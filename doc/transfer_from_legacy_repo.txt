@@ -1,0 +1,2 @@
+git cherry-pick <start-commit-hash>^..<end-commit-hash>
+
