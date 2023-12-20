@@ -1,2 +1,40 @@
+1. On the legacy history trunk, the last checkpoint is the following commit
+commit 1297870491bb59aab9d68bbdaa0b11c8a2ffa458 (HEAD -> xsp-release-3.3.2, tag: before-github-2024, usb/xsp-release-3.3.2, origin/xsp-release-3.3.2, inti/xsp-release-3.3.2)
+Author: Thierry CARRARD <thierry.carrard@cea.fr>
+Date:   Tue Dec 19 16:26:27 2023 +0100
+
+    improved compatibility with future version of exaNBody
+
+
+2. a new branch, has been created, starting from the very first history commit, and adding the files by checkouting them from before-github-2024
+> git checkout -b main 9258f3def6dcf1d6ee20e6e5f93e20bb022a9916
+> git checkout before-github-2024 -- addons cmake contribs data doc include scripts src
+> git commit -am "jump start from state @ before-github-2024"
+
+3. so the new branch main, contains the recent state of files but without history
+> git log
+commit 513a4678c78b044685dd681d869df583e841cfd8
+Author: Thierry Carrard <thierry.carrard@orange.fr>
+Date:   Wed Dec 20 09:00:50 2023 +0100
+
+    jump start from state @ before-github-2024
+
+commit 9258f3def6dcf1d6ee20e6e5f93e20bb022a9916
+Author: Emmanuel Cieren <emmanuel.cieren@cea.fr>
+Date:   Wed Nov 13 08:38:00 2013 +0000
+
+    Dir organization
+
+4. how to transfer a development made on legacy trunk to new branch 'main' ?
+the strategy is 2-fold
+  - first, rebase your development from before-github-2024 tag, so that you have this tag back in the history of your dev branch
+  - second, use cherry-pick to re-apply commits of your dev branch to the new 'main' branch
+
+5. exemple
+a) i created a dev branch on the legacy trunk
+git checkout -b my_test_dev
+** create some commits ***
+
+
 git cherry-pick <start-commit-hash>^..<end-commit-hash>
 
