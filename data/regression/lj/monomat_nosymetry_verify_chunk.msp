@@ -1,0 +1,46 @@
+# no-seq
+configuration:
+  logging:
+    debug: true
+  debug:
+    filter: [ ".*\\.verify_chunk_neighbors" ]
+  profiling:
+    summary: true
+
+includes:
+  - monomat.cfg
+
+grid_flavor: grid_flavor_minimal
+
+rebuild_amr:
+  sub_grid_density: 7.0
+
+global:
+  simulation_end_iteration: 4
+  rcut_inc: 0.1 ang
+  chunk_size: 8
+
+input_data:
+  - read_stamp_v3:
+      file: droplet.mpio
+      bounds_mode: FILE
+  - grid_stats
+
+domain:
+  cell_size: 40.0 ang
+  periodic: [true,true,true]
+
+lj_compute_force:
+  parameters: { epsilon: 9.340E-20 J , sigma: 0.227E-09 m }
+  rcut: 5.68 ang
+
+compute_force: lj_compute_force
+
+update_particle_neighbors:
+  - compute_primary_neighbors
+  - compute_dual_neighbors
+  - amr_grid_pairs
+  - chunk_neighbors
+  - verify_chunk_neighbors
+
+simulation_epilog: nop

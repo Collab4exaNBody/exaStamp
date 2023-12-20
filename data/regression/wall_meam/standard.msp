@@ -1,0 +1,70 @@
+# no-seq
+meam_force:
+  rcut: 3.69 ang
+  parameters:
+    rmax: 3.69 ang
+    rmin: 0.0
+    Ecoh: 4.93474273599999995322e-19 J
+    E0: 4.93474273599999995322e-19 J
+    A: 1.000E+00
+    r0: 3.44 ang
+    alpha: 6.200E+00
+    delta: 0.000E+00
+    beta0: 6.200E+00
+    beta1: 6.000E+00
+    beta2: 6.000E+00
+    beta3: 6.000E+00
+    t0: 1.000E+00
+    t1: 4.500E+00
+    t2: 6.500E+00
+    t3: -0.183E+00
+    s0: 1.440E+02
+    s1: 0.000E+00
+    s2: 0.000E+00
+    s3: 0.000E+00
+    Cmin: 0.800E+00
+    Cmax: 2.800E+00
+    Z: 1.200E+01 
+    rc: 4.0 ang
+    rp: 0.1 ang
+
+# atoms descriptions
+species:
+  - Tin:
+      mass: 197.1508269E-27 kg
+      z: 50
+      charge: 0 e-
+
+wall:
+  normal: [ 1.0, 0.0, 0.0 ]
+  offset: -5.0 ang # positionned at the limit of the domain
+  cutoff: 2.4 ang
+  epsilon: 1.0e-19 J
+
+compute_force:
+  - meam_force
+  - wall
+
+grid_flavor: grid_flavor_multimat
+
+input_data:
+  - read_stamp_v3:
+      filename: moving_tin2.mpio
+      bounds_mode: FILE
+
+domain:
+  grid_dims: [6,6,6]
+  periodic: [false,true,true]
+
+global:
+  simulation_end_iteration: 190
+  simulation_log_frequency: 1
+  rcut_inc: 1.0 ang
+  dt: 1.0e-3 ps
+
+simulation_epilog:
+  - check_values:
+      file: wall_meam_std.dat
+      acc_threshold: 3.0e-6
+      pos_threshold: 1.6e-10
+

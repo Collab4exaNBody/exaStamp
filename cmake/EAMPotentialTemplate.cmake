@@ -1,0 +1,56 @@
+# Pair potential generation template
+
+# EAM potential generation template
+set(EAM_POTENTIAL_TEMPLATE ${CMAKE_CURRENT_SOURCE_DIR}/eam_potential_template)
+
+# discover/configure/generate source files for EAM potential template
+file(GLOB EAM_POTENTIAL_TEMPLATE_SRCS ${EAM_POTENTIAL_TEMPLATE}/*)
+
+set_property(GLOBAL PROPERTY GLOBAL_XSTAMP_EAM_POTENTIALS "")
+
+macro(AddEAMPotential PPDIR PluginName)
+#  message(STATUS "AddEAMPotential(${PPDIR} ${PluginName})")
+  get_property(XSTAMP_EAM_POTENTIALS GLOBAL PROPERTY GLOBAL_XSTAMP_EAM_POTENTIALS)
+  list(APPEND XSTAMP_EAM_POTENTIALS "${PPDIR}:${PluginName}")
+  set_property(GLOBAL PROPERTY GLOBAL_XSTAMP_EAM_POTENTIALS ${XSTAMP_EAM_POTENTIALS})
+endmacro()
+
+macro(GenerateEAMPotential PPDIR PluginName)
+#  message(STATUS "GeneratePairPotential(${PPDIR} ${PluginName})")
+  if(IS_DIRECTORY ${PPDIR})
+    set(EAMPotGenDir ${CMAKE_CURRENT_BINARY_DIR}/gen/eam_potentials/${PluginName})
+    file(MAKE_DIRECTORY ${EAMPotGenDir})
+    file(GLOB PP_FILES ${PPDIR}/*)
+#    message(STATUS "Files = ${EAM_POTENTIAL_TEMPLATE_SRCS} ${PP_FILES}")
+    foreach(PP_FILE ${EAM_POTENTIAL_TEMPLATE_SRCS} ${PP_FILES})
+#      message(STATUS "Create link : ${EAMPotGenDir}/${bname} -> ${PP_FILE}")
+      get_filename_component(bname ${PP_FILE} NAME)
+      file(CREATE_LINK ${PP_FILE} ${EAMPotGenDir}/${bname} SYMBOLIC)
+    endforeach()
+    set(${PluginName}_LINK_LIBRARIES exaStampPotential exanbParticleNeighbors)
+    xstamp_add_plugin(${PluginName} ${EAMPotGenDir})
+  else()
+    message(FATAL_ERROR "${PPDIR} is not a directory")
+  endif()
+  unset(dir)
+  unset(PluginSources)
+endmacro()
+
+macro(GenerateAllEAMPotentials)
+#  message(STATUS "GenerateAllPairPotentials")
+  get_property(XSTAMP_EAM_POTENTIALS GLOBAL PROPERTY GLOBAL_XSTAMP_EAM_POTENTIALS)
+  foreach(ppdata ${XSTAMP_EAM_POTENTIALS})
+    string(REPLACE ":" ";" PPLIST ${ppdata})
+    list(GET PPLIST 0 PPDIR)
+    list(GET PPLIST 1 PluginName)
+#    message(STATUS "EAM: ${PPDIR} ${PluginName}")
+    GenerateEAMPotential(${PPDIR} ${PluginName})
+    set(XSTAMP_EAM_POTENTIAL_NAMES "${XSTAMP_EAM_POTENTIAL_NAMES} ${PluginName}")
+  endforeach()
+  if(XSTAMP_EAM_POTENTIAL_NAMES)
+    message(STATUS "found EAM potentials :${XSTAMP_EAM_POTENTIAL_NAMES}")
+  else()
+    message(STATUS "no EAM potential found")
+  endif()
+endmacro()
+

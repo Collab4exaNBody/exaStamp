@@ -1,0 +1,67 @@
+# override parameters with command line options :
+# -----------------------------------------------
+#
+# exaStamp stampv4_to_atom_dump.msp --set-global-inputfile lastLegacyDump --set-global-outputfile atoms.dump --set-domain-cell_size "40.0 ang" --set-species "[ Tin: { mass: 1.9710101613867305e-25 kg , z: 50 , charge: 0 e- } ]"
+#
+# override parameters with user file :
+# ------------------------------------
+#
+# includes: [ stampv4_to_atom_dump.msp ]
+#
+# domain:
+#   cell_size: 30.0 ang
+#   periodic: [ true , true , true ]
+#
+# species:
+#  - Tin:
+#      mass: 1.9710101613867305e-25 kg
+#      z: 50
+#      charge: 0 e-
+#
+# global:
+#   inputfile: lastLegacyDump
+#   outputfile: atoms.dump
+#
+
+domain:
+  cell_size: 20.0 ang
+
+species:
+  - Unknown:
+      mass: 0.0 kg
+      z: 0
+      charge: 0 e-
+
+global:
+  ghost_dist: 0.0 ang
+  inputfile: lastLegacyDump
+  outputfile: atoms.dump
+
+read_stamp_v4:
+  bounds_mode: FILE
+  enable_xform_scale: true
+  pbc_adjust_xform: true
+  enlarge_bounds: 0.0 ang
+
+write_dump_atoms:
+  compression_level: 9
+
+simulation:
+  - mpi_comm_world
+  - grid_flavor_multimat
+  - global
+  - domain
+  - species
+  - read_block:
+      rebind: { file: inputfile }
+      body: [ read_stamp_v4 ]
+  - reduce_species
+  - simple_cost_model: { ccost: 1.0 , pdens: 4.0 , pdens2:0.0 , pdens3:0.003 }
+  - load_balance_rcb
+  - migrate_cell_particles
+  - simulation_thermodynamic_state
+  - print_thermodynamic_state
+  - write_block:
+      rebind: { filename: outputfile }
+      body: [ write_dump_atoms ]
+

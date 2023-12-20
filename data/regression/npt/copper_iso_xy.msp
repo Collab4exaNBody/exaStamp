@@ -1,0 +1,65 @@
+# no-seq
+
+includes:
+  - config_parrinellorahman.msp
+
+grid_flavor: grid_flavor_full
+
+sutton_chen_force:
+  rcut: 7.29 ang
+  parameters:
+    c: 3.317E+01
+    epsilon: 3.605E-21 J
+    a0: 0.327E-09 m
+    n: 9.050E+00
+    m: 5.005E+00
+
+# atoms descriptions
+species:
+  - Cu:
+      mass: 105.486E-27 kg
+      z: 29
+      charge: 0 e-
+
+# define potential we'll reuse later
+compute_force: sutton_chen_force
+
+# this is required because compute force is called once before data is read
+# Important WARNING : Da unit is removed for this test. Da is the internal mass unit used, but if specified, unexpected conversion happens and value is improperly rounded, i.e. 1.0 becomes 0.99999998
+init_prolog:
+  - deformation_xform:
+      defbox: { extension: [ 1.0 , 1.0 , 1.0 ] }
+  - init_parrinellorahman:
+        Text: 300 K
+        masseNVT: 1.0e-14 Da
+        Pext: 1.013e5 kg*m^-1*s^-2
+        masseNPT: 1.0e2 Da
+        hmask: [ [ 1 , 0 , 0 ] , [ 0 , 1 , 0 ] , [ 0 , 0 , 0 ] ]
+        hblend: [ [ 1/2 , 1/2 , 0 ] , [ 1/2 , 1/2 , 0 ] , [ 0 , 0 , 0 ] ]
+
+input_data:
+  - read_stamp_v3:
+     file: Geo_20x20x20_300K.mpio
+     bounds_mode: DOMAIN
+
+domain:
+  cell_size: 7.186 ang
+  bounds: [ [0,0,0] , [71.86,71.86,71.86] ]
+  grid_dims: [ 10 , 10 , 10 ]
+  periodic: [true,true,true]
+
+global:
+  simulation_end_iteration: 10
+  simulation_log_frequency: 1
+  rcut_inc: 1.0 ang # no rcut increment, neighbor lists rebuilt every timestep
+  dt: 5.0e-3 ps
+  simulation_dump_frequency: -1
+
+simulation_epilog:
+  - print_domain
+  - check_values:
+      file: npt_iso_xy.dat
+      acc_threshold: 1.2e-10
+      pos_threshold: 1.e-11
+
+

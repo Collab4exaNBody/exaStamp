@@ -1,0 +1,18 @@
+# no-mt no-mpi
+
+includes:
+  - rngstate4p4t.msp
+  - default.msp
+
+global:
+  dt: 4.0e-3 ps
+  simulation_end_iteration: 50
+  simulation_log_frequency: 1
+
+simulation_epilog:
+  - check_values:
+      file: langevin.dat
+      samples: 100
+      pos_threshold: 1.e-12
+      acc_threshold: 1.e-9
+

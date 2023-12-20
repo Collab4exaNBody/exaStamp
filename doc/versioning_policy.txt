@@ -1,0 +1,12 @@
+Naming
+------
+- each release is named x.y.z
+- x corresponds to major architeture standard
+- y corresponds to feature set
+- z corresponds to bug fixes
+
+Compatibility between versions
+------------------------------
+version are back compatible, except if incompatibilies have been decided during an exaStamp meeting preceding a version release.
+versions x.y.Za and x.y.Zb must be compatible and have the same feature set
+

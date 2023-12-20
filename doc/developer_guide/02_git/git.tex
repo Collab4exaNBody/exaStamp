@@ -1,0 +1,46 @@
+\section{Using git}
+\label{sec:install}
+
+\begin{verbatim}
+
+Setup
+
+Prerequisites
+install necessary packages as in scripts/required-packages-Ubuntu-18.04.sh
+
+1. clone your own git repository
+git clone ssh://your-inti-login@inti.ocre.cea.fr:/ccc/home/cont001/xstampdev/xstampdev/ExaStamp.git exaStamp
+
+2. première configuration et compilation
+<path-to-sources>/scripts/configure-Ubuntu-18.04.sh
+
+
+How to add a remote connection to inti if you cloned from another location
+
+3. 
+git remote add inti ssh://votre-login-inti@inti.ocre.cea.fr:/ccc/home/cont001/xstampdev/xstampdev/ExaStamp.git
+
+3b. pour faire un push ou un pull depuis/vers un depot distant :
+git push inti ma-branche # push vers inti
+git pull inti ma-branche # pull depuis inti
+
+Note:
+vous aurez toujours un 'remote' nommé origin qui est l'URL que vous avez utilisez pour le clone
+donc si vous voulez push/pull vers le serveur duquel vous avez cloné :
+git push origin ma-branche
+git pull origin ma-branche
+
+Note 2:
+pour voir a liste des depot remote
+git remote -v
+
+
+Handling branches
+copy a remote branch to the local repo, with exactly the same state as the remote one :
+git checkout -b <my_new_branch> <remote>/<branch_name>
+or
+git reset --hard <remote>/<branch_name>
+
+\end{verbatim}
+
+

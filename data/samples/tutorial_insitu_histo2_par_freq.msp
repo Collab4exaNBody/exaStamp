@@ -1,0 +1,55 @@
+# no-seq
+
+configuration:
+  +plugins:
+    - microStampTutorial
+
+grid_flavor: grid_flavor_full
+
+# atoms descriptions
+species:
+  - Copper:
+      mass: 105.486E-27 kg
+      z: 29
+      charge: 0 e-
+
+input_data:
+  - read_stamp_v3:
+      file: big_lattice.mpio
+      bounds_mode: FILE
+
+domain:
+  grid_dims: [12,12,12]
+  periodic: [true,true,true]
+
+global:
+  dt: 4.0e-3 ps
+  simulation_end_iteration: 20
+  simulation_log_frequency: 1
+
+# at end of every compute iteration
+compute_loop_epilog:
+  - trigger_analytics:
+      rebind: { result: trigger_analytics }
+      body:
+        - nth_timestep: { freq: 1 }
+  - insitu_analytics:
+      condition: trigger_analytics
+      body:
+        - histopar_energy: { samples: 50000 }
+        - histopar_vx: { samples: 50000 }
+
+# at end of simulation
+simulation_epilog:
+  - histopar_energy: { samples: 50 }
+  - print_histogram: { message: "energy" }
+  - histopar_vx: { samples: 50 }
+  - print_histogram: { message: "vx" }
+
+# define potential we'll reuse later
+lj_compute_force:
+  parameters: { epsilon: 9.340E-20 J , sigma: 0.227E-09 m }
+  rcut: 5.68 ang
+
+compute_force: lj_compute_force
+

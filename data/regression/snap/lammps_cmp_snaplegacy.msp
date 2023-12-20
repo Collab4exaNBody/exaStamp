@@ -1,0 +1,61 @@
+# no-seq
+
+includes:
+  - config_update_symmetric_forces.msp
+
+configuration:
+  logging:
+    debug: false
+  debug:
+    filter: [ ".*snaplegacy_force" ]
+
+grid_flavor: grid_flavor_multimat
+
+input_data:
+  - read_xyz_file_with_xform:
+      file: Mo_structure.xyz
+      pbc_adjust_xform: true
+
+zbl_compute_force:
+  parameters: { r1: 4.0 ang , rc: 4.615858 ang }
+  rcut: 4.615858 ang
+
+snaplegacy_force:
+  parameters:
+    nt: 2
+    param: "Mo_Chen_PRM2017.snapparam"
+    coef: "Mo_Chen_PRM2017.snapcoeff"
+  symmetric_forces: true
+
+# atoms descriptions
+species:
+  - Mo:
+      mass:  95.95 Da
+      z: 42
+      charge: 0 e-
+
+# define potential we'll reuse later
+compute_force:
+  - zbl_compute_force
+  - snaplegacy_force
+
+domain:
+  cell_size: 5.3 ang
+  periodic: [true,true,true]
+
+global:
+  dt: 1.0e-3 ps
+  simulation_end_iteration: 10
+  simulation_log_frequency: 1
+  simulation_dump_frequency: -1
+  simulation_dump_thermo_frequency: 1
+  is_dump_virial: true
+
+
+simulation_epilog:
+  - compute_local_metrics:
+      per_atom_data: ["pe","f"]
+  - write_xyz_file:
+      per_atom_data: ["pe", "f"]
+      filename: xstamp.xyz
+

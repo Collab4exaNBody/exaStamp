@@ -1,0 +1,51 @@
+# no-seq
+
+species:
+  - Copper:
+      mass: 105.486E-27 kg
+      z: 29
+      charge: 0 e-
+
+snap_force:
+  parameters:
+    nt: 2
+    param: "W_2940_2017_2.snapparam"
+    coef: "W_2940_2017_2.snapcoeff"
+
+zbl_compute_force:
+  parameters: { r1: 0.99363 ang , rc: 4.73442 ang }
+  rcut: 4.73442 ang
+
+grid_flavor: grid_flavor_multimat
+
+# define potential we'll reuse later
+compute_force:
+  - snap_force
+  - zbl_compute_force
+
++first_iteration:
+  - chunk_neighbors_stats
+  - grid_stats
+
+input_data:
+  - read_stamp_v3:
+      file: Mo_conf_300K.MpiIO
+      bounds_mode: FILE
+
+domain:
+  grid_dims: [4,4,4]
+  periodic: [true,true,true]
+
+global:
+  dt: 4.0e-3 ps
+  rcut_inc: 0.3 ang
+  simulation_end_iteration: 12
+  simulation_log_frequency: 1
+
+simulation_epilog:
+  - check_values:
+      file: monomat_snap_jmax4.dat
+      threshold: 1.e-10
+
+final_dump: nop
+

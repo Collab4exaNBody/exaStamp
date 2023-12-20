@@ -1,0 +1,17 @@
+Compilation sur yoccoz/KNL :
+============================
+ssh yoccoz
+ccc_mprun -n1 -x -pknl -s
+export DEFAULT_BUILD_DIR=`ccc_home -s`/build/ExaStamp-exabench/Atos_7__mic
+export DEFAULT_INSTALL_DIR=/ccc/cont001/home/exabench/exabench/SP3.2/Codes/ExaStamp/Atos_7__mic
+/ccc/cont001/home/exabench/exabench/SP3.2/Codes/ExaStamp/ExaStamp/scripts/configure-yoccoz.sh
+
+
+Compilation sur Borel/Haswell :
+===============================
+ssh borel
+ccc_mprun -n1 -x -pstandard -s
+export DEFAULT_BUILD_DIR=`ccc_home -s`/build/ExaStamp-exabench/Atos_7__x86_64
+export DEFAULT_INSTALL_DIR=/ccc/cont001/home/exabench/exabench/SP3.2/Codes/ExaStamp/Atos_7__x86_64
+/ccc/cont001/home/exabench/exabench/SP3.2/Codes/ExaStamp/ExaStamp/scripts/configure-borel.sh
+

@@ -1,0 +1,16 @@
+# no-seq
+includes:
+  - monomat_base.cfg
+
+compute_force: compute_force_pair
+
+compute_force_pair:
+  virial: true
+  symetric: false
+  potentials:
+    - { type_a: Copper  , type_b: Copper , potential: lj   , rcut: 5.68 ang , parameters: { epsilon: 9.340E-20 J , sigma: 0.227E-09 m } }
+
+update_particle_neighbors:
+  - compute_primary_neighbors
+  - compute_dual_neighbors
+

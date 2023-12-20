@@ -1,0 +1,65 @@
+# no-seq
+
+grid_flavor: grid_flavor_full
+
+# atoms descriptions
+species:
+  - Copper:
+      mass: 105.486E-27 kg
+      z: 29
+      charge: 0 e-
+
+input_data:
+  - read_stamp_v3:
+      file: big_lattice.mpio
+      bounds_mode: FILE
+
+domain:
+  grid_dims: [12,12,12]
+  periodic: [true,true,true]
+
+global:
+  dt: 4.0e-3 ps
+  simulation_end_iteration: 5
+  simulation_log_frequency: 1
+
+# at end of simulation
+simulation_epilog:
+  - histopar_energy: { samples: 50 }
+  - print_histogram: { message: "energy" }
+  - histopar_vx: { samples: 50 }
+  - print_histogram: { message: "vx" }
+
+# define potential we'll reuse later
+lj_compute_force:
+  parameters: { epsilon: 9.340E-20 J , sigma: 0.227E-09 m }
+  rcut: 5.68 ang
+
+compute_force: lj_compute_force
+
+# create a communicator duplicate
+init_prolog:
+  - mpi_dup
+
+numerical_scheme:
+  name: scheme
+  body:
+    - copy_grid
+    - concurrent_compute_insitu:
+        parallel: true
+        cores: [ 3 , 1 ]
+        body:
+          - simulation_compute:
+              - push_f_v_r: { dt_scale: 1.0 }
+              - push_f_v: { dt_scale: 0.5 }
+              - ghost_update_r
+              - zero_force_energy
+              - compute_force
+              - force_to_accel
+              - push_f_v: { dt_scale: 0.5 }
+          - insitu_analytics:
+              rebind: { grid: grid_copy, mpi: mpi_dup }
+              body:
+                - histopar_energy: { samples: 50000 }
+                - histopar_vx: { samples: 50000 }
+

@@ -1,0 +1,57 @@
+# no-seq
+
+configuration:
+  +plugins:
+    - microStampTutorial
+
+grid_flavor: grid_flavor_full
+
+# atoms descriptions
+species:
+  - Copper:
+      mass: 105.486E-27 kg
+      z: 29
+      charge: 0 e-
+
+input_data:
+  - mpi_dup
+  - read_stamp_v3:
+      file: big_lattice.mpio
+      bounds_mode: FILE
+
+domain:
+  grid_dims: [12,12,12]
+  periodic: [true,true,true]
+
+global:
+  dt: 4.0e-3 ps
+  simulation_end_iteration: 5
+  simulation_log_frequency: 1
+
+
+init_epilog:
+  - message: "intitialize worker thread"
+  - histoseq_thread_init
+
+compute_loop_prolog:
+  - message: "worker thread start"
+  - histoseq_thread_run: { samples: 50000 }
+
+compute_loop_epilog:
+  - histoseq_thread_finish  
+  - message: "worker thread done"
+
+# define potential we'll reuse later
+compute_force: compute_force_pair
+
+compute_force_pair:
+  symetric: false
+  virial: true
+  potential: lj
+  parameters: { epsilon: 9.340E-20 J , sigma: 0.227E-09 m }
+  rcut: 5.68 ang
+
+update_particle_neighbors:
+  - compute_primary_neighbors
+  - compute_dual_neighbors
+

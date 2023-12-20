@@ -1,0 +1,71 @@
+# no-seq
+
+compute_force_pair_multimat:
+  potentials:
+    - { type_a: H     , type_b: H     , potential: ewald_short_range,  rcut: 30.000 ang , parameters: { alpha: -1e-2 , epsilon: 1.0E-1 , radius: 30.000 ang , kmax: 0 , size: [ 0x1.d028ad8p+8 , 0x1.d028ad8p+8 , 0x1.d028ad8p+8 ] } }
+    - { type_a: H     , type_b: Elect , potential: ewald_short_range,  rcut: 30.000 ang , parameters: { alpha: -1e-2 , epsilon: 1.0E-1 , radius: 30.000 ang , kmax: 0 , size: [ 0x1.d028ad8p+8 , 0x1.d028ad8p+8 , 0x1.d028ad8p+8 ] } }
+    - { type_a: Elect , type_b: Elect , potential: ewald_short_range,  rcut: 30.000 ang , parameters: { alpha: -1e-2 , epsilon: 1.0E-1 , radius: 30.000 ang , kmax: 0 , size: [ 0x1.d028ad8p+8 , 0x1.d028ad8p+8 , 0x1.d028ad8p+8 ] } }
+
+# atoms descriptions
+species:
+  - H:
+      mass: 1.6605401867e-27 kg
+      z: 1
+      charge: 1. e-
+  - Elect:
+      mass: 9.1093897540e-31 kg
+      z: 2
+      charge: -1. e-
+
+input_data:
+  - read_stamp_v3:
+      file: plasma_stampv3.MpiIO
+      bounds_mode: FILE
+      enable_xform_scale: true
+      pbc_adjust_xform: true
+      enlarge_bounds: 0.0 ang
+#  - copy_charge_specy_to_particle
+  - sum_charges
+  - ewald_potential_energy_shift:
+      ewald_config:
+        epsilon: 1.0E-1
+        alpha: -1e-2
+        radius: 30.000 ang
+        kmax: 0
+        size: [ 0x1.d028ad8p+8 , 0x1.d028ad8p+8 , 0x1.d028ad8p+8 ]
+
+# define potential we'll reuse later
+compute_force:
+  - compute_force_pair_multimat
+  - ewald_long_range:
+      ewald_config:
+        epsilon: 1.0E-1
+        alpha: -1e-2
+        radius: 30.000 ang
+        kmax: 0
+        size: [ 0x1.d028ad8p+8 , 0x1.d028ad8p+8 , 0x1.d028ad8p+8 ]
+
+grid_flavor: grid_flavor_multimat
+
+domain:
+  cell_size: 32 ang
+  periodic: [true,true,true]
+
+global:
+  simulation_end_iteration: 10
+  simulation_log_frequency: 1
+  simulation_dump_frequency: 100000
+  simulation_load_balance_frequency: 50000
+  rcut_inc: 1 ang
+  dt: 1.e-6 ps
+
+final_dump: nop
+
+simulation_epilog:
+  - check_values:
+      file: plasma_ewald.dat
+      pos_threshold: 1.e-10
+      acc_threshold: 1.e-7
+      vel_threshold: 1.e-10
+      fatal: true
+

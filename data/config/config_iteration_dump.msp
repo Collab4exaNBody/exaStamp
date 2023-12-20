@@ -1,0 +1,155 @@
+# define when log must be printed
+trigger_dump_data:
+  rebind: { freq: simulation_dump_frequency , result: trigger_dump_data }
+  body:
+    - nth_timestep: { first: false }
+
+trigger_dump_analysis:
+  rebind: { freq: analysis_dump_frequency , result: trigger_dump_analysis }
+  body:
+    - nth_timestep: { first: false }
+
+dump_data_exastamp_v4:
+  rebind: { thermodynamic_state: thermodynamic_state_4_dump }
+  body:
+    - timestep_file: "ExaStampV4prot_%09d.MpiIO"
+    - message: { mesg: "Write dump " , endl: false }
+    - print_dump_file:
+        rebind: { mesg: filename }
+        body:
+          - message: { endl: true }
+    - simulation_thermodynamic_state
+    - write_exastamp_v4
+
+dump_data_stamp_v4:
+  rebind: { thermodynamic_state: thermodynamic_state_4_dump }
+  body:
+    - timestep_file: "StampV4prot_%09d.MpiIO"
+    - message: { mesg: "Write dump " , endl: false }
+    - print_dump_file:
+        rebind: { mesg: filename }
+        body:
+          - message: { endl: true }
+    - simulation_thermodynamic_state
+    - write_stamp_v4
+
+dump_data_stamp_v3:
+  - timestep_file: "StampV3prot_%09d.MpiIO"
+  - message: { mesg: "Write dump " , endl: false }
+  - print_dump_file:
+      rebind: { mesg: filename }
+      body:
+        - message: { endl: true }
+  - write_stamp_v3
+
+# Native ExaNB dump format for single atoms
+dump_data_atoms:
+  - timestep_file: "atoms_%09d.MpiIO"
+  - write_dump_atoms
+
+# Native ExaNB dump format for rigid molecules
+dump_data_rigidmol:
+  - timestep_file: "rigidmol_%09d.MpiIO"
+  - write_dump_rigidmol
+
+dump_data_vtklegacy:
+  - timestep_file: "output_%09d.vtk"
+  - message: { mesg: "Write vtk-legacy " , endl: false }
+  - print_dump_file:
+      rebind: { mesg: filename }
+      body:
+        - message: { endl: true }
+  - write_vtklegacy: { ghost: false }
+
+dump_data_vtk:
+  - timestep_file: "output_%09d"
+  - message: { mesg: "Write vtk " , endl: false }
+  - print_dump_file:
+      rebind: { mesg: filename }
+      body:
+        - message: { endl: true }
+  - write_vtk
+
+dump_data_paraview:
+  - timestep_file: "paraview/output_%09d"
+  - message: { mesg: "Write " , endl: false }
+  - print_dump_file:
+      rebind: { mesg: filename }
+      body:
+        - message: { endl: true }
+  - write_paraview
+
+dump_data_grid_vtklegacy:
+  - grid_flavor
+  - resize_grid_cell_values
+  - grid_cell_particle_splatting
+  - timestep_file: "grid_%09d.vtk"
+  - write_grid_vtklegacy
+
+dump_data_grid_vtk:
+  - grid_flavor
+  - resize_grid_cell_values
+  - grid_cell_particle_splatting
+  - timestep_file: "grid_%09d"
+  - write_grid_vtk:
+      use_point_data: false
+
+#dump_data: dump_data_stamp_v3
+dump_data: dump_data_atoms
+
+dump_data_CCL_analysis:
+  - grid_flavor
+  - resize_grid_cell_values
+  - grid_cell_particle_splatting
+  - grid_connected_components
+  - timestep_file: "grid_label_analysis_%09d.csv"
+  - grid_label_analysis
+
+dump_data_xyz:
+  - timestep_file: "exaStamp_%09d.xyz"
+  - message: { mesg: "Write xyz " , endl: false }
+  - print_dump_file:
+      rebind: { mesg: filename }
+      body:
+        - message: { endl: true }
+  - write_xyz_file
+
+dump_data_lmp:
+  - timestep_file: "exaStamp_%09d.lmp"
+  - message: { mesg: "Write xyz " , endl: false }
+  - print_dump_file:
+      rebind: { mesg: filename }
+      body:
+        - message: { endl: true }
+  - write_lmp_file
+
+dump_data_slice_analysis:
+  - grid_flavor
+  - resize_grid_cell_values
+  - grid_cell_particle_splatting
+  - timestep_file: "grid_slice_analysis_%09d.csv"
+  - grid_slice_analysis
+
+dump_analysis: dump_data_grid_vtk
+
+# usefull to cleanly place particles in corresponding cells
+# and/or extend domain, just before a dump
+cleanup_before_dump: init_particles
+
+# define how to print log
+dump_data_if_triggered:
+  condition: trigger_dump_data
+  body:
+#    - cleanup_before_dump
+    - dump_data
+
+dump_analysis_if_triggered:
+  condition: trigger_dump_analysis
+  body:
+    # - cleanup_before_dump
+    - dump_analysis
+
+final_dump:
+#    - cleanup_before_dump
+    - dump_data
+

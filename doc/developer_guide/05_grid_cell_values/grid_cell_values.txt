@@ -1,0 +1,130 @@
+structure GridCellValues :
+==========================
+
+IJK m_grid_dims => dimensions de la grille, doit être egal a grid->dimension() (s'il correspond à la grille 'grid')
+size_t m_ghost_layers => nombre de couches fantomes, egal à grid->ghost_layers()
+size_t m_components => nombre total de valeurs pour chaque cellule de la grille
+GridCellValueVector m_data => toutes les données, m_components valeurs successives pour chaque cellule, dans l'ordre des cellules.
+std::unordered_map< std::string , GridCellField > m_fields => décrit comment l'ensemble des valeurs pour chaque cellule se divise en plusieurs champs
+
+structure GridCellField :
+=========================
+décrit comment une sous partie des valeurs pour chacune des cellules décrit un champs particulier
+
+size_t m_subdiv => subdivision de la cellule en m_subdiv x m_subdiv x m_subdiv sous cellules
+size_t m_components => nombre total de valeurs pour ce champs, peut valoir un multiple de (m_subdiv x m_subdiv x m_subdiv) si plusieurs valeurs par sous cellule (i.e. vecteur)
+size_t m_offset => dans l'ensemble des valeurs corespondant à une cellule, ou commence la série de valeurs correspondant ce champs
+
+
+structure GridCellFieldAccessor
+===============================
+décrit comment accèder aux valeurs d'un champs
+
+m_data_ptr => pointeur vers la série de valeur correspondant à la première cellule
+m_stride => nombre d'éléments à sauter pour passer à la série de valeurs correspondant à la cellule suivante
+
+
+fichier src/analytics/grid_cell_particle_splatting.cpp
+======================================================
+source de l'opérateur grid_cell_particle_splatting, bonne source d'inspiration pour savoir comment utiliser la structure GridCellValues.
+important: si on ajoute des champs, il faut le faire avant de recuperer les accesseurs pour les differents champs, car le 'stride' change lorsqu'on ajoute un champs.
+
+
+fichier src/io/write_grid_vtk.cpp
+=================================
+source de l'operateur write_grid_vtk qui écrit les fichier .pvti/.vti
+
+
+produire un fichier de grille regulière
+=======================================
+On peut utiliser une combinaison de grid_cell_particle_splatting et de write_grid_vtk pendant une simulation.
+on peut aussi relire une prot pour prduire un grille, comme dans l'exemple si dessous, en utilisant le fichier data/samples/tools/stampv3_to_grid_vtk.msp
+
+$ ccc_mprun -n32 -c8 -phaswell /usr/bin/env OMP_NUM_THREADS=8 ./xstampv2 stampv3_to_grid_vtk.msp
+Version : dev-multi-cell_values-2020-11-18
+MPI     : 32   processes
+CPU     : 64   cores (max 64)
+OpenMP  : 8    threads (max nest. 2)
+SIMD    : AVX2
+SOATL   : FFA / A32 / C8
+
++ microStampLogic
++ microStampCompute
++ microStampIO
++ microStampMpi
++ microStampDefBox
++ microStampDebug
++ microStampAnalytics
+======== Atom species ========
+H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe Co Ni Cu Zn Ga Ge As Se Br Kr Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I Xe Cs Ba La Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu Hf Ta W Re Os Ir Pt Au Hg Tl Pb Bi Po At Rn Fr Ra Ac Th Pa U Np Pu Am Cm Bk Cf Es Fm Md No Lr Rf Db Sg Bh Hs Mt Ds Rg Cn Nh Fl Mc Lv Ts Og 
+==============================
+
+grid subdivision factor :
+3                               <- ici on indique la subdivision souhaitée (la taille de cellul est 40.0 ang dans ce fichier d'entrée
+splat size :
+12.0 ang                        <- taille du 'splat' (l'empreinte de la particule autour d'elle)
+input file :
+droplet.mpio                    <- fichier StampV3 à lire
+============ droplet.mpio ============
+Iteration Number = 0
+Total Particles  = 2389780
+File bounds      = (-2.5312463422e+02,-2.5312463422e+02,-2.5398130992e+02)-(2.5312463422e+02,2.5312463422e+02,2.5398130992e+02)
+Simulation Time  = 0.0000000000e+00
+MPI Proc. (PE)   = 32
+Particles / PE   = 74680
+Bounds mode      = FILE
+World bounds     = (-2.4895064066e+02,-2.4895064066e+02,-2.4980731636e+02)-(2.4895064066e+02,2.4895064066e+02,2.4980731636e+02)
+Enlarge bounds   = 0.0000000000e+00
+XSv2 XForm       = { (1.0000000000e+00,0.0000000000e+00,0.0000000000e+00) , (0.0000000000e+00,1.0000000000e+00,0.0000000000e+00) , (0.0000000000e+00,0.0000000000e+00,1.0000000000e+00) }
+Domain XForm     = { (1.0000000000e+00,0.0000000000e+00,0.0000000000e+00) , (0.0000000000e+00,1.0000000000e+00,0.0000000000e+00) , (0.0000000000e+00,0.0000000000e+00,1.0000000000e+00) }
+Domain bounds    = (-2.5312463422e+02,-2.5312463422e+02,-2.5398130992e+02)-(2.5312463422e+02,2.5312463422e+02,2.5398130992e+02)
+Domain size      = 5.0624926843e+02,5.0624926843e+02,5.0796261984e+02
+Real size        = 5.0624926843e+02,5.0624926843e+02,5.0796261984e+02
+Cell size        = 4.2187439036e+01
+Grid dimensions  = 12,12,13 (1872 cells)
+========================================
+
+
+# reduced species configuration 
+# copy-paste the following to input file 
+species:
+  - H:
+      mass: 1.0070000000e+00 Da
+      z: 1
+      charge: 0.0000000000e+00 e-
+# until this line
+
+        0  0.000000e+00       2389780                 1.0966158758e-03   1.0966158758e-03   0.0000000000e+00        8.484  2.150e-08  0.000e+00  1.302e+08  2.407e+06
+======== grid stats ========
+dimension      = 12x12x13
+ghost layers   = 1
+cell size      = 4.2187439036e+01
+inner cells    = 1,872
+ghost cells    = 5,432
+part. per cell = 0 / 1,276 / 2,989
+particles      = 2,389,780
+ghosts part.   = 6,061,314
+otb particles  = 0
+============================
+
+
+en résultat, on obtient les fichiers suivants:
+grid_000000000_0.vti  grid_000000000_1.vti  grid_000000000_2.vti  grid_000000000_3.vti  grid_000000000.pvti
+les fichiers .vti sont les sous domaines écrits par chaque processeur, le ficheir .pvti est celui que l'on peut ouvrir avec paraview
+
+
+utiliser paraview sur inti
+==========================
+1. d'abord, créer les alias suivants pour simplifier :
+alias paraview='~xstampdev/tools/run_paraview.sh'
+alias pvserver='~xstampdev/tools/run_pvserver.sh'
+
+2. lancer le serveur en parallele (NPROCS entre 1 et 64 suivant la taille des cas)
+$ NPROCS=4 NCORES=8 pvserver
+Waiting for client...
+Connection URL: cs://inti1201:11111         <- url à noter pour se connecter avec le client
+Accepting connection(s): inti1201:11111   
+
+3. lancer le client et le connecter au serveur
+paraview -url=cs://inti1201:11111
+

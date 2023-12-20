@@ -1,0 +1,261 @@
+#pragma once
+
+#include <utility>
+#include <exaStamp/molecule/molecule_compute_param.h>
+
+namespace exaStamp
+{
+  /**
+   * Signum function : give the sign of an expression (+1, -1 or 0)
+   */
+  template <typename T>
+  typename std::enable_if<std::is_unsigned<T>::value, int>::type
+  inline constexpr signum(T x) noexcept {
+    return T(0) < x;
+  }
+
+  template <typename T>
+  typename std::enable_if<std::is_signed<T>::value, int>::type
+  inline constexpr signum(T x) noexcept {
+    return (T(0) < x) - (x < T(0));
+  }
+
+  inline std::pair<double,double> intramolecular_quar( const MoleculeGenericFuncParam& p , double t)
+  {
+    const auto k2 = p[0];
+    const auto k3 = p[1];
+    const auto k4 = p[2];
+    const auto t0 = p[3];
+    double tmp = t-t0;
+    return { 2 * k2 *      tmp
+           + 3 * k3 *  pow(tmp,2)
+           + 4 * k4 *  pow(tmp,3)
+           ,
+             k2 * pow(tmp,2)
+           + k3 * pow(tmp,3)
+           + k4 * pow(tmp,4)
+           };  
+  }
+
+  inline std::pair<double,double> intramolecular_cos( const MoleculeGenericFuncParam& p , double _phi )
+  {
+    const auto k1 = p[0];
+    const auto k2 = p[1];
+    const auto k3 = p[2];
+    const auto phi0 = p[3];
+
+    bool opls_mode = ( phi0 >= 512 );
+    const double phi = opls_mode ? _phi : (_phi - phi0);
+    const double opls_fac = opls_mode ? -1.0 : 1.0;
+    
+    const double sin_phi = sin(phi);
+    const double sin_2phi = sin(2*phi);
+    const double sin_3phi = sin(3*phi);
+    const double cos_phi = cos(phi);
+    const double cos_2phi = cos(2*phi);
+    const double cos_3phi = cos(3*phi);
+    
+    return {
+       opls_fac *     k1 * sin_phi
+     +            2 * k2 * sin_2phi
+     + opls_fac * 3 * k3 * sin_3phi
+     ,
+       k1 * ( 1 - opls_fac * cos_phi )
+     + k2 * ( 1 -            cos_2phi )
+     + k3 * ( 1 - opls_fac * cos_3phi )
+     };
+  }
+
+
+  // base definition for an intra molecular ptoential. might also be used as a null potential
+  class IntraMolecularPotentialFunctional
+  {
+  public:
+    virtual inline std::pair<double,double> force_energy(double) const
+    {
+      return { 0., 0. };
+    }
+    virtual inline MoleculeGenericFuncParam generic_parameters() const
+    {
+      return {0.,0.,0.,0.};
+    }
+    virtual ~IntraMolecularPotentialFunctional() = default;
+  };
+
+  // Harm potential
+  class IntraMolecularHarmFunctional : public IntraMolecularPotentialFunctional
+  {
+  public:
+    inline IntraMolecularHarmFunctional(double _k, double _t0) : k(_k), t0(_t0) {}
+    inline std::pair<double,double> force_energy(double t) const override final
+    {
+      return intramolecular_quar( {k/2,0.,0.,t0} , t );
+/*      return {       k *     (t - t0)
+             , 0.5 * k * pow((t - t0),2) }; */
+    }
+    inline MoleculeGenericFuncParam generic_parameters() const override final
+    {
+      return {k/2,0.,0.,t0};
+    }
+  private:
+    double k = 0.0;
+    double t0 = 0.0;
+  };
+
+  // Harm potential 1.0
+  class IntraMolecularHarmX2Functional : public IntraMolecularPotentialFunctional
+  {
+  public:
+    inline IntraMolecularHarmX2Functional(double _k, double _t0) : k(_k), t0(_t0) {}
+    inline std::pair<double,double> force_energy(double t) const override final
+    {
+      return intramolecular_quar( {k,0.,0.,t0} , t );
+/*      return { 2.0 * k *     (t - t0)
+             ,       k * pow((t - t0),2) }; */
+    }
+    inline MoleculeGenericFuncParam generic_parameters() const override final
+    {
+      return {k,0.,0.,t0};
+    }
+  private:
+    double k = 0.0;
+    double t0 = 0.0;
+  };
+
+  // Quar potential
+  class IntraMolecularQuarFunctional : public IntraMolecularPotentialFunctional
+  {
+  public:
+    inline IntraMolecularQuarFunctional(double _k2, double _k3, double _k4, double _t0) : k2(_k2), k3(_k3), k4(_k4), t0(_t0) {}
+    inline std::pair<double,double> force_energy(double t) const override final
+    {
+      return intramolecular_quar( {k2,k3,k4,t0} , t );
+/*      double tmp = t-t0;
+      return { 2 * k2 *      tmp
+             + 3 * k3 *  pow(tmp,2)
+             + 4 * k4 *  pow(tmp,3)
+             ,
+               k2 * pow(tmp,2)
+             + k3 * pow(tmp,3)
+             + k4 * pow(tmp,4)
+             };*/
+    }
+    inline MoleculeGenericFuncParam generic_parameters() const override final
+    {
+      return {k2,k3,k4,t0};
+    }
+  private:
+    double k2 = 0.0;
+    double k3 = 0.0;
+    double k4 = 0.0;
+    double t0 = 0.0;
+  };
+
+  // Compass potential
+  class IntraMolecularCompassFunctional : public IntraMolecularPotentialFunctional
+  {
+  public:
+    inline IntraMolecularCompassFunctional(double _k1, double _k2, double _k3) : k1(_k1), k2(_k2), k3(_k3) {}
+    inline std::pair<double,double> force_energy(double phi) const override final
+    {
+      return intramolecular_cos( {k1,k2,k3,0.} , phi );
+/*      return {
+             k1 * sin(  phi)
+       + 2 * k2 * sin(2*phi)
+       + 3 * k3 * sin(3*phi)
+       ,
+         k1 * ( 1 - cos(  phi) )
+       + k2 * ( 1 - cos(2*phi) )
+       + k3 * ( 1 - cos(3*phi) )
+       }; */
+    }
+    inline MoleculeGenericFuncParam generic_parameters() const override final
+    {
+      return {k1,k2,k3,0.};
+    }
+  private:
+    double k1 = 0.0;
+    double k2 = 0.0;
+    double k3 = 0.0;
+  };
+
+  // Half Compass potential
+  class IntraMolecularHalfCompassFunctional : public IntraMolecularPotentialFunctional
+  {
+  public:
+    inline IntraMolecularHalfCompassFunctional(double _k1, double _k2, double _k3) : k1(_k1), k2(_k2), k3(_k3) {}
+    inline std::pair<double,double> force_energy(double phi) const override final
+    {
+      return intramolecular_cos( {k1/2,k2/2,k3/2,0.0} , phi );
+/*      return {
+           0.5 * k1 * sin(  phi)
+         +       k2 * sin(2*phi)
+         + 1.5 * k3 * sin(3*phi)
+       ,
+           k1/2 * ( 1 - cos(  phi) )
+         + k2/2 * ( 1 - cos(2*phi) )
+         + k3/2 * ( 1 - cos(3*phi) )
+       }; */
+    }
+    inline MoleculeGenericFuncParam generic_parameters() const override final
+    {
+      return {k1/2,k2/2,k3/2,0.0};
+    }
+  private:
+    double k1 = 0.0;
+    double k2 = 0.0;
+    double k3 = 0.0;
+  };
+
+  // OPLS potential
+  class IntraMolecularOPLSFunctional : public IntraMolecularPotentialFunctional
+  {
+  public:
+    inline IntraMolecularOPLSFunctional(double _k1, double _k2, double _k3) : k1(_k1), k2(_k2), k3(_k3) {}
+    inline std::pair<double,double> force_energy(double phi) const override final
+    {
+      return intramolecular_cos( {k1/2,k2/2,k3/2,512} , phi );
+/*      return {
+         - 0.5 * k1 * sin(  phi)
+         +       k2 * sin(2*phi)
+         - 1.5 * k3 * sin(3*phi)
+       ,
+           0.5 * k1 * ( 1 + cos(  phi) )
+         + 0.5 * k2 * ( 1 - cos(2*phi) )
+         + 0.5 * k3 * ( 1 + cos(3*phi) )
+       }; */
+    }
+    inline MoleculeGenericFuncParam generic_parameters() const override final
+    {
+      return {k1/2,k2/2,k3/2,512};
+    }
+  private:
+    double k1 = 0.0;
+    double k2 = 0.0;
+    double k3 = 0.0;
+  };
+
+  // CosTwo potential
+  class IntraMolecularCosTwoFunctional : public IntraMolecularPotentialFunctional
+  {
+  public:
+    inline IntraMolecularCosTwoFunctional(double _k, double _phi0) : k(_k), phi0(_phi0) {}
+    inline std::pair<double,double> force_energy(double phi) const override final
+    {
+      double tmp = phi - phi0;
+      return {       k * sin(2*tmp)
+             , 0.5 * k * ( 1 - cos(2*tmp) ) 
+             };
+    }
+    inline MoleculeGenericFuncParam generic_parameters() const override final
+    {
+      return {0.,k/2,0.,phi0};
+    }
+  private:
+    double k = 0.0;
+    double phi0 = 0.0;
+  };
+
+
+}
+

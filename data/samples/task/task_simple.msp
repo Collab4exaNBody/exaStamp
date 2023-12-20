@@ -1,0 +1,14 @@
+configuration:
+  profiling:
+    summary: true
+    memusage_threshold: 1024
+
+simulation:
+  parallel_tasks: true
+  body:
+    - task_simple_producer:
+        A: 99.9
+        B: 1031
+        C: [ 5.0 , -3.0 ]
+    - task_simple_consumer
+

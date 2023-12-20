@@ -1,0 +1,100 @@
+## Careful : order is important
+configuration:
+  +plugins:
+    - microStampIO
+    - microStampLCHBOP
+
+  logging:
+    debug: false
+    parallel: false
+    profiling: false
+
+  profiling:
+    operator: true
+    operator_exectime: false
+    operator_summary: true
+
+  debug:
+    plugins: false
+    dump_config: false
+    dump_graph: true
+    dump_search_path: false
+    dump_config_files: false
+    dump_graph_details: false
+
+global:
+  dt: 1.0e-4 ps
+  rcut_max: 8.8 ang
+  rcut_inc: 0.0 ang   # additional distance so that we don't have to rebuild neighbor list each time step
+  ghost_dist: 8.8 ang 
+  timestep: 0
+
+# atoms descriptions
+species:
+  - C:
+     z: 12
+     mass: 12.0107 Da
+     charge: 0.0 e-
+  - H:
+     z: 1
+     mass: 1.00794 Da
+     charge: -0.4680 e-
+
+LCHBOP_inits:
+   flag_vmr: false
+#   parameters
+#   nbclist
+#   LCHBOP_rc_perf         : [8e-10, 1.2e-10] 
+#   LCHBOP_rc: 8e-10 ang
+
+grid_flavor: grid_flavor_full
+
+input_data_xyz:
+  - read_xyz_file:
+     file: C216.xyz
+     resize_factor: 0.0025381
+
+domain:
+#  periodic: [true,true,true]
+#  grid_dims: [1,1,1]
+  cell_size: 2.2 ang
+
+init_particles:
+  - load_balance
+  - migrate_cell_particles
+  - rebuild_amr
+  - backup_r
+  - ghost_comm_scheme
+  - ghost_update_all_no_fv
+#  - update_particle_neighbors
+
+update_particle_neighbors:
+  - compute_primary_bonds:
+      rcut_max: 0.22
+      rcut_inc: 0.0
+  - compute_dual_bonds
+
+simulation:
+  - global
+  - domain
+  - grid_flavor
+  - species
+  - input_data_xyz
+  - init_particles
+  - LCHBOP_inits
+  - compute_loop:
+      loop: false
+      condition: compute_loop_continue
+      body:
+#        - update_particles
+        - push_position_2nd_order: { dt_scale: 1.0 }
+        - push_f_v: { dt_scale: 0.5 }
+        - ghost_update_r
+        - zero_force_energy
+        - cell_owner_rank
+        - LCHBOP_EF
+        - push_f_v: { dt_scale: 0.5 }
+        - write_vtk: {is_binary: false}
+        - end_iteration
+        - compute_loop_stop
+

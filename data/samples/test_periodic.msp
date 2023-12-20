@@ -1,0 +1,52 @@
+logging:
+  debug: false
+  parallel: false
+  profiling: false
+
+debug:
+  operator: true
+  operator_exectime: false
+  operator_summary: true
+  plugins: true
+  config: true
+  graph: true
+  graph_lod: 3
+
+# define potential we'll reuse later
+compute_force:
+  symetric: true
+  virial: false
+  potential: lj
+  parameters: { epsilon: 9.340E-20 J , sigma: 0.227E-09 m }
+  rcut: 5.68 ang
+
+# atoms descriptions
+species:
+  - Copper:
+      mass: 105.486E-27 kg
+      z: 29
+      charge: 0 e-
+
+grid_flavor: grid_flavor_minimal
+
+input_data:
+  - read_stamp:
+      file: droplet.mpio
+      bounds_mode: COMPUTED
+      enlarge_bounds: 1.0 ang
+  - replicate_domain: [3,3,3]
+#  - grid_stats
+#  - shift_v: [ 10, 10, 10 ]
+
+domain:
+  grid_dims: [12,12,12]
+  periodic: [true,true,true]
+
+# (optional) specialize update_particles for the mono material symetric particular case
+update_particle_neighbors:
+  - compute_primary_neighbors_monomat
+  - resize_particle_locks
+
+global:
+  simulation_end_iteration: 100
+

@@ -1,0 +1,1262 @@
+\documentclass[12pt]{article}
+
+\usepackage{xcolor}
+
+\usepackage{listings}%
+\lstset { %
+  language=C++,
+  backgroundcolor=\color{black!5}, % set backgroundcolor
+  basicstyle=\footnotesize\ttfamily,
+  breaklines=true,
+  keywordstyle=\color{blue}\ttfamily,
+  stringstyle=\color{red}\ttfamily,
+  commentstyle=\color{teal}\ttfamily,
+}
+
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{physics}
+
+\title{ExaStamp: SNAP specifications}
+\pagestyle{plain}
+
+\begin{document}
+
+  \newcommand{\spec}[1]{\colorbox{green!60}{\texttt{\detokenize{#1}}}} % specified (imposed) names.
+  \newcommand{\chk}[1]{\colorbox{blue!60}{\texttt{\detokenize{#1}}}} % check with CEA: on what to do.
+  \newcommand{\todo}{\colorbox{red!60}{TODO}}
+
+  \maketitle
+
+  \section{Purpose}
+
+  The purpose of this document is to specify the implementation of the SNAP potential \cite{Thompson_01} in ExaStamp.
+
+  \section{Physical and mathematical description}
+  This section summurizes the key-points of the theory developed by Bartok \cite{Bartok_01} and Thompson \cite{Thompson_01}.
+
+  \subsection{Introduction to SNAP potential}
+  The Spectral Neighbor Analysis Potential (SNAP) \cite{Thompson_01} is based on the Gaussian Approximation Potential (GAP) \cite{Bartok_01}. 
+  In GAP's approach, the environment of the atoms of the studied material is described by a quantity, the bispectrum, which is invariant to rotations,
+  translations and permutation of atoms, and is a complete representation, i.e. there is a bijection between bispectrum and atomic configurations. 
+  The potential energy surface,  which is the physical quantity we want to compute, is the sum of atomic energy functions, these functions depending 
+  on bispectrum elements. \\
+
+  \subsection{SNAP potential}
+
+  \subsection{Bispectrum}
+  We consider a configuration of $N$ atoms. Considering $\vec{r}$ the position vector, the definition of the local atomic density of the atom $i$ which has $j$ neighbours is:
+
+\begin{equation}
+\rho_i \left(\vec{r}\right)=\sum_{j} \delta\left(\vec{r}-\vec{r}_{ij}\right)
+\end{equation}
+
+  Now we choose to use an hypersphere of a 4-D space, which is homeomorphic to a subset of the classical 3-D space. For any vector $\vec{\left(r\right)}$, we define the 3 parametric angles of the sphere as follows:
+\begin{align} 
+\phi &= \arctan\left(y/x\right)  \notag \\
+\theta &= \arccos\left(z/|r| \right) \\
+\theta_0 &= |r|/r_0  \notag
+\end{align}
+  
+The angle $\theta_0$ contains the information about the distance, and $r_0>r_{cut}/{\pi}$ is an arbitrary parameter. \\
+
+A function $\rho$ in the 3-D space can be represented using the hyperspherical harmonics $U^j_{mm'}\left(\phi,\theta,\theta_0\right)$ of that 3-D hypersphere of the 4-D space. We have:
+\begin{align}
+\rho \left(\vec{r}\right) = \sum_{j=0}^{+\infty} \sum_{m,m'=-j}^j c_{mm'}^j U_{mm'}^j \left( \phi,\theta,\theta_0 \right)
+\end{align}
+
+with 
+
+\begin{align}
+c^j_{mm'}=\bra{U_{mm'}^j}\ket{\rho}
+\end{align}  
+
+These quantities $c^j_{mm'}$ can therefore be evaluated, as the scalar product is:
+
+\begin{align}
+\bra{f}\ket{g}=\int f^\ast \left(\vec{r}\right) g \left(\vec{r}\right) d\vec{r}
+\end{align}
+
+\begin{align}
+c^j_{mm'} &= \bra{U_{mm'}^j}\ket{\rho} \notag \\
+          &= \int {U^\ast}^j_{mm'} \left(\vec{r}\right) \rho\left(\vec{r}\right) d\vec{r} \\
+	  &= \sum_k \int {U^\ast}^j_{mm'} \left(\vec{r}\right) \delta \left(\vec{r}-\vec{r}_{ik} d\vec{r} \right) \notag \\
+\end{align}
+With the well-known properties of the Dirac function, we finally obtain the value of the coefficients:
+\begin{align}
+c^j_{mm'}= \sum_k {U^\ast}^j_{mm'} \left( \phi\left(\vec{r}_k\right) , \theta\left(\vec{r}_k\right), \theta_0 \left(\vec{r}_k\right) \right)
+\end{align}
+
+The sum is done on the index $k$ which stands for atoms in neighnorhood of the atom $i$.
+Bartok \cite{Bartok_01} shows that the bispectrum components can be written as:
+
+\begin{align}
+B_{j_1,j_2,j}=\sum_{m_1,m'_1=-j_1}^{j_1} \sum_{m_2,m'_2=-j_2}^{j_2} \sum_{m,m'=-j}^{j} \left(c_{m,m'}^j\right)^\ast C^{j m}_{j_1 m_1 j_2 m_2}  C^{j m'}_{j_1 m'_1 j_2 m'_2} c^{j_1}_{m_1 m'_1} c^{j_2}_{m_2 m'_2}
+\end{align}
+
+where $C^{j m}_{j_1 m_1 j_2 m_2}$ and $C^{j m'}_{j_1 m'_1 j_2 m'_2}$ coefficients are the Clebsch-Gordan coefficients. \\
+
+With considerations of symetry on indices in Clebsch-Gordan coefficients and in generalized spherical harmonics, Thompson \cite{Thompson_01} shows that the bispectrum can be written in the following more effective way:
+
+\begin{eqnarray} \label{eqn:thompson_bs}
+B_{j_1,j_2,j}=\sum_{m,m'}^j \left(c_{m,m'}^j\right)^\ast \sum_{m_1,m'_1=-j_1}^{j_1} \sum_{m_2,m'_2=-j_2}^{j_2} C^{j m}_{j_1 m_1 j_2 m_2}  C^{j m'}_{j_1 m'_1 j_2 m'_2} c^{j_1}_{m_1 m'_1} c^{j_2}_{m_2 m'_2}
+\end{eqnarray}
+
+To compute the bispectrum components, we can see that we need to compute:
+
+\begin{enumerate}
+	\item the Clebsch-Gordan coefficients for the indexes $j,j_1,j_2$ integers or half-integers, and for $m \in \{-j,-j+1,...,j-1,j\}$, $m_1 \in \{-j_1,-j_1+1,...,j_1-1,j_1\}$, $m_2 \in \{-j_2,-j_2+1,...,j_2-1,j_2\}$,
+	\item the generalized spherical harmonics that are needed to compute the $c^j_{mm'}$ coefficients.
+\end{enumerate}
+
+ \subsection{Clebsch-Gordan coefficients}
+
+The Clebsch-Gordan coefficients \cite{Caola_01} $C^{j m}_{j_1 m_1 j_2 m_2}$ satisfy some interesting and useful properties \cite{MW}: 
+
+\begin{itemize} 
+\item $j,j_1,j_2$ are positive integers or half integers
+\item $j+j_1+j_2$ is an integer
+\item $m,m_1,m_2$ are positive or negative integers or half-integers
+\item $m \in [\![-j,j]\!]$
+\item $m_1 \in [\![-j_1,j_1]\!]$
+\item $m_2 \in [\![-j_2,j_2]\!]$
+\item $j_1+j_2-j \ge 0$
+\item $j_1-j_2+j \ge 0$
+\item $-j_1+j_2+j \ge 0$
+\item $C^{j m}_{j_1 m_1 j_2 m_2}=0$ if $m_1+m_2 \not= m$ \\
+\end{itemize}
+
+The Clebsch-Gordan coefficients can be computed using the Wigner-3j symbols, written $\bigl( \begin{smallmatrix} j_1 & j_2 & j \\ m_1 & m_2 & -m \end{smallmatrix} \bigr)$ following the relation:
+
+\begin{eqnarray}
+C^{j m}_{j_1 m_1 j_2 m_2}=\left(-1\right)^{m+j_1-j_2} \sqrt{2 j+1} \times \begin{pmatrix} j_1 & j_2 & j \\ m_1 & m_2 & -m \end{pmatrix}
+\end{eqnarray}
+
+The Wigner-3j symbols can be computed using the following formula:
+
+\begin{eqnarray}
+\lefteqn{ \begin{pmatrix} j_1 & j_2 & j \\ m_1 & m_2 & -m \end{pmatrix}  = (-1)^{j_1+j_2-j} \times \sqrt{\Delta\left(j_1\, j_2\, j\right)} } \\ 
+& \times \sqrt{\left(j_1+m_1\right)! \left(j_1-m_1\right)! \left(j_2+m_2\right)! \left(j_2-m_2\right)! \left(j+m\right)! \left(j-m\right)!} \nonumber \\
+& \times \sum_{t} \frac{\left(-1\right)^t}{x} \nonumber
+\end{eqnarray}
+
+with $\Delta\left(j_1\, j_2\, j\right)$ being the Triangle term:
+
+\begin{eqnarray}
+\Delta \left(j_1\, j_2\, j\right) = \frac{\left(j_1+j_2-j\right)! \left(j_1-j_2+j\right)! \left(-j_1+j_2+j\right)!}{\left(j_1+j_2+j+1\right)!}
+\end{eqnarray}
+
+and with $x$ :
+
+\begin{eqnarray}
+x & =t!\left(j-j_2+t+m_1\right)! \left(j-j_1+t-m_2\right)! \left(j_1+j_2-j-t\right)! \\
+& \times \left(j_1-t-m_1\right)! \left(j_2-t+m_2 \right)! \nonumber
+\end{eqnarray}
+
+The sum is over all integers t such as the factorials are defined, i.e. have non-negative arguments.
+
+ \subsection{Generalized spherical harmonics}
+
+Generalized spherical harmonics verify recurrence relations that allow to compute it in a more efficient way than directly from the construction of the matrix elements \cite{Bartok_01}. These recurrence relations are :
+
+\begin{eqnarray} \label{eqn:gsh_b7}
+U^j_{m m'}\left(\theta_0,\theta,\phi\right) & =\sqrt{\dfrac{j-m}{j-m'}}\times u^\ast U^{j-\frac{1}{2}}_{m+\frac{1}{2} m'+\frac{1}{2}}\left(\theta_0,\theta,\phi\right) \nonumber \\ 
+& - i \sqrt{\dfrac{j+m}{j-m'}}v e^{-i\phi}U^{j-\frac{1}{2}}_{m-\frac{1}{2} m'+\frac{1}{2}}\left(\theta_0,\theta,\phi\right) \\
+& \text{for } m' \neq j \nonumber
+\end{eqnarray}
+
+
+\begin{eqnarray} \label{eqn:gsh_b8}
+U^j_{m m'}\left(\theta_0,\theta,\phi\right) & =\sqrt{\dfrac{j+m}{j+m'}}\times u^\ast U^{j-\frac{1}{2}}_{m-\frac{1}{2} m'-\frac{1}{2}}\left(\theta_0,\theta,\phi\right) \nonumber \\ 
+& - i \sqrt{\dfrac{j-m}{j+m'}}v e^{i\phi}U^{j-\frac{1}{2}}_{m+\frac{1}{2} m'-\frac{1}{2}}\left(\theta_0,\theta,\phi\right) \\
+& \text{for } m' \neq -j \nonumber
+\end{eqnarray}
+
+with 
+
+\begin{eqnarray} \label{eqn:uandv}
+u =& \cos{\theta_0}-i \sin{\theta_0}\cos{\theta}=\dfrac{z_0-iz}{r_0} \\
+v =& \sin{\theta_0}\sin{\theta} = e^{i \phi} \dfrac{x-i y}{r_0}=e^{-i \phi} \dfrac{x+i y}{r_0}
+\end{eqnarray}
+
+These equalities derive from basic trigonometry and the definition of the angles and coordinates :
+
+\begin{eqnarray}
+x = & r_0 \sin{\theta_0} \sin{\theta} \cos{\phi} \nonumber \\ 
+y = & r_0 \sin{\theta_0} \sin{\theta} \sin{\phi} \nonumber \\
+z = & r_0 \sin{\theta_0} \cos{\theta} \\
+z_0 =  & r_0 \cos{\theta_0} \nonumber
+\end{eqnarray}
+
+The initialization of the relation is done with the first values :
+
+\begin{eqnarray}
+U^0_{0 0} =& \dfrac{1}{\sqrt{2}}\dfrac{z_0 \pm i z }{r} \\
+U^{\frac{1}{2}}_{\pm \frac{1}{2} \mp \frac{1}{2}} =& -\dfrac{i}{\sqrt{2}}\dfrac{x \mp i y}{r} \nonumber
+\end{eqnarray}
+
+	\subsection{Derivative of generalized spherical harmonics}
+
+In order to compute the force derivating from the SNAP potential, we need to compute the derivative of the generalized spherical harmonics. The derivation of the equations \ref{eqn:gsh_b7} and \ref{eqn:gsh_b8} leads to these recurrence relations:
+
+\begin{eqnarray} \label{eqn:dgsh_b8}
+\dfrac{\partial U^j_{m m'}}{\partial r^\alpha} =& \sqrt{\dfrac{j-m}{j-m'}}\times \left(\dfrac{\partial u^\ast}{\partial r^\alpha} U^{j-\frac{1}{2}}_{m+\frac{1}{2} m'-\frac{1}{2}}+u^\ast \dfrac{\partial U^{j-}\frac{1}{2}_{m+\frac{1}{2} m'-\frac{1}{2}}}{\partial r^{\alpha}}\right) \\
+-& i \sqrt{\dfrac{j+m}{j-m'}}\times \left(\dfrac{\partial\left(ve^{-i\phi}\right)}{\partial r^\alpha} U^{j-\frac{1}{2}}_{m-\frac{1}{2} m'+\frac{1}{2}}+v e^{-i\phi} \dfrac{\partial U^{j-\frac{1}{2}}_{m-\frac{1}{2} m'+\frac{1}{2}}}{\partial r^\alpha}\right) \nonumber \\
+& \text{for } m \neq j \nonumber
+\end{eqnarray}
+
+\begin{eqnarray} \label{eqn:dgsh_b7}
+\dfrac{\partial U^j_{m m'}}{\partial r^\alpha} =& \sqrt{\dfrac{j+m}{j+m'}}\times \left(\dfrac{\partial u}{\partial r^\alpha} U^{j-\frac{1}{2}}_{m-\frac{1}{2} m'-\frac{1}{2}}+u \dfrac{\partial U^{j-\frac{1}{2}}_{m-\frac{1}{2} m'-\frac{1}{2}}}{\partial r^\alpha}\right) \\
+-& i \sqrt{\dfrac{j-m}{j+m'}}\times \left(\dfrac{\partial\left(ve^{i\phi}\right)}{\partial r^\alpha} U^{j-\frac{1}{2}}_{m+\frac{1}{2} m'-\frac{1}{2}}+v e^{i\phi} \dfrac{\partial U^{j-\frac{1}{2}}_{m+\frac{1}{2} m'-\frac{1}{2}}}{\partial r^\alpha}\right) \nonumber \\
+& \text{for } m' \neq -j \nonumber
+\end{eqnarray}
+
+
+where $r^\alpha$ is $x$, $y$ or $z$.
+We need to compute the derivative of the quantities $u$, $u^\ast$, $v e^{i\phi}$ and $v e^{-i\phi}$ defined by relations \ref{eqn:uandv}. Here after is the way to compute $\dfrac{\partial v e^{-i\phi}}{\partial x}$:
+
+\begin{eqnarray}
+\dfrac{\partial v e^{-i\phi}}{\partial x} =& \dfrac{\partial \left(\dfrac{x-i y}{r_0}\right)}{\partial x} \nonumber \\
+=& \dfrac{1}{r_0}+\left(x-i y\right)\left(-\dfrac{1}{r_0^2}\right)\dfrac{\partial r_0}{\partial x} \\
+=& \dfrac{1}{r_0}-\dfrac{x-i y}{r_0^2}\dfrac{\partial r_0}{\partial x} \nonumber 
+\end{eqnarray}
+
+We use the relation between coordinates to compute $\frac{\partial r_0}{\partial x}$:
+
+\begin{eqnarray}
+r=\sqrt{x^2+y^2+z^2}=r_0 \sin \theta_0
+\end{eqnarray}
+We therefore have:
+\begin{eqnarray}
+\dfrac{\partial \dfrac{1}{r_0}}{\partial x}=&\dfrac{\partial \frac{\sin \theta_0}{r}}{\partial x} \nonumber \\
+=&\dfrac{\cos \theta_0}{r} \dfrac{\partial \theta_0}{\partial x} - \dfrac{\sin \theta_0}{r^2}\dfrac{\partial r}{\partial x} 
+\end{eqnarray}
+
+Considering that $\theta_0=\dfrac{r}{r_1}$ with $r_1$ an arbitrary constant close to $r_{cut}$, we have:
+
+\begin{eqnarray}
+\dfrac{\partial \dfrac{1}{r_0}}{\partial x}=&\dfrac{\cos \theta_0}{r \times r_1} \dfrac{\partial r}{\partial x} - \dfrac{\sin \theta_0}{r^2}\dfrac{\partial r}{\partial x} \nonumber \\
+&=\dfrac{1}{r}\left(\dfrac{\cos \theta_0}{r_1}-\dfrac{\sin \theta_0}{r}\right) \dfrac{\partial r}{\partial x}
+\end{eqnarray}
+
+One can introduce the quantity $l_0=1/r_0=\dfrac{\sin \theta_0}{r}$, and rewrite this equation:
+
+\begin{eqnarray}
+\dfrac{\partial l_0}{\partial x}=\dfrac{1}{r}\left(\dfrac{\cos \theta_0}{r_1}-l_0\right) \dfrac{\partial r}{\partial x}
+\end{eqnarray}
+
+Introducing this quantity, we now have:
+
+\begin{eqnarray}
+\dfrac{\partial v e^{-i\phi}}{\partial x} =&\dfrac{\partial \left[ l_0\left(x-iy\right)\right]}{x} \nonumber \\
+&=\dfrac{\partial l_0}{\partial x}\left(x-iy\right)+l_0\dfrac{\partial\left(x-iy\right)}{\partial x}
+\end{eqnarray}
+Derivating the relation between $r$ and the coordinates, we obtain:
+
+\begin{eqnarray}
+\dfrac{\partial r}{\partial x}=\dfrac{x}{r}
+\end{eqnarray}
+
+and we now can compute $\dfrac{\partial v e^{-i\phi}}{\partial x}$:
+
+\begin{eqnarray}
+\dfrac{\partial v e^{-i\phi}}{\partial x}=\dfrac{1}{r}\left(\dfrac{\cos \theta_0}{r_1}-l_0\right)\left(x-iy\right) \dfrac{x}{r}+l_0
+\end{eqnarray}
+
+The derivatives according to other coordinates are obtained by the same kind of calculus:
+
+\begin{eqnarray} \label{eqn:dv}
+\dfrac{\partial v e^{-i\phi}}{\partial y}=&\dfrac{1}{r}\left(\dfrac{\cos \theta_0}{r_1}-l_0\right)\left(x-i y\right)\dfrac{y}{r}-i l_0  \nonumber \\
+\dfrac{\partial v e^{-i\phi}}{\partial z}=&\dfrac{1}{r}\left(\dfrac{\cos \theta_0}{r_1}-l_0\right)\left(x-i y\right)\dfrac{z}{r}         \nonumber \\
+\dfrac{\partial v e^{i\phi}}{\partial x} =&\dfrac{1}{r}\left(\dfrac{\cos \theta_0}{r_1}-l_0\right)\left(x+i y\right)\dfrac{x}{r}+l_0              \\
+\dfrac{\partial v e^{i\phi}}{\partial y} =&\dfrac{1}{r}\left(\dfrac{\cos \theta_0}{r_1}-l_0\right)\left(x+i y\right)\dfrac{y}{r}+i l_0  \nonumber \\
+\dfrac{\partial v e^{i\phi}}{\partial z} =&\dfrac{1}{r}\left(\dfrac{\cos \theta_0}{r_1}-l_0\right)\left(x+i y\right)\dfrac{z}{r}         \nonumber 
+\end{eqnarray}
+
+The same kind of calculus leads to the derivatives of $u$: 
+
+\begin{eqnarray}
+\dfrac{\partial u}{\partial x}=&\dfrac{\partial l_0\left(z_0-iz\right)}{\partial x}  \nonumber \\
+=& \left(z_0-iz\right) \dfrac{\partial l_0}{\partial x} + l_0 \dfrac{\partial \left(z_0-iz\right)}{\partial x} 
+\end{eqnarray}
+
+To compute the derivative of $z_0$ according to $x$, we need to remember that we are on the hypersphere of the 4-D space, so $z_0$ is related to the other coordinates:
+
+\begin{eqnarray}
+z_0=\dfrac{r}{\tan \theta_0}
+\end{eqnarray}
+
+so that the derivative is:
+
+\begin{eqnarray}
+\dfrac{\partial z_0}{\partial x}=&\dfrac{1}{\tan \theta_0}\dfrac{dr}{dx}-\dfrac{r}{\tan^2 \theta_0} \cos^2 \theta_0 \dfrac{\partial \theta_0}{\partial x} \nonumber \\
+&=\left(\dfrac{1}{\tan \theta_0}-\dfrac{1}{\sin^2\theta_0} \dfrac{r}{r_1}\right)\dfrac{\partial r}{\partial x} \\ 
+&=\left(\dfrac{1}{\tan \theta_0}-\dfrac{\theta_0}{\sin^2\theta_0}\right)\dfrac{x}{r} \nonumber 
+\end{eqnarray}
+
+We finally obtain:
+
+\begin{eqnarray} \label{eqn:dux}
+\dfrac{\partial u}{\partial x}=\left[\left(z_0-iz\right)\dfrac{1}{r}\left(\dfrac{\cos \theta_0}{r_1}-l_0\right)+l_0 \left(\dfrac{1}{\tan \theta_0}-\dfrac{\theta_0}{\sin^2\theta_0}\right)\right]\dfrac{x}{r}
+\end{eqnarray}
+
+The other derivatives are obtained by the same kind of calculus:
+
+\begin{eqnarray}\label{eqn:du}
+\dfrac{\partial u}{\partial y}=&\left[\left(z_0-iz\right)\dfrac{1}{r}\left(\dfrac{\cos \theta_0}{r_1}-l_0\right)+l_0 \left(\dfrac{1}{\tan \theta_0}-\dfrac{\theta_0}{\sin^2\theta_0}\right)\right]\dfrac{y}{r} \nonumber \\
+\dfrac{\partial u}{\partial z}=&\left[\left(z_0-iz\right)\dfrac{1}{r}\left(\dfrac{\cos \theta_0}{r_1}-l_0\right)+l_0 \left(\dfrac{1}{\tan \theta_0}-\dfrac{\theta_0}{\sin^2\theta_0}\right)\right]\dfrac{z}{r}-i l_0 \nonumber \\
+\dfrac{\partial u^\ast}{\partial x}=&\left[\left(z_0+iz\right)\dfrac{1}{r}\left(\dfrac{\cos \theta_0}{r_1}-l_0\right)+l_0 \left(\dfrac{1}{\tan \theta_0}-\dfrac{\theta_0}{\sin^2\theta_0}\right)\right]\dfrac{x}{r} \\
+\dfrac{\partial u^\ast}{\partial y}=&\left[\left(z_0+iz\right)\dfrac{1}{r}\left(\dfrac{\cos \theta_0}{r_1}-l_0\right)+l_0 \left(\dfrac{1}{\tan \theta_0}-\dfrac{\theta_0}{\sin^2\theta_0}\right)\right]\dfrac{y}{r} \nonumber \\
+\dfrac{\partial u^\ast}{\partial z}=&\left[\left(z_0+iz\right)\dfrac{1}{r}\left(\dfrac{\cos \theta_0}{r_1}-l_0\right)+l_0 \left(\dfrac{1}{\tan \theta_0}-\dfrac{\theta_0}{\sin^2\theta_0}\right)\right]\dfrac{z}{r}+i l_0 \nonumber 
+\end{eqnarray}
+%\begin{eqnarray}
+%\dfrac{\partial u}{\partial x}=&\dfrac{\partial\left(\dfrac{z_0-i z}{r_0}\right)}{\partial x} \nonumber \\
+%=&-x\dfrac{z_0-iz}{r_0^3} \nonumber \\
+%\dfrac{\partial u}{\partial y}=&-y\dfrac{z_0-i z}{r_0^3} \nonumber \\
+%\dfrac{\partial u}{\partial z}=&-z\dfrac{z_0-i z}{r_0^3} -\dfrac{i}{r_0} \\
+%\dfrac{\partial u^\ast}{\partial x}=&-x\dfrac{z_0+i z}{r_0^3} \nonumber \\
+%\dfrac{\partial u^\ast}{\partial y}=&-y\dfrac{z_0+i z}{r_0^3} \nonumber \\
+%\dfrac{\partial u^\ast}{\partial z}=&-z\dfrac{z_0+i z}{r_0^3}+\dfrac{i}{r_0} \nonumber
+%\end{eqnarray}
+
+
+	\subsection{Energy and forces}
+
+As mentioned in \cite{Bartok_01}, in Quantum Mecanics atomic energies are not directly accessible: only the total energy of a configuration can be determined, and the forces on each atom. The energy of a configuration can be decomposed in a local contribution and a long-range contribution. This long-range contribution, which is the electrostatic part of the energy, is negligible in atomic systems. \\
+As mentioned in Bartok's thesis \cite{Bartok_01} and in Thompson's article \cite{Thompson_01}, we assume that the local energy is the sum of separate contributions from each atom in the neighbourhood. Thompson considers that, for every material examined so far, the energy and the forces can be obtained by linear contributions from the lowest-order bispectrum components. These coefficients only depend on the chemical type of the central atom, and the energy can be written: 
+
+\begin{eqnarray} \label{eqn:energy}
+E_{SNAP}^{i} \left(\boldsymbol{B^i}\right)=\beta_0^{\alpha_i}+\sum_{k=1}^K \beta_k^{\alpha_i} B_k^i=\beta_0^{\alpha_i}+\boldsymbol{\beta^{\alpha_i}}  \boldsymbol{. \ B^i}
+\end{eqnarray}
+
+with $E^i$ the local energy of atom $i$, $\boldsymbol{B^i}$ the $K$ components of the bispectrum of atom $i$, $\alpha_i$ the chemical type of atom $i$ and $\beta_k^{\alpha_i}$ the linear coefficients for atoms of type $\alpha_i$. \\
+
+Finally, the total SNAP energy at a position $\boldsymbol{r}^N$ is the sum of the contributions in the neighbourhood of atom $i$: 
+
+\begin{eqnarray} \label{totenergy}
+E_{SNAP}\left(\boldsymbol{r}^N\right)=\sum_{atoms} E_{SNAP}^i=\sum_{i=1}^N \left( \beta_0^{\alpha_i}+\boldsymbol{\beta^{\alpha_i}}\boldsymbol{ . \ B^i}\right)
+\end{eqnarray}
+
+The force on atom $j$ can be obtained from the derivative of that energy with respect to its position $\boldsymbol{r}_j$:
+
+\begin{eqnarray}
+\boldsymbol{F}_{SNAP}^j=-\sum_{i=1}^N \boldsymbol{\beta^{\alpha_i} . \ }\dfrac{\partial \boldsymbol {B^i }}{\partial \boldsymbol{r_j}}
+\end{eqnarray}
+
+where $N$ are the atoms in the neighbourhood of atom $j$.
+
+  \section{Kernels}
+
+    Kernels are here willingly presented from a "logical" point of view: that is, for each kernel, one emphasizes the inputs, the outputs,
+    the API, the kernel core (callee) and the context of use (caller). This helps to focus on the logic of each kernel. In the context
+    of ExaStamp, these kernels may have a different shape (wrapped in class, use member instead of class, ...).
+
+    \subsection{Kernel 1: compute the Clebsch-Gordan coefficients}
+
+
+      \subsubsection{API}
+
+        We define a class snapCg which will provide to the code the method to compute the coefficients and to access it. This class has one public member variable and two public member functions, and all the other content is private:\\
+	\begin{lstlisting}
+class snapCg {
+
+  public:
+    snapCg(double const &_jmax, int const &_nt);		//constructor
+
+    double val(int j, int j1, int j2, int m, int m1, int m2) {  //returns cg(j,j1,j2,m,m1,m2)
+      return cg_tab[index(j,j1,j2,m,m1,m2)];
+    }
+
+    int size() { 					//returns the number of cg coefficients (useless ?)
+      return cg_tab.size();
+    }
+
+    double get_jmax() const { //returns jmax
+       return _jmax;
+    }
+
+    int compute(); 					 	//computes all the coefs
+
+    int index(int j, int j1, int j2, int m, int m1, int m2) {    // returns the index in the array of cg coefs
+      int idx_tabm= (m2+j2)/_nt + (m1+j1)/_nt*((2*j2)/_nt+1)+(m+j)/_nt*((2*j1)/_nt+1)*((2*j2)/_nt+1) ; //index in the subarray (m,m1,m2)
+      return tab_idxj[idx_tabj(j,j1,j2)]+idx_tabm; // sum of the beginning of the subarray(offset)+index in the subarray
+    }
+
+    vector<double> cg_tab;					// array of coefs
+
+    vector<int> tab_idxj;					// array of offsets to find the subset(m,m1,m2) in the array
+
+    int _nt;							// input parameter <=> ntype
+
+    int idx_tabj(int j, int j1, int j2) {			// returns the index in the array of offsets 
+      return j2+j1*(nt_jmax+1)+j*pow(nt_jmax+1,2);
+    }
+
+    int nt_jmax;						// jmax*ntype
+    double _jmax;						// input parameter jmax
+
+  private:
+
+    int factorial(int const n, double & f);			// return f*n!
+    int wigner3j(int const j, int const m,			// computes wigner3j symbols
+		 int const j1,int const m1,
+		 int const j2,int const m2,
+		 double & w3j);
+    int compute_cg(int const j,int const m,			// computes one coefficient
+	       	 int const j1,int const m1,
+		 int const j2,int const m2,
+		 double & onecg);
+    static double const _factorial[168];			// tabulated n! values
+};
+	\end{lstlisting}
+
+      \subsubsection{Kernel context}
+    To generate the Clebch-Gordan coefficients, one should declare an object of the class snapCg and call the member function as follows:\\
+	\begin{lstlisting}
+  snapCg cg(jmax,nt);     
+  int rc= cg.compute();
+	\end{lstlisting}
+   To access the coefficients, one should call the member function cg\_val:
+	\begin{lstlisting}
+   double valcg;
+   valcg= cg.val(j,j1,j2,m,m1,m2);
+	\end{lstlisting}
+
+   The input parameter $nt$ is implemented, because it is present in the Fortran code (called $ntype$ in it) which is one of the reference for this work. In the case of the SNAP potential calculation, this parameter is not needed. It allows to map the half-integers $j$ indices on integers, and only permits in our case to compute only the appropriate coefficients for $m$ indices required. It therefore has two purposes, and must be set in SNAP's context to $nt=2$. 
+      \subsubsection{Kernel implementation}
+
+        The following pseudo-code illustrate the implementation of the member functions:
+        \begin{lstlisting}
+snapCg::snapCg(double const &jmax, int const &nt) : _jmax(jmax), _nt(nt), cg_tab(0.), tab_idxj(0) , nt_jmax(floor(_nt*_jmax)) {}; 
+
+//Member functions
+//
+//Public member functions 
+//
+//Returns cg coefficient for (j,j1,j2,m,m1,m2)
+//Computes all the cg coefficients
+int snapCg::compute() {
+  int cnt_cg=0;
+  cout << "compute_cg: calcul des cg, nt_jmax=" << nt_jmax << endl;
+  cout << "_nt=" << _nt << endl;
+  cout << "_jmax=" << _jmax << endl;
+  cout << "floor(_nt*_jmax)" << floor(_nt*_jmax) << endl;
+  nt_jmax=floor(_nt*_jmax);
+  tab_idxj.resize(pow(nt_jmax+1,3));
+  for (int j = 0; j <= nt_jmax; ++j) {
+    for (int j1 = 0; j1 <= nt_jmax; ++j1) {
+      for (int j2 = 0; j2 <= nt_jmax; ++j2) {
+	      tab_idxj[idx_tabj(j,j1,j2)]=cnt_cg;
+        if (j1+j2-j  < 0) {tab_idxj[idx_tabj(j,j1,j2)]=-99; continue;} // undefined
+        if (j-j1+j2  < 0) {tab_idxj[idx_tabj(j,j1,j2)]=-99; continue;} // undefined
+        if (j-j2+j1  < 0) {tab_idxj[idx_tabj(j,j1,j2)]=-99; continue;} // undefined
+        if ((j+j1+j2)%_nt==1) {tab_idxj[idx_tabj(j,j1,j2)]=-99; continue;}  //undefined: j+j1+j2 integer
+        for (int m = -j; m <= j; m+=_nt) {
+          for (int m1 = -j1; m1 <= j1; m1+=_nt) {
+            for (int m2 = -j2; m2 <= j2; m2+=_nt) {
+              double cgval = 0.;
+              if (m-m1-m2 != 0) {cg_tab.push_back(cgval); cnt_cg+=1; continue;} // push_back all defined values
+              int rc = compute_cg(j1, m1, j2, m2, j, m, cgval);
+              if (rc != 0) {cerr << "Error: compute_cg KO" << endl; return 1;}
+              cg_tab.push_back(cgval);
+	            cnt_cg+=1;
+  	    }
+	  }
+	}
+      }
+    }
+  }
+  return 0;
+}
+
+//Private member functions
+//
+//Returns the index in the array of cg coefficients
+//Computes one cg coefficient
+int snapCg::compute_cg(int const j1, int const m1,
+                       int const j2, int const m2,
+                       int const j,  int const m,
+                       double & onecg) {
+  onecg = 0.; // Reset out parameter.
+  // http://mathworld.wolfram.com/Wigner3j-Symbol.html (19)
+  double w3j = 0.;
+  int rc = wigner3j(j1, m1, j2, m2, j, -m, w3j);
+  if (rc != 0) {cerr << "Error: wigner3j KO" << endl; return 1;}
+  onecg = pow(-1., (m+j1-j2)/_nt)*sqrt((2.*j)/_nt+1.)*w3j;
+  return 0;
+}
+
+//Computes Wigner3j symbol for (j1,m1,j2,m2,j,m)
+int snapCg::wigner3j(int const j1, int const m1,
+                     int const j2, int const m2,
+                     int const j,  int const m,
+                     double & w3j) {
+  w3j = 0.; // Reset out parameter.
+
+  // http://mathworld.wolfram.com/TriangleCoefficient.html
+
+  int rc = 0;
+  double tcn = 1.; // Triangle coefficient: numerator.
+  rc = factorial( (j1+j2-j)/_nt,    tcn); if (rc != 0) {cerr << "Error: bad factorial" << endl; return 1;}
+  rc = factorial( (j1-j2+j)/_nt,    tcn); if (rc != 0) {cerr << "Error: bad factorial" << endl; return 1;}
+  rc = factorial((-j1+j2+j)/_nt,    tcn); if (rc != 0) {cerr << "Error: bad factorial" << endl; return 1;}
+  double tcd = 1.; // Triangle coefficient: denominator.
+  rc = factorial( (j1+j2+j)/_nt +1, tcd); if (rc != 0) {cerr << "Error: bad factorial" << endl; return 1;}
+  double tc = tcn/tcd; // Triangle coefficient.
+
+  // http://mathworld.wolfram.com/Wigner3j-Symbol.html (7)
+
+  double coef = 1.;
+  rc = factorial((j1+m1)/_nt, coef); if (rc != 0) {cerr << "Error: bad factorial" << endl; return 1;}
+  rc = factorial((j1-m1)/_nt, coef); if (rc != 0) {cerr << "Error: bad factorial" << endl; return 1;}
+  rc = factorial((j2+m2)/_nt, coef); if (rc != 0) {cerr << "Error: bad factorial" << endl; return 1;}
+  rc = factorial((j2-m2)/_nt, coef); if (rc != 0) {cerr << "Error: bad factorial" << endl; return 1;}
+  rc = factorial((j +m )/_nt, coef); if (rc != 0) {cerr << "Error: bad factorial" << endl; return 1;}
+  rc = factorial((j -m )/_nt, coef); if (rc != 0) {cerr << "Error: bad factorial" << endl; return 1;}
+
+  double sum = 0.;
+  int tmin = max((j2-j -m1)/_nt, max((j1+m2-j)/_nt,     0      ));
+  int tmax = min((j1+j2- j)/_nt, min((j1-m1)/_nt  , (j2+m2)/_nt));
+  for (int t = tmin; t <= tmax; ++t) {
+    double x = 1.;
+    rc = factorial(               +t, x); if (rc != 0) {cerr << "Error: bad factorial" << endl; return 1;}
+    rc = factorial((-j2+j+m1)/_nt +t, x); if (rc != 0) {cerr << "Error: bad factorial" << endl; return 1;}
+    rc = factorial((-j1+j-m2)/_nt +t, x); if (rc != 0) {cerr << "Error: bad factorial" << endl; return 1;}
+    rc = factorial(( j1+j2-j)/_nt -t, x); if (rc != 0) {cerr << "Error: bad factorial" << endl; return 1;}
+    rc = factorial(( j1-m1  )/_nt -t, x); if (rc != 0) {cerr << "Error: bad factorial" << endl; return 1;}
+    rc = factorial(( j2+m2  )/_nt -t, x); if (rc != 0) {cerr << "Error: bad factorial" << endl; return 1;}
+//    cout << "w3j : x:" <<  "\t" << x << endl;
+    sum += pow(-1., t)/x;
+  }
+
+  w3j = pow(-1., (j1-j2-m)/_nt)*sqrt(tc*coef)*sum;
+
+  return 0;
+}
+
+//Returns f*n!
+int snapCg::factorial(int const n, double & f) {
+  if (n > 168) {cerr << "Error: factorial > 168 KO" << endl; return 1;}
+  f *= _factorial[n]; // Tabulated factorial (for performance).
+  return 0;
+}
+        \end{lstlisting}
+
+	To store the coefficients in an effective way, \textit{i.e.} with coefficients stored in the same order than it will be accessed in the kernel computing the bispectrum, we store it in a 1-D array, with all the coefficients for a given triplet $\left(j,j_1,j_2\right)$ in contiguous memory areas. This will permit an optimum use of the memory bandwith and of the caches. \\
+To do so, we consider our 1-D array as subarrays of C.B. coefficients with $\left(j,j_1,j_2\right)$ indexes fixed and $\left(m,m_1,m_2\right)$ varying. We store the first index of these subarrays in an array of offsets depending on $\left(j,j_1,j_2\right)$, and we therefore can rebuild for any coefficient its position in the 1-D array of coefficients using this array of offsets and the adequate displacement according to $\left(m,m_1,m_2\right)$.\\
+
+        For performance reasons, the factorial is tabulated. \\
+
+    \subsubsection{Validation}
+
+    The Clebsch-Gordan's coefficients computation kernel is validated by two unitary tests. These tests run a Fortran code extracted from the reference which computes the C.G. coefficients for a couple $\left(j_{max},nt\right)$, and writes the results in a reference file. Then, a C++ code computes the same coefficients, reads the reference, and compares the two results. \\
+Two couples of parameters are tested: a trivial one, $\left(j_{max}=1,nt=1\right)$, and one from directly coming from a test case of the Fortran SNAP's computation code: $\left(j_{max}=3.5,nt=2\right)$. In both cases the tests are OK.
+
+	
+
+    \subsection{Kernel 2: compute the generalised spherical harmonics and their derivatives}
+
+
+      \subsubsection{API}
+
+
+	We define a class snapGsh which will provide to the code the method to compute the generalized spherical harmonics for an atom and to access it. This class has 3 public member functions: one to compute the harmonics and thier derivatives, one to access the harmonics and one to access its derivative, for a given triplet of parameters $\left(j,m_1,m_2\right)$.
+        The final API is:
+        \begin{lstlisting}
+class snapGsh {
+
+  public:
+    snapGsh(double const &_jmax=0.) : _jmax(_jmax), ran(), rcut(0.), gsh() {};	//constructor
+    int compute_gsh(double3d const &ran, double rcut);	//computes all gsh and dgsh coefficients; rcut could be transformed in const double input of the class?
+    complex<double> gsh_val(int j, int m1, int m2) {	// returns gsh value for (j,m1,m2)
+       return gsh[idx(j,m1,m2)];
+    }
+    complex3d       dgsh_val(int j, int m1, int m2) {	// returns dgsh value for (j,m1,m2)
+       return dgsh[idx(j,m1,m2)];
+    }
+    int idx(int j, int m1, int m2) {	//returns index in gsh vector corresponding to (j,m1,m2)
+        int idx=j*(j+1)*(2*j+1)/6+(m2+j)/2*(j+1)+(m1+j)/2+2; //sum of j first square integers+offset
+        return idx;
+    }
+    int size();         	           //returns gsh vector size
+    void set_jmax(double J) {_jmax=J;}
+  private:
+    double _jmax;	// input parameter jmax
+    double3d ran;	// neighbour position 
+    double rcut;	// rcut parameter; could be an input parameter of the class ?
+    vector<complex<double>> gsh;       //contains all gsh coefficients 
+    vector<complex3d>       dgsh;      //contains all dgsh coefficients
+};
+        \end{lstlisting}
+
+We introduce a derived type, called complex3D, which is a set of 3 complex numbers. It is used to simplify the code and to possibly improve performance. It is also used in the bispectrum componants computation kernel.
+
+      \subsubsection{Kernel implementation}
+
+        The following pseudo-code illustrate the implementation:
+
+        \begin{lstlisting}
+
+int snapGsh::compute_gsh(double3d const &ran, double rcut) {
+
+  cout.precision(12);
+  // Initialize constants.
+
+  double const x = ran.x, y = ran.y, z = ran.z;
+  double const r = sqrt(x*x + y*y + z*z);
+  double3d     dr;
+  double const PI=3.14159265359; // For Fortran exact comparison
+#ifdef LAMMPS
+//On pourrait aussi faire comme dans Lammps sna.cpp l.334
+//theta0=(r-rmin0)*rfac0*PI/(rcut-rmin0)
+//puis
+//r0=r/theta0
+//C'est strictement equivalent
+//Il conviendra de passer ces parametres en entree de la classe
+  double const rmin0 = 0.;
+  double const rfac0 = 1.0;
+  double const r0 = (r*(rcut-rmin0))/(rfac0*PI*(r-rmin0));
+#else
+  double const r0 = rcut/(PI-0.020);  // Bartok PhD (2.57)
+#endif
+  double const theta0 = r/r0; // Bartok PhD (2.57)
+  double const l0 = r/sin(theta0);
+  double const z0 = l0*cos(theta0);
+  double const l0i = sin(theta0)/r;
+  double const dz=1./tan(theta0)-theta0/pow(sin(theta0),2);
+  double const dil0=(cos(theta0)/r0 - l0i)/r;
+  complex<double> imag(0., 1.);
+//
+  dr=ran/r;
+
+  // Initialize generalised spherical harmonics.
+
+  if (_jmax <= 0) {cerr << "Error: bad jmax" << endl; return 1;}
+  gsh.resize(size());
+  dgsh.resize(size());
+
+  complex<double> u000(1., 0.); // j = 0, m1 = m2 = 0 - Bartok PhD (B.9)
+  complex<double> du000(0., 0.);
+  gsh[idx(0, 0, 0)] = u000;
+  dgsh[idx(0, 0, 0)]= du000;
+
+  complex<double> z_minus = (z0-imag*z)*l0i;  // u
+  complex<double> z_plus  = (z0+imag*z)*l0i;  // u*
+  complex<double> x_minus =(x-imag*y)*l0i;    // v*eiphi
+  complex<double> x_plus  =(x+imag*y)*l0i;    // v*e-iphi
+  complex3d       dx_plus ; 
+  complex3d       dx_minus;
+  complex3d       dz_plus ;
+  complex3d       dz_minus;
+
+  for (int i=0; i<=2; i++) {
+     dx_plus =(x+imag*y)*dil0*dr;
+     dx_minus=(x-imag*y)*dil0*dr;
+     dz_plus =((z0+imag*z)*dil0+dz*l0i)*dr;
+     dz_minus =((z0-imag*z)*dil0+dz*l0i)*dr;
+  }
+  dx_plus.x += l0i;
+  dx_plus.y +=imag*l0i;
+  dx_minus.x += l0i;
+  dx_minus.y +=-imag*l0i;
+
+  dz_plus.z +=imag*l0i;
+  dz_minus.z +=-imag*l0i;
+
+
+  // Compute generalised spherical harmonics.
+
+  int two_jmax = floor(2*_jmax);
+
+  for (int j = 1; j <= two_jmax; ++j) {
+    for (int m1=-j; m1<=j ; m1 +=2) {
+	gsh[idx(j,m1,m1)]=u000;
+    }
+  }
+
+  for (int j = 1 /*0 OK: recursion initialized*/; j <= two_jmax; ++j) {
+    for (int m2 = -j; m2 <= j; m2 += 2) {
+      for (int m1 = -j; m1 <= j; m1 += 2) {
+        // Compute gsh for j, m1, m2.
+
+#ifdef USE_B7
+        if ( m2 == j) {// Bartok PhD (B.7)
+          complex<double>  first = sqrt((double)(j+m1)/(double)(j+m2));
+          complex<double> second = sqrt((double)(j-m1)/(double)(j+m2));
+
+          gsh[idx(j, m1, m2)] = first*z_minus* gsh[idx(j-1, m1-1, m2-1)] - imag*second*x_plus*gsh[idx(j-1, m1+1, m2-1)];
+
+	  dgsh[idx(j, m1, m2)] =  first*(dz_minus*gsh[idx(j-1,m1-1,m2-1)]+z_minus*dgsh[idx(j-1,m1-1,m2-1)])-
+					imag*second*(dx_plus*gsh[idx(j-1,m1+1,m2-1)]+x_plus*dgsh[idx(j-1,m1+1,m2-1)]);
+        }
+	else { // Bartok PhD B.7
+          complex<double>  first = sqrt((double)(j-m1)/(double)(j-m2));
+          complex<double> second = sqrt((double)(j+m1)/(double)(j-m2));
+
+          gsh[idx(j, m1, m2)] = first*z_plus      *gsh[idx(j-1, m1+1, m2+1)] - imag*second*x_minus*gsh[idx(j-1, m1-1, m2+1)];
+
+	  dgsh[idx(j, m1, m2)] = first*(dz_plus*gsh[idx(j-1,m1+1,m2+1)]+z_plus*dgsh[idx(j-1,m1+1,m2+1)])-
+				     imag*second*(dx_minus*gsh[idx(j-1,m1-1,m2+1)]+x_minus*dgsh[idx(j-1,m1-1,m2+1)]);
+        }
+#else        
+        if (m2 == -j) { // Bartok PhD (B.8)
+          complex<double>  first = sqrt((double)(j-m1)/(double)(j-m2));
+          complex<double> second = sqrt((double)(j+m1)/(double)(j-m2));
+
+          gsh[idx(j, m1, m2)] = first*z_plus      *gsh[idx(j-1, m1+1, m2+1)] - imag*second*x_minus*gsh[idx(j-1, m1-1, m2+1)];
+
+	  dgsh[idx(j, m1, m2)] = first*(dz_plus*gsh[idx(j-1,m1+1,m2+1)]+z_plus*dgsh[idx(j-1,m1+1,m2+1)])-
+				     imag*second*(dx_minus*gsh[idx(j-1,m1-1,m2+1)]+x_minus*dgsh[idx(j-1,m1-1,m2+1)]);
+        }
+        else { // Bartok PhD (B.8)
+          complex<double>  first  = sqrt((double)(j+m1)/(double)(j+m2));
+          complex<double> second  = sqrt((double)(j-m1)/(double)(j+m2));
+
+          gsh[idx(j, m1, m2)] = first*z_minus* gsh[idx(j-1, m1-1, m2-1)] - imag*second*x_plus*gsh[idx(j-1, m1+1, m2-1)];
+
+	  dgsh[idx(j, m1, m2)] =  first*(dz_minus*gsh[idx(j-1,m1-1,m2-1)]+z_minus*dgsh[idx(j-1,m1-1,m2-1)])-
+					imag*second*(dx_plus*gsh[idx(j-1,m1+1,m2-1)]+x_plus*dgsh[idx(j-1,m1+1,m2-1)]);
+        }
+#endif
+      }
+    }
+  }
+  return 0;
+}
+
+int snapGsh::size() {
+      int two_jmax = floor(2*_jmax);
+      size_t nb_j = two_jmax + 1; // Account for j = 0.
+      size_t nb_m_per_j = two_jmax + 1; // -j <= m <= j with cnt 2.
+      return nb_j*nb_m_per_j*nb_m_per_j; // Upper bound.
+    };
+        \end{lstlisting}
+
+      \subsubsection{Kernel context}
+
+	To compute the generalized spherical harmonics and their derivatives for a neighbour of relative position \textit{ran}, one should declare an object of the class snapGsh and call the member function as follows:
+
+        \begin{lstlisting}
+snapGsh atom1_gsph(jmax);
+int rc=atom1_gsph.compute_gsh(ran,rcut);
+        \end{lstlisting}
+	To access one spherical harmonic or its derivative, one should call the member functions as follows:
+	\begin{lstlisting}
+complex<double> ujm1m2;
+complex3d dujm1m2;
+ujm1m2=atom1_gsph.gsh_val(j,m1,m2);
+dujm1m2=atom1_gsph.dgsh_val(j,m1,m2);
+	\end{lstlisting}
+    \subsubsection{Validation}
+
+    The generalized spherical harmonics computation kernel is validated by two unitary tests. These tests run a Fortran code extracted from the reference which computes the generalized spherical harmonics for a given relative position of neighbour atom and its rcut, and writes the results in a reference file. Then, a C++ code computes the same harmonics and derivatives, reads the reference, and compares the two results. \\
+Two couples of parameters are tested: a trivial one, with $r=\left(1.,2.,3.\right)$, $j_{max}=1$ and $r_{cut}=5.0$, and one directly coming from a test case of the Fortran SNAP's computation code: $r=\left(-2.6630,-2.6630,-2.6630\right)$, $j_{max}=7$ and $r_{cut}=5.0000$. In both cases the tests are OK. \\
+One more test has been done in order to determine which equation to use between \ref{eqn:gsh_b7} and \ref{eqn:gsh_b8}. This was not specified by theory and we choosed to verify that the two choices lead to the same results. Therefore, a compilation flag has been added to triger one or the other choice. This test demonstrated that both choices lead to the same results.
+    \subsection{Kernel 3: compute the bispectrum and its derivatives}
+
+      \subsubsection{Theoretical background}
+
+        Theoretical background can be found in Bartok PhD \cite{Bartok_01} and Thompson's article \cite{Thompson_01}. The bispectrum can be computed using the equation \ref{eqn:thompson_bs}. \\
+We can reduce the number of indices of the bispectrum to compute: 
+\begin{itemize}
+\item As mentioned in Thompson's article, $j_1$ and $j_2$ having symetric roles, we can compute the coefficients of the bispectrum only for $j_1>j_2$. 
+\item The condition $|j_1-j_2|<j<j_1+j_2$ also gives a restriction on the coefficients $B_{j j_1 j_2}$ to compute.\\
+\end{itemize}
+
+
+For each index of the bispectrum, we can also reduce the number of terms to sum. The Clebsch-Gordan coefficients are non-zero only if 
+\begin{eqnarray} \label{eqn:eqcg_m}
+m_1+m_2=m. 
+\end{eqnarray} 
+This allows to reduce the number of sums in equation \ref{eqn:thompson_bs}, by substituing $m2$ by $m-m_1$ and $m'_2$ by $m'-m'_1$. Furthermore, considering that $m_2,m'_2 \in [\![-j_2,j_2]\!]$, we can restric the range of $m_1$ and $m'_1$ to obtain non-zero Clebsch-Gordan coefficients:\\
+\begin{eqnarray}
+m_1 \in [\![\max(-j_1,m-j_2),\min(j_1,m+j_2)]\!]  \\
+m'_1 \in [\![\max(-j_1,m'-j_2),\min(j_1,m'+j_2)]\!] \nonumber
+\end{eqnarray}
+If $m_1$ is not in that range, then the Clebsch-Gordan coefficients cannot obey \ref{eqn:eqcg_m}. The bispectrum coefficients can therefore be computed using the following equation:
+\begin{eqnarray} \label{eqn:bs_eff}
+B_{j j_1 j_2}=\sum_{m,m=-j}^j\left(c^j_{m m'}\right)^\ast \sum_{m_1=\max\left(-j_1,m-j_2\right)}^{\min\left(j_1,m+j_2\right)} \sum_{m'_1=\max\left(-j_1,m'-j_2\right)}^{\min\left(j_1,m'+j_2\right)}C^{j m}_{j_1 m_1 j_2 m-m_1} C^{j m'}_{j_1 m'_1 j_2 m'-m'_1} c^{j_1}_{m_1 m'_1} c^{j_2}_{_m2 m'_2}
+\end{eqnarray}
+for $j_1\in [\![ 0,j_{max}]\!]$, $j_2 \in [\![0,j_1]\!]$ and $j \in [\![|j_1-j_2|,j_1+j_2]\!]$.
+
+      \subsubsection{API}
+
+We define a class snapBs which will provide to the code the method to compute the bispectrum components for an atom, the derivatives of the bispectrum components with respect to each of his neigbours, the contribution to energy and forces and a method to access it. This class public members are: one to build the list of neighbours, one to compute the coefficients needed to compute the bispectrum, one to compute the bispectrum and its derivatives components, one to access to the number of components of the bispectrum, and methods to access to the bispectrum, its derivatives values, and the energy and forces contributions. The final API is:
+        \begin{lstlisting}
+
+class snapBs
+{
+  template<typename T> using vector = std::vector<T>;
+  template<typename T> using complex = std::complex<T>;
+
+  public:
+    snapBs(double const jmax, double const rcut, int myspecy, double const *coefs, double const *factor);
+
+    int compute_bs(snapCg &cg);		// compute bispectrum components and its derivatives
+
+    int compute_cmm(); 			// compute cmm and dcmm coefficients
+
+    int set_neighbours(double const *rx, double const *ry, double const *rz, int const * _species, size_t N_atom); //list of neighbours positions, species, and number of neighbours
+
+    int n_idx_bs();			// number of bispectrum components
+
+    complex<double> bs_val(int idx) {	// just in case and for tests
+      return bs[idx];
+    }
+
+    complex3d dbs_val(int idx) {	// just in case and for tests
+      return dbs[idx];
+    }
+
+    complex<double> en_val();		// SNAP energy of the atom
+    complex3d force_val(int i);		// contribution to the force from ith atom of neighbourhood
+
+    inline double get_rcut() const { return _rcut; }
+    inline int get_my_specy() const { return _myspecy; }
+    inline int get_n_atom() const { return N_atom; }
+
+  private:
+    int N_atom;				// Number of atoms in neighbourhood
+    int N_neigh;			// Number of atoms in neighbourhood closer than rcut
+    int nidx;				// Number of bispectrum components
+    double _jmax;
+    double _rcut;
+    int _myspecy;			// input: atom specy
+    const double* _coefs;		// input: machine learning coefficients (number: nb of bispectrum components * nb species)
+    const double* _factor;		// input: weight factors
+    int two_jmax;
+    int gsh_size;			// number of gsh coefficients
+    vector<complex<double>> bs;		// bispectrum components
+    vector<complex3d> dbs;		// bispectrum derivatives
+    vector<complex<double>> cmm;	// cmm coefficients (Thompson)
+    vector<complex3d> dcmm;		// cmm coefficients derivatives (Thompson)
+    vector<double> radius;		// relative distance of neighbours
+    vector<double3d> r_vec;		// position of neighbours
+    vector<snapGsh> vec_gsh;		// general spherical harmonics objects vector
+    vector<complex<double>> forces;	// contribution to forces
+    complex<double> energy;		// contribution to energy
+    int n_species;			// input: number of species
+    vector<int> species;		// input: neighbours species
+
+    int idx(int j, int m1, int m2) {
+      return j*(j+1)*(2*j+1)/6+(m2+j)/2*(j+1)+(m1+j)/2+2; //sum of j first square integers+offset
+    }
+
+    int didx(int N, int j, int m1, int m2) {
+      return N*gsh_size+j*(j+1)*(2*j+1)/6+(m2+j)/2*(j+1)+(m1+j)/2+2; //sum of j first square integers+offset
+    }
+};
+
+
+        \end{lstlisting}
+
+      \subsubsection{Kernel implementation}
+
+        The following pseudo-code illustrates the implementation:
+        \begin{lstlisting}
+
+static inline complex3d conj(complex3d const &c) {
+	complex3d r;
+	r.x = conj(c.x);
+	r.y = conj(c.y);
+	r.z = conj(c.z);
+	return r;
+}
+
+snapBs::snapBs(double const jmax, double const rcut, int myspecy, double const *coefs, double const *factor)
+  : _jmax(jmax)
+  , _rcut(rcut)
+  , _myspecy(myspecy)
+  , _coefs(coefs)
+  , _factor(factor)
+  , two_jmax(floor(2*_jmax))
+  , gsh_size(pow(floor(2*_jmax)+1,3))
+  ,cmm()
+  , bs()
+  , dbs()
+  , dcmm()
+  , radius()
+  , r_vec()
+  , vec_gsh()
+  , forces()
+  , energy(),
+  n_species(),
+  nidx(n_idx_bs())
+{
+}
+
+
+int snapBs::n_idx_bs()
+{
+  int n_idx=0;
+  for (int j1=0; j1 <=two_jmax; j1+=1) {
+#ifdef LAMMPS
+    for (int j2=0; j2 <= j1; j2+=1) { //Thompson-Lammps
+      for (int j=abs(j1-j2); j<=min(two_jmax,j1+j2); j+=2)
+#else
+   int j2=j1;
+      for (int j=j1-j2; j<=min(two_jmax,j1+j2); j+=1)
+#endif
+        {
+          if ((j+j1+j2)%2==1)  continue;
+#ifdef LAMMPS
+	  if (j<j1) continue;
+#endif
+    	  n_idx+=1;
+        }
+#ifdef LAMMPS
+   } //Thompson-Lammps
+#endif
+  }
+  bs.resize(n_idx);
+  nidx=n_idx;
+return n_idx;
+}
+
+int snapBs::set_neighbours(double const *rx, double const *ry, double const *rz, int const * _species, size_t _N_atom)
+{
+  N_atom=_N_atom;
+  r_vec.resize(N_atom);
+  radius.resize(N_atom);
+  species.resize(N_atom); 
+  for (int i=0; i<N_atom; ++i)
+  {
+    double r =0.;
+    r=sqrt(rx[i]*rx[i] + ry[i]*ry[i] + rz[i]*rz[i]);
+    r_vec[i].x=rx[i]; r_vec[i].y=ry[i]; r_vec[i].z=rz[i];
+    radius[i]=r;
+    species[i]=_species[i];
+  }
+  return 0;
+}
+
+int snapBs::compute_cmm()
+{
+  if(vec_gsh.size()!=N_atom)
+	{
+		vec_gsh.resize(N_atom);
+	}
+	 for (auto i=0;i<vec_gsh.size();i++)
+		vec_gsh[i].set_jmax(_jmax);
+  double fcut;
+  double dfcut;
+  if(cmm.size()<gsh_size)
+    cmm.resize(gsh_size);
+
+  if(dcmm.size()<N_atom*gsh_size)
+    dcmm.resize(N_atom*gsh_size);
+
+  for (int j = 0; j <= two_jmax; ++j) {
+    for (int m2 = -j; m2 <= j; m2 += 2) {
+      for (int m1 = -j; m1 <= j; m1 += 2) {
+	cmm[idx(j,m1,m2)]=0.;
+	for (int i = 0; i<N_atom; ++i) {
+       	  dcmm[didx(i,j,m1,m2)]=0.;
+        }
+      }
+    }
+  }
+
+  for (int j = 0; j <= two_jmax; ++j) {
+    for (int m1 = -j; m1 <= j; m1 += 2) {
+      cmm[idx(j,m1,m1)]=1.;
+    }
+  }
+  
+ double const PI=3.14159265359;
+ double const rmin0=0.;
+ N_neigh=0;
+ for (int i=0; i<N_atom; ++i)
+ { //loop on neighbours
+   if ( (radius[i]>_rcut) || (radius[i]<1.e-12) ) { cout << i << " th atom ignored" << endl; continue;}
+   N_neigh+=1;
+   vec_gsh[i].compute_gsh(r_vec[i],_rcut); //Compute the gsh for atom i
+#ifdef LAMMPS
+   fcut=0.5*(cos(PI*(radius[i]-rmin0)/(_rcut-rmin0))+1.)*_factor[species[i]];
+   dfcut=-0.5*PI/(_rcut-rmin0)*sin(PI*(radius[i]-rmin0)/(_rcut-rmin0))*_factor[species[i]];
+#else    
+   fcut=0.5*(cos(PI*radius[i]/_rcut)+1.)*_factor[species[i]];
+   dfcut=-0.5*PI/_rcut*sin(PI*radius[i]/_rcut)*_factor[species[i]];
+#endif
+   for (int j = 0; j <= two_jmax; ++j)
+   {
+     for (int m2 = -j; m2 <= j; m2 += 2)
+     {
+       for (int m1 = -j; m1 <= j; m1 += 2)
+       {
+	       cmm[idx(j,m1,m2)] += vec_gsh[i].gsh_val(j,m1,m2)*fcut;
+	       dcmm[didx(i,j,m1,m2)] =dfcut*r_vec[i]*vec_gsh[i].gsh_val(j,m1,m2)/radius[i]+fcut*vec_gsh[i].dgsh_val(j,m1,m2);
+       }
+     }
+   }
+ }
+ return 0;
+}
+
+int snapBs::compute_bs(snapCg &cg) {
+	
+  nidx=n_idx_bs();
+  bs.resize(nidx);
+  dbs.resize(N_atom*nidx);
+
+  size_t bs_idx=0;
+  size_t bs_didx=0;
+  int m21;
+  int m22;
+  complex<double> lbs; //local bispectrum
+  complex3d ldbs; //local bispectrum derivatives
+
+
+  //initialize bs and dbs to zero
+  bs.assign(nidx,0.);
+  dbs.assign(nidx*N_atom,0.);
+  bs_didx=-1;
+  for (int i=0; i < N_atom ; i++) {
+  bs_idx=-1;
+    for (int j1=0; j1 <= two_jmax; j1++) {
+#ifdef LAMMPS
+      for (int j2=0; j2 <= j1; j2++) { // Thompson - Lammps
+        for (int j=abs(j1-j2); j<=min(two_jmax,j1+j2); j+=2) {
+#else
+      int j2=j1; //
+        for (int j=j1-j2; j<=min(two_jmax,j1+j2); j++) {
+#endif
+          if ((j+j1+j2)%2==1) continue;
+#ifdef LAMMPS
+          if (j<j1) continue; // Thompson
+#endif
+	  bs_idx+=1;
+	  bs_didx+=1;
+          if ( (radius[i]<1.e-12) || (radius[i]>_rcut) ) continue;
+	  for (int m1=-j; m1 <=j; m1+=2) {
+    	    for (int m2=-j; m2 <=j; m2+=2) {
+	    lbs=0.;
+	    ldbs=0.;
+             
+              for (int m11=max(-j1,m1-j2); m11<=min(j1,m1+j2); m11+=2) {
+    	        for (int m12=max(-j1,m2-j2); m12<=min(j1,m2+j2); m12+=2) {
+                m21=m1-m11; m22=m2-m12;
+
+                lbs+=cg.val(j,j1,j2,m1,m11,m21) * cg.val(j,j1,j2,m2,m12,m22) * cmm[idx(j1,m11,m12)] * cmm[idx(j2,m21,m22)];
+		ldbs+=cg.val(j,j1,j2,m1,m11,m21) * cg.val(j,j1,j2,m2,m12,m22) * (dcmm[didx(i,j1,m11,m12)]*cmm[idx(j2,m21,m22)] + cmm[idx(j1,m11,m12)]* dcmm[didx(i,j2,m21,m22)]);
+		}
+	      }
+              bs[bs_idx]+=conj(cmm[idx(j,m1,m2)])*lbs;
+	      dbs[bs_didx]+=-(conj(dcmm[didx(i,j,m1,m2)]) * lbs + conj(cmm[idx(j,m1,m2)])*ldbs);
+	    }   //m2
+          }	//m1
+
+        }	//j
+      }		//j2
+#ifdef LAMMPS
+    }		//j1  // Thompson
+#endif
+  }		//atoms
+  bs_idx=0;
+  double R_neigh=N_neigh;
+  for (int j1=0; j1 <= two_jmax; j1++) {
+#ifdef LAMMPS
+    for (int j2=0; j2 <= j1; j2++) { // Thompson - Lammps
+#else
+    int j2=j1;
+#endif
+
+      for (int j=j1-j2; j<=min(two_jmax,j1+j2); j++) {
+        if ((j+j1+j2)%2==1) continue;
+#ifdef LAMMPS
+	if (j<j1) continue;
+#endif
+      bs[bs_idx]=bs[bs_idx]/R_neigh;
+      cout << bs_idx << "\t" << bs[bs_idx] << endl;
+      bs_idx+=1;
+      }
+#ifdef LAMMPS
+    }
+#endif
+  }
+  return 0;
+}
+
+complex<double> snapBs::en_val() {
+   energy=0.;
+   for (int i=0; i<nidx; i++) {
+     energy+=bs[i]*_coefs[_myspecy*nidx+i];
+   }
+return energy;
+}
+
+complex3d snapBs::force_val(int i) {
+  int k=species[i];
+  complex3d f_val;
+  f_val=0.;
+  for (int j=0; j< nidx; j++) {
+     f_val+=dbs[i*nidx+j]*_coefs[k*nidx+j];
+  }
+return f_val;
+}
+        \end{lstlisting}
+
+      \subsubsection{Kernel context}
+
+To compute the bispectrum components of an atom with neighbours positions stored in $rx$, $ry$ and $rz$ vectors, one should declare an object of the class snapBs and call the member functions as follow:
+        \begin{lstlisting}
+snapBs bs(jmax,rcut);
+
+int rc=bs.refresh_neighbours(&rx[0],&ry[0],&rz[0],&factor[0],N_atom);
+
+rc=bs.compute_cmm();
+
+rc=bs.compute_bs(cg);
+        \end{lstlisting}
+To access the bispectrum components, one should call the member function as follows:
+	\begin{lstlisting}
+int bs_size=bs.n_idx_bs();
+vector<complex<double>> bs_components;
+
+for (i=0; i<bs_size; i++) {
+bs_components[i] = bs.bs_val(i));
+}
+	\end{lstlisting}
+
+\subsection{Validation}
+The bispectrum components computation is validated comparing results from our kernel to results extracted from the Fortran code. First, the list of atoms and the bispectrum components are extracted from the Fortran code and stored in files. Then, a C++ code reads the positions of atoms, and computes the bispectrum components and its derivatives for this list of atoms. To validate, the code reads the results from the Fortran code and compares it to its values. The result is OK.
+
+A second validation has been done by comparison with a Lammps simulation. The principle is the same, activating the \verb=-DLAMMPS= compilation flag. It modifies the normalisation in the computation of the generalized spherical harmonics ($r_{cut}$), the computation of the quantity $f_{cut}$ and its derivative, and the symmetry considerations applied in the computation of the bispectrum components. The result is also OK, and that validates the compatibility mode of the implemented SNAP calculation with the Lammps code.
+  \section{Implementation in ExaStamp}
+
+
+    \subsection{Delivery}
+
+      All pieces of code, tests and documents related to this development are delivered in the gitlab of the ExaStamp
+      project available at CESIMAT on a branch named \spec{xsp-snap}.
+
+    \subsection{In ExaStamp}
+
+The implementation of the potential in ExaStamp has been made by Thierry Carrard, who well knows ExaStamp as main developer. It is implemented in the file \verb=src/potential/snapPotential.cpp=. Here follows the code implementation: 
+	\begin{lstlisting}
+
+class SnapPrivateParameters
+{
+public:
+  static constexpr size_t n_atom_types = 1;
+  static constexpr size_t bs_size = 26;
+  static constexpr size_t MAX_NEIGHBORS = 256;
+  static const std::vector<double> s_coefs;
+  static const std::vector<double> s_factor;
+  static const std::vector<int> s_species;
+  static thread_local snapBs* s_snapbs;
+
+  inline SnapPrivateParameters(double _jmax, int _nt)
+    : m_cg(_jmax,_nt)
+  {
+    std::cout<<"compute Cg with jmax="<<_jmax<<", ntype="<<_nt<<std::endl;
+    m_cg.compute();
+  }
+  
+//  inline const snapCg& cg() const { return m_cg; }
+  inline const snapCg& cg() { return m_cg; }
+  
+  inline void check_rebuild_bs(double rcut, int atomType) const
+  {
+    bool rebuild_bs = (s_snapbs == nullptr);
+    if( ! rebuild_bs )
+    {
+      rebuild_bs = ( rcut != s_snapbs->get_rcut() || atomType != s_snapbs->get_my_specy() );
+    }
+    if( rebuild_bs )
+    {
+      if( s_snapbs != nullptr ) { delete s_snapbs; }
+      s_snapbs = new snapBs( m_cg.get_jmax(), rcut, atomType, s_coefs.data(), s_factor.data() );
+    } 
+  }
+  
+  inline void computeBS( double rcut, int atomType, const double* drx,	const double* dry, const double* drz,	unsigned int n )
+//  inline void computeBS( double rcut, int atomType, const double* drx,	const double* dry, const double* drz,	unsigned int n ) const
+  {
+    check_rebuild_bs( rcut, atomType );
+    s_snapbs->set_neighbours(drx,dry,drz,s_species.data(),n);
+    s_snapbs->compute_cmm();
+    s_snapbs->compute_bs(m_cg);
+  }
+  
+  inline double energy() const
+  {
+    return std::real(s_snapbs->en_val());
+  }
+
+  inline double3d force(unsigned int i) const
+  {
+    complex3d fc = s_snapbs->force_val(i);
+    return double3d( std::real(fc.x) , std::real(fc.y) , std::real(fc.z) );
+  }
+  
+private:
+  snapCg m_cg;
+};
+
+
+const std::vector<double> SnapPrivateParameters::s_coefs( SnapPrivateParameters::bs_size , 1. );
+const std::vector<double> SnapPrivateParameters::s_factor( SnapPrivateParameters::n_atom_types, 1. );
+const std::vector<int> SnapPrivateParameters::s_species( SnapPrivateParameters::MAX_NEIGHBORS , 0 );
+thread_local snapBs* SnapPrivateParameters::s_snapbs = nullptr;
+
+
+void snap_init_potential_parameters(SnapParameters& p)
+{
+  p.m_priv = new SnapPrivateParameters(p.jmax,p.ntype);
+}
+
+void snap_compute_energy(const SnapParameters& p, double r, double& e, double& de)
+{
+    assert( false && "Not Implemented" );
+    e = 0.0;
+    de = 0.0;
+}
+
+void snap_compute_force_energy_simd(
+	double* __restrict__ _fx,
+	double* __restrict__ _fy,
+	double* __restrict__ _fz,
+	double* __restrict__ _en,
+	const double* __restrict__ drx,
+	const double* __restrict__ dry,
+	const double* __restrict__ drz,
+	const unsigned int n,
+	const SnapParameters& params,
+	const double ecut,
+	const double rcut)
+{
+  const int atomType = 0;
+
+  assert( n < 256 );
+
+  params.m_priv->computeBS(rcut,atomType,drx,dry,drz,n);
+
+  double e = params.m_priv->energy();		// SNAP energy of the atom
+  double fx=0.,fy=0.,fz=0.;
+  
+  for(unsigned int i=0;i<n;++i)
+  {
+    double3d F = params.m_priv->force(i);
+    fx += F.x;
+    fy += F.y;
+    fz += F.z;
+  }
+  
+  *_fx = fx;
+  *_fy = fy;
+  *_fz = fz;
+  * _en = e;
+}
+	\end{lstlisting}
+
+
+
+  % Bibliographie
+
+  \bibliographystyle{plain}
+  \bibliography{specSNAP}
+
+\end{document}
+

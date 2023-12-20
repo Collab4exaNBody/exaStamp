@@ -1,0 +1,122 @@
+### Ubuntu base configuration script ###
+
+# list of required packages
+[ $REQUIRED_PACKAGES ] || REQUIRED_PACKAGES="libyaml-cpp-dev cmake cmake-curses-gui libopenmpi-dev gcc g++ gfortran git zlib1g-dev hwloc gdb gawk"
+[ "$REQUIRED_PACKAGES" == "<none>" ] && REQUIRED_PACKAGES=""
+
+# test if a package exists. echoes 1 if it exists, 0 otherwise
+function is_package_installed
+{
+  dpkg -l "$1" 2>/dev/null | grep -c "$1"
+}
+
+# check if all required packages are installed
+MISSING_PACKAGES=""
+for p in ${REQUIRED_PACKAGES}
+do
+  if [ `is_package_installed $p` = 0 ]
+  then
+    echo "Package $p is missing."
+    MISSING_PACKAGES="${MISSING_PACKAGES} $p"
+  fi
+done
+if [ "${MISSING_PACKAGES}" != "" ]
+then
+    echo "To install missing packages :" 
+    echo "sudo apt-get install ${MISSING_PACKAGES}"
+    if [ "${NON_INTERACTIVE_CONFIGURE}" == "" ]
+    then
+      echo -n "Continue anyway (y/n) ? "
+      read CONTINST
+      [ $CONTINST == "y" ] ||  [ $CONTINST == "Y" ] || exit 0
+    fi
+fi
+
+DEFAULT_CUDA_NVCC=`which nvcc`
+[ $DEFAULT_CUDA_NVCC ] || DEFAULT_CUDA_NVCC=/usr/local/cuda/bin/nvcc
+if [ -f "${DEFAULT_CUDA_NVCC}" ]
+then
+read -r -d '' CMAKE_CUDA_COMPILER_DEF <<- EOF
+CMAKE_CUDA_COMPILER = ${DEFAULT_CUDA_NVCC}
+XSTAMP_BUILD_CUDA = ON
+EOF
+echo "Found nvcc here : ${DEFAULT_CUDA_NVCC}"
+fi
+
+# Global product configuration
+TARGET_OS=`lsb_release -d|sed 's/Description:[ \t]*//g'|cut -d'.' -f1,2|tr " " "-"|cut -d'-' -f1,2`
+
+# auto detect GPU architecture if present
+if [ -f /usr/local/cuda/bin/__nvcc_device_query ]
+then
+  CMAKE_CUDA_ARCHITECTURES=`/usr/local/cuda/bin/__nvcc_device_query`
+  if [ "$CMAKE_CUDA_ARCHITECTURES" != "" ]
+  then
+    echo "Detected GPU architecture ${CMAKE_CUDA_ARCHITECTURES}"
+    CMAKE_CUDA_COMPILER_DEF=`echo "${CMAKE_CUDA_COMPILER_DEF}"; echo "CMAKE_CUDA_ARCHITECTURES = ${CMAKE_CUDA_ARCHITECTURES}"`
+  fi
+  #echo "${CMAKE_CUDA_COMPILER_DEF}"
+fi
+
+# environment commands required to compile and run
+read -r -d '' ENV_SETUP_COMMANDS <<- EOF
+EOF
+
+CMAKE_MINIMAL_SETUP=""
+if [ "$XSTAMP_MINIMAL_BUILD" != "" ]
+then
+read -r -d '' CMAKE_MINIMAL_SETUP <<- EOF
+XSTAMP_BUILD_CUDA=OFF
+XSTAMP_BUILD_buckingham=OFF
+XSTAMP_BUILD_crg=OFF
+XSTAMP_BUILD_ewald=OFF
+XSTAMP_BUILD_exaStampAnalytics=OFF
+XSTAMP_BUILD_exaStampEwald=OFF
+XSTAMP_BUILD_exaStampLCHBOP=OFF
+XSTAMP_BUILD_exaStampMEAM=OFF
+XSTAMP_BUILD_exaStampN2P2=OFF
+XSTAMP_BUILD_exaStampParrinelloRahman=OFF
+XSTAMP_BUILD_exaStampParticleCharge=OFF
+XSTAMP_BUILD_exaStampRangeNeighbors=OFF
+XSTAMP_BUILD_exaStampSnapLMP=OFF
+XSTAMP_BUILD_exaStampTTM=OFF
+XSTAMP_BUILD_exaStampTutorial=OFF
+XSTAMP_BUILD_exp6rf=OFF
+XSTAMP_BUILD_johnson=OFF
+XSTAMP_BUILD_ljrf=OFF
+XSTAMP_BUILD_ravelo=OFF
+XSTAMP_BUILD_reaction_field=OFF
+XSTAMP_BUILD_relax=OFF
+XSTAMP_BUILD_sutton_chen=OFF
+XSTAMP_BUILD_vniitf=OFF
+XSTAMP_BUILD_zbl=OFF
+EOF
+fi
+
+# cmake predefined variables for Ubuntu to configurei, compile and execute nicely
+read -r -d '' CMAKE_CONFIG_VARS <<- EOF
+  ${CMAKE_CUDA_COMPILER_DEF}
+  ${CMAKE_MINIMAL_SETUP}
+  CMAKE_CXX_FLAGS_RELEASE   = -O3 -DNDEBUG
+  EXASTAMP_TEST_DATA_DIR    = /usr/local/xstampv2/data
+  EXASTAMP_USE_ZOLTAN       = OFF
+  MPIEXEC_PREFLAGS          = --oversubscribe
+  MPIEXEC_PREFLAGS_DBG      = --oversubscribe;xterm;-e
+EOF
+
+if [ "${NON_INTERACTIVE_CONFIGURE}" == "" ]
+then
+  [ "x$TARGET_OS" == "xUbuntu-20.04" ] && \
+  echo "Important :" && \
+  echo "If MPI detection fails after upgrading to Ubuntu 20.04, please use the following command to properly reinstall openmpi:" && \
+  echo "sudo apt-get install --reinstall openmpi-common openmpi-bin libopenmpi3 libopenmpi-dev" && \
+  echo "" && \
+  echo "Cuda install :" && \
+  echo "wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-keyring_1.0-1_all.deb" && \
+  echo "sudo dpkg -i cuda-keyring_1.0-1_all.deb" && \
+  echo "sudo apt-get update" && \
+  echo "sudo apt-get -y install cuda" && \
+  echo "" && \
+  echo "press <return> to continue" && read XXX
+fi
+

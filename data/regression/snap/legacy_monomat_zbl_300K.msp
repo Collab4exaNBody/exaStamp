@@ -1,0 +1,22 @@
+# no-seq
+
+includes:
+  - legacy_monomat.msp
+
+read_stamp_v3:
+  file: Mo_conf_300K.MpiIO
+
+zbl_compute_force:
+  parameters: { r1: 0.1 ang , rc: 4.615858 ang }
+  rcut: 4.615858 ang
+
+# define potential we'll reuse later
+compute_force:
+  - snaplegacy_force
+  - zbl_compute_force
+
+simulation_epilog:
+  - check_values:
+      file: monomat_snap_zbl_300K_ang.dat
+      threshold: 1.e-10
+

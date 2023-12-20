@@ -1,0 +1,32 @@
+# no-seq
+includes:
+  - default.msp
+
+compute_force:
+  - lj_compute_force
+  - two_sided_langevin_thermostat:
+      T_a: 400 K
+      gamma_a: 1.0 ps^-1
+      T_b: 800 K
+      gamma_b: 1.0 ps^-1
+      planes:
+        - [ 1.0 , 0.0 , 0.0 , -110.0 ang ]
+        - [ -1.0 , 0.0 , 0.0 , 150.0 ang ]
+
++input_data:
+  - replicate_domain: [ 6 , 1 , 1 ]
+  - grid_stats
+  - print_domain
+
+global:
+  dt: 4.0e-3 ps
+  init_temperature: 300.0 K
+  simulation_end_iteration: 3000
+  splat_size: 6.0 ang
+  grid_subdiv: 1
+
+simulation_epilog:
+  - check_temperature:
+      temperature: 462.17 K
+      tolerance: 0.03
+

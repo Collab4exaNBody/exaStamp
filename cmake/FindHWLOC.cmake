@@ -1,0 +1,186 @@
+#.rst:
+# FindHwloc
+# ----------
+#
+# Try to find Portable Hardware Locality (hwloc) libraries.
+# http://www.open-mpi.org/software/hwloc
+#
+# You may declare HWLOC_ROOT environment variable to tell where
+# your hwloc library is installed. 
+#
+# Once done this will define::
+#
+#   Hwloc_FOUND          - True if hwloc was found
+#   Hwloc_INCLUDE_DIRS   - include directories for hwloc
+#   Hwloc_LIBRARIES      - link against this library to use hwloc
+#   Hwloc_VERSION_STRING - version
+#
+# The module will also define two cache variables::
+#
+#   Hwloc_INCLUDE_DIR    - the hwloc include directory
+#   Hwloc_LIBRARY        - the path to the hwloc library
+#
+
+#=============================================================================
+# Copyright 2014 Mikael Lepistö
+#
+# Distributed under the OSI-approved BSD License (the "License");
+# see accompanying file Copyright.txt for details.
+#
+# This software is distributed WITHOUT ANY WARRANTY; without even the
+# implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the License for more information.
+#=============================================================================
+# (To distribute this file outside of CMake, substitute the full
+#  License text for the above reference.)
+
+if(WIN32)
+  find_path(Hwloc_INCLUDE_DIR
+    NAMES
+      hwloc.h
+    PATHS
+      ENV "PROGRAMFILES(X86)"
+      ENV HWLOC_ROOT
+    PATH_SUFFIXES
+      include
+  )
+
+  find_library(Hwloc_LIBRARY
+    NAMES 
+      libhwloc.lib
+    PATHS
+      ENV "PROGRAMFILES(X86)"
+      ENV HWLOC_ROOT
+    PATH_SUFFIXES
+      lib
+  )
+
+  #
+  # Check if the found library can be used to linking 
+  #
+  SET (_TEST_SOURCE "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/linktest.c")
+  FILE (WRITE "${_TEST_SOURCE}"
+    "
+    #include <hwloc.h>
+    int main()
+    { 
+      hwloc_topology_t topology;
+      int nbcores;
+      hwloc_topology_init(&topology);
+      hwloc_topology_load(topology);
+      nbcores = hwloc_get_nbobjs_by_type(topology, HWLOC_OBJ_CORE);
+      hwloc_topology_destroy(topology);
+      return 0;
+    }
+    "
+  )
+
+  TRY_COMPILE(_LINK_SUCCESS ${CMAKE_BINARY_DIR} "${_TEST_SOURCE}"
+    CMAKE_FLAGS
+    "-DINCLUDE_DIRECTORIES:STRING=${Hwloc_INCLUDE_DIR}"
+    CMAKE_FLAGS
+    "-DLINK_LIBRARIES:STRING=${Hwloc_LIBRARY}"
+  )
+
+  IF(NOT _LINK_SUCCESS)
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+      message(STATUS "You are building 64bit target.")
+    ELSE()
+      message(STATUS "You are building 32bit code. If you like to build x64 use e.g. -G 'Visual Studio 12 Win64' generator." )
+    ENDIF()
+    message(FATAL_ERROR "Library found, but linking test program failed.")
+  ENDIF()
+
+  #
+  # Resolve version if some compiled binary found...
+  #
+  find_program(HWLOC_INFO_EXECUTABLE
+    NAMES 
+      hwloc-info
+    PATHS
+      ENV HWLOC_ROOT 
+    PATH_SUFFIXES
+      bin
+  )
+  
+  if(HWLOC_INFO_EXECUTABLE)
+    execute_process(
+      COMMAND ${HWLOC_INFO_EXECUTABLE} "--version" 
+      OUTPUT_VARIABLE HWLOC_VERSION_LINE 
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    string(REGEX MATCH "([0-9]+.[0-9]+)$" 
+      Hwloc_VERSION_STRING "${HWLOC_VERSION_LINE}")
+    unset(HWLOC_VERSION_LINE)
+  endif()
+  
+  #
+  # All good
+  #
+
+  set(Hwloc_LIBRARIES ${Hwloc_LIBRARY})
+  set(Hwloc_INCLUDE_DIRS ${Hwloc_INCLUDE_DIR})
+
+  include(FindPackageHandleStandardArgs)
+  find_package_handle_standard_args(
+    Hwloc
+    FOUND_VAR Hwloc_FOUND
+    REQUIRED_VARS Hwloc_LIBRARY Hwloc_INCLUDE_DIR
+    VERSION_VAR Hwloc_VERSION_STRING)
+
+  mark_as_advanced(
+    Hwloc_INCLUDE_DIR
+    Hwloc_LIBRARY)
+
+else()
+
+  # Find with pkgconfig
+  find_package(PkgConfig)
+
+  if(HWLOC_ROOT)
+    set(ENV{PKG_CONFIG_PATH} "${HWLOC_ROOT}/lib/pkgconfig")
+  else()
+    foreach(PREFIX ${CMAKE_PREFIX_PATH})
+      set(PKG_CONFIG_PATH "${PKG_CONFIG_PATH}:${PREFIX}/lib/pkgconfig")
+    endforeach()
+    set(ENV{PKG_CONFIG_PATH} "${PKG_CONFIG_PATH}:$ENV{PKG_CONFIG_PATH}")
+  endif()
+
+  if(hwloc_FIND_REQUIRED)
+    set(_hwloc_OPTS "REQUIRED")
+  elseif(hwloc_FIND_QUIETLY)
+    set(_hwloc_OPTS "QUIET")
+  else()
+    set(_hwloc_output 1)
+  endif()
+
+  if(hwloc_FIND_VERSION)
+    if(hwloc_FIND_VERSION_EXACT)
+      pkg_check_modules(HWLOC ${_hwloc_OPTS} hwloc=${hwloc_FIND_VERSION})
+    else()
+      pkg_check_modules(HWLOC ${_hwloc_OPTS} hwloc>=${hwloc_FIND_VERSION})
+    endif()
+  else()
+    pkg_check_modules(HWLOC ${_hwloc_OPTS} hwloc)
+  endif()
+
+  if(HWLOC_FOUND)
+    include(FindPackageHandleStandardArgs)
+    # include directory is not required to be set if hwloc.h is in standard path
+    find_package_handle_standard_args(HWLOC DEFAULT_MSG HWLOC_LIBRARIES)
+
+    if(NOT ${HWLOC_VERSION} VERSION_LESS 1.7.0)
+      set(HWLOC_GL_FOUND 1)
+    endif()
+
+    set(Hwloc_FOUND TRUE)
+    set(Hwloc_INCLUDE_DIRS  ${HWLOC_INCLUDE_DIRS})
+    set(Hwloc_LIBRARIES ${HWLOC_LIBRARIES})
+    set(Hwloc_VERSION_STRING ${HWLOC_VERSION})
+    unset(HWLOC_FOUND)
+    unset(HWLOC_INCLUDE_DIRS)
+    unset(HWLOC_LIBRARIES)
+    unset(HWLOC_VERSION)
+  endif()
+endif()
+

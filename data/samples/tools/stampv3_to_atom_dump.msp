@@ -1,0 +1,38 @@
+# Usage exemple :
+# <... mpirun ...> ./exaStamp --set-species "[ { Sn: { mass: 197.1508269E-27 kg , z: 50 , charge: 0 e- } } ]" --set-read_stamp_v3-file microjet.mpio --set-domain-periodic "[ true , true , true ]"
+
+domain:
+  cell_size: 40.0 ang
+  periodic: [ false , false , false ]
+  expandable: true
+
+global:
+  ghost_dist: 0.0 ang
+#  grid_subdiv: 3
+
+# allows for easy override from commande line
+read_stamp_v3:
+  bounds_mode: FILE
+  file: lastLegacyDump
+
+write_dump_atoms:
+  compression_level: 9
+  filename: atoms.dump
+
+species: []
+
+simulation:
+  - mpi_comm_world
+  - grid_flavor_multimat
+  - global
+  - domain
+  - species
+  - read_stamp_v3
+  - species
+  - simple_cost_model: { ccost: 1.0 , pdens: 4.0 , pdens2:0.0 , pdens3:0.003 }
+  - load_balance_rcb
+  - migrate_cell_particles
+  - simulation_thermodynamic_state
+  - print_thermodynamic_state
+  - write_dump_atoms
+

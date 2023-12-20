@@ -1,0 +1,20 @@
+# no-seq
+includes:
+  - monomat_base.cfg
+
+tabpair_compute_force:
+  parameters:
+    file: "lj_tab.yml"
+  rcut: 5.68 ang
+
+compute_force: tabpair_compute_force
+
+global:
+  dt: 1.0e-3 ps
+
+simulation_epilog:
+  - check_values:
+      file: monomat_lj_tab.dat
+      acc_threshold: 8.5e-10
+      pos_threshold: 1.0e-11
+

@@ -1,0 +1,50 @@
+# Exemple usage :
+# OMP_NUM_THREADS=128 ccc_mprun -n1 -c128 -prome ./exaStamp atom_dump_info.msp --set-global-filename microjet.dump 
+# OMP_NUM_THREADS=128 ccc_mprun -n1 -c128 -prome ./exaStamp atom_dump_info.msp --set-global-filename microjet.dump --set-grid_flavor grid_flavor_multimat
+# OMP_NUM_THREADS=128 ccc_mprun -n1 -c128 -prome ./exaStamp atom_dump_info.msp --set-global-filename microjet.dump --logging-debug true
+
+configuration:
+  logging:
+    debug: false
+  debug:
+    filter: [ ".*read_dump_atoms" , ".*write_dump_atoms" , "ooo" ]
+  profiling:
+    summary: true
+
+global:
+  ghost_dist: 0.0 ang
+  grid_subdiv: 3
+
+compute_force: nop
+
+grid_flavor: grid_flavor_multimat
+
+replicate_domain: [ 1 , 1 , 1 ]
+
+write_output: nop
+
+simulation:
+    - print_logo_banner
+    - hw_device_init   # provide MPI_COMM_WORLD as a default communicator
+    - make_empty_grid
+    - grid_flavor
+    - global
+    - generate_default_species
+    - preinit_rcut_max
+    - domain
+    - init_prolog
+    - read_dump_atoms
+    - replicate_domain
+    - species: { verbose: false , fail_if_empty: true }
+    - grid_post_processing
+    - reduce_species_after_read
+    - init_rcut_max
+    - print_domain
+    - performance_adviser: { verbose: true }
+    - species: { verbose: true , fail_if_empty: true }
+    - first_iteration
+    - grid_stats
+    - memory_stats
+    - write_output
+    - hw_device_finalize
+

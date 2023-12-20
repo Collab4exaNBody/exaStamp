@@ -1,0 +1,82 @@
+# no-seq
+
+
+# ======= preformance tuning ==================
+configuration:
+  profiling:
+    summary: true
+
+chunk_neighbors:
+  config:
+    chunk_size: 4
+
++first_iteration:
+  - grid_stats
+  - chunk_neighbors_stats
+  - print_domain: { hexfloat: true }
+
+# ================== input ======================
+
+grid_flavor: grid_flavor_multimat
+
+species:
+  - H:
+      mass: 1.6605401867e-27 kg
+      z: 1
+      charge: 1. e-
+  - Elect:
+      mass: 9.1093897540e-31 kg
+      z: 2
+      charge: -1. e-
+
+domain:
+  cell_size: 32 ang
+  periodic: [true,true,true]
+
+input_data:
+  - read_stamp_v3:
+      file: plasma_stampv3.MpiIO
+      bounds_mode: FILE
+      enable_xform_scale: true
+      pbc_adjust_xform: true
+      enlarge_bounds: 0.0 ang
+  - ewald_init
+  - sum_charges
+  - ewald_potential_energy_shift:
+
+# ================= potential ===========================
+ewald_init:
+  epsilon: 1.0E-1
+  alpha: -1e-2
+  radius: 30.000 ang
+  kmax: 0
+
+ewald_short_range_block:
+  rebind: { common_parameters: ewald_config }
+  body: [ ewald_short_range_multi_force ]
+
+compute_force:
+  - ewald_init
+  - ewald_short_range_block
+  - ewald_long_range
+
+# ============== simulation parameters ================
+
+global:
+  simulation_end_iteration: 10
+  simulation_log_frequency: 1
+  simulation_dump_frequency: -1
+  simulation_load_balance_frequency: 50000
+  rcut_inc: 1 ang
+  dt: 1.e-6 ps
+
+final_dump: nop
+
+simulation_epilog:
+  - check_values:
+      fatal: true
+      file: plasma_ewald.dat
+      pos_threshold: 1.e-10
+      acc_threshold: 1.e-7
+      vel_threshold: 1.e-10
+

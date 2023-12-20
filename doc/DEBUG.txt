@@ -1,0 +1,10 @@
+Current Bugs :
+==============
+  - FIXME: value approximation happens when internal code unit is specified, i.e 1.0 Da gives a value of 0.99999998 internally
+  - write_stamp_v3 : needs configurable actions when particles are outise domain bounds
+
+Debug exemples :
+
+Exemple de trace Intel inspector sur inti :
+/usr/bin/ccc_mprun -n4 -phaswell -x /ccc/products/inspector-2018.3/system/default/inspector/bin64/inspxe-cl -collect=ti3 -trace-mpi -r analyse1 -- /ccc/home/cont001/ocre/carrard/build/ExaStamp/Atos_7__x86_64/xstamp data.xsp
+

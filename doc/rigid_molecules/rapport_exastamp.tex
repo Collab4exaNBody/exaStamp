@@ -1,0 +1,1035 @@
+\documentclass[12pt]{article}
+
+\usepackage{xcolor}
+
+\usepackage{listings}%
+\lstset { %
+  language=C++,
+  backgroundcolor=\color{black!5}, % set backgroundcolor
+  basicstyle=\footnotesize\ttfamily,
+  breaklines=true,
+  keywordstyle=\color{blue}\ttfamily,
+  stringstyle=\color{red}\ttfamily,
+  commentstyle=\color{teal}\ttfamily,
+}
+
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{physics}
+\usepackage{color}
+
+\title{Molécules rigides, poste 1 : théorie et algorithmes}
+\pagestyle{plain}
+
+\begin{document}
+
+  \maketitle
+
+  \section{Objet du contrat}
+
+
+Le contrat porte sur l’implémentation, dans un code de dynamique moléculaire en langage C++, d’une méthode de calcul des équations du mouvement de particules rigides. Le code de calcul dans lequel doit être implémenté la méthode est nommé "Exastamp", est développé par le CEA et a vocation à être utilisé sur super-calculateurs, notamment ceux du CEA de nouvelle génération à architecture many-core (Intel KNL, ARM thunderx2, AMD). \\
+Les spécifications techniques, du point de vue théorique et algorithmique doivent être écrites et validées par le client, puis la méthode de calcul doit être implémentée dans le code et validée à l’aide de tests unitaires et d’un cas-test physique. La validation se fait à partir de cas tests proposés par nous-mêmes et validés par le CEA, qui peut demander des cas tests supplémentaires de son choix. \\
+Une attention particulière doit être portée aux performances de la méthode de calcul implémentée, afin de s’assurer qu’elle soit compatible avec une utilisation en contexte HPC qui est la vocation d’Exastamp. \\
+
+  \section{Spécifications théoriques de la méthode de calcul }
+
+Le client a fourni une liste de documents bibliographiques traitant du calcul des équations du mouvement de molécules rigides. Ces documents sont notamment le livre de Rapaport \cite{rapaport}, celui de Goldstein \cite{goldstein} et celui d'Allen et Tildesley \cite{allentildesley}, ainsi que la thèse de Gabriel Stoltz \cite{stoltz} et divers documents écrits par Claire Lemarchand. \\
+
+A l'aide du théorème de Chasles \cite{goldstein}, le mouvement de corps rigides peut être décomposé en deux parties totalement indépendantes : la partie translationnelle du mouvement du centre de masse et la partie rotationnelle. La première partie est régie par la force totale qui s'applique au corps, tandis que la seconde partie est déterminée par le couple total appliqué. 
+
+  \subsection{Partie translationnelle du mouvement}
+
+  \subsubsection{Equation du mouvement du centre de masse}
+De manière classique, l'équation de la partie translationnelle du mouvement du centre de masse d'une molécule $i$ s'écrit :
+
+\begin{eqnarray} \label{eqn:trans}
+M_{i} \dfrac{d^{2}\vec{R}_{i}}{dt^2}=\vec{F}_{i}
+\end{eqnarray}
+
+où $M_{i}$ est la masse de la molécule, $\vec{R}_{i}$ le vecteur position du centre de masse de la molécule, et $\vec{F}_{i}$ est la force s'appliquant sur le centre de masse. Afin de déterminer la trajectoire du centre de masse, il faut donc connaître la force qui s'y applique. Cette force est la somme des forces intermoléculaires entre la molécule $i$ et les molécules avec lesquelles elle intéragit, et peut s'écrire :
+
+\begin{eqnarray}
+\vec{F}_{i}=\sum_{j} \vec{F}_{i,j}
+\end{eqnarray}
+
+La force intermoléculaire $\vec{F}_{i,j}$ entre la molécule $i$ et la molécule $j$ peut se décomposer commme la somme vectorielle des forces $\vec{f}_{n_i,m_j}$ entre les centres de force des deux molécules :
+
+\begin{eqnarray}
+\vec{F}_{i,j}= \sum_{n_i=1}^{N_i} \sum_{m_j=1}^{N_j} \vec{f}_{n_i,m_j}
+\end{eqnarray}
+
+où $n_i$ est l'indice correspondant aux centres de force de la molécule considérée, $N_i$ le nombre de centres de force de la molécule $i$, $m_j$ l'indice correspondant aux centres de force de la molécule $j$, et $N_j$ le nombre de centres de forces de la molécule $j$.
+
+Les forces entre centres de forces dérivent d'un potentiel, et peuvent donc s'écrire de la manière suivante :
+
+\begin{eqnarray}
+\vec{f}_{n_i,m_j}=-\vec{\nabla} u\left(\vec{r}_{n_i,m_j}\right)
+\end{eqnarray}
+
+où $u\left(\vec{r}_{n_i,m_j}\right)$ est le potentiel d'interaction entre le centre de force $n_i$ de la molécule $i$ et le centre de force $m_j$ de la molécule $j$.
+
+Ce potentiel d'interaction est calculé au sein d'exastamp dans une partie indépendante de ce projet. (Pour Thierry : est-ce que j'implémente le calcul du gradient du potentiel ? Est-il fourni dans le calcul du potentiel, il me semble que c'était le cas au moins pour SNAP ? Auquel cas le calcul de la force s'appliquant au centre de masse se résumera à la sommation des contributions).
+
+Comme nous le verrons dans le traitement de la partie rotationnelle du mouvement, le calcul du couple fait lui aussi intervenir les forces appliquées aux centres de force. On peut donc calculer la force s'appliquant sur chaque centre de force afin de la réutiliser ensuite :
+
+\begin{eqnarray} \label{eqn:fcm}
+\vec{f}_{n_i}=\sum_{j=1}^{J_i} \sum_{m_j=1}^{N_j} \vec{f}_{n_i,m_j}
+\end{eqnarray}
+
+où $J_i$ est le nombre de molécules intéragissant avec la molécule $i$ et $\vec{F}_{n_i}$ est la force s'appliquant sur ce centre de force $n_i$ de la molécule $i$. Ainsi, la force $\vec{F}_i$ s'appliquant sur le centre de masse de la modulécule $i$ devient :
+
+\begin{eqnarray}
+\vec{F}_i=\sum_{n_i=1}^{N_i} \vec{f}_{n_i}
+\end{eqnarray}
+
+     \subsubsection{Intégration}
+
+L'intégration de l'équation du mouvement du centre de masse se base sur le développement de Taylor de la position au second ordre :
+
+\begin{eqnarray} \label{eqn:poscm}
+\vec{r}\left(t+\delta t\right)=\vec{r}\left(t\right)+\delta t \vec{v}\left(t\right) + \dfrac{\delta t^2}{2}\vec{a}\left(t\right)
+\end{eqnarray}
+
+Après discussion avec le client, il a été décidé de retenir la méthode dite "Velocity-Verlet", qui permet de déterminer la position mais aussi la vitesse au pas de temps $t+\delta t$ avec précision \cite{allentildesley}. Cette méthode consiste à calculer les positions en utilisant l'équation \ref{eqn:poscm}, puis à déterminer la vitesse au temps $t+\delta t/2$ :
+
+\begin{eqnarray} \label{eqn:vitcm}
+\vec{v}\left(t+\delta t/2\right)=\vec{v}\left(t\right)+\dfrac{\delta t}{2}\vec{a}\left(t\right)
+\end{eqnarray} 
+
+On réévalue alors la force et l'accélération s'appliquant sur le centre de masse au temps $t+\delta t$ avec la nouvelle position calculée, et on termine le calcul de la vitesse sur la seconde moitié du pas de temps :
+
+\begin{eqnarray}
+\vec{v}\left(t+\delta t\right)=\vec{v}\left(t+\delta t/2\right)+\dfrac{\delta t}{2}\vec{a}\left(t+\delta t\right)
+\end{eqnarray}
+
+      \subsubsection{Algorithme et code}
+      
+Une méthode ou une fonction sera réalisée pour le calcul de la force s'appliquant au centre de masse. Elle appellera le calcul du potentiel entre chaque site de la molécule traitée et les sites des molécules voisines, et sommera les contributions pour déterminer la force totale appliquée. Une méthode associée à la classe molécule permettra de calculer la position au temps $t+\delta t$, et une seconde méthode permettra d'avancer la valeur de la vitesse d'un demi pas de temps. 
+
+L'algorithme consistera donc à appeler dans un premier temps le calcul de la force, afin de déterminer l'accélération, à l'aide de l'équation \ref{eqn:trans}, puis le calcul de la position à l'aide de l'équation \ref{eqn:poscm}, puis l'avancée d'un demi pas de temps de la vitesse en utilisant \ref{eqn:vitcm}. On réalise ensuite le calcul de la partie rotationnelle du mouvement, qui est présentée dans la section suivante. Enfin, on appelle à nouveau le calcul de la force à $t+dt$ avec les nouvelles positions déterminées, et on avance une dernière fois la vitesse jusqu'au temps $t+\delta t$ grâce à la méthode déjà définie à laquelle on fournit la nouvelle force calculée.
+
+      \subsection{Partie rotationnelle du mouvement}
+
+Comme dit précédemment, le mouvement d'un corps rigide peut être décomposé en deux mouvements : la partie translationnelle du mouvement du centre de masse et la partie rotationnelle du corps autour du centre de masse. Alors que la première partie est régie par la force totale appliquée, cette seconde partie du mouvement est régie par le couple total appliqué.
+
+Le couple total $\tau_i$ appliqué sur la molécule $i$ s'écrit :
+
+\begin{eqnarray}
+\tau_i=\sum_k \vec{r}_k \cross \vec{f}_k
+\end{eqnarray}
+
+où l'indice $k$ désigne les centres de forces de la molécule $i$, $\vec{r}_k$ le vecteur position du centre de force $k$ par rapport au centre de masse, et $\vec{f}_k$ la force s'appliquant sur celui-ci. La force $\vec{f}_k$ correspond au calcul \ref{eqn:fcm} précédemment évoqué. 
+
+Conformément à la demande du client dans le cadre de ce contrat, la méthode des quaternions va être utilisée pour étudier la partie rotationnelle du mouvement. 
+
+		\subsubsection{Rotations, angles d'Euler et quaternions}
+
+L'orientation d'un corps rigide peut être définie par la relation entre un repère fixe et un repère lié au corps rigide. On peut lier les deux repères via une combinaison de trois rotations entre le repère $\left(\vec{x},\vec{y},\vec{z}\right)$ fixe et le repère mobile. Dans la suite du document, les quantités avec un suffixe $f$ sont considérées dans le repère fixe et les quantités dans le repère mobile sont suffixées avec la lettre $m$ pour mobile ou molécule. Les angles des rotations pour passer du repère fixe au repère mobile sont appelés angles d'Euler, et sont définis de la manière suivante \cite{goldstein} :
+
+\begin{itemize}
+\item Une première rotation d'angle $\phi$ autour de l'axe $\vec{z}$
+\item Puis une seconde rotation d'angle $\theta$ autour du nouvel axe $\vec{x}$ obtenu
+\item Enfin une troisième rotation d'angle $\psi$ autour du nouvel axe $\vec{z}$ obtenu.
+\end{itemize}
+
+On peut ainsi écrire tout vecteur $\vec{e}$ dans les deux repères. Notons $\vec{e}_f$ le vecteur dans le repère fixe et $\vec{e}_m$ dans le repère mobile de la molécule. On peut relier les composantes de ces deux vecteurs à l'aide de la matrice de rotation $A$, élaborée comme étant la succession des trois rotations précédemment définies :
+
+\begin{eqnarray}
+\vec{e}_m=A.\vec{e}_f
+\end{eqnarray}
+
+La matrice de rotation $A$ s'écrit \cite{goldstein} :
+
+\begin{eqnarray}
+\begin{pmatrix}
+\cos \phi \cos \psi - sin \phi cos \theta \sin \psi & \sin \phi \cos \psi + \cos \phi \cos \theta \sin \psi & \sin \theta \sin \psi \\
+-\cos \phi \sin \psi - \sin \phi \cos \theta \cos \psi & -\sin \phi \sin \psi + \cos \phi \cos \theta \cos \psi & \sin \theta \cos \psi \\
+\sin \phi \sin \theta & -\cos \phi \sin \theta & \cos \theta  
+\end{pmatrix}
+\end{eqnarray}
+L'opération inverse pour passer du repère mobile au repère fixe se réalise en utilisant la transposée de la matrice de rotation :
+
+\begin{eqnarray}
+\vec{e}_f= A^T \vec{e}_m
+\end{eqnarray}
+
+On peut alors introduire les quaternions comme étant des éléments de $\mathbb{R}^4$. Les livres de Goldstein \cite{goldstein}, de Rapaport \cite{rapaport} et d'Allen et Tildesley \cite{allentildesley} décrivent les quaternions de différentes manières, nous allons ici en présenter certains aspects utiles pour la suite. Le quaternion d'Hamilton $Q$ est défini par ses quatre composantes qui sont :
+
+\begin{eqnarray}
+q_1=\cos\left(\dfrac{\theta}{2}\right)\cos\left(\dfrac{\phi+\psi}{2}\right) \nonumber \\
+q_2=\sin\left(\dfrac{\theta}{2}\right)\sin\left(\dfrac{\phi-\psi}{2}\right) \nonumber \\ 
+q_3=\cos\left(\dfrac{\theta}{2}\right)\sin\left(\dfrac{\phi+\psi}{2}\right) \\
+q_4=\cos\left(\dfrac{\theta}{2}\right)\cos\left(\dfrac{\phi+\psi}{2}\right) \nonumber
+\end{eqnarray}
+
+On montre très aisément par les relations trigonométriques usuelles que ce quaternion est normalisé :
+
+\begin{eqnarray}
+\sum_{m=1}^4 {q_{m}}^2=1
+\end{eqnarray}
+
+Les relations inverses, pour passer des composantes du quaternion d'Hamilton aux angles d'Euler, sont :
+
+\begin{eqnarray}
+& \sin \theta = 2\sqrt{\left(q_1^2+q_2^2\right)\left(1-q_1^2-q_2^2\right)} \nonumber \\
+& \cos \theta = 1-2\left(q_1^2+q_2^2\right) \nonumber \\
+& \sin \phi  = 2\left(q_1 q_3+q_2 q_4 \right) / \sin \theta \nonumber \\
+& \cos \phi = 2\left(q_1 q_3 - q_1 q_2\right) / \sin \theta \\
+& \sin \psi = 2 \left(q_1 q_3-q_2 q_4\right) / \sin \theta \nonumber \\
+& \cos \psi = 2 \left(q_1 q_4 + q_2 q_3 \right) / \sin \theta \nonumber \\
+\end{eqnarray}
+
+Ces résultats présentent une singularité pour $\theta=0$ et $\theta=\pi$, ce qui correspond à la coïncidence de deux axes de rotation. Dans ce cas là, on choisit arbitrairement de définir $\psi=0$ étant donné qu'on ne peut plus identifier séparément $\psi$ et $\phi$.
+
+On peut également définir les quaternions d'une autre façon, en se basant sur le fait qu'une rotation peut être définie par :
+
+\begin{eqnarray} \label{eqn:rotalt}
+\vec{e}_f=\vec{e}_m\cos \xi +\left(\vec{c}.\vec{e}_m\right)\vec{e}_m\left(1-\cos \xi\right) + \left(\vec{c}\cross  \vec{e}_m\right) \sin \xi
+\end{eqnarray}
+
+où $\vec{c}$ est le vecteur unitaire définissant l'axe de rotatin and $\xi$ est l'angle de rotation. En définissant alors :
+
+\begin{eqnarray}
+q_4=cos\left(\xi/2\right)
+\end{eqnarray}
+et
+\begin{eqnarray}
+q_m=c_m \sin\left(\xi/2\right)
+\end{eqnarray}
+pour $m=1,2,3$, alors on peut réécrire l'équation \ref{eqn:rotalt} de la manière suivante :
+
+\begin{eqnarray}
+\vec{e}_f=\left(2{q_4}^2-1\right)\vec{e}_m+2\left(\vec{q}.\vec{e}_m\right)\vec{q}+2q_4\vec{q}\cross \vec{e}_m
+\end{eqnarray}
+
+qui permet alors d'obtenir directement la matrice de rotation en termes des composantes du quaternion d'Hamilton :
+\begin{eqnarray}
+A=2\begin{pmatrix}
+q_1^2+q_4^2-1/2 & q_1 q_2+q_3 q_4 & q_1 q_3 -q_2 q_4 \\
+q_1 q_2-q_3 q_4 & q_2^2+q_4^2-1/2 & q_2 q_3 +q_1 q_4 \\
+q_1 q_2+q_2 q_4 & q_2 q_3-q_1 q_4 & q_3^2 +q_4^2-1/2 \\
+\end{pmatrix}
+\end{eqnarray}
+
+Hormis le fait que les quaternions permettent de s'affranchir des fonctions trigonométriques, coûteuses en temps de calcul, l'intérêt plus profond est que leur utilisation permet d'éliminer les problèmes de singularité de la matrice de rotation utilisée pour résoudre les équations du mouvement.
+
+       \subsubsection{Equations du mouvement}
+       
+L'équation concernant la partie rotationnelle du mouvement est celle reliant le couple total appliqué $\vec{\tau}$ à la variation du moment angulaire $\vec{l}$ dans le repère fixe :
+
+\begin{eqnarray} \label{eqn:couplemvt}
+\vec{\tau}_f = \dfrac{d\vec{l}_f}{dt}
+\end{eqnarray}
+
+
+Dans le repère mobile, cette équation devient :
+
+\begin{eqnarray} \label{eqn:mtangmob}
+\left(\dfrac{d\vec{l}}{dt}\right)_m=\left(\dfrac{d\vec{l_m}}{dt}\right) + \vec{\omega_m}\cross \vec{l}_m
+\end{eqnarray}
+Or, dans le repère mobile, chaque composante du moment angulaire s'écrit simplement :
+
+\begin{eqnarray} \label{eqn:mtinertie}
+l_x=I_x {\omega}_x \nonumber \\
+l_y=I_y {\omega}_y \\
+l_z=I_z {\omega}_z \nonumber \\
+\end{eqnarray}
+
+où $I_x$, $I_y$ et $I_z$ sont les composantes diagonales du tenseur d'inertie, dont les composantes ont la valeur :
+
+\begin{eqnarray} \label{eqn:inertie}
+I_x=\sum_{n_i=1}^{N_i}m_{n_i}\left(y_{n_i}^2+z_{n_i}^2\right) \nonumber \\
+I_y=\sum_{n_i=1}^{N_i}m_{n_i}\left(x_{n_i}^2+z_{n_i}^2\right) \\
+I_z=\sum_{n_i=1}^{N_i}m_{n_i}\left(x_{n_i}^2+y_{n_i}^2\right) \nonumber
+\end{eqnarray}
+
+où $x_{n_i}$, $y_{n_i}$ et $z_{n_i}$ sont les coordonnées relatives au centre de masse des sites de force. Les molécules étant rigides, le calcul des composantes diagonales du tenseur d'inertie peut être réalisé à l'initialisation du calcul.
+
+On obtient ainsi trois équations régissant les composantes de la dérivée de la vitesse angulaire :
+
+\begin{eqnarray} \label{eqn:omegapt}
+\dot{\omega_m}_x=\dfrac{{\tau_m}_x +\left(I_y-I_z\right){\omega_m}_y {\omega_m}_z}{I_x} \nonumber \\
+\dot{\omega_m}_y=\dfrac{{\tau_m}_y +\left(I_y-I_z\right){\omega_m}_y{\omega_m}_z}{I_x} \\
+\dot{\omega_m}_z=\dfrac{{\tau_m}_z +\left(I_y-I_z\right){\omega_m}_y {\omega_m}_z}{I_x} \nonumber
+\end{eqnarray}
+
+De plus, à l'aide de l'algèbre des quaternions présentés dans leur forme complexe, Rapaport \cite{rapaport} montre que la vitesse et l'accélération des quaternions peuvent s'écrire :
+
+\begin{eqnarray} \label{eqn:omega}
+\begin{pmatrix}
+{\omega_m}_x \\ {\omega_m}_y \\ {\omega_m}_z \\ 0 \\
+\end{pmatrix}
+= 2 W \begin{pmatrix}
+\dot{q}_1 \\ \dot{q}_2 \\ \dot{q}_3 \\ \dot{q}_4 \\
+\end{pmatrix}
+\end{eqnarray}
+
+\begin{eqnarray} \label{eqn:qptpt}
+\begin{pmatrix}
+\ddot{q_1} \\ \ddot{q_2} \\ \ddot{q_3} \\ \ddot{q}_4 \\
+\end{pmatrix}
+= \dfrac{1}{2} W^T \begin{pmatrix}
+\dot{\omega_m}_x \\ \dot{\omega_m}_y \\ \dot{\omega_m}_z \\ -2\sum \dot{q}_m^2
+\end{pmatrix}
+\end{eqnarray}
+avec $W$ la matrice suivante :
+\begin{eqnarray}
+W=\begin{pmatrix}
+q_4 & q_3 & -q_2 & -q_1 \\
+-q_3 & q_4 & q_1 & -q_2 \\
+q_2 & -q_1 & q_4 & -q_3 \\
+q_1 & q_2 & q_3 & q_4 \\
+\end{pmatrix}
+\end{eqnarray}
+
+On peut, en utilisant les équations \ref{eqn:omegapt} et \ref{eqn:omega}, faire disparaître la vitesse angulaire et sa dérivée pour obtenir une équation ne faisant intervenir que les quaternions et leurs dérivées. Ces équations peuvent se résoudre à l'aide d'une méthode prédicteur-correcteur, comme proposé par Rapaport \cite{rapaport}. Un premier algorithme de résolution de la partie rotationnelle du mouvement a été proposé, qui est un méthode de leap-frog à demi pas de temps exposée par Allen et Tildesley \cite{allentildesley}. Toutefois, Claire Lemarchand a suggéré que nous utilisions un algorithme un peu différent, déjà implémenté dans le code Stamp, prédécesseur d'Exastamp. Le voici présenté ci-dessous. \\
+
+\subsubsection{Intégration}
+
+A l'instant $t$, le quaternion $q\left(t\right)$, le couple $\tau\left(t\right)$ et le moment angulaire $l\left(t\right)$ sont connus dans le repère fixe. Voici les étapes de l'algorithme menant à la résolution de la partie rotationnelle du mouvement.
+
+\begin{enumerate}
+\item On commence par calculer le moment angulaire dans le repère fixe au temps $t+\delta t/2$ ) l'aide de l'équation \ref{eqn:couplemvt} :
+\begin{eqnarray}
+\vec{l}_f\left(t+\delta t/2\right)=\vec{l}_f\left(t\right)+\vec{\tau}_f\left(t\right) \delta t/2
+\end{eqnarray}
+\item On passe alors dans le repère mobile :
+\begin{eqnarray}
+\vec{l}_m\left(t\right)=A\left(t\right)\vec{l}_f\left(t\right)
+\end{eqnarray}
+\item On utilise alors l'équation \ref{eqn:mtinertie} pour en déduire la vitesse angulaire :
+\begin{eqnarray}
+{\omega_m}_x\left(t\right)={l_m}_x\left(t\right)/I_x \nonumber \\
+{\omega_m}_y\left(t\right)={l_m}_y\left(t\right)/I_y \\
+{\omega_m}_z\left(t\right)={l_m}_z\left(t\right)/I_z \nonumber
+\end{eqnarray}
+\item On détermine le couple dans le repère mobile :
+\begin{eqnarray}
+\vec{\tau}_m\left(t\right)=A\left(t\right)\vec{\tau}_f\left(t\right)
+\end{eqnarray}
+\item On calcule ensuite le moment angulaire dans le repère mobile à $t+\delta t/2$ à l'aide de l'équation \ref{eqn:mtangmob} :
+\begin{eqnarray}
+\vec{l}_m\left(t+\delta t/2\right)=\vec{l}_m\left(t\right)+\left[\vec{\tau}_m\left(t\right)-\left(\vec{\omega_m}\cross \vec{l}_m\right)\left(t\right)\right]\delta t/2
+\end{eqnarray}
+\item On détermine alors la vitesse angulaire à $t+\delta t/2$ :
+\begin{eqnarray}
+{\omega_m}_x\left(t+\delta t/2\right)={l_m}_x\left(t+\delta t/2\right)/I_x \nonumber \\
+{\omega_m}_y\left(t+\delta t/2\right)={l_m}_y\left(t+\delta t/2\right)/I_y \\
+{\omega_m}_z\left(t+\delta t/2\right)={l_m}_z\left(t+\delta t/2\right)/I_z
+\end{eqnarray}
+\item On calcule à présent la dérivée du quaternion à $t+\delta t/2$ à l'aide de l'équation \ref{eqn:omega} :
+\begin{eqnarray}
+\dfrac{dq}{dt}\left(t+\delta t/2\right)=\dfrac{1}{2}W^{-1}\left(t\right) \omega_m\left(t+\delta t/2\right)
+\end{eqnarray}
+On détermine alors une première valeur du quaternion à $t+\left( \delta t/2\right)$ :
+\begin{eqnarray}
+q_0\left(t+\delta t/2\right)=q\left(t\right)+\dfrac{dq}{qt}\left(t+\delta t/2\right)\dfrac{\delta t}{2}
+\end{eqnarray}
+\item on normalise le quaternion obtenu pour éviter les dérives numériques :
+\begin{eqnarray}
+q_0\left(t+\delta t/2\right)=q_0/ \left\| q_0\right\|
+\end{eqnarray}
+\item On va à présent faire une boucle sur des estimations de la valeur de la dérivée temporelle du quaternion $dq/dt\left(t+\delta t/2\right)$. On recalcule la matrice de rotation avec la valeur du quaternion précédemment obtenue ($q_0$ pour la première itération, $q_{n-1}\left(t+\delta t/2\right)$ dans le cas général
+\item On repasse le moment angulaire dans le repère mobile à l'aide de la nouvelle matrice de rotation :
+\begin{eqnarray}
+\vec{l}_m\left(t\right)=A\left(t\right)\vec{l}_f\left(t\right)
+\end{eqnarray}
+\item On recalcule la vitesse angulaire :
+\begin{eqnarray}
+{\omega_m}_x\left(t+\delta t/2\right)={l_m}_x\left(t+\delta t/2\right)/I_x \nonumber \\
+{\omega_m}_y\left(t+\delta t/2\right)={l_m}_y\left(t+\delta t/2\right)/I_y \\
+{\omega_m}_z\left(t+\delta t/2\right)={l_m}_z\left(t+\delta t/2\right)/I_z
+\end{eqnarray}
+\item On calcule à nouveau la dérivée du quaternion :
+\begin{eqnarray}
+\dfrac{dq}{dt}\left(t+\delta t/2\right)=\dfrac{1}{2}W^{-1}\left(t\right) \omega_m\left(t+\delta t/2\right)
+\end{eqnarray}
+en ayant actualisé la matrice W avec les nouveaux quaternions.
+\item On calcule le quaternion $q_n\left(t+\delta t/2\right)$ :
+\begin{eqnarray}
+q_n\left(t+\delta t/2\right)=q\left(t\right)+\dfrac{dq}{qt}\left(t+\delta t/2\right)\dfrac{\delta t}{2}
+\end{eqnarray}
+\item on re-normalise :
+\begin{eqnarray}
+q_n\left(t+\delta t/2\right)=q_n/ \left\|q_n\right\|
+\end{eqnarray}
+\item On compare $q_n$ et $q_{n-1}$. Si $\left\|q_n\left(t+\delta t/2\right)-q_{n-1}\left(t+\delta t/2\right)\right\|$ est inférieur à un critère de convergence défini par l'utilisateur, alors on quitte la boucle, sinon on estime $q_{n+1}$ et ainsi de suite. Si on ne converge pas après un nombre d'itérations maximum défini par l'utilisateur, alors on conserve la dernière itération obtenue pour la suite et un message d'avertissement est émis.
+\item On calcule ensuite $q\left(t+\delta t\right)$ :
+\begin{eqnarray}
+q\left(t+\delta t\right)=q\left(t\right)+\dfrac{dq}{dt}\left(t+\delta t/2\right) dt
+\end{eqnarray}
+\item On renormalise encore une fois, afin de conserver un quaternion unitaire en dépis des dérives numériques.
+\end{enumerate}
+
+%Dans un premier temps, le moment angulaire dans le repère fixe est évalué à l'instant $t$ à l'aide de l'équation \ref{eqn:couplemvt} :
+
+%\begin{eqnarray}
+%\vec{l}_f\left(t\right)=\vec{l}_f\left(t-\dfrac{\delta t}{2}\right)+\dfrac{\delta t}{2} \vec{\tau}_f\left(t\right)
+%\end{eqnarray}
+%On en déduit alors le moment angulaire dans le repère mobile à l'aide de la matrice de rotation :
+
+%\begin{eqnarray}
+%\vec{l}_m\left(t\right)=R \ \vec{l}_f\left(t\right)
+%\end{eqnarray}
+
+%En utilisant l'équation \ref{eqn:mtinertie} qui relie le moment angulaire aux composantes diagonales du moment d'inertie dans le centre de masse, on peut ainsi déterminer aisément la vitesse angulaire $\vec{\omega}\left(t\right)$. On peut alors utiliser l'équation \ref{eqn:omega} qui relie les composantes du quaternion, leurs dérivées et la vitesse angulaire pour en déduire la dérivée du quaternion $\dot{Q}\left(t\right)$. On peut alors en déduire la valeur du quaternion au demi pas de temps :
+
+%\begin{eqnarray}
+%Q\left(t+\dfrac{\delta t}{2}\right)=Q\left(t\right)+\dfrac{\delta t}{2} \dot{Q}\left(t\right)
+%\end{eqnarray} 
+
+%On peut alors déterminer le moment angulaire au demi pas de temps :
+
+%\begin{eqnarray}
+%\vec{l}_s\left(t+\dfrac{\delta t}{2}\right)=\vec{l}_s\left(t-\dfrac{\delta t}{2}\right) + \delta t \tau_s\left(t\right)
+%\end{eqnarray}
+
+%On répète alors les opérations précédentes, à savoir passer dans le repère mobile à l'aide de la nouvelle matrice de rotation obtenue avec le quaternion au demi pas de temps, en déduire la vitesse angulaire, puis la dérivée du quaternion, et enfin déterminer le quaternion au temps $t+\delta t$ :
+
+%\begin{eqnarray}
+%Q\left(t+\delta t\right)=Q\left(t\right)+\delta t \dot{Q}\left(t+\dfrac{\delta t}{2}\right)
+%\end{eqnarray}
+
+
+    \subsection{Cas des molécules linéaires}
+    
+Les molécules rigides linéaires peuvent être traitées d'une manière simplifiée. En effet, les sites de force étant alignés, les vecteurs position des sites de force sont colinéaires et on a donc $\vec{r}_{n_i}=d_{n_i}\vec{e}$, $\vec{e}$ étant le vecteur unitaire selon l'axe de la molécule. Le couple appliqué sur la molécule peut alors être écrit :
+
+\begin{eqnarray}
+\vec{\tau}=\sum_{n_i} \vec{r}_{n_i}\cross \vec{f}_{n_i}=\vec{e}\cross \sum_{n_i}d_{n_i}\vec{f}_{n_i}=\vec{e}\cross\vec{g}
+\end{eqnarray}
+
+avec 
+
+\begin{eqnarray}
+\vec{g}=\sum_{n_i}d_{n_i}\vec{f}_{n_i}
+\end{eqnarray}
+
+Dans le calcul du couple, le vecteur $\vec{g}$ peut être réduit à sa composante perpendiculaire à l'axe de la molécule, étant donné que la partie radiale disparaît avec le produit vectoriel. Ainsi, on peut écrire le couple :
+
+\begin{eqnarray}
+\vec{\tau}=\vec{e}\cross \vec{g}^{\perp}
+\end{eqnarray}
+
+La valeur de $\vec{g}^{\perp}$ est déterminée très simplement en enlevant la composante suivant l'axe $\vec{e}$ :
+
+\begin{eqnarray}
+\vec{g}^{\perp}=\vec{g}-\left(\vec{g}.\vec{e}\right) \vec{e}
+\end{eqnarray}
+
+On définit alors $\vec{u}=\dot{\vec{e}}$ le vecteur dérivée du vecteur unitaire définissant l'axe de la molécule linéaire. De par la définition de $\vec{u}$ :
+
+\begin{eqnarray}
+\vec{u}=\dfrac{d\vec{e}}{dt}=\vec{\omega}\cross \vec{e}
+\end{eqnarray}
+
+on obtient :
+
+\begin{eqnarray}
+\vec{e}\cross\vec{u}=\vec{e}\cross\left(\vec{\omega}\cross\vec{e}\right)
+\end{eqnarray}
+
+En utilisant la relation $\vec{a}\cross\left(\vec{b}\cross\vec{c}\right)=\left(\vec{a}.\vec{c}\right)\vec{b}-\left(\vec{a}.\vec{b}\right)\vec{c}$ on obtient :
+
+\begin{eqnarray}
+\vec{e}\cross\vec{u}=\left(\vec{e}.\vec{e}\right)\vec{\omega}-\left(\vec{e}.\vec{\omega}\right)\vec{e}
+\end{eqnarray}
+
+Or, $\vec{e}$ est unitaire et $\vec{\omega}.\vec{e}=0$ puisqu'ils sont orthogonaux, on a donc :
+
+\begin{eqnarray}
+\vec{e}\cross\vec{u}=\vec{\omega}
+\end{eqnarray}
+
+On peut obtenir la dérivée du vecteur $\vec{u}$ en dérivant cette relation :
+
+\begin{eqnarray} \label{eqn:dotu}
+\dot{\vec{u}}=\vec{g}^\perp / I + \lambda \vec{e} 
+\end{eqnarray}
+
+où $I$ est le moment d'inertie et $\lambda$ peut être vu comme un multipicateur de Lagrange. En termes physiques, le premier terme du membre de droite correspond à la force responsable de la rotation de la molécule, tandis que le second terme correspond à la force qui maintient la longueur de la molécule constante.
+
+Une méthode de type leap-frog à demi pas de temps peut encore être proposée. En effet, en avançant les coordonnées d'un demi pas de temps, on obtient :
+
+\begin{eqnarray}
+\vec{u}\left(t\right)=\vec{u}\left(t-\dfrac{\delta t}{2}\right)+\dfrac{\delta t}{2}\left[\dfrac{\vec{g}^\perp\left(t\right)}{I}+\lambda\left(t\right)\vec{e}\left(t\right)\right]
+\end{eqnarray}
+
+En projetant cette équation sur la direction du vecteur $\vec{e}$, on obtient :
+
+\begin{eqnarray} \label{eqn:lambda}
+\lambda\left(t\right) \delta t=-2 \vec{u}\left(t-\dfrac{\delta t}{2}\right) . \vec{e}
+\end{eqnarray}
+
+En injectant \ref{eqn:lambda} dans \ref{eqn:dotu}, on obtient finalement :
+
+\begin{eqnarray}
+\delta t \dot{\vec{u}}=\delta t \dfrac{\vec{g}^\perp \left(t\right)}{I}-2\left[\vec{u}\left(t-\dfrac{\delta t}{2}\right)\vec{e}\left(t\right)\right] \vec{e}\left(t\right)
+\end{eqnarray}
+
+On peut alors avancer la valeur du vecteur $\vec{u}$ jusqu'au temps $t+\delta t/2$ :
+
+\begin{eqnarray}
+\vec{u}\left(t+\dfrac{\delta t}{2}\right)=\vec{u}\left(t-\dfrac{\delta t}{2}\right)+\delta t \dot{\vec{u}}\left(t\right)
+\end{eqnarray}
+ 
+Enfin, on termine le pas de temps pour déterminer la nouvelle direction de l'axe de la molécule au temps $t+\delta t$ :
+
+\begin{eqnarray}
+\vec{e}\left(t+\delta t\right)=\vec{e}\left(t\right)+\delta t\vec{u}\left(t+\dfrac{\delta t}{2}\right)
+\end{eqnarray}
+
+	\subsection{Initialisation de la simulation}
+	
+	\subsubsection{Initialisation des vitesses translationnelles}
+La position et l'orientation initiales des molécules est définie par l'utilisateur. En revanche, les vitesses translationnelle et angulaire des molécules doivent être initialisées par le code. Elles sont donc déterminées aléatoirement au sein d'une distribution gaussienne. La vitesse du centre de masse est alors calculée, et retranchée à toutes les molécules afin d'assurer que la somme des vitesses est bien nulle, puis on ajuste les vitesses d'un facteur permettant de conserver la température initiale. 
+\\
+
+Les vitesses translationnelles des centres de masse des particules sont définies aléatoirement au sein de la distribution gaussienne suivante :
+
+\begin{eqnarray} \label{eqn:gaussdisttrans}
+\rho\left(v_{i,\alpha}\right)=\left(\dfrac{m_i}{2\pi k_B T}\right)^{1/2}\exp\left(-\dfrac{m_i v_{i,\alpha}^2/2}{k_B T}\right)
+\end{eqnarray}
+
+où $T$ est la température, $k_B$ la constante de Boltzmann, $m_i$ la masse de la molécule $i$ et $\alpha$ représente chacune des trois directions $x$, $y$ et $z$.
+
+Afin d'assurer que le centre de masse du système est bien nulle, on calcule alors la vitesse selon chaque direction du centre de masse du système composé de l'ensemble des molécules $V_{cms,\alpha}$ :
+
+\begin{eqnarray}
+V_{cms,\alpha}=\dfrac{\sum_i m_i v_{i,\alpha}}{\sum_i m_i}
+\end{eqnarray}
+
+On soustrait alors cette valeur aux composantes de chacune des vitesses :
+
+\begin{eqnarray}
+v'_{i,\alpha}=v_{i,\alpha}-V_{\alpha,cms}
+\end{eqnarray}
+
+Afin de s'assurer qu'on retrouve ensuite la température définie par l'utilisateur, et ainsi que l'énergie cinétique totale corresponde bien à l'énergie interne totale :
+\begin{eqnarray}
+\sum_i \dfrac{1}{2} m_i {v'}_{i,\alpha}^2=\dfrac{1}{2}Nk_bT
+\end{eqnarray}
+avec N le nombre de particules du système. On multiplie donc chaque composante des vitesse par un facteur $c=\sqrt{\dfrac{Nk_BT}{\sum_i m_i {v'}_{i,\alpha}^2}}$.
+
+		\subsubsection{Initialisation des vitesses rotationelles}
+
+Le principe est le même pour les vitesses rotationnelles. Ces vitesses rotationnelles vont être initialisées dans le repère mobile, dans lequel le moment d'inertie a une expression simple. La masse est alors remplacée par la composante du moment d'inertie dans la direction $\alpha$. On choisit donc des vitesses angulaires $\omega_{i,\alpha}$ dans une distribution gaussienne :
+
+\begin{eqnarray} \label{eqn:gaussdistrot}
+\rho\left(\omega_{i,\alpha}\right)=\left(\dfrac{I_{i,\alpha}}{2\pi k_B T}\right)^{1/2}\exp\left(-\dfrac{I_{i,\alpha} \omega_{i,\alpha}^2/2}{k_B T}\right)
+\end{eqnarray}
+
+En toute rigueur, le moment angulaire total n'étant pas conservé, il n'est pas nécessaire de s'assurer que le moment angulaire total est nul. Toutefois, nous allons quand même le définir nul à l'instant initial.
+
+On définit ainsi les nouvelles vitesses angulaires :
+
+\begin{eqnarray}
+{\omega '}_{i,\alpha}=\omega_{i,\alpha}-\dfrac{\sum_i I_{i,\alpha}\omega_{i,\alpha}}{\sum_i I_{i,\alpha}}
+\end{eqnarray}
+
+Enfin, afin de s'assurer qu'on trouve bien la bonne température, on multiplie, comme pour les vitesses translationnelles, par le facteur adéquat $c=\sqrt{\dfrac{Nk_bT}{\sum_i I_{i,\alpha}{\omega '}_{i,\alpha}^2}}$.
+
+\subsection{Thermostat de Langevin}
+
+Gabriel Stoltz propose une méthode simple pour inclure un thermostat de Langevin dans une méthode de type Verlet. Cette méthode consiste à ajouter aux forces appliquées deux termes, un premier terme représentant des forces ficitives modélisant les fluctuations browniennes, et un terme de viscosité modélisant la dissipation s'opposant à ces fluctuations. Le premier terme dans la force s'écrit :
+
+\begin{eqnarray}
+\vec{f}_b=-\xi\dfrac{\vec{p}_i}{m_i}
+\end{eqnarray}
+où $\vec{f}_b$ est la force de fluctuation brownienne, $\xi$ est un paramètres d'échelle, $\vec{p_i}=m_i\vec{v_i}$ est l'impulsion de la particule $i$ et $\vec{v}_i$ est la vitesse de la particule $i$. On peut donc écrire simplement en faisant intervenir la vitesse uniquement :
+
+\begin{eqnarray}
+\vec{f}_b=\xi \vec{v}_i
+\end{eqnarray}
+
+Le second terme représentant la dissipation peut quant à lui s'écrire :
+
+\begin{eqnarray}
+\vec{f}_d=\dfrac{\sigma_i}{\sqrt{dt}\vec{G}^m_i}
+\end{eqnarray}
+
+où $\sigma$ est un paramètre, $dt$ est le pas de temps et $\vec{G}^m_i$ est un vecteur aléatoire de force de composantes indépendantes et identiquement distribuées dans une distribution gaussienne \textcolor{red}{De norme 1 pour avoir une direction aléatoire ?}. En supposant qu'il n'y a pas d'autre force, G. Stoltz \cite{sotltz} établit qu'afin d'obtenir la bonne température cinétique, la relation liant les deux paramètres $\xi$ et $\sigma$ est :
+
+\begin{eqnarray}
+\sigma_i^{dt}=\sqrt{\dfrac{2\xi}{\beta}\left(1+\dfrac{\xi dt}{2m_i}\right)}
+\end{eqnarray}
+avec $\beta=\dfrac{1}{k_B T}$.
+
+Ainsi, pour considérer un thermostat de Langevin dans la simulation, il faut ajouter au calcul des forces ces deux termes, le reste de l'algorithme étant inchangé.
+
+\subsection{Génération de nombres aléatoires dans une distribution gaussienne}
+
+Le livre d'Allen et Tildesley \cite{allentildesley} propose une manière simple de créer une telle distribution. Un nombre $\eta$ dans une telle distribution peut être obtenu à partir d'un nombre $\xi$ dans une distribution normale avec une moyenne nulle par :
+
+\begin{eqnarray}
+\eta=\left(\dfrac{k_B T}{m_i}\right)^2 \xi
+\end{eqnarray}
+
+Pour générer $\xi$, deux méthodes peuvent être proposées.
+\\
+
+La méthode de Box et Muller \cite{allentildesley} consiste à :
+\begin{itemize}
+\item générer deux nombre aléatoires $\xi_1$ et $\xi_2$ dans l'intervalle $\left(0,1\right)$
+\item calculer $\xi_1=\sqrt{-2 \log \xi_1}\cos\left(2\pi \xi_2\right)$ et $\xi_2=\sqrt{-2 \log \xi_1} \sin\left(2\pi \xi_2\right)$
+\end{itemize}
+Les nombres sont donc obtenus par paire.
+\\
+
+Une seconde méthode \cite{allentildesley}, plus rapide car ne faisant pas appel aux fonctions trigonométriques, permet de générer des nombres aléatoires :
+\begin{itemize}
+\item générer $12$ nombres aléatoires $\xi_1, ..., \xi_12$ dans l'intervalle $\left(0,1\right)$
+\item calculer $\xi=\sum_{i=1}^12 \left(\xi_i-6\right)$
+\end{itemize}
+
+%\section{Spécifications du code}
+%
+%\subsection{La classe molécule, ses données et ses méthodes}
+%
+%Nous proposons de définir une classe C++, appelée "mol", qui contienne l'ensemble des informations et des méthodes adaptées aux molécules. Cette classe doit contenir :
+%
+%\begin{itemize}
+%\item Le nombre de sites de force
+%\item La masse de chaque site de force (atome) composant la molecule
+%\item La force s'appliquant sur chaque site de force
+%\item La masse du centre de masse (la masse totale de la molécule)
+%\item La position relative au centre de masse de chaque site de force
+%\item La position dans le repère fixe de chaque site de force
+%\item La vitesse initiale de chaque site de force
+%\item La vitesse de chaque site de force dans le repère fixe \textcolor{red}{(à confirmer, probablement utile pour le thermostat de Langevin et pour des vérifications, se calculera facilement avec la vitesse angulaire $\omega$ et la position relative au centre de masse)}
+%\item La localisation du centre de masse et sa vitesse
+%\item La force appliquée sur le centre de masse
+%\item Le couple appliqué sur le centre de masse dans le repère mobile
+%\item Le couple appliqué sur le centre de masse dans le repère fixe
+%\item Le moment angulaire dans le repère fixe
+%\item Le moment angulaire dans le repère mobile
+%\item Le moment d'inertie de la molécule
+%\item Le quaternion de la molécule
+%\item La dérivée du quaternion
+%\item La vitesse angulaire dans le repère mobile
+%\item La matrice de rotation 
+%\end{itemize} 
+%
+%Nous allons déjà commencer par définir des types permettant de gérer les vecteurs à trois dimensions de l'espace et les quaternions.
+%
+%\begin{lstlisting}
+%// Definition d'un type pour les vecteurs
+%struct double3d
+%{
+%	double x;
+%	double y;
+%	double z;
+%};
+%
+%inline double3d operator+(double3d const &a, double3d const &b) {
+%  double3d r = a;
+%  r.x += b.x;
+%  r.y += b.y;
+%  r.z += b.z;
+%  return r;
+%}
+%
+%inline double3d operator-(double3d const &a, double3d const &b) {
+%  double3d r = a;
+%  r.x -= b.x;
+%  r.y -= b.y;
+%  r.z -= b.z;
+%  return r;
+%}
+%
+%// produit vectoriel 
+%inline double3d operator^(double3d const &a, double const &b) {
+%	double3d r = a;
+%	r.x = a.y*b.z-a.z*b.y;
+%	r.y = a.z*b.x-a.x*b.z;
+%	r.z = a.x*b.y-a.y*b.x;
+%
+%	return r;
+%	
+%// division composante par composante
+%inline double3d operator/(double3d const &a, double const &b) {
+%	double3d r = a;
+%	r.x=a.x/b.x;
+%	r.y=a.y/b.y;
+%	r.z=a.z/b.z;
+%}
+%
+%// produit scalaire
+%inline double3d operator*(double a, double3d const &b) {
+%  double3d r = b;
+%  r.x *= a.x;
+%  r.y *= a.y;
+%  r.z *= a.z;
+%  return r;
+%}
+%
+%// Definition d'un type pour les quaternions
+%
+%struct quat
+%{
+%	double u1;
+%	double u2;
+%	double u3;
+%	double u4;
+%}
+%
+%inline quat operator+(Quat const &a, quat const &b) {
+%  quat r = a;
+%  r.u1 += b.u1;
+%  r.u2 += b.u2;
+%  r.u3 += b.u3;
+%  r.u4 += b.u4;
+%  return r;
+%}
+%
+%// Definition de macros utiles 
+%
+%#define QScale(q,s)				\
+%  q.u1 *= s ,					\
+%  q.u2 *= s ,					\
+%  q.u3 *= s ,					\
+%  q.u4 *= s 					\
+%
+%#define QSADD(q1,q2,s3,q3)			\
+% q1.u1 = q2.u1 +s3 * q3.u1,			\
+% q1.u2 = q2.u2 +s3 * q3.u2,			\
+% q1.u3 = q2.u3 +s3 * q3.u3,			\
+% q1.u4 = q2.u4 +s3 * q3.u4			\ 
+%
+%#define QLenSq(q)				\
+%  (q.u1*q.u1+ q.u2*q.u2+			\
+%  q.u3*q.u3+q.u4*q.u4)				\
+%
+%#define QLen(q)					\
+%  sqrt(QLenSq(q))				\
+%  
+%#define QNorm(q)				\
+%  q=QScale(q,1/(QLen(q))			\
+%
+%\end{lstlisting}
+%
+%Nous allons ensuite définir la classe molécule :
+%
+%\begin{lstlisting}
+%Class molelcule {
+%  public:
+%    //methodes publiques
+%    mol(); // constructeur
+%    int set_poscm(double rcmx, double rcmy, double rcmz}; // definir la position du centre de masse
+%    int set_quat(double q1, double q2, double q3, double q4); // definir le quaternion
+%    int set_possite(int _nsite, double* rsitex, double* rsitey, double* rsitez, double* sitemass); //definir les sites de force et calculer le mt inertiel
+%    int compute_forces(); //calculer la force sur chaque site et la force totale sur le centre de masse
+%    int compute_torquef(); //calculer le couple
+%    int compute_mtangf(); //calculer le mt angulaire initial
+%    int compute_possitef(); //calculer les positions des sites de force dans le repere fixe
+%    int compute_svel(); //avancer la vitesse d'un demi pas de temps
+%    int compute_trans(); //avancer d'un pas de temps la partie translationnelle
+%
+%    int compute_rot(); //avancer d'un pas de temps la partie rotationnelle
+%    int compute_matrot(quat &q); //calculer la matrice de rotation
+%    int rot_ftom(double3d vec);//passer un vecteur du repere fixe au repere mobile
+%    int rot_mtof(double3d vec);//passer un vecteur du repere mobile au repere fixe 
+%    int wmat_mul(quat q, double3d vec); //realiser l'operation 1/2*transposee de W * vecteur
+%   
+%  private:
+%    //methodes privees de manipulation de matrice
+%    double[9] transp_mat(double a[9]); //retourne la transposee d'une matrice 3x3
+%    double3d matxvec(double3d a[9],double3d vec){//retourne le produit d'une matrice 3x3 et d'un vecteur
+%    int compute_langevin();//calcule les forces associees au thermostat de Langevin
+%    //donnees membres (privees)
+%    double masscm; //masse du centre de masse
+%    int nsite; // input : nombre de sites de force
+%    std:vector<double3d> &rsite; //position des sites de force relatives au centre de masse
+%    std:vector<double3d> &rsitef; //position des sites de force dans le repere fixe
+%    std:vector<double3d> &vsite; //vitesse des sites de force
+%    std:vector<double3d> &msite; //masse des sites de force
+%    std:vector<double3d> &sforce; //force totale sur chaque site de force
+%    double3d forcecm; //force sur le centre de masse
+%    double3d torquef; //couple total dans le repere fixe
+%    double3d torquem; //couple total dans le repere mobile
+%    double3d rcm; //position du centre de masse
+%    double3d vcm; // vitesse du centre de masse
+%    double3d acm; // acceleration du centre de masse
+%    double3d mtangf[2]; //moment angulaire dans repere fixe au temps t et t+dt/2
+%    double3d mtangm[2]; //moment angulaire dans repere mobile au temps t et t+dt/2
+%    double3d mtinert; //moment d'inertie
+%    double eang[3]; // angles d'Euler    
+%    quat q; //quaternion de la molecule 
+%    quat qv; // derivee du quaternion au temps t+dt/2
+%    double3d omega[2]; //vitesse angulaire dans repere mobile aux temps t et t+dt/2
+%    double matrot[9]; // matrice de rotation
+%    double xi; //Parametre du thermostat de Langevin
+%\end{lstlisting}
+%
+%Voici à présent le détail des méthodes membres de la classe molécule :
+%
+%\begin{lstlisting}
+%int set_poscm(double rcmx, double rcmy, double rcmz){
+%  rcm.x=rcmx;
+%  rcm.y=rcmy;
+%  rcm.z=rcmz;
+%  }
+%
+%int set_quat(double q1, double q2, double q3, double q4){
+%  q.u1=q1;
+%  q.u2=q2;
+%  q.u3=q3;
+%  q.u4=q4;
+%  }
+%  
+%int set_possite(int _nsite, double *rsitex, double *rsitey, double *rsitez, double *sitemass){
+%  nsite=_nsite
+%  double3d rtsite
+%  minert=0.
+%  for (i=0; i<nsite; i++){
+%    rtsite.x=rsitex[i];
+%    rtsite.y=rsitey[i];
+%    rtsite.z=rsitez[i];
+%    minert.x=sitemass[i]*(rsitey[i]*rsitey[i]+rsitez[i]*rsitez[i])
+%    minert.y=sitemass[i]*(rsitez[i]*rsitez[i]+rsitex[i]*rsitex[i])
+%    minert.z=sitemass[i]*(rsitex[i]*rsitex[i]+rsitey[i]*rsitey[i])
+%    rsite.pushback(rtsite);
+%    rsitef.pushback(rtsite+rcm);
+%    msite.pushback(sitemass[i]);
+%
+%    }
+%  }
+%  
+%int compute_forces(){
+%//Voir avec thierry pour le detail
+%  double3d tforce //stockage temporaire de la force
+%  forcecm=0. //reinitialisation de la force totale  
+%  for (i=0; i<nsite; i++){
+%    tforce=0. //On reinitialise la force a 0 pour chaque site
+%    for (j=0; j<n_siteinter; j++){ //boucle sur les site avec lesquels il y a interaction
+%      tforce=tforce+contrib(j) //ici il faudra detailler contrib(j) par rapport aux appels aux potentiels d'exastamp
+%    }
+%    //Il devrait aussi y avoir ajout d'un terme pour prendre ne compte le thermostat de Langevin
+%    double3d fthl=compute_langevin();//calcule la force totale associee au thermostat de langevin
+%    sforce.pushback(tforce+fthl);
+%    forcecm=forcecm+tforce;
+%  }
+%}
+%
+%int compute_torquef(){
+%  torquef=0. //reinitialisation du couple
+%  for (i=0; i<nsite; i++){
+%    torquef=torquef+rsite[i]*sforce[i];
+%  }
+%}
+%int compute_svel(){
+%  vcm=vcm+dt/2.*forcecm/masscm;
+%}
+%
+%int compute_possitef(){//calculer les positions des sites de force dans le repere fixe
+%  for (i=0; i<nsite; i++){
+%    rsitef[i]=rcm+matxvec(transp_mat(matrot),rsite[i]);
+%  }
+%}
+%
+%int compute_matrot(quat &q, int transpose){ //methode astucieuse de construction de la matrice fournir par Rapaport
+%  real p[10]; //stockage temporaire des differents produits des composantes des quaternions
+%  real tq[4]; stockage temporaire du quaternion
+%  real s; //transposee si -1
+%  int k, k1, k2;
+%  
+%  tq[0]=q.u1;
+%  tq[1]=q.u2;
+%  tq[2]=q.u3;
+%  tq[3]=q.u4;
+%  for (k=0, k2=0; k2<4; k2++){
+%    for (k1=k2; k1<4; k1++, k++) {
+%      p[k]=2.*tq[k1]*tq[k2];
+%    }
+%  }
+%  //elements diagonaux
+%  matrot[0]=p[0]+p[9]-1.;
+%  matrot[4]=p[4]+p[9]-1.;
+%  matrot[8]=p[7]+p[9]-1.;
+%  //autres elements avec prise en compte de la transposee si besoin
+%  s=transpose;//-1 ou 1
+%  matrot[1]=p[1]+s*p[8];
+%  matrot[3]=p[1]-s*p[8];
+%  matrot[2]=p[2]-s*p[6];
+%  matrot[6]=p[2]+s*p[6];
+%  matrot[5]=p[5]+s*p[3];
+%  matrot[7]=p[5]-s*p[3];
+%}
+%  
+%int wmat_mul(quat q, double3d vec){//realise le calcul 1/2 transposee de W * vec
+%  quat res;
+%  res.u1=q.u4*vec.x-q.u3*vec.y+q.u2*vec.z;
+%  res.u2=q.u3*vec.x+q.u4*vec.y-q.u1*vec.z;
+%  res.u3=-q.u2*vec.x+q.u1*vec.y+q.u4*vec.z;
+%  res.u4=-q.u1*vec.x-q.u2*vec.y-q.u3*vec.z;
+%  res=QScale(q,0.5)
+%  return res;
+%}
+%
+%int matxvec(double3d a[9],double3d vec){//retourne le produit d'une matrice 3x3 et d'un vecteur
+%  double3d res;
+%  res.x=a[1]*vec.x+a[2]*vec.y+a[3]*vec.z
+%  res.y=a[4]*vec.x+a[5]*vec.y+a[6]*vec.z
+%  res.z=a[7]*vec.x+a[8]*vec.y+a[9]*vec.z
+%  return res;
+%}
+%
+%int rotftom(double3d vec){//passe un vecteur de la base fixe a la base mobile
+%  return matxvec(matrot,vec);
+%}
+%
+%int rotmtof(double3d vec){//passe un vecteur de la base mobile a la base fixe
+%  return matxvec(transp_mat(matrot),vec);
+%}
+%
+%int transp_mat(double a[9]){ //retourne la transposee d'une matrice
+%  double res[9];
+%  res[1]=a[1];
+%  res[2]=a[4];
+%  res[3]=a[7];
+%  res[4]=a[2];
+%  res[5]=a[5];
+%  res[6]=a[8];
+%  res[7]=a[3];
+%  res[8]=a[6];
+%  res[9]=a[9];
+%  return res;
+%}
+%
+%
+%\end{lstlisting}
+%
+%Voici le pseudo-code de l'initialisation de la simulation \textcolor{red}{A compléter}.
+%
+%\begin{lstlisting}
+%  public:
+%    int init_simu(double const &_temp, double const &_nmol, double *rx, double *ry, double *rz, double *q1, double *q2, double *q3, double *q3); //fonction pour initialiser les grandeurs de la simulation
+%    
+%  private: 
+%    double _sigma; // parametre de la gaussienne
+%    double const _temp; //temperature
+%    double const _nmol; //nombre de molecules
+%    int gaussgen(double &_sigma, int &_n); // fonction de generation de _n nombres dans une gaussienne
+%    
+%    
+%\end{lstlisting} 
+%
+%\textcolor{red}{A compléter} Voici une représentation de la fonction d'initialisation :
+%
+%\begin{lstlisting}
+%int init_simu(double const &_temp, double const &_nmol, double *rxcm, double *rycm, double *rzcm, double *q1, double *q2, double *q3, double *q3, double *nsite, double *rxsite, double *rysite, double *rzsite) {
+%  molecule mol[_nmol];
+%  for (int i=0; i<_nmol; i++){
+%    molecule &m=mol[i]    
+%    m.set_poscm(rxcm[i], rycm[i], rzcm[i]);
+%    m.set_quat(q1[i], q2[i], q3[i], q4[i]);
+%    m.set_possite(nsite[i], *rxsite[i], *rysite[i], *rzsite[i]);
+%    m.compute_forces();//calcul des forces initiales
+%    m.compute_torque();//calcul des couples initiaux
+%    }
+%    //Initialisation vitesses angulaires et vitesses cm
+%    // A completer mais a base de gaussgen(kb*_temp/m,_nmol) a priori
+%    m.compute_mtangf();//determination du mt ang initial
+%  }
+%    
+%int compute_mtangif(){
+%  double3d mtangif=0. //initialisation valeur temporaire
+%    for (int i=0; i<nsite; i++){//calcul du moment angulaire initial
+%      mtangif=mtangif+msite[i]*(rcm[i]+rsite[i])*vsite[i] //ajout de chaque composante du moment cinetique
+%    }
+%  }
+%\end{lstlisting}
+%
+%On suppose que la force s'appliquant sur le centre de masse est connue à l'instant $t$. Voici le pseudo-code permettant l'avancement de la position au temps $t+dt$ :
+%
+%\begin{lstlisting}
+%int compute_trans(){
+%    rcm=rcm+vcm*dt+ddt*ddt/2*forcecm/masscm // avancer la position a t+dt
+%    svel_compute(); //avancer la vitesse a t+dt/2
+%  }
+%}
+%\end{lstlisting}
+%
+%On suppose que le couple, le quaternion et le moment angulaire dans le repère fixe sont connus à l'instant $t$. Le pseudo-code ci-dessous permet d'avancer d'un pas de temps la partie rotationelle du mouvement.
+%
+%\begin{lstlisting}
+%int compute_rot(){
+%  mtangf[1]=mtangf[0]+torquef*ddt; //calculer moment angulaire ds repere fixe au temps t+dt/2 (ddt=dt/2)
+%  mtangm[0]=rot_ftom(mtangf[0]); //on passe le mt ang fixe dans le repere mobile au temps t+dt
+%  omega[0].mtangm[0]/mtinert; //calcul de la vitesse angulaire
+%  torquem=rot_ftom(m.torquef); //passage du couple dans le repere mobile
+%  mtangm[1]=mtangm[0]+(torquem-(m.omega[0]*m.tangm[0]))*ddt; //calcul du mt ang a t+dt/2
+%  omega[1]=mtangm[1]/mtinert;// calcul de la vitesse angulaire a t+dt/2
+%  qv=wmat_mul(m.q,m.omega[1]); //calculer la derivee du quaternion a t+dt/2
+%  quat qtemp1=q+qv*ddt; //premiere estimation du quaternion
+%  Qnorm(qtemp1); //normalisation du quaternion
+%  double diff=1.
+%  int count=0
+%  while (diff>conv_crit){
+%    if (count>=conv_cycles){//sortir si on ne converge pas
+%      cout << "Warning: compute rotational movement: max cycles numbre reached. Keeping last quaternion value and continue";
+%      break;
+%      }
+%    compute_matrot(qtemp1,1);//on actualise la matrice de rotation
+%    mtangm[0]=rot_ftom(mtangf[0]);//on repasse le mt ang dans le repere mobile avec la nouvelle matrice de rotation
+%    omega[1]=mtangm[1]/minert;//on recalcule le mt angulaire
+%    qv=wmat_mul(qtemp1,omega[1]);//calculer la nouvelle derivee du quaternion au temps t+dt/2
+%    quat qtemp2=qtemp1+qv*ddt;//nouvelle estimation du quaternion
+%    Qnorm(qtemp2);//normalisation du quaternion
+%    diff=QLen(qtemp2-qtemp1);//calcul de la norme de la difference des deux quaternions
+%    count=count+1;//incrementation du compteur de cycles
+%    } //fin boucle estimation
+%  } //fin de la fonction d'avancee du temps de la partie rotationnelle
+%\end{lstlisting}
+%
+%Ainsi, nous avons toutes les briques pour assembler l'algorithme de traitement des particules rigides :
+%
+%\begin{lstlisting}
+%init_simu(Temp, Nmol, rxcm[], rycm[], rzcm[], q1[], q2[], q3[], q4[], nsite[], rxsite[], rysite[], rzsite[]); //initialise la simulation et calcule le necessaire pour le premier pas de temps
+%while(t<tfinal){//boucle sur le temps
+%  //boucle sur les molecules, a parallaleliser openMP 
+%  for (i=0; i<nmol; i++){
+%    molecule &m=mol[i]
+%    m.compute_trans();//avancer positions centres de masse jusqu'a t+dt
+%    m.compute_rot();//partie rotationnelle jusqu'a t+dt
+%    m.compute_possite();//calculer les positions des sites a t+dt
+%    m.compute_forces();//avancer les forces jusqu'a t+dt
+%    m.compute_svel();//terminer l'avancee des vitesses jusqu'a t+dt
+%    m.compute_torque();//avancer les couples jusqu'a t+dt
+%  }//fin boucle sur les molecules
+%  t=t+dt;// avancer le temps de la simulation
+%}//fin boucle sur le temps
+%\end{lstlisting}
+%  % Bibliographie
+
+\subsection{Parallélisme OpenMP}
+
+Le parallélisme OpenMP est introduit en répartissant les boucles sur les molécules sur différents threads. Chaque coeur s'occupe alors d'une partie des molécules de la boucle.
+
+\clearpage
+	\addcontentsline{toc}{chapter}{Bibliographie}
+	\begin{thebibliography}{9}
+	
+		\bibitem{goldstein}
+Herbert Goldstein, Charles Poole, John Safko
+	\emph{Classical Mechanics}.
+Addison Wesley, 1980.
+      
+        \bibitem{rapaport}
+Dennis Rapaport
+    \emph{The Art of Molecular Dynamics Simulation}
+Cambridge University Press, 2004
+
+        \bibitem{allentildesley}
+M.P. Allen, D.J. Tildesley
+    \emph{Computer Simulation of Liquids}
+Oxford University Press  
+		\bibitem{stoltz}
+Gabriel Stoltz
+	\emph Quelques méthodes mathématiques pour la simulation moléculaire multiéchelle
+Ecole des Ponts ParisTech, 2007
+	\end{thebibliography}
+\end{document}

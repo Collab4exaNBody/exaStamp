@@ -1,0 +1,58 @@
+
+configuration:
+  logging:
+    debug: false
+  debug:
+    filter: [ ".*material_langevin_thermostat" ]
+
+# define potential we'll reuse later
+compute_force_pair_multimat:
+  potentials:
+    - { type_a: Silicon , type_b: Copper , potential: zero }
+    - { type_a: Silicon , type_b: Zinc   , potential: zero }
+    - { type_a: Silicon , type_b: Silicon, potential: lj   , rcut: 8.47 ang , parameters: { epsilon: 4.117E-21 J , sigma: 0.339E-09 m } }
+    - { type_a: Copper  , type_b: Copper , potential: lj   , rcut: 5.68 ang , parameters: { epsilon: 9.340E-20 J , sigma: 0.227E-09 m } }
+    - { type_a: Zinc    , type_b: Zinc   , potential: lj   , rcut: 6.10 ang , parameters: { epsilon: 2.522E-20 J , sigma: 0.244E-09 m } }
+    - { type_a: Copper  , type_b: Zinc   , potential: lj   , rcut: 5.89 ang , parameters: { epsilon: 4.853E-20 J , sigma: 0.236E-09 m } }
+
+material_langevin_thermostat:
+  - { type: Silicon , gamma: 0.1 , T: 300 K }
+  - { type: Copper  , gamma: 0.1 , T: 300 K }
+  - { type: Zinc    , gamma: 0.1 , T: 300 K }
+
+compute_force:
+  - compute_force_pair_multimat
+  - material_langevin_thermostat
+
+# atoms descriptions
+species:
+  - Silicon:
+      mass: 46.623E-27 kg
+      z: 14
+      charge: 0 e-
+  - Copper:
+      mass: 105.486E-27 kg
+      z: 29
+      charge: 0 e-
+  - Zinc:
+      mass: 108.531E-27 kg
+      z: 30
+      charge: 0 e-
+
+grid_flavor: grid_flavor_multimat
+
+input_data:
+  - read_stamp_v3:
+      file: multimat.mpio
+      bounds_mode: FILE
+
+domain:
+  grid_dims: [4,4,4]
+  periodic: [true,true,true]
+
+global:
+  dt: 4.0e-3 ps
+  simulation_end_iteration: 10
+  simulation_log_frequency: 1
+
+

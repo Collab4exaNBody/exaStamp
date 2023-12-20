@@ -1,0 +1,55 @@
+# no-seq enable-if-EXASTAMP_ENABLE_PERF_TESTS nthreads=max
+
+configuration:
+  logging:
+    debug: false
+  debug:
+    filter: [ '.*grid_connected_components' ]
+  profiling:
+    summary: true
+
+grid_flavor: grid_flavor_minimal
+
+species:
+  - Copper:
+      mass: 105.486E-27 kg
+      z: 29
+      charge: 0 e-
+
+input_data:
+  - read_stamp_v3:
+      file: microjet.mpio
+      bounds_mode: FILE
+
+init_epilog:
+  - grid_stats
+
+domain:
+  cell_size: 40.0 ang
+  periodic: [true,true,true]
+
+global:
+  dt: 4.0e-3 ps
+  simulation_end_iteration: 600010
+  simulation_log_frequency: 1
+  simulation_dump_frequency: 3
+  rcut_inc: 0.7 ang
+
+lj_compute_force:
+  parameters: { epsilon: 9.340E-20 J , sigma: 0.227E-09 m }
+  rcut: 5.68 ang
+
+compute_force: lj_compute_force
+
+dump_data:
+  - grid_flavor
+  - resize_grid_cell_values
+  - atom_cell_projection:
+      fields: [ "mv2" , "mass" ]
+      grid_subdiv: 3
+      splat_size: 3.0 ang
+  - timestep_file: "grid_%09d"
+  - write_grid_vtk
+
+final_dump: nop
+

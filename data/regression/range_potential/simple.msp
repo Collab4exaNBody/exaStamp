@@ -1,0 +1,39 @@
+# no-seq
+
+range_potential:
+  r0min: 0.1 ang
+  r0max: 1.0 ang
+  r1min: 1.2 ang
+  r1max: 2.6 ang
+  r2min: 2.4 ang
+  r2max: 4.4 ang
+
+# atoms descriptions
+species:
+  - Tin:
+      mass: 197.1508269E-27 kg
+      z: 50
+      charge: 0 e-
+
+# define potential we'll reuse later
+compute_force: range_potential
+
+grid_flavor: grid_flavor_multimat
+
+input_data:
+  - read_stamp_v3:
+      file: tin.mpio
+      bounds_mode: FILE
+
+domain:
+  grid_dims: [5,5,5]
+  periodic: [true,true,true]
+
+global:
+  simulation_end_iteration: 10
+  simulation_log_frequency: 1
+  rcut_inc: 0.2 ang
+  dt: 1.0e-3 ps
+  enable_task_graph: false
+
+

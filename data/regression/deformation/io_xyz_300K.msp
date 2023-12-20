@@ -1,0 +1,18 @@
+# no-seq
+
+includes:
+  - io_xyz.msp
+
+input_data:
+  - read_stamp_v3:
+     file: Geo_20x20x20_300K.mpio
+     bounds_mode: FILE
+
+global:
+  is_local_measure: true
+
+simulation_epilog:
+  - check_values:
+      file: eam_sc_io_xyz_300K.dat
+      threshold: 1.5e-10
+

@@ -1,0 +1,140 @@
+\section{Coding standards}
+\label{sec:coding_stabdards}
+
+
+inspired from the follwing sources
+https://isocpp.org/wiki/faq/coding-standards
+http://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines
+
+\begin{lstlisting}
+
+
+Coding style :
+==============
+
+class MyFirstClass
+{
+  // 2 spaces indent. spaces only indentation (no \t characters)
+  public:
+    int integer_value() const;
+    void set_integer_value(int x);
+
+  private:
+    // members start with m_
+    int m_integer_value;
+};
+
+class MySecondClass
+{
+  // 2 spaces indent. spaces only indentation (no \t characters)
+  public:
+    const MyFirstClass& object() const;
+    void set_object(const MyFirstClass& o);
+
+  private:
+    MyFirstClass m_object;
+    // class member start with s_
+    static int s_per_class_integer;
+};
+
+// global values start with g_
+int g_my_global_value = 0;
+
+// function names (and member methods) use lower case only, letters and _ i.e. [a-Z0-9_] pattern
+int my_function( int x, int y)
+{
+  // all variables are initialized
+  int z = 0;
+  int w = 0;
+  z = x*y;
+  w = x+y;
+  return z/w;
+}
+
+// enum types are named (no anonymous enums)
+enum Choice
+{
+  CHOICE_THIS,
+  CHOICE_THAT,
+  CHOICE_OTHER
+};
+
+
+// =================== Application =========================
+
+// 1. operators in exaStampV2
+// ---------------------------
+
+// source file name is operator given name with .cpp,
+// following exemple of operator named wall in exaStampV2,
+// in src/compute/wall.cpp
+
+#include "ustamp/operator.h"
+// ... all necessary includes here ...
+#include <iomanip>
+
+namespace ustamp
+{
+
+  template<
+    class GridT,  // if operator takes Grid<> templated type as an argument,
+                  // then anonymous type with default value must ensure that instantiation is possible only if Grid<>
+		  // satisfies some requirements (i.e. presence of computation scalar fields
+    class = AssertGridHasFields< GridT, field::_fx, field::_fy, field::_fz, field::_ep >    >
+
+  // class name has no real importance, but must comply to the coding standards
+  class WallOperator : public OperatorNode
+  {
+    // input / output slots are declared private
+    // if a slot is INPUT only, it must be declared either REQUIRED, OPTIONAL, or given a default value
+    ADD_SLOT( GridT  , grid   , INPUT_OUTPUT );
+    ADD_SLOT( Vec3d  , normal , INPUT , Vec3d{1.0,0.0,0.0} );
+    ADD_SLOT( double , offset , INPUT , 0.0 );
+    ADD_SLOT( double , cutoff , INPUT , REQUIRED );
+    ADD_SLOT( Domain , domain , INPUT , REQUIRED );
+    ADD_SLOT( double , force_scale , INPUT , OPTIONAL );
+
+  public:
+
+    // execute method is the only one mandatory to implement an OperatorNode
+    inline void execute () override final
+    {
+      double fscale = 1.0;
+      if( force_scale.has_value() ) // one can test if slot has a value (yaml provided or connected from an other component)
+      {
+	fscale = *force_scale;
+      }
+      // slot's value is accessed as if it would be a pointer to the value, with * or -> dereferencing
+      apply_wall( *grid, *normal, - (*offset), *cutoff, *force_scale, domain->xform() );
+    }
+
+    // optional overloading to customize yaml file interpretation when describing this operator
+    inline void yaml_intialize(const YAML::Node& node) override final
+    {
+      YAML::Node tmp;
+      if( node.IsSequence() && node.size()==3 )
+      {
+        tmp["normal"] = node;
+      }
+      else { tmp = node; }
+      this->OperatorNode::yaml_intialize( tmp );
+    }
+
+    // documentation method
+    
+  };
+  
+  // this helps older versions of gcc handle the unnamed default second template parameter
+  template <class GridT> using WallOperatorTemplate = WallOperator<GridT>;
+
+  // this special construction function will be automatically executed upon plugin load
+  // this is useful to register this operator's factory
+  CONSTRUCTOR_FUNCTION
+  {
+    OperatorNodeFactory::instance()->register_factory( "wall", make_grid_variant_operator< WallOperatorTemplate > );
+  }
+
+}
+
+\end{lstlisting}
+

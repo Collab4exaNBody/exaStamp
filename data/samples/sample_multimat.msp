@@ -1,0 +1,60 @@
+logging:
+  debug: false
+  profiling: false
+  parallel: false
+
+debug:
+  operator: true
+  operator_exectime: false
+  operator_summary: true
+  plugins: true
+  config: true
+  graph: true
+  graph_lod: 3
+
+_: # potential parameters, can be part of an external data base
+  - &ig_silicon_copper  { types: [ Silicon , Copper  ] , potential: null , rcut: 0.0 ang }
+  - &ig_silicon_zinc    { types: [ Silicon , Zinc    ] , potential: null , rcut: 0.0 ang }
+  - &lj_silicon_silicon { types: [ Silicon , Silicon ] , potential: lj   , rcut: 8.47 ang , parameters: { epsilon: 4.117E-21 J , sigma: 0.339E-09 m } }
+  - &lj_copper_copper   { types: [ Copper  , Copper  ] , potential: lj   , rcut: 5.68 ang , parameters: { epsilon: 9.340E-20 J , sigma: 0.227E-09 m } }
+  - &lj_zinc_zinc       { types: [ Zinc    , Zinc    ] , potential: lj   , rcut: 6.10 ang , parameters: { epsilon: 2.522E-20 J , sigma: 0.244E-09 m } }
+  - &lj_copper_zinc     { types: [ Copper  , Zinc    ] , potential: lj   , rcut: 5.89 ang , parameters: { epsilon: 4.853E-20 J , sigma: 0.236E-09 m } }
+
+
+# define potential we'll reuse later
+compute_force:
+  symetric: true
+  virial: true
+  types: [ Copper , Tin , Carbon ]
+  potentials:
+    - *ig_silicon_copper
+    - *ig_silicon_zinc
+    - *lj_silicon_silicon
+    - *lj_copper_copper
+    - *lj_zinc_zinc
+    - *lj_copper_zinc
+
+species:
+  - Silicon:
+      mass: 46.623E-27 kg
+      z: 14
+      charge: 0 e-
+  - Copper:
+      mass: 105.486E-27 kg
+      z: 29
+      charge: 0 e-
+  - Zinc:
+      mass: 108.531E-27 kg
+      z: 30
+      charge: 0 e-
+
+input_data:
+  - read_stamp: droplet.mpio
+
+domain:
+  periodic: [true,true,true]
+
+global:
+  simulation_end_iteration: 2
+  simulation_log_frequency: 1
+

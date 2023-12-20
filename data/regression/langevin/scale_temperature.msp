@@ -1,0 +1,43 @@
+# no-seq
+
+compute_force_pair:
+  virial: false
+  symetric: false
+  potential: lj
+  parameters: { epsilon: 9.340E-20 J , sigma: 0.227E-09 m }
+  rcut: 5.68 ang
+
+# define force computation part of the numerichal scheme
+compute_force: nop
+
+# atoms descriptions
+species:
+  - Copper:
+      mass: 105.486E-27 kg
+      z: 29
+      charge: 0 e-
+
+grid_flavor: grid_flavor_minimal
+
+input_data:
+  - read_stamp_v3:
+      file: small_lattice_10000K.mpio
+      bounds_mode: COMPUTED
+      enlarge_bounds: 1.0 ang
+
+domain:
+  grid_dims: [6,6,6]
+  periodic: [true,true,true]
+
+global:
+  dt: 4.0e-3 ps
+  simulation_end_iteration: 1
+  simulation_log_frequency: 1
+  scale_temperature: 378 K
+
+simulation_epilog:
+  - check_temperature:
+      temperature: 378 K
+      tolerance: 1.e-6
+
+

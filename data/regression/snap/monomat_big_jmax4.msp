@@ -1,0 +1,51 @@
+# no-seq
+
+configuration:
+  profiling:
+    summary: true
+
+species:
+  - Copper:
+      mass: 105.486E-27 kg
+      z: 29
+      charge: 0 e-
+
+snap_force:
+  parameters:
+    nt: 2
+    param: "W_2940_2017_2.snapparam"
+    coef: "W_2940_2017_2.snapcoeff"
+
+zbl_compute_force:
+  parameters: { r1: 0.99363 ang , rc: 4.73442 ang }
+  rcut: 4.73442 ang
+
+grid_flavor: grid_flavor_multimat
+
+# define potential we'll reuse later
+compute_force:
+  - snap_force
+  - zbl_compute_force
+
++first_iteration:
+  - grid_stats
+  - chunk_neighbors_stats
+  - memory_stats
+
+input_data:
+  - read_stamp_v3:
+      file: mo_300K_746496_particles.MpiIO
+      bounds_mode: FILE
+
+domain:
+  cell_size: 10.0 ang
+  periodic: [true,true,true]
+
+global:
+  dt: 1.0e-3 ps
+  rcut_inc: 1.0 ang
+  simulation_end_iteration: 10
+  simulation_log_frequency: 10
+
+final_dump: nop
+

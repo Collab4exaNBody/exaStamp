@@ -1,0 +1,55 @@
+Vrac Stamp:
+============
+- reorganisation des sources et libs :
+	- separation libs / plugins
+
+- .msp as plugins, .msp files in plugins directory can be used as plugins
+
+- automatic operator parameter when parameter dictionary is a scalar.
+  for every form like:
+  message: "a scalar instead of of dictionary"
+  implicitly deduce that scalar value is assigned to the first operator slot
+  
+- facilitÃ© pour ajouter des enum nommÃ©s en input
+
+- simplify compute_pair_singlemat / multimat :
+    - remove legacy neghbor list structures
+    - remove legacy ComputPairBuffer class template
+    - fusion single and multimat
+
+- dev ops tasks :
+   - bug tracker
+   - test server
+   - github server
+
+Optimizations:
+==============
+- Cell/particle exchange :
+     * send each cell only once to each partner processor, including all necessary particles.
+     Also account for cells without particles to exchange, in case in want cell centered quantities
+
+     * Ensures that the property 'one cell is sent to exactly one location on a partner processor' is verified
+     and eventually make use of this assumption to optimize.
+     This might imply restrtiction on domain dimension, cell size and neighboring distance.
+
+
+
+--- Legacy (exaStamp V1) ---
+
+Codage, gestion de projet
+=========================
+- convention de nommage : fonctions, classes, membres
+- revoir systeme d'options : un seul endroit pour stocker les options, et pas de code à rajouter
+- un fichier .h par objet, le meme nom pour le fichier et l'objet
+
+features
+=========
+- ajouter option CMAKE pour definir __Array_check_bounds
+
+Bugs potentiels, tests à faire
+==============================
+- Les 26 voisins d'une cellule doivent-ils toujours exister ?
+	- si oui, le verifier par un test.
+	- si non, verifier que le cas ou l'index d'une cellule voisine est -1 ou -2 (vide/non initialisé) est bien géré dans l'ensemble du code
+- modifier le test integration_mpi pour inclure la procedure qui test soit MPI_THREAD_MULTIPLE soit MPI_THREAD_SERIALIZED
+

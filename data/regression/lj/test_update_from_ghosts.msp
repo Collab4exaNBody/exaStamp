@@ -1,0 +1,7 @@
+# no-seq no-mt
+includes:
+  - monomat.cfg
+
++parallel_update_particles:
+  - update_from_ghost_check_id
+

@@ -1,0 +1,6 @@
+simulation:
+  - input_value: { mesg: "Value : " }
+  - message: { mesg: "internal value = " , endl: false }
+  - print_real
+  - message: ""
+

@@ -1,0 +1,52 @@
+includes:
+  - config_species.msp
+
+domain:
+  periodic: [ false , false , false ]
+
+global:
+  timestep: 0
+  dt: 1.0 ps
+
+simulation:
+  - mpi_comm_world
+  - grid_flavor_multimat
+  - global
+  - user_cell_size:
+      rebind: { value: default_cell_size }
+      body:
+        - input_value: { mesg: "cell size :" , endl: true , value: 40.0 ang }
+  - user_ghost_dist:
+      rebind: { value: ghost_dist }
+      body:
+        - input_value: { mesg: "ghost distance :" , endl: true , value: 40.0 ang }
+  - domain
+  - generate_default_species
+  - user_grid_subdiv:
+      rebind: { value: grid_subdiv }
+      body:
+        - input_integer: { mesg: "grid subdivision factor :" , endl: true , value: 3 }
+  - user_splat_size:
+      rebind: { value: splat_size }
+      body:
+        - input_value: { mesg: "splat size :" , endl: true , value: 6.0 ang }
+  - input_mpio_file:
+    - user_source_file:
+        rebind: { text: file }
+        body: [ input_text: { mesg: "input file :" , endl: true , text: "lastLegacyDump" } ]
+    - read_stamp_v3:
+        bounds_mode: FILE
+  - reduce_species
+  - simple_cost_model: { ccost: 1.0 , pdens: 4.0 , pdens2:0.0 , pdens3:0.003 }
+  - load_balance_rcb
+  - migrate_cell_particles
+  - ghost_comm_scheme
+  - ghost_update_all_no_fv
+  - simulation_thermodynamic_state
+  - print_thermodynamic_state
+  - resize_grid_cell_values
+  - grid_stats
+  - grid_cell_particle_splatting
+  - timestep_file: "grid_%09d.vtk"
+  - write_grid_vtklegacy
+

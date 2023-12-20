@@ -1,0 +1,13 @@
+# no-seq no-mpi
+includes:
+  - tin_task_graph.msp
+
+configuration:
+  profiling:
+    trace:
+      format: "yaml"
+      file: "trace"
+      total: true
+      color: "tag"
+      idle: true
+

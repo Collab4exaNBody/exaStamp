@@ -1,0 +1,14 @@
+# no-seq
+includes:
+  - reaction_field.cfg
+
+reaction_field_pc:
+  parameters: { epsilon: 80.0 , rc: 5.6 ang }
+
+compute_force: reaction_field_pc
+
+check_values:
+  file: reaction_field_pc.dat
+  acc_threshold: 1.e-10
+  pos_threshold: 1.e-12
+

@@ -1,0 +1,15 @@
+# no-seq
+
+configuration:
+  logging:
+    debug: false
+  debug:
+    filter: [ ".*simple_cost_model" , ".*extend_domain"]
+
+includes:
+  - default.msp
+
+global:
+  dt: 4.0e-3 ps
+  init_temperature: 300.0 K
+

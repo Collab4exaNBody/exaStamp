@@ -1,0 +1,11 @@
+configuration:
+  profiling:
+    summary: true
+    memusage_threshold: 1024
+
+simulation:
+  parallel_tasks: true
+  body:
+    - task_vector_producer: { my_grid_dims: [4,4,4] }
+    - task_vector_consumer
+

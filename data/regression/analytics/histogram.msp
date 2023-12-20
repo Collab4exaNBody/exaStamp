@@ -1,0 +1,37 @@
+# no-seq
+
+grid_flavor: grid_flavor_full
+
+# atoms descriptions
+species:
+  - Copper:
+      mass: 105.486E-27 kg
+      z: 29
+      charge: 0 e-
+
+input_data:
+  - read_stamp_v3:
+      file: small_lattice.mpio
+      bounds_mode: FILE
+
+domain:
+  grid_dims: [12,12,12]
+  periodic: [true,true,true]
+
+global:
+  dt: 4.0e-3 ps
+  simulation_end_iteration: 100
+  simulation_log_frequency: 10
+
+simulation_epilog:
+  - histogram_energy: { samples: 50 }
+  - print_histogram: { message: "energy" }
+
+# define potential we'll reuse later
+compute_force: lj_compute_force
+
+lj_compute_force:
+  parameters: { epsilon: 9.340E-20 J , sigma: 0.227E-09 m }
+  rcut: 5.68 ang
+
+

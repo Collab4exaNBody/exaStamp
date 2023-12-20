@@ -1,0 +1,40 @@
+# specific operations needed for molecules when particles move from cell to cell (and processor to processor)
++parallel_update_particles:
+  - intramolecular_pair_weight
+  - molecule_list
+
+init_epilog:
+  - intramolecular_setup
+
+molecule_pair_weight:
+  ignore_intramolecular: true
+
+extramolecular_neighbors:
+  config:
+    free_scratch_memory: true
+    build_particle_offset: false
+    subcell_compaction: true
+    scratch_mem_per_cell: 1048576
+    stream_prealloc_factor: 1.05 # standard value to avoid most of dynamic allocations
+    chunk_size: 4
+
+chunk_neighbors_impl: extramolecular_neighbors
+
++first_iteration:
+  - chunk_neighbors_stats
+
+# if user doesn't overload molecule_pair_weight, does nothing
+intramolecular_pair_weight: nop
+
+# Native ExaNB dump format for rigid molecules
+dump_data_molecule:
+  - timestep_file: "molecule_%09d.MpiIO"
+  - message: { mesg: "Write dump " , endl: false }
+  - print_dump_file:
+      rebind: { mesg: filename }
+      body:
+        - message: { endl: true }
+  - write_dump_molecule
+
+dump_data: dump_data_molecule
+

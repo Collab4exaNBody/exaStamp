@@ -1,0 +1,96 @@
+########### Generic particle update block ################
+
+includes:
+  - config_load_balance.msp
+
+# define a test node which outputs a boolean value 'trigger_move_particles'
+# which tells when to move particles across cells and update neighbor lists
+trigger_move_particles:
+  rebind: { threshold: max_displ , result: trigger_move_particles }
+  body:
+    - particle_displ_over
+
+
+################### AMR ############################
+rebuild_amr:
+  sub_grid_density: 6.5
+  amr_z_curve: false
+  enforced_ordering: 1
+####################################################
+
+
+################### Neighbor list update ############################
+chunk_neighbors:
+  config:
+    free_scratch_memory: true
+    build_particle_offset: false
+    subcell_compaction: true
+    scratch_mem_per_cell: 1048576
+    stream_prealloc_factor: 1.05 # standard value to avoid most of dynamic allocations
+    chunk_size: 8
+
+chunk_neighbors_impl: chunk_neighbors
+
+update_particle_neighbors:
+  - amr_grid_pairs
+  - chunk_neighbors_impl
+  - resize_particle_locks
+####################################################################
+
+grid_post_processing: grid_memory_compact
+
+profile_ghost_comm_scheme: nop
+#profile_ghost_comm_scheme: print_ghost_comm_stats # exchange volume stats
+#profile_ghost_comm_scheme: print_ghost_comm_scheme # full print
+
+ghost_full_update:
+  - ghost_comm_scheme
+  - profile_ghost_comm_scheme
+  - ghost_update_all_no_fv
+  
+
+################### parallel particle migration ############################
+parallel_update_particles:
+  - migrate_cell_particles
+  - rebuild_amr
+  - backup_r
+  - ghost_full_update
+  - grid_post_processing
+  - update_particle_neighbors
+
+# define actions to initialize particles at startup, just after file read
+init_particles:
+  - move_particles
+  - extend_domain
+  - load_balance
+  - parallel_update_particles
+###########################################################################
+
+
+update_particles_full_body:
+  - move_particles
+  - trigger_load_balance
+  - load_balancing_if_triggered
+  - parallel_update_particles
+
+update_particles_full:
+  condition: trigger_move_particles
+  body:
+    - update_particles_full_body
+
+update_particles_fast_body:
+    - ghost_update_r
+
+update_particles_fast:
+  condition: not trigger_move_particles
+  body:
+    - update_particles_fast_body
+
+check_and_update_particles:
+  - trigger_move_particles
+  - update_particles_full
+  - update_particles_fast
+  - loadbalance_log_helper:
+      rebind: { lb_flag: trigger_load_balance , move_flag: trigger_move_particles }
+      body: [ lb_event_counter ]
+

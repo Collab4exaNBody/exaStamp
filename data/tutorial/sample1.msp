@@ -1,0 +1,25 @@
+configuration:
+  logging:
+    debug: false
+    parallel: false
+    profiling: false
+
+  profiling:
+    exectime: false
+    summary: true
+
+  debug:
+    plugins: true
+    config: true
+    graph: true
+    dump_search_path: true
+    files: true
+    graph_lod: 3
+
+  +plugins:
+    - microStampTutorial
+
+simulation:
+  - mult_message: { a: 2 , b: 3 }
+
+

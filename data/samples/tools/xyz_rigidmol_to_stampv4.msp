@@ -1,0 +1,27 @@
+includes:
+  - config_species.msp
+
+simulation:
+  - grid_flavor_multimat
+  - global
+  - domain
+  - generate_default_species
+  - input:
+    - user_source_file:
+        rebind: { text: file }
+        body: [ input_text: { mesg: "xyz file : " } ]
+    - read_xyz_rigidmol:
+        bounds_mode: FILE
+  - reduce_species_after_read
+  - user_temperature:
+      rebind: { value: init_temperature }
+      body: [ input_value: { mesg: "temperature: " } ]
+  - do_init_temperature
+  - output:
+    - user_destination_file:
+        rebind: { text: filename }
+        body: [ input_text: { mesg: "stampv4 file : " } ]
+    - write_stamp_v4:
+        dt: 0.0
+        timestep: 0
+

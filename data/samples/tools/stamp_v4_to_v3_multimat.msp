@@ -1,0 +1,41 @@
+includes:
+  - config_species.msp
+
+domain:
+  cell_size: 40.0 ang
+  periodic: [ false , false , false ]
+
+global:
+  dt: 1.0 ps
+  ghost_dist: 1.0 ang
+  file: lastLegacyDump
+
+#user_source_file:
+#  rebind: { text: file }
+#  body: [ input_text: { mesg: "input file :" , endl: true , text: "lastLegacyDump" } ]
+
+compute_force: nop
+
+simulation:
+  - mpi_comm_world
+  - grid_flavor_multimat
+  - global
+  - domain
+  - generate_default_species
+  - input_mpio_file:
+#    - user_source_file
+    - read_stamp_v4:
+        bounds_mode: FILE
+        version: 42
+  - reduce_species
+  - simple_cost_model: { ccost: 1.0 , pdens: 4.0 , pdens2:0.0 , pdens3:0.003 }
+  - load_balance_rcb
+  - migrate_cell_particles
+  - ghost_comm_scheme
+  - ghost_update_all
+  - simulation_thermodynamic_state
+  - print_thermodynamic_state
+  - grid_stats
+  - timestep_file: "dump_%09d.StampV4"
+  - dump_data_stamp_v3
+

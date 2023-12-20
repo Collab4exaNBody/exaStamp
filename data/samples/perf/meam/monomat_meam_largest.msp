@@ -1,0 +1,36 @@
+includes:
+  - monomat_nosymetry_perf_base.cfg
+
+configuration:
+  profiling:
+    exectime: true
+#  debug:
+#    graph: true
+#    graph_lod: 0
+
+load_balance:
+  - simple_cost_model: { ccost: 1.0 , pdens: 4.0 , pdens2:0.0 , pdens3:0.0 }
+  - load_balance_rcb
+
+rebuild_amr:
+  sub_grid_density: 5.0
+
+global:
+  simulation_end_iteration: 60004
+  chunk_size: 4
+  #amr_z_curve: false
+
+compute_force_pair:
+  chunk: true
+  symetric: false
+
+update_particle_neighbors:
+  - amr_grid_pairs
+  - chunk_neighbors
+#  - chunk_neighbors_stats
+
++input_data:
+  - grid_stats
+  - replicate_domain: [ 1 , 7 , 7 ]
+  - grid_stats
+

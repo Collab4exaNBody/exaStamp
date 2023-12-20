@@ -1,0 +1,48 @@
+# no-seq
+
+grid_flavor: grid_flavor_minimal
+
+# atoms descriptions
+species:
+  - Copper:
+      mass: 105.486E-27 kg
+      z: 29
+      charge: 0 e-
+
+
+input_data:
+  - read_stamp_v3:
+      file: microjet.mpio
+      bounds_mode: FILE
+#  - grid_stats
+
+domain:
+#  cell_size: 128.0 ang # maximum tested
+  cell_size: 12.0 ang
+  periodic: [true,true,true]
+
+global:
+  dt: 4.0e-3 ps
+  simulation_end_iteration: 600010
+  simulation_log_frequency: 1
+  rcut_inc: 1.0 ang
+
+# define potential we'll reuse later
+compute_force: lj_compute_force
+
+lj_compute_force_symetric:
+  task_graph: true
+  parameters: { epsilon: 9.340E-20 J , sigma: 0.227E-09 m }
+  rcut: 5.68 ang
+
+lj_compute_force:
+  parameters: { epsilon: 9.340E-20 J , sigma: 0.227E-09 m }
+  rcut: 5.68 ang
+
+update_particle_neighbors:
+  - compute_primary_neighbors
+  - compute_dual_neighbors
+  - chunk_neighbors:
+      chunk_size: 8
+#      chunk_size: 32 # maximum tested
+

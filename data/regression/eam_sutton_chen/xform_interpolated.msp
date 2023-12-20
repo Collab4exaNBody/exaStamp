@@ -1,0 +1,20 @@
+# no-seq
+
+includes:
+  - xform_base.cfg
+
+xform_time_interpolate:
+  time_serie: [0.0, 50.0e-3, 100e-3, 150e-3, 200e-3]    
+  xform_serie: [ [ [1.0, 0.0, 0.0],  [0.0, 1.0, 0.0],  [0.0, 0.0, 1.0] ],
+  	         [ [1.5, 0.0, 0.0],  [0.0, 1.0, 0.0],  [0.0, 0.0, 1.0] ],
+  	         [ [1.0, 0.0, 0.0],  [0.0, 1.0, 0.0],  [0.0, 0.0, 1.0] ],
+		         [ [1.0, 0.0, 0.0],  [0.0, 1.5, 0.0],  [0.0, 0.0, 1.0] ],     
+		         [ [1.0, 0.0, 0.0],  [0.0, 1.0, 0.0],  [0.0, 0.0, 1.0] ] ]			
+
+xform_function: xform_time_interpolate
+
+simulation_epilog:
+  - check_values:
+      file: eam_sc_xform_time_interpolate.dat
+      threshold: 1.5e-10
+

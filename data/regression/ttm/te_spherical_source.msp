@@ -1,0 +1,64 @@
+# no-seq
+
+configuration:
+  logging:
+    debug: false
+  debug:
+    filter: '.*ionic_eletronic_heat_transfer'
+
+lj_compute_force:
+  parameters: { epsilon: 9.340E-20 J , sigma: 0.227E-09 m }
+  rcut: 5.68 ang
+
+# atoms descriptions
+species:
+  - Copper:
+      mass: 105.486E-27 kg
+      z: 29
+      charge: 0 e-
+
+grid_flavor: grid_flavor_multimat
+
+input_data:
+  - read_stamp_v3:
+      file: small_lattice.mpio
+      bounds_mode: FILE
+  - replicate_domain: [ 3 , 3 , 3 ]
+  - grid_stats
+  - print_domain 
+  - resize_grid_cell_values
+  - init_ttm:
+      ti_source_type: "null"
+      te_source_type: "sphere"
+      te_source_params: [ 60.0 ang , 60.0 ang , 60.0 ang , 2000.0 K , 40.0 ang , 4.0 ang , 0.3 ps , 0.01 ps ]
+  - ionic_eletronic_heat_transfer:
+      copy_ti_te: true
+
+compute_force:
+    - ionic_eletronic_heat_transfer:
+        g: 0.0
+        Ke: 1.0
+    - lj_compute_force
+
+dump_data:
+  - timestep_file: "grid_%09d.vtk"
+  - write_grid_vtklegacy
+
+domain:
+  cell_size: 8.0 ang
+  periodic: [true,true,true]
+
+global:
+  simulation_end_iteration: 6000
+  simulation_log_frequency: 10
+  simulation_dump_thermo_frequency: 5
+  simulation_dump_frequency: 10
+  rcut_inc: 0.5 ang
+  dt: 1.0e-3 ps
+  enable_cell_values: true
+  grid_subdiv: 3        # ttm grid subdivision
+  splat_size: 1.6 ang   # used by ionic_eletronic_heat_transfer for particles' kinetic energy splatting
+
+# enforce testing of cell/particle migration across sub domains
+#load_balance: load_balance_random
+

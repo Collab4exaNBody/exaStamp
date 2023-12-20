@@ -1,0 +1,9 @@
+# default input : read last dump with legacy StampV3 format 
+
+read_stamp_v3:
+      file: lastLegacyDump
+      filename: lastLegacyDump
+      bounds_mode: FILE
+
+input_data: read_stamp_v3
+

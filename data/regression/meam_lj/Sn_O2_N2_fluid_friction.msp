@@ -1,0 +1,206 @@
+# no-seq
+
+includes: [ config_update_symmetric_forces.msp ]
+
+configuration:
+  logging:
+    debug: true
+  debug:
+    filter: [ ".*set_cell_values" ]
+  profiling:
+    summary: true
+  onika:
+    gpu_sm_mult: 6
+    gpu_block_size: 256
+
+ghost_update_r:
+  gpu_buffer_pack: true
+  async_buffer_pack: false
+  staging_buffer: true
+
+update_force_energy_from_ghost:
+  gpu_buffer_pack: true
+  async_buffer_pack: false
+  staging_buffer: true
+
+meam_lj_force:
+  ghost: false
+  meam_type: Sn
+  rcut: 4.17 ang
+  parameters:
+    rmax: 4.17 ang
+    rmin: 0.0
+    Ecoh: 4.93474273599999995322e-19 J
+    E0: 4.93474273599999995322e-19 J
+    A: 1.000E+00
+    r0: 3.44 ang
+    alpha: 6.200E+00
+    delta: 0.000E+00
+    beta0: 6.200E+00
+    beta1: 6.000E+00
+    beta2: 6.000E+00
+    beta3: 6.000E+00
+    t0: 1.000E+00
+    t1: 4.500E+00
+    t2: 6.500E+00
+    t3: -0.183E+00
+    s0: 1.440E+02
+    s1: 0.000E+00
+    s2: 0.000E+00
+    s3: 0.000E+00
+    Cmin: 0.800E+00
+    Cmax: 2.800E+00
+    Z: 1.200E+01
+    rc: 4.0 ang
+    rp: 0.1 ang
+  lj_parameters:
+    - { type_a: O2  , type_b: O2 , rcut: 8 ang , epsilon: 162.2273150e-23 J , sigma: 3.58 ang }
+    - { type_a: N2  , type_b: N2 , rcut: 8 ang , epsilon: 131.3005758e-23 J , sigma: 3.70 ang }
+    - { type_a: O2  , type_b: N2 , rcut: 8 ang , epsilon: 145.9470447e-23 J , sigma: 3.64 ang }
+    - { type_a: O2  , type_b: Sn , rcut: 8 ang , epsilon: 150.0000000e-24 J , sigma: 3.00 ang }
+    - { type_a: N2  , type_b: Sn , rcut: 8 ang , epsilon: 150.0000000e-24 J , sigma: 3.00 ang }
+
+lj_multi_force:
+  rcut: 8 ang
+  common_parameters: { epsilon: 0.0 J , sigma: 0.0 ang }
+  parameters:
+    - {type_a: O2  , type_b: O2 , rcut: 8 ang ,  parameters: { epsilon: 162.2273150e-23 J , sigma: 3.58 ang } }
+    - {type_a: N2  , type_b: N2 , rcut: 8 ang ,  parameters: { epsilon: 131.3005758e-23 J , sigma: 3.70 ang } }
+    - {type_a: O2  , type_b: N2 , rcut: 8 ang ,  parameters: { epsilon: 145.9470447e-23 J , sigma: 3.64 ang } }
+    - {type_a: O2  , type_b: Sn , rcut: 8 ang ,  parameters: { epsilon: 150.0000000e-24 J , sigma: 3.00 ang } }
+    - {type_a: N2  , type_b: Sn , rcut: 8 ang ,  parameters: { epsilon: 150.0000000e-24 J , sigma: 3.00 ang } }
+
+compute_force:
+  - meam_lj_force
+  - fluid_friction:
+      field_name: "fluid"
+
+grid_flavor: grid_flavor_multimat
+
+replicate_domain:
+  repeat: [ 1 , 1 , 1 ]
+
+input_data:
+#
+###################################
+#  Common part needed both
+#  for initial setup and restart
+###################################
+  - particle_regions:
+      - PLANE1:
+          quadric:
+            shape: { plane: [ 1 , 0 , 0 , 0 ] }
+            transform:
+              - zrot: pi/4
+              - translate: [ 20 ang , 150 ang , 0 ]
+      - PLANE2:
+          quadric:
+            shape: { plane: [ 1 , 0 , 0 , 0 ] }
+            transform:
+              - zrot: -pi/4
+              - translate: [ 20 ang , 150 ang , 0 ]
+      - BOX:
+          bounds: [ [ 250 ang , 0 ang , 0 ang ] , [ 300 ang , 300 ang , 300 ang ] ]
+      - SPHERE:
+          quadric:
+            shape: sphere
+            transform:
+              - scale: [ 20 ang , 20 ang , 20 ang ] 
+              - translate: [ 150 ang , 150 ang , 150 ang ]
+#
+  - has_dump_file:
+      rebind: { result: has_dump_file }
+      body: [ file_exists: { filename: lastLegacyDump } ]
+#
+################################
+#   Initial system setup
+# ##############################
+  - generate_initial_grid:
+      condition: not has_dump_file
+      body:
+        - message: "Initial run, building system ..."
+#     *** Species initialization ***
+        - species:
+          - Sn:
+              mass: 197.1508269E-27 kg
+              z: 50
+              charge: 0 e-
+          - N2:
+              mass: 46.517509309e-27 kg
+              z: 2
+              charge: 0 e-
+          - O2:
+              mass: 53.135293325e-27 kg
+              z: 2
+              charge: 0 e-
+#     *** Domain configuration ***
+        - domain:
+            cell_size: 30.0 ang
+            periodic: [true,true,true]
+#     *** Generate lattice with geometrical constraints ***
+        - lattice:
+            structure: SC
+            types: [ Sn ]
+            size: [ 3. ang , 3. ang , 3. ang ]
+            noise: 0.2 ang
+            noise_cutoff: 0.4 ang
+            repeats: [ 100 , 100 , 100 ]
+            region: PLANE1 or PLANE2 or BOX or SPHERE
+        - lattice:
+            init_domain: false
+            structure: BCC
+            types: [ O2 , N2 ]
+            size: [ 15 ang , 15 ang , 15 ang ]
+            noise: 0.2 ang
+            noise_cutoff: 0.4 ang
+            repeats: [ 20 , 20 , 20 ]
+            region: not ( PLANE1 or PLANE2 or BOX or SPHERE )
+#     *** Initialize temperature ***
+        - gaussian_noise_v
+        - init_temperature: { temperature: 300 K , atom_type: Sn }
+        - init_temperature: { temperature: 300 K , atom_type: O2 }
+        - init_temperature: { temperature: 300 K , atom_type: N2 }
+#     *** set central ball's initial velocity
+        - shift_v:
+            value: [ -1000 m/s , 0 , 0 ]
+            region: SPHERE
+#
+###################################
+#  Restart from dump file
+###################################
+  - read_from_last_dump:
+      condition: has_dump_file
+      body:
+        - message: "Restart from last dump ..."
+        - read_dump_atoms:
+            filename: lastLegacyDump
+        - replicate_domain
+  - message: "initialize friction flow"
+  - set_cell_values:
+      field_name: "fluid"
+      grid_subdiv: 3
+      value: [ 0.0 , 0.0 , 0 , 0 ]
+  - set_cell_values:
+      field_name: "fluid"
+      grid_subdiv: 3
+      value: [ 1.0 , 1.0 , 0 , 0 ]
+      region: SPHERE
+
++first_iteration:
+  - print_domain
+  - grid_stats
+  - atom_neighbors_stats
+
+global:
+  simulation_end_iteration: 50
+  simulation_log_frequency: 10
+  simulation_dump_frequency: 1000
+  rcut_inc: 1.25 ang
+  dt: 1.0e-3 ps
+
+dump_data:
+  - dump_data_vtklegacy
+  - dump_data_atoms
+
+final_dump: nop
+

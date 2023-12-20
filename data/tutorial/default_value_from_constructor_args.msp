@@ -1,0 +1,7 @@
+configuration:
+  +plugins:
+    - microStampTutorial
+
+simulation:
+  - default_slot_value_from_ctor_args
+

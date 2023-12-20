@@ -1,0 +1,23 @@
+# ===================================
+# === micro-stamp meam potential  ===
+# ===================================
+
+set(XSTAMP_MEAM_MAX_NEIGHBORS "32" CACHE STRING "MEAM max particle neighbors")
+set(XSTAMP_MEAM_MULTIMAT_MAX_TYPES "4" CACHE STRING "MEAM/LJ max different particle types")
+set(XSTAMP_MEAM_MERGE_FORCE_UPDATES "ON" CACHE BOOL "MEAM fusion force updates")
+set(XSTAMP_MEAM_ENFORCE_OVERFLOW_CHECK "OFF" CACHE BOOL "MEAM compute buffer overflow checking")
+
+set(exaStampMEAM_COMPILE_DEFINITIONS -DXSTAMP_MEAM_MAX_NEIGHBORS=${XSTAMP_MEAM_MAX_NEIGHBORS} -DXSTAMP_MEAM_MULTIMAT_MAX_TYPES=${XSTAMP_MEAM_MULTIMAT_MAX_TYPES})
+  
+if(XSTAMP_MEAM_MERGE_FORCE_UPDATES)
+set(exaStampMEAM_COMPILE_DEFINITIONS ${exaStampMEAM_COMPILE_DEFINITIONS} -DXSTAMP_MEAM_MERGE_FORCE_UPDATES=1)
+endif()
+
+if(XSTAMP_MEAM_ENFORCE_OVERFLOW_CHECK)
+set(exaStampMEAM_COMPILE_DEFINITIONS ${exaStampMEAM_COMPILE_DEFINITIONS} -DXSTAMP_MEAM_ENFORCE_OVERFLOW_CHECK=1)
+endif()
+
+set(exaStampMEAM_LINK_LIBRARIES exaStampPotential exanbParticleNeighbors lennard_jones)
+
+xstamp_add_plugin(exaStampMEAM ${CMAKE_CURRENT_SOURCE_DIR})
+

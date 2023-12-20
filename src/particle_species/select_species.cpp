@@ -1,0 +1,57 @@
+#include <exaStamp/particle_species/particle_specie_yaml.h>
+
+#include <exanb/core/operator.h>
+#include <exanb/core/operator_factory.h>
+#include <exanb/core/operator_slot.h>
+#include <exanb/core/log.h>
+#include <exanb/core/yaml_utils.h>
+#include <exanb/core/particle_type_id.h>
+
+#include <iostream>
+#include <iomanip>
+#include <string>
+#include <unordered_map>
+
+namespace exaStamp
+{
+  using namespace exanb;
+
+  struct SelectParticleSpecies : public OperatorNode
+  {
+    ADD_SLOT( ParticleSpecies , species , INPUT_OUTPUT , REQUIRED );
+    ADD_SLOT( std::vector<std::string> , selection , INPUT , REQUIRED );
+    ADD_SLOT(ParticleTypeMap , particle_type_map , INPUT_OUTPUT );
+
+    inline void execute () override final
+    {
+      std::unordered_set<std::string> sel( selection->begin() , selection->end() );
+      size_t count = 0;
+      for(unsigned int i=0;i<species->size();i++)
+      {
+        if( sel.find(species->at(i).m_name) != sel.end() )
+        {
+          if(count!=i) species->at(count) = species->at(i);
+          ++ count;
+        }
+      }
+      ldbg << "selected "<<count<<" species among "<<species->size()<<std::endl;
+      species->resize( count );
+
+      // update particle type name map
+      particle_type_map->clear();
+      for(unsigned int a=0;a<species->size();a++)
+      {
+        (*particle_type_map) [ species->at(a).name() ] = a;
+      }
+    }
+
+  };
+
+  // === register factories ===  
+  CONSTRUCTOR_FUNCTION
+  {
+    OperatorNodeFactory::instance()->register_factory( "select_species", make_simple_operator<SelectParticleSpecies> );
+  }
+
+}
+

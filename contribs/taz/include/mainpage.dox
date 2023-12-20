@@ -1,0 +1,21 @@
+/// @mainpage ExaStamp documentation
+/// <em> Reading Emmanuel Cieren's PhD thesis @cite cieren_phd is strongly recomanded as an introduction to ExaStamp principles and workings before reading this documentation. </em>
+///
+/// <b> User guides </b>
+///
+/// - [Molecular Dynamics](markdown/md.md)
+/// - [Dissipative Particle Dynamics and Dissipative Particle dynamics with Energy conservation](markdown/coarse-grained.md)
+/// - [Smoothed Dissipative Particle Dynamics](markdown/sdpd.md)
+/// - [Timers](markdown/optional-timers.md)
+/// - [Verlet List](markdown/verlet-list.md)
+/// - [OpenMP](markdown/openmp.md)
+/// - [In-situ analytics library](@ref analytics)
+///
+/// <b> Various notes </b>
+///
+/// - nbr is an abbreviation for neighbor
+/// - dof stand for degree of freedom
+/// - deps are currently excluded from this documentation
+///
+/// @see [References](citelist.html)
+

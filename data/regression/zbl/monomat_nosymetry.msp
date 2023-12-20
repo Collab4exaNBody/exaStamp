@@ -1,0 +1,6 @@
+# no-seq
+includes:
+  - monomat_zbl.cfg
+
+compute_force: zbl_compute_force
+

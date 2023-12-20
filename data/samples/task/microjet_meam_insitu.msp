@@ -1,0 +1,98 @@
+# no-seq enable-if-EXASTAMP_ENABLE_PERF_TESTS nthreads=max
+
+configuration:
+  nocuda: true
+  profiling:
+    summary: false # default is deactivated, activate with --profiling-summary true
+    trace:
+      enable: true # default is off, activate with --profiling-trace-enable true
+      color: "tag"
+      total: true
+
+grid_flavor: grid_flavor_minimal
+
+meam_force:
+  rcut: 3.69 ang
+  parameters:
+    rmax: 3.69 ang
+    rmin: 0.0
+    Ecoh: 4.93474273599999995322e-19 J
+    E0: 4.93474273599999995322e-19 J
+    A: 1.000E+00
+    r0: 3.44 ang
+    alpha: 6.200E+00
+    delta: 0.000E+00
+    beta0: 6.200E+00
+    beta1: 6.000E+00
+    beta2: 6.000E+00
+    beta3: 6.000E+00
+    t0: 1.000E+00
+    t1: 4.500E+00
+    t2: 6.500E+00
+    t3: -0.183E+00
+    s0: 1.440E+02
+    s1: 0.000E+00
+    s2: 0.000E+00
+    s3: 0.000E+00
+    Cmin: 0.800E+00
+    Cmax: 2.800E+00
+    Z: 1.200E+01 
+    rc: 4.0 ang
+    rp: 0.1 ang
+
+species:
+  - Tin:
+      mass: 197.1508269E-27 kg
+      z: 50
+      charge: 0 e-
+
+input_data:
+  - read_stamp_v3:
+      file: microjet.mpio
+      bounds_mode: FILE
+#  - replicate_domain: [ 1 , 2 , 2 ]
+
+#init_epilog:
++first_iteration:
+  - grid_stats
+  - histogram_cell_particles: { samples: 50 }
+  - print_histogram: { message: "particles per cell" , nmarks: 25 , scaling: 40 }
+
+dump_data: nop
+final_dump: nop
+
+domain:
+  cell_size: 80.0 ang
+  periodic: [true,true,true]
+
+chunk_neighbors:
+  chunk_size: 8
+
+global:
+  dt: 1.0e-3 ps
+  simulation_end_iteration: 600005
+  simulation_log_frequency: 1
+  rcut_inc: 0.7 ang
+  #amr_z_curve: false
+  enable_task_graph: false
+
+#insitu_processing:
+
+# define potential we'll reuse later
+compute_force:
+  - resize_grid_cell_values
+  - grid_cell_particle_splatting:
+      enable_temperature: false
+      enable_velocity_vector: false
+      grid_subdiv: 8
+      splat_size: 2.0 ang
+  - meam_force
+  - grid_connected_components:
+      density_threshold: 1.15
+      babilotte_threshold: 0.2
+
+#compute_loop_epilog: insitu_processing
+
+#simulation_epilog:
+#  - memory_stats
+

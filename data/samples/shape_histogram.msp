@@ -1,0 +1,18 @@
+
+simulation:
+  - global:
+      samples: 100
+  - grid_flavor_minimal
+  - domain:
+      grid_dims: [24,24,24]
+      periodic: [false,false,false]
+  - read_stamp_v3:
+      file: droplet.mpio
+      bounds_mode: FILE
+  - histogram_rx
+  - print_histogram: { message: "------------------- X --------------------" }
+  - histogram_ry
+  - print_histogram: { message: "------------------- Y --------------------" }
+  - histogram_rz
+  - print_histogram: { message: "------------------- Z --------------------" }
+

@@ -1,0 +1,4 @@
+set(exaStampParticleSpecies_LINK_LIBRARIES exanbCore exanbGridCellParticles exanbParticleNeighbors)
+
+xstamp_add_plugin(exaStampParticleSpecies ${CMAKE_CURRENT_SOURCE_DIR})
+

@@ -1,0 +1,7 @@
+# no-seq
+includes:
+  - monomat.cfg
+
+compute_force: lj_compute_force
+
+

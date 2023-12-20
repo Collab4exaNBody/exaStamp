@@ -1,0 +1,69 @@
+# no-seq
+
+configuration:
+  profiling:
+    summary: true
+#  logging:
+#    debug: true
+#  debug:
+#    filter: '.*sim_continue'
+
+meam_force_chunk:
+  rcut: 3.69 ang
+  parameters:
+    rmax: 3.69 ang
+    rmin: 0.0
+    Ecoh: 4.93474273599999995322e-19 J
+    E0: 4.93474273599999995322e-19 J
+    A: 1.000E+00
+    r0: 3.44 ang
+    alpha: 6.200E+00
+    delta: 0.000E+00
+    beta0: 6.200E+00
+    beta1: 6.000E+00
+    beta2: 6.000E+00
+    beta3: 6.000E+00
+    t0: 1.000E+00
+    t1: 4.500E+00
+    t2: 6.500E+00
+    t3: -0.183E+00
+    s0: 1.440E+02
+    s1: 0.000E+00
+    s2: 0.000E+00
+    s3: 0.000E+00
+    Cmin: 0.800E+00
+    Cmax: 2.800E+00
+    Z: 1.200E+01 
+    rc: 4.0 ang
+    rp: 0.1 ang
+
+# atoms descriptions
+species:
+  - Tin:
+      mass: 197.1508269E-27 kg
+      z: 50
+      charge: 0 e-
+
+# define potential we'll reuse later
+compute_force: meam_force_chunk
+
+# pour activer les listes de voisins compactes
+update_particle_neighbors: update_particle_neighbors_chunk
+
+# minimum d'informations sur la grille
+# grid_flavor: grid_flavor_multimat # debug
+grid_flavor: grid_flavor_minimal
+
+# fichier d'input par defaut: lastLegacyDump au format StampV3
+
+domain:
+  cell_size: 20.0 ang
+  periodic: [false,false,false]
+
+global:
+  simulation_end_iteration: 45000
+  simulation_log_frequency: 1
+  simulation_dump_frequency: 10
+  dt: 1.0e-3 ps
+  enable_domain_extension: true
+

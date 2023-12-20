@@ -1,0 +1,43 @@
+configuration:
+  onika:
+    gpu_sm_mult: 6
+    gpu_block_size: 256
+  logging:
+    debug: true
+  debug:
+    filter: [ ".*write_dump_atoms" , ".*read_dump_atoms" ]
+  profiling:
+    summary: true # default is deactivated, activate with --profiling-summary true
+    trace:
+      enable: false # default is off, activate with --profiling-trace-enable true
+      color: "tag"
+      total: true
+      trigger: "loop@sequential"
+      trigger_interval: [ 1 , 3 ]
+
+grid_flavor: grid_flavor_multimat
+
+input_data:
+  - read_dump_atoms:
+      filename: atoms_000000004.dump
+
++first_iteration:
+  - grid_stats
+
+global:
+  dt: 1.0e-3 ps
+  simulation_end_iteration: 10
+  simulation_log_frequency: 1
+  simulation_dump_frequency: 2
+  rcut_inc: 0.2 ang
+
+# define potential we'll reuse later
+compute_force:
+  - lj_compute_force
+
+lj_compute_force:
+  parameters: { epsilon: 9.340E-20 J , sigma: 0.227E-09 m }
+  rcut: 5.68 ang
+
+dump_data: dump_data_atoms
+

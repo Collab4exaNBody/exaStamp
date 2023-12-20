@@ -1,0 +1,36 @@
+# copy exemples/convert_stampv4_to_molecule_dump.msp to your working dir
+# customize it, the nrun it with exaStamp to perform conversion
+
+global:
+  ghost_dist: 0.0 ang
+  inputfile: input.StampV4
+  outputfile: molecule.dump
+
+read_stamp_v4:
+  bounds_mode: FILE
+  enable_xform_scale: true
+  pbc_adjust_xform: true
+  enlarge_bounds: 0.0 ang
+
+
+simulation:
+  - mpi_comm_world
+  - grid_flavor_full
+  - global
+  - domain
+  - species
+  - read_block:
+      rebind: { file: inputfile }
+      body: [ read_stamp_v4 ]
+  - reduce_species
+  - simple_cost_model: { ccost: 1.0 , pdens: 4.0 , pdens2:0.0 , pdens3:0.003 }
+  - load_balance_rcb
+  - migrate_cell_particles
+  - simulation_thermodynamic_state
+  - print_thermodynamic_state
+  - write_block:
+      rebind: { filename: outputfile }
+      body:
+        - write_dump_molecule:
+            compression_level: 9
+

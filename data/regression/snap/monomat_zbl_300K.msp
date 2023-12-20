@@ -1,0 +1,27 @@
+# no-seq
+
+includes:
+  - monomat.msp
+
+input_data:
+  - read_stamp_v3:
+      file: Mo_conf_300K.MpiIO
+      bounds_mode: FILE
+
+zbl_compute_force:
+  parameters: { r1: 0.1 ang , rc: 4.615858 ang }
+  rcut: 4.615858 ang
+
+cpu_gpu_load_balance:
+  gpu_cell_particles_threshold: 0
+
+# define potential we'll reuse later
+compute_force:
+  - snap_force
+  - zbl_compute_force
+
+simulation_epilog:
+  - check_values:
+      file: monomat_snap_zbl_300K_ang.dat
+      threshold: 1.e-10
+

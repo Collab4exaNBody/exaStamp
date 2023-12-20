@@ -1,0 +1,36 @@
+#pragma once
+
+#include <unordered_map>
+#include <cstdint>
+#include <exanb/core/mt_concurrent_map.h>
+
+namespace exaStamp
+{
+  using IdMap       = MultiThreadedConcurrentMap< std::unordered_map     <uint64_t, uint64_t> , ::exanb::max_threads_hint *2 >;
+  using IdMapGhosts = MultiThreadedConcurrentMap< std::unordered_multimap<uint64_t, uint64_t> , ::exanb::max_threads_hint *2 >;
+
+  static inline uint64_t atom_from_idmap(const uint64_t id, const IdMap& id_map, const IdMapGhosts& id_map_ghosts)
+  {
+    auto it = id_map.find(id);
+    if(it!=id_map.end()) { return it->second; }
+    else
+    {
+      auto itg = id_map_ghosts.find(id);
+      assert( itg != id_map_ghosts.end() );
+      return itg->second;
+    }
+  }
+
+  static inline uint64_t atom_from_idmap_if_found(const uint64_t id, const IdMap& id_map, const IdMapGhosts& id_map_ghosts, const uint64_t value_if_not_found=std::numeric_limits<uint64_t>::max() )
+  {
+    auto it = id_map.find(id);
+    if(it!=id_map.end()) { return it->second; }
+    else
+    {
+      auto itg = id_map_ghosts.find(id);
+      if( itg != id_map_ghosts.end() ) return itg->second;
+      else return value_if_not_found;
+    }
+  }
+  
+}

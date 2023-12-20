@@ -1,0 +1,1403 @@
+#include <exanb/core/basic_types_yaml.h>
+#include <exanb/core/operator.h>
+#include <exanb/core/operator_slot.h>
+#include <exanb/core/operator_factory.h>
+#include <exanb/core/make_grid_variant_operator.h>
+#include <exanb/core/grid.h>
+#include <exanb/core/basic_types_stream.h>
+#include <exanb/core/log.h>
+#include <exanb/core/domain.h>
+#include <exanb/core/quantity.h>
+#include <exanb/core/domain.h>
+
+#include <exaStamp/mechanical/cell_particles_local_metrics.h>
+#include <exaStamp/mechanical/cell_particles_local_mechanical_metrics.h>
+#include <exaStamp/mechanical/cell_particles_local_structural_metrics.h>
+
+#include <exanb/io/vtk_writer_binary.h>
+#include <exanb/io/vtk_writer_ascii.h>
+
+#include <algorithm>
+#include <iostream>
+#include <fstream>
+#include <mpi.h>
+#include <string>
+#include <iomanip>
+#include <experimental/filesystem>
+
+namespace exaStamp
+{
+
+  using namespace exanb;
+
+  template<typename GridT>
+  static inline void write_vtk_scalar_bis(std::ofstream& file_to_write_in, const GridParticleLocalStructuralMetrics &structural_data, std::string scalar_name, const GridT &grid, bool is_binary, bool is_ghosts, int compression) {
+    if(is_binary)
+      {
+      std::vector<double> sources;
+
+      if (scalar_name == "crystal_structure") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if(!grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              double cs = structural_data[c].crystal_structure[pos];
+              sources.push_back(cs);
+            }
+          }
+        }
+      }
+      
+      file_to_write_in <<  vtk_space_offset_eight << "<DataArray type=\"Float64\" Name=\"" << scalar_name << "\" format=\"binary\">"<< std::endl;
+      exanb::write_binary_datas(file_to_write_in, compression, sources);
+      file_to_write_in << std::endl
+                       <<  vtk_space_offset_eight << "</DataArray>" << std::endl;
+    }
+    
+    else {
+
+      file_to_write_in <<  vtk_space_offset_eight << "<DataArray type=\"Float64\" Name=\"" << scalar_name << "\" format=\"ascii\">" << std::endl;
+
+      if (scalar_name == "crystal_structure") {
+        for(size_t c=0; c<grid.number_of_cells();++c) { 
+          if( !grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              double cs = structural_data[c].crystal_structure[pos];          
+              file_to_write_in << vtk_space_offset_ten << std::to_string(cs) << " ";
+            }
+          }
+        }
+      }
+      
+      file_to_write_in << std::endl
+                       <<  vtk_space_offset_eight << "</DataArray>" << std::endl;
+    }
+  }
+  
+  template<typename GridT>
+  static inline void write_vtk_scalar(std::ofstream& file_to_write_in, const GridParticleLocalMechanicalMetrics &mechanical_data, std::string scalar_name, const GridT &grid, bool is_binary, bool is_ghosts, int compression) {  
+    if(is_binary)
+      {
+      std::vector<double> sources;
+
+      if (scalar_name == "dislo_indic") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if(!grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              sources.push_back(mechanical_data[c].dislo_indic[pos]);
+            }
+          }
+        }
+      }
+
+      if (scalar_name == "vis") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if(!grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              sources.push_back(mechanical_data[c].vis[pos]);
+            }
+          }
+        }
+      }
+
+      if (scalar_name == "coin") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if(!grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              sources.push_back(mechanical_data[c].coin[pos]);
+            }
+          }
+        }
+      }
+      
+      file_to_write_in <<  vtk_space_offset_eight << "<DataArray type=\"Float64\" Name=\"" << scalar_name << "\" format=\"binary\">"<< std::endl;
+      exanb::write_binary_datas(file_to_write_in, compression, sources);
+      file_to_write_in << std::endl
+                       <<  vtk_space_offset_eight << "</DataArray>" << std::endl;
+    }
+    
+    else {
+
+      file_to_write_in <<  vtk_space_offset_eight << "<DataArray type=\"Float64\" Name=\"" << scalar_name << "\" format=\"ascii\">" << std::endl;
+
+      if (scalar_name == "dislo_indic") {
+        for(size_t c=0; c<grid.number_of_cells();++c) { 
+          if( !grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              file_to_write_in << vtk_space_offset_ten << std::to_string(mechanical_data[c].dislo_indic[pos]) << " ";
+            }
+          }
+        }
+      }
+
+      if (scalar_name == "vis") {
+        for(size_t c=0; c<grid.number_of_cells();++c) { 
+          if( !grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              file_to_write_in << vtk_space_offset_ten << std::to_string(mechanical_data[c].vis[pos]) << " ";
+            }
+          }
+        }
+      }
+
+      if (scalar_name == "coin") {
+        for(size_t c=0; c<grid.number_of_cells();++c) { 
+          if( !grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              file_to_write_in << vtk_space_offset_ten << std::to_string(mechanical_data[c].coin[pos]) << " ";
+            }
+          }
+        }
+      }
+      
+      file_to_write_in << std::endl
+                       <<  vtk_space_offset_eight << "</DataArray>" << std::endl;
+    }
+  }
+
+  template<typename GridT>
+  static inline void write_vtk_vector(std::ofstream& file_to_write_in, const GridParticleLocalMechanicalMetrics &mechanical_data, std::string vector_name, const GridT &grid, bool is_binary, bool is_ghosts, int compression) {
+
+    if(is_binary)
+    {
+
+      std::vector<double> sources;
+
+      if (vector_name == "mu") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if(!grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              sources.push_back(mechanical_data[c].mu[pos].x);
+              sources.push_back(mechanical_data[c].mu[pos].y);
+              sources.push_back(mechanical_data[c].mu[pos].z);
+            }
+          }
+        }
+      }
+
+      if (vector_name == "s") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if(!grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              sources.push_back(mechanical_data[c].s[pos].x);
+              sources.push_back(mechanical_data[c].s[pos].y);
+              sources.push_back(mechanical_data[c].s[pos].z);
+            }
+          }
+        }
+      }
+      
+      if (vector_name == "l") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if(!grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              sources.push_back(mechanical_data[c].l[pos].x);
+              sources.push_back(mechanical_data[c].l[pos].y);
+              sources.push_back(mechanical_data[c].l[pos].z);
+            }
+          }
+        }
+      }
+
+      if (vector_name == "m") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if(!grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              sources.push_back(mechanical_data[c].m[pos].x);
+              sources.push_back(mechanical_data[c].m[pos].y);
+              sources.push_back(mechanical_data[c].m[pos].z);
+            }
+          }
+        }
+      }
+
+      if (vector_name == "n") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if(!grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              sources.push_back(mechanical_data[c].n[pos].x);
+              sources.push_back(mechanical_data[c].n[pos].y);
+              sources.push_back(mechanical_data[c].n[pos].z);
+            }
+          }
+        }
+      }
+
+      if (vector_name == "phi") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if(!grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              sources.push_back(mechanical_data[c].phi[pos].x);
+              sources.push_back(mechanical_data[c].phi[pos].y);
+              sources.push_back(mechanical_data[c].phi[pos].z);
+            }
+          }
+        }
+      }
+
+      if (vector_name == "dislo_line") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if(!grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              sources.push_back(mechanical_data[c].dislo_line[pos].x);
+              sources.push_back(mechanical_data[c].dislo_line[pos].y);
+              sources.push_back(mechanical_data[c].dislo_line[pos].z);
+            }
+          }
+        }
+      }
+
+      if (vector_name == "dislo_line_ortho") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if(!grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              sources.push_back(mechanical_data[c].dislo_line_ortho[pos].x);
+              sources.push_back(mechanical_data[c].dislo_line_ortho[pos].y);
+              sources.push_back(mechanical_data[c].dislo_line_ortho[pos].z);
+            }
+          }
+        }
+      }
+      
+      file_to_write_in <<  vtk_space_offset_eight << "<DataArray type=\"Float64\" Name=\"" << vector_name << "\" NumberOfComponents=\"3\" format=\"binary\">"<< std::endl;
+      exanb::write_binary_datas(file_to_write_in, compression, sources);
+      file_to_write_in << std::endl
+                       <<  vtk_space_offset_eight << "</DataArray>" << std::endl;
+    }
+
+    else {
+      
+      file_to_write_in <<  vtk_space_offset_eight << "<DataArray type=\"Float64\" Name=\"" << vector_name << "\" NumberOfComponents=\"3\" format=\"ascii\">" << std::endl;
+
+      if (vector_name == "mu") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if( !grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              file_to_write_in << vtk_space_offset_ten
+                               << std::to_string(mechanical_data[c].mu[pos].x) << " "
+                               << std::to_string(mechanical_data[c].mu[pos].y) << " "
+                               << std::to_string(mechanical_data[c].mu[pos].z) << " ";
+            }
+          }
+        }
+      }
+      
+      if (vector_name == "s") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if( !grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              file_to_write_in << vtk_space_offset_ten
+                               << std::to_string(mechanical_data[c].s[pos].x) << " "
+                               << std::to_string(mechanical_data[c].s[pos].y) << " "
+                               << std::to_string(mechanical_data[c].s[pos].z) << " ";
+            }
+          }
+        }
+      }
+      
+      if (vector_name == "l") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if( !grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              file_to_write_in << vtk_space_offset_ten
+                               << std::to_string(mechanical_data[c].l[pos].x) << " "
+                               << std::to_string(mechanical_data[c].l[pos].y) << " "
+                               << std::to_string(mechanical_data[c].l[pos].z) << " ";
+            }
+          }
+        }
+      }
+      
+      if (vector_name == "m") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if( !grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              file_to_write_in << vtk_space_offset_ten
+                               << std::to_string(mechanical_data[c].m[pos].x) << " "
+                               << std::to_string(mechanical_data[c].m[pos].y) << " "
+                               << std::to_string(mechanical_data[c].m[pos].z) << " ";
+            }
+          }
+        }
+      }
+      
+      if (vector_name == "n") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if( !grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              file_to_write_in << vtk_space_offset_ten
+                               << std::to_string(mechanical_data[c].n[pos].x) << " "
+                               << std::to_string(mechanical_data[c].n[pos].y) << " "
+                               << std::to_string(mechanical_data[c].n[pos].z) << " ";
+            }
+          }
+        }
+      }
+      
+      if (vector_name == "phi") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if( !grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              file_to_write_in << vtk_space_offset_ten
+                               << std::to_string(mechanical_data[c].phi[pos].x) << " "
+                               << std::to_string(mechanical_data[c].phi[pos].y) << " "
+                               << std::to_string(mechanical_data[c].phi[pos].z) << " ";
+            }
+          }
+        }
+      }
+      
+      if (vector_name == "dislo_line") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if( !grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              file_to_write_in << vtk_space_offset_ten
+                               << std::to_string(mechanical_data[c].dislo_line[pos].x) << " "
+                               << std::to_string(mechanical_data[c].dislo_line[pos].y) << " "
+                               << std::to_string(mechanical_data[c].dislo_line[pos].z) << " ";
+            }
+          }
+        }
+      }
+      
+      if (vector_name == "dislo_line_ortho") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if( !grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              file_to_write_in << vtk_space_offset_ten
+                               << std::to_string(mechanical_data[c].dislo_line_ortho[pos].x) << " "
+                               << std::to_string(mechanical_data[c].dislo_line_ortho[pos].y) << " "
+                               << std::to_string(mechanical_data[c].dislo_line_ortho[pos].z) << " ";
+            }
+          }
+        }
+      }
+      
+      file_to_write_in << std::endl
+                       <<  vtk_space_offset_eight << "</DataArray>" << std::endl;
+    }
+  }
+
+  template<typename GridT>
+  static inline void write_vtk_bispectrum(std::ofstream& file_to_write_in, const GridParticleLocalStructuralMetrics &structural_data, std::string vector_name, size_t ncomps, const GridT &grid, bool is_binary, bool is_ghosts, int compression) {
+
+    lout << "ncomps = " << ncomps << std::endl;
+    if(is_binary)
+    {
+
+      std::vector<double> sources;
+
+      if (vector_name == "bispectrum") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if(!grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              for(size_t comp=0; comp<ncomps;++comp) {
+                sources.push_back(structural_data[c].bispectrum[pos][comp]);
+              }
+            }
+          }
+        }
+      }
+      
+      file_to_write_in <<  vtk_space_offset_eight << "<DataArray type=\"Float64\" Name=\"" << vector_name << "\" NumberOfComponents=\"" << ncomps <<"\" format=\"binary\">"<< std::endl;
+      exanb::write_binary_datas(file_to_write_in, compression, sources);
+      file_to_write_in << std::endl
+                       <<  vtk_space_offset_eight << "</DataArray>" << std::endl;
+    }
+
+    else {
+      
+      file_to_write_in <<  vtk_space_offset_eight << "<DataArray type=\"Float64\" Name=\"" << vector_name << "\" NumberOfComponents=\"" << ncomps <<"\" format=\"ascii\">" << std::endl;
+
+      if (vector_name == "bispectrum") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if( !grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              file_to_write_in << vtk_space_offset_ten;
+              for(size_t comp=0; comp<ncomps;++comp) {
+                file_to_write_in << std::to_string(structural_data[c].bispectrum[pos][comp]) << " ";
+              }
+            }
+          }
+        }
+      }
+      
+      file_to_write_in << std::endl
+                       <<  vtk_space_offset_eight << "</DataArray>" << std::endl;
+    }
+  }  
+  template<typename GridT>  
+  static inline void write_vtk_tensor(std::ofstream& file_to_write_in, const GridParticleLocalMechanicalMetrics &mechanical_data, std::string tensor_name, const GridT &grid, bool is_binary, bool is_ghosts, int compression) {  
+    if(is_binary)
+    {
+      std::vector<double> sources;
+
+      if (tensor_name == "F") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if(!grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              sources.push_back(mechanical_data[c].F[pos].m11);
+              sources.push_back(mechanical_data[c].F[pos].m12);
+              sources.push_back(mechanical_data[c].F[pos].m13);
+              sources.push_back(mechanical_data[c].F[pos].m21);
+              sources.push_back(mechanical_data[c].F[pos].m22);
+              sources.push_back(mechanical_data[c].F[pos].m23);
+              sources.push_back(mechanical_data[c].F[pos].m31);
+              sources.push_back(mechanical_data[c].F[pos].m32);
+              sources.push_back(mechanical_data[c].F[pos].m33);
+            }
+          }
+        }
+      }
+
+      if (tensor_name == "E") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if(!grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              sources.push_back(mechanical_data[c].E[pos].m11);
+              sources.push_back(mechanical_data[c].E[pos].m12);
+              sources.push_back(mechanical_data[c].E[pos].m13);
+              sources.push_back(mechanical_data[c].E[pos].m21);
+              sources.push_back(mechanical_data[c].E[pos].m22);
+              sources.push_back(mechanical_data[c].E[pos].m23);
+              sources.push_back(mechanical_data[c].E[pos].m31);
+              sources.push_back(mechanical_data[c].E[pos].m32);
+              sources.push_back(mechanical_data[c].E[pos].m33);       
+            }
+          }
+        }
+      }
+
+      if (tensor_name == "R") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if(!grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              sources.push_back(mechanical_data[c].R[pos].m11);
+              sources.push_back(mechanical_data[c].R[pos].m12);
+              sources.push_back(mechanical_data[c].R[pos].m13);
+              sources.push_back(mechanical_data[c].R[pos].m21);
+              sources.push_back(mechanical_data[c].R[pos].m22);
+              sources.push_back(mechanical_data[c].R[pos].m23);
+              sources.push_back(mechanical_data[c].R[pos].m31);
+              sources.push_back(mechanical_data[c].R[pos].m32);
+              sources.push_back(mechanical_data[c].R[pos].m33);       
+            }
+          }
+        }
+      }
+
+      if (tensor_name == "U") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if(!grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              sources.push_back(mechanical_data[c].U[pos].m11);
+              sources.push_back(mechanical_data[c].U[pos].m12);
+              sources.push_back(mechanical_data[c].U[pos].m13);
+              sources.push_back(mechanical_data[c].U[pos].m21);
+              sources.push_back(mechanical_data[c].U[pos].m22);
+              sources.push_back(mechanical_data[c].U[pos].m23);
+              sources.push_back(mechanical_data[c].U[pos].m31);
+              sources.push_back(mechanical_data[c].U[pos].m32);
+              sources.push_back(mechanical_data[c].U[pos].m33);       
+            }
+          }
+        }
+      }
+      
+      if (tensor_name == "L") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if(!grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              sources.push_back(mechanical_data[c].L[pos].m11);
+              sources.push_back(mechanical_data[c].L[pos].m12);
+              sources.push_back(mechanical_data[c].L[pos].m13);
+              sources.push_back(mechanical_data[c].L[pos].m21);
+              sources.push_back(mechanical_data[c].L[pos].m22);
+              sources.push_back(mechanical_data[c].L[pos].m23);
+              sources.push_back(mechanical_data[c].L[pos].m31);
+              sources.push_back(mechanical_data[c].L[pos].m32);
+              sources.push_back(mechanical_data[c].L[pos].m33);       
+            }
+          }
+        }
+      }
+
+      if (tensor_name == "vector_gradient_tensor") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if(!grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              sources.push_back(mechanical_data[c].vector_gradient_tensor[pos].m11);
+              sources.push_back(mechanical_data[c].vector_gradient_tensor[pos].m12);
+              sources.push_back(mechanical_data[c].vector_gradient_tensor[pos].m13);
+              sources.push_back(mechanical_data[c].vector_gradient_tensor[pos].m21);
+              sources.push_back(mechanical_data[c].vector_gradient_tensor[pos].m22);
+              sources.push_back(mechanical_data[c].vector_gradient_tensor[pos].m23);
+              sources.push_back(mechanical_data[c].vector_gradient_tensor[pos].m31);
+              sources.push_back(mechanical_data[c].vector_gradient_tensor[pos].m32);
+              sources.push_back(mechanical_data[c].vector_gradient_tensor[pos].m33);          
+            }
+          }
+        }
+      }
+      
+      file_to_write_in <<  vtk_space_offset_eight << "<DataArray type=\"Float64\" Name=\"" << tensor_name << "\" NumberOfComponents=\"9\" format=\"binary\">"<< std::endl;
+      exanb::write_binary_datas(file_to_write_in, compression, sources);
+      file_to_write_in << std::endl
+                       <<  vtk_space_offset_eight << "</DataArray>" << std::endl;
+    }
+
+    else {
+      file_to_write_in <<  vtk_space_offset_eight << "<DataArray type=\"Float64\" Name=\"" << tensor_name << "\" NumberOfComponents=\"9\" format=\"ascii\">" << std::endl;
+      if (tensor_name == "F") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if( !grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              file_to_write_in << vtk_space_offset_ten
+                               << std::to_string(mechanical_data[c].F[pos].m11) << " "
+                               << std::to_string(mechanical_data[c].F[pos].m12) << " "
+                               << std::to_string(mechanical_data[c].F[pos].m13) << " "
+                               << std::to_string(mechanical_data[c].F[pos].m21) << " "
+                               << std::to_string(mechanical_data[c].F[pos].m22) << " "
+                               << std::to_string(mechanical_data[c].F[pos].m23) << " "
+                               << std::to_string(mechanical_data[c].F[pos].m31) << " "
+                               << std::to_string(mechanical_data[c].F[pos].m32) << " "
+                               << std::to_string(mechanical_data[c].F[pos].m33) << " ";
+            }
+          }
+        }
+      }
+
+      if (tensor_name == "E") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if( !grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              file_to_write_in << vtk_space_offset_ten
+                               << std::to_string(mechanical_data[c].E[pos].m11) << " "
+                               << std::to_string(mechanical_data[c].E[pos].m12) << " "
+                               << std::to_string(mechanical_data[c].E[pos].m13) << " "
+                               << std::to_string(mechanical_data[c].E[pos].m21) << " "
+                               << std::to_string(mechanical_data[c].E[pos].m22) << " "
+                               << std::to_string(mechanical_data[c].E[pos].m23) << " "
+                               << std::to_string(mechanical_data[c].E[pos].m31) << " "
+                               << std::to_string(mechanical_data[c].E[pos].m32) << " "
+                               << std::to_string(mechanical_data[c].E[pos].m33) << " ";
+            }
+          }
+        }
+      }
+
+      if (tensor_name == "R") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if( !grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              file_to_write_in << vtk_space_offset_ten
+                               << std::to_string(mechanical_data[c].R[pos].m11) << " "
+                               << std::to_string(mechanical_data[c].R[pos].m12) << " "
+                               << std::to_string(mechanical_data[c].R[pos].m13) << " "
+                               << std::to_string(mechanical_data[c].R[pos].m21) << " "
+                               << std::to_string(mechanical_data[c].R[pos].m22) << " "
+                               << std::to_string(mechanical_data[c].R[pos].m23) << " "
+                               << std::to_string(mechanical_data[c].R[pos].m31) << " "
+                               << std::to_string(mechanical_data[c].R[pos].m32) << " "
+                               << std::to_string(mechanical_data[c].R[pos].m33) << " ";
+            }
+          }
+        }
+      }
+
+      if (tensor_name == "U") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if( !grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              file_to_write_in << vtk_space_offset_ten
+                               << std::to_string(mechanical_data[c].U[pos].m11) << " "
+                               << std::to_string(mechanical_data[c].U[pos].m12) << " "
+                               << std::to_string(mechanical_data[c].U[pos].m13) << " "
+                               << std::to_string(mechanical_data[c].U[pos].m21) << " "
+                               << std::to_string(mechanical_data[c].U[pos].m22) << " "
+                               << std::to_string(mechanical_data[c].U[pos].m23) << " "
+                               << std::to_string(mechanical_data[c].U[pos].m31) << " "
+                               << std::to_string(mechanical_data[c].U[pos].m32) << " "
+                               << std::to_string(mechanical_data[c].U[pos].m33) << " ";
+            }
+          }
+        }
+      }
+      
+      if (tensor_name == "L") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if( !grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              file_to_write_in << vtk_space_offset_ten
+                               << std::to_string(mechanical_data[c].L[pos].m11) << " "
+                               << std::to_string(mechanical_data[c].L[pos].m12) << " "
+                               << std::to_string(mechanical_data[c].L[pos].m13) << " "
+                               << std::to_string(mechanical_data[c].L[pos].m21) << " "
+                               << std::to_string(mechanical_data[c].L[pos].m22) << " "
+                               << std::to_string(mechanical_data[c].L[pos].m23) << " "
+                               << std::to_string(mechanical_data[c].L[pos].m31) << " "
+                               << std::to_string(mechanical_data[c].L[pos].m32) << " "
+                               << std::to_string(mechanical_data[c].L[pos].m33) << " ";
+            }
+          }
+        }
+      }
+
+      if (tensor_name == "vector_gradient_tensor") {
+        for(size_t c=0; c<grid.number_of_cells();++c) {
+          if( !grid.is_ghost_cell(c) || is_ghosts) {
+            size_t np = grid.cells()[c].size();              
+            for(size_t pos=0;pos<np;++pos) {
+              file_to_write_in << vtk_space_offset_ten
+                               << std::to_string(mechanical_data[c].vector_gradient_tensor[pos].m11) << " "
+                               << std::to_string(mechanical_data[c].vector_gradient_tensor[pos].m12) << " "
+                               << std::to_string(mechanical_data[c].vector_gradient_tensor[pos].m13) << " "
+                               << std::to_string(mechanical_data[c].vector_gradient_tensor[pos].m21) << " "
+                               << std::to_string(mechanical_data[c].vector_gradient_tensor[pos].m22) << " "
+                               << std::to_string(mechanical_data[c].vector_gradient_tensor[pos].m23) << " "
+                               << std::to_string(mechanical_data[c].vector_gradient_tensor[pos].m31) << " "
+                               << std::to_string(mechanical_data[c].vector_gradient_tensor[pos].m32) << " "
+                               << std::to_string(mechanical_data[c].vector_gradient_tensor[pos].m33) << " ";
+            }
+          }
+        }
+      }            
+      file_to_write_in << std::endl
+                       <<  vtk_space_offset_eight << "</DataArray>" << std::endl;
+    }
+  }
+
+  //template<typename FType>
+  //using fieldId = typename onika::soatl::FieldId<FType>;
+
+  template<typename GridT>
+  struct VtkMechanicalWriter : public OperatorNode
+  {
+    //field type
+    using has_type_field_t = typename GridT::CellParticles::template HasField < field::_type > ;
+    static constexpr bool has_type_field = has_type_field_t::value;
+
+    //field id
+    using has_id_field_t = typename GridT::CellParticles::template HasField < field::_id > ;
+    static constexpr bool has_id_field = has_id_field_t::value;
+
+    //field id mol
+    using has_id_mol_field_t = typename GridT::CellParticles::template HasField < field::_idmol > ;
+    static constexpr bool has_id_mol_field = has_id_mol_field_t::value;
+
+    //field vx
+    using has_vx_field_t = typename GridT::CellParticles::template HasField < field::_vx > ;
+    static constexpr bool has_vx_field = has_vx_field_t::value;
+
+    //field vy
+    using has_vy_field_t = typename GridT::CellParticles::template HasField < field::_vy > ;
+    static constexpr bool has_vy_field = has_vy_field_t::value;
+
+    //field vz
+    using has_vz_field_t = typename GridT::CellParticles::template HasField < field::_vz > ;
+    static constexpr bool has_vz_field = has_vz_field_t::value;
+
+    //field ax
+    using has_ax_field_t = typename GridT::CellParticles::template HasField < field::_ax > ;
+    static constexpr bool has_ax_field = has_ax_field_t::value;
+
+    //field ay
+    using has_ay_field_t = typename GridT::CellParticles::template HasField < field::_ay > ;
+    static constexpr bool has_ay_field = has_ay_field_t::value;
+
+    //field az
+    using has_az_field_t = typename GridT::CellParticles::template HasField < field::_az > ;
+    static constexpr bool has_az_field = has_az_field_t::value;
+
+    //field rxf
+    using has_rxf_field_t = typename GridT::CellParticles::template HasField < field::_rxf > ;
+    static constexpr bool has_rxf_field = has_rxf_field_t::value;    
+
+    //field ryf
+    using has_ryf_field_t = typename GridT::CellParticles::template HasField < field::_ryf > ;
+    static constexpr bool has_ryf_field = has_ryf_field_t::value;    
+
+    //field rzf
+    using has_rzf_field_t = typename GridT::CellParticles::template HasField < field::_rzf > ;
+    static constexpr bool has_rzf_field = has_rzf_field_t::value;
+    
+    // Convert bigEndian littleEndian
+    // Thanks to https://stackoverflow.com/questions/105252
+    // template <typename T>
+    // void SwapEnd(T& var)
+    // {
+    //   char* varArray = reinterpret_cast<char*>(&var);
+    //   for(long i = 0; i < static_cast<long>(sizeof(var)/2); i++)
+    //     std::swap(varArray[sizeof(var) - 1 - i],varArray[i]);
+    // }
+
+    using VariablesVec = std::vector<std::string>;    
+
+    ADD_SLOT( MPI_Comm    , mpi             , INPUT );
+    ADD_SLOT( GridT       , grid            , INPUT );
+    ADD_SLOT( Domain      , domain          , INPUT );
+    ADD_SLOT( bool        , is_binary       , INPUT , true);
+    ADD_SLOT( bool        , is_box          , INPUT , true);
+    ADD_SLOT( bool        , is_external_box , INPUT , false);
+    ADD_SLOT( bool        , is_ghosts       , INPUT , false);
+    ADD_SLOT( std::string , compression     , INPUT , "default");
+    ADD_SLOT( std::string , filename        , INPUT , "output"); // default value for backward compatibility
+    ADD_SLOT( std::string , foldername      , INPUT , "paraview_datas"); // default value for backward compatibility    
+
+    // Structure that enables the output of per-atom variables computed through the operator compute_local_metrics to be called before writting out atoms if needed
+    ADD_SLOT( GridParticleLocalMetrics          , local_data            , INPUT, OPTIONAL);
+    ADD_SLOT( GridParticleLocalMechanicalMetrics, local_mechanical_data , INPUT, OPTIONAL);
+    ADD_SLOT( GridParticleLocalStructuralMetrics, local_structural_data , INPUT, OPTIONAL);        
+    ADD_SLOT( VariablesVec                      , per_atom_data         , INPUT, OPTIONAL);
+    ADD_SLOT( bool                              , use_filtered_positions, INPUT , false);
+    
+    inline void execute () override final
+    {
+      namespace fs = std::experimental::filesystem;
+          
+      GridT& grid = *(this->grid);
+      bool is_binary = *(this->is_binary);
+      bool is_box = *(this->is_box);
+      bool is_external_box = *(this->is_external_box);
+      bool is_ghosts = *(this->is_ghosts);
+      Mat3d xform = domain->xform();
+      // bool use_filtered_positions = (*(this->use_filtered_positions) && has_rxf_field && has_ryf_field && has_rzf_field);
+
+      GridParticleLocalMetrics local_metrics;
+      GridParticleLocalMechanicalMetrics local_mechanical_metrics;
+      GridParticleLocalStructuralMetrics local_structural_metrics;            
+      VariablesVec per_atom_variables;
+
+      if ( (local_data.has_value() or local_mechanical_data.has_value() or local_structural_data.has_value()) and per_atom_data.has_value() ) {
+        if ( local_data.has_value() ) {
+          local_metrics = *(this->local_data);
+        }
+        if ( local_mechanical_data.has_value() ) {
+          local_mechanical_metrics = *(this->local_mechanical_data);
+        }
+        if ( local_structural_data.has_value() ) {
+          local_structural_metrics = *(this->local_structural_data);
+        }       
+        per_atom_variables = *(this->per_atom_data);
+        std::sort(per_atom_variables.begin(), per_atom_variables.end());
+      }
+      
+      // Gestion of compression level for binary datas
+      int compression_level = -1;
+      if(*compression == "default")  compression_level = -1;
+      else if(*compression == "min") compression_level = 0;
+      else if(*compression == "max") compression_level = 9;
+      else if((*compression)>="0" && (*compression)<="9") compression_level = std::stoi(*compression);
+      else
+      {
+          lerr << "vtk_writer_operator : compression type is unknow. Keywords : max, min, default or [0-9]" << std::endl;
+          std::abort();
+      }
+      
+      ldbg << "using compression level "<<compression_level<<std::endl;
+
+      // MPI Initialization
+      int rank=0, np=1;
+      MPI_Comm_rank(*mpi, &rank);
+      MPI_Comm_size(*mpi, &np);
+
+      // initialisation : remove and recreate folder where .pvtp and vtp will be stored
+      lout << "create "<<*foldername<<" dir" << std::endl;
+      static bool init = true;
+      if(rank==0 && init)
+        {
+          init = false;   
+          std::ostringstream subfolder_oss;       
+          subfolder_oss << *foldername << "/" << *filename;
+          std::string subfolder_name = subfolder_oss.str();
+          fs::remove_all(*foldername);
+          fs::remove_all(*filename);
+          std::error_code ec0, ec1;
+          fs::create_directory(*foldername, ec0);
+          fs::create_directory(subfolder_name, ec1);
+        }
+
+      if(rank==0)
+        {
+          std::ostringstream subfolder_oss;       
+          subfolder_oss << *foldername << "/" << *filename;
+          std::string subfolder_name = subfolder_oss.str();
+          std::error_code ec;
+          fs::create_directory(subfolder_name, ec);
+        }
+      
+      MPI_Barrier( *mpi );
+
+      size_t n_cells = grid.number_of_cells();
+      auto cells = grid.cells();
+      size_t nb_particles = grid.number_of_particles();
+      if(!is_ghosts) { nb_particles -= grid.number_of_ghost_particles(); }
+           
+      // only one proc need to write .ptvp file
+      if(rank==0)
+        {
+          std::ofstream file_pvtp;
+          std::ostringstream filename_oss;
+          filename_oss << *foldername << "/" << *filename << ".pvtp";
+          std::string filename_pvtp = filename_oss.str();
+
+          lout << "write " << filename_pvtp << std::endl;
+
+          std::string scalar;
+          if(has_type_field)   scalar += "type, ";
+          if(has_id_field)     scalar += "id, ";
+          if(has_id_mol_field) scalar += "id_molecule, ";
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "dislo_indic")) scalar += "dislo_indic, ";
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "vis")) scalar += "vis, ";
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "coin")) scalar += "coin, ";
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "crystal_structure")) scalar += "crystal_structure, ";     
+          scalar.pop_back();
+          scalar.pop_back();//removing ", " stay in the last field
+          
+          std::string vector;
+          if(has_ax_field && has_ay_field && has_az_field) vector += "f, ";
+          if(has_vx_field && has_vy_field && has_vz_field) vector += "v, ";
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "mu")) vector += "mu, ";
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "s")) vector += "s, ";
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "l")) vector += "l, ";
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "m")) vector += "m, ";
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "n")) vector += "n, ";     
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "phi")) vector += "phi, ";
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "dislo_line")) vector += "dislo_line, ";
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "dislo_line_ortho")) vector += "dislo_line_ortho, ";
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "bispectrum")) vector += "bispectrum, ";   
+          vector.pop_back();
+          vector.pop_back();//removing ", " stay in the last field
+          
+          std::string tensor;
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "F")) tensor += "F, ";
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "E")) tensor += "E, ";
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "R")) tensor += "R, ";
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "U")) tensor += "U, ";
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "L")) tensor += "L, ";
+          if (tensor.size()>3) {
+            tensor.pop_back();
+            tensor.pop_back();//removing ", " stay in the last field
+          }
+          
+          file_pvtp.open(filename_pvtp);
+          file_pvtp << "<?xml version=\"1.0\"?>" << std::endl
+                    << vtk_space_offset_two << "<VTKFile type=\"PPolyData\" version=\"1.0\" byte_order=\"LittleEndian\" header_type=\"UInt64\" compressor=\"vtkZLibDataCompressor\">" << std::endl
+                    << vtk_space_offset_four << "<PPolyData GhostLevel=\"0\">" << std::endl
+                    << vtk_space_offset_four << "<PPointData Scalar=\"" << scalar << "\" Vectors=\""<< vector << "\" Tensors=\""<< tensor << "\">" << std::endl;
+          
+          // Add scalar type associated to atoms
+          if(has_type_field)
+            file_pvtp << vtk_space_offset_six << "<PDataArray type=\"UInt8\" Name=\"type\"/>" << std::endl;
+          if(has_id_field)
+            file_pvtp << vtk_space_offset_six << "<PDataArray type=\"UInt64\" Name=\"id\"/>" << std::endl;
+          if(has_id_mol_field)
+            file_pvtp << vtk_space_offset_six << "<PDataArray type=\"UInt64\" Name=\"id_molecule\"/>" << std::endl;
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "dislo_indic"))
+            file_pvtp << vtk_space_offset_six << "<PDataArray type=\"Float64\" Name=\"dislo_indic\"/>" << std::endl;
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "vis"))
+            file_pvtp << vtk_space_offset_six << "<PDataArray type=\"Float64\" Name=\"vis\"/>" << std::endl;
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "coin"))
+            file_pvtp << vtk_space_offset_six << "<PDataArray type=\"Float64\" Name=\"coin\"/>" << std::endl;
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "crystal_structure"))
+            file_pvtp << vtk_space_offset_six << "<PDataArray type=\"Float64\" Name=\"crystal_structure\"/>" << std::endl;
+          
+          // Add vector type associated to atoms          
+          if(has_ax_field && has_ay_field && has_az_field)
+            file_pvtp << vtk_space_offset_six << "<PDataArray type=\"Float64\" Name=\"f\" NumberOfComponents=\"3\"/>" << std::endl;
+          if(has_vx_field && has_vy_field && has_vz_field)
+            file_pvtp << vtk_space_offset_six << "<PDataArray type=\"Float64\" Name=\"v\" NumberOfComponents=\"3\"/>" << std::endl;
+          if(is_ghosts)
+            file_pvtp << vtk_space_offset_six << "<PDataArray type=\"UInt8\" Name=\"is_ghost\"/>" << std::endl;
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "mu"))
+            file_pvtp << vtk_space_offset_six << "<PDataArray type=\"Float64\" Name=\"mu\" NumberOfComponents=\"3\"/>" << std::endl;        
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "s"))
+            file_pvtp << vtk_space_offset_six << "<PDataArray type=\"Float64\" Name=\"s\" NumberOfComponents=\"3\"/>" << std::endl;         
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "l"))
+            file_pvtp << vtk_space_offset_six << "<PDataArray type=\"Float64\" Name=\"l\" NumberOfComponents=\"3\"/>" << std::endl;         
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "m"))
+            file_pvtp << vtk_space_offset_six << "<PDataArray type=\"Float64\" Name=\"m\" NumberOfComponents=\"3\"/>" << std::endl;         
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "n"))
+            file_pvtp << vtk_space_offset_six << "<PDataArray type=\"Float64\" Name=\"n\" NumberOfComponents=\"3\"/>" << std::endl;         
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "phi"))
+            file_pvtp << vtk_space_offset_six << "<PDataArray type=\"Float64\" Name=\"phi\" NumberOfComponents=\"3\"/>" << std::endl;       
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "dislo_line"))
+            file_pvtp << vtk_space_offset_six << "<PDataArray type=\"Float64\" Name=\"dislo_line\" NumberOfComponents=\"3\"/>" << std::endl;        
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "dislo_line_ortho"))
+            file_pvtp << vtk_space_offset_six << "<PDataArray type=\"Float64\" Name=\"dislo_line_ortho\" NumberOfComponents=\"3\"/>" << std::endl;
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "bispectrum")) {
+            // Needs to be improved, juste a walkaround here to get bispectrum size : use snap function in the future
+            size_t ncomps = 0;              
+            for(size_t c=0; c<n_cells;++c)
+              {
+                if( !grid.is_ghost_cell(c) || is_ghosts )
+                  {
+                    ncomps = local_structural_metrics[c].bispectrum[0].size();
+                  }
+              }     
+            file_pvtp << vtk_space_offset_six << "<PDataArray type=\"Float64\" Name=\"bispectrum\" NumberOfComponents=\"" << ncomps <<"\"/>" << std::endl;                  
+          }
+          // Add matrix type associated to atoms                  
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "F"))
+            file_pvtp << vtk_space_offset_six << "<PDataArray type=\"Float64\" Name=\"F\" NumberOfComponents=\"9\"/>" << std::endl;
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "E"))
+            file_pvtp << vtk_space_offset_six << "<PDataArray type=\"Float64\" Name=\"E\" NumberOfComponents=\"9\"/>" << std::endl;
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "R"))
+            file_pvtp << vtk_space_offset_six << "<PDataArray type=\"Float64\" Name=\"R\" NumberOfComponents=\"9\"/>" << std::endl;
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "U"))
+            file_pvtp << vtk_space_offset_six << "<PDataArray type=\"Float64\" Name=\"U\" NumberOfComponents=\"9\"/>" << std::endl;
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "L"))
+            file_pvtp << vtk_space_offset_six << "<PDataArray type=\"Float64\" Name=\"L\" NumberOfComponents=\"9\"/>" << std::endl;
+          if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "vector_gradient_tensor"))
+            file_pvtp << vtk_space_offset_six << "<PDataArray type=\"Float64\" Name=\"vector_gradient_tensor\" NumberOfComponents=\"9\"/>" << std::endl;
+          
+          file_pvtp << vtk_space_offset_four << "</PPointData>" << std::endl
+                    << vtk_space_offset_four << "<PPoints>" << std::endl
+                    << vtk_space_offset_six << "<PDataArray type=\"Float64\" NumberOfComponents=\"3\"/>" << std::endl
+                    << vtk_space_offset_four << "</PPoints>" << std::endl;
+          
+          for(int i=0;i<np; ++i)
+          {
+            std::ostringstream oss; oss<< *filename << "/piece_" << i << ".vtp"; std::string piece_filename = oss.str();
+            file_pvtp << vtk_space_offset_four << "<Piece Source=\""<< piece_filename <<"\"/>" << std::endl;
+          }
+
+          file_pvtp << vtk_space_offset_two << "</PPolyData>" << std::endl
+                    << "</VTKFile>" << std::endl;
+
+          file_pvtp.close();
+        }
+      
+      std::ofstream file_vtp;
+      std::string filename_vtp;
+      { std::ostringstream oss; oss<< *foldername << "/" << *filename << "/piece_" << rank << ".vtp"; filename_vtp = oss.str(); }
+      lout << "write " << filename_vtp << std::endl;
+
+      file_vtp.open(filename_vtp);
+      file_vtp << "<?xml version=\"1.0\"?>" << std::endl
+               << "<VTKFile type=\"PolyData\" version=\"1.0\" byte_order=\"LittleEndian\" header_type=\"UInt64\" compressor=\"vtkZLibDataCompressor\">" << std::endl
+               <<  vtk_space_offset_two  << "<PolyData>" << std::endl
+               <<  vtk_space_offset_four << "<Piece  NumberOfPoints=\""<< nb_particles << "\" NumberOfVerts=\"1\" NumberOfLines=\"0\" NumberOfStrips=\"0\" NumberOfPolys=\"0\">" << std::endl
+               <<  vtk_space_offset_six  << "<PointData>" << std::endl;
+
+      // Write scalar fields associated to atoms      
+      if(has_type_field)
+        {
+          ldbg << "write type" << std::endl;
+          if(is_binary)
+            {
+              exanb::write_binary_datas_from_field(grid, field::type, std::string("type"), std::string("UInt8"), file_vtp, compression_level, is_ghosts);
+            }
+          else
+            {
+              exanb::write_ascii_datas_from_field(grid, field::type, std::string("type"), std::string("UInt8"), file_vtp, is_ghosts);
+            }
+        }
+      if(has_id_field)
+        {
+          ldbg << "write id" << std::endl;
+          if(is_binary)
+            {
+              exanb::write_binary_datas_from_field(grid, field::id, std::string("id"), std::string("UInt64"), file_vtp, compression_level, is_ghosts);
+            }
+          else
+            {
+              exanb::write_ascii_datas_from_field(grid, field::id, std::string("id"), std::string("UInt64"), file_vtp, is_ghosts);
+            }
+        }
+      if(has_id_mol_field)
+        {
+          ldbg << "write idmol" << std::endl;
+          if(is_binary)
+            {
+              exanb::write_binary_datas_from_field(grid, field::idmol, std::string("id_molecule"), std::string("UInt64"), file_vtp, compression_level, is_ghosts);
+            }
+          else
+            {
+              exanb::write_ascii_datas_from_field(grid, field::idmol, std::string("id_molecule"), std::string("UInt64"), file_vtp, is_ghosts);
+            }
+        }      
+      if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "dislo_indic"))
+        write_vtk_scalar(file_vtp, local_mechanical_metrics, std::string("dislo_indic"), grid, is_binary, is_ghosts, compression_level);
+      if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "vis"))
+        write_vtk_scalar(file_vtp, local_mechanical_metrics, std::string("vis"), grid, is_binary, is_ghosts, compression_level);
+      if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "coin"))
+        write_vtk_scalar(file_vtp, local_mechanical_metrics, std::string("coin"), grid, is_binary, is_ghosts, compression_level);
+      if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "crystal_structure"))
+        write_vtk_scalar_bis(file_vtp, local_structural_metrics, std::string("crystal_structure"), grid, is_binary, is_ghosts, compression_level);
+
+      // Write vector fields associated to atoms
+      if(has_vx_field && has_vy_field && has_vz_field)
+        {
+          if(is_binary)
+            {
+              exanb::write_binary_datas_from_fields(grid, field::vx, field::vy, field::vz, std::string("v"), std::string("Float64"), file_vtp, compression_level, is_ghosts);
+            }
+          else
+            {
+              exanb::write_ascii_datas_from_fields(grid, field::vx, field::vy, field::vz, std::string("v"), std::string("Float64"), file_vtp, is_ghosts);
+            }
+        }
+      if(has_ax_field && has_ay_field && has_az_field)
+        {
+          ldbg << "write force" << std::endl;
+          if(is_binary)
+          {
+            std::vector<double> sources;
+
+            for(size_t c=0; c<n_cells;++c)
+            {
+              if(!grid.is_ghost_cell(c) || is_ghosts)
+              {
+                const auto * __restrict__ fx = cells[c].field_pointer_or_null(field::ax);
+                const auto * __restrict__ fy = cells[c].field_pointer_or_null(field::ay);
+                const auto * __restrict__ fz = cells[c].field_pointer_or_null(field::az);
+                size_t np = cells[c].size();              
+                for(size_t pos=0;pos<np;++pos)
+                {
+                  sources.push_back(fx[pos]);
+                  sources.push_back(fy[pos]);
+                  sources.push_back(fz[pos]);
+                }
+              }
+            }
+
+            file_vtp <<  vtk_space_offset_eight << "<DataArray type=\"Float64\" Name=\"f\" NumberOfComponents=\"3\" format=\"binary\">"<< std::endl;
+            exanb::write_binary_datas(file_vtp, compression_level, sources);
+          }
+          else
+          {
+            file_vtp <<  vtk_space_offset_eight << "<DataArray type=\"Float64\" Name=\"f\" NumberOfComponents=\"3\" format=\"ascii\">" << std::endl;
+            for(size_t c=0; c<n_cells;++c)
+            {
+              if( !grid.is_ghost_cell(c) || is_ghosts)
+              {
+                const auto * __restrict__ fx = cells[c].field_pointer_or_null(field::ax);
+                const auto * __restrict__ fy = cells[c].field_pointer_or_null(field::ay);
+                const auto * __restrict__ fz = cells[c].field_pointer_or_null(field::az);
+                size_t np = cells[c].size();              
+                for(size_t pos=0;pos<np;++pos)
+                {
+                  file_vtp << vtk_space_offset_ten;
+                  file_vtp << std::to_string(fx[pos]) << " "
+                           << std::to_string(fy[pos]) << " "
+                           << std::to_string(fz[pos]) << " ";
+                }
+              }
+            }
+          }
+          file_vtp << std::endl
+                   <<  vtk_space_offset_eight << "</DataArray>" << std::endl;
+        }
+      if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "mu"))
+        write_vtk_vector(file_vtp, local_mechanical_metrics, std::string("mu"), grid, is_binary, is_ghosts, compression_level);
+      if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "s"))
+        write_vtk_vector(file_vtp, local_mechanical_metrics, std::string("s"), grid, is_binary, is_ghosts, compression_level);
+      if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "l"))
+        write_vtk_vector(file_vtp, local_mechanical_metrics, std::string("l"), grid, is_binary, is_ghosts, compression_level);
+      if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "m"))
+        write_vtk_vector(file_vtp, local_mechanical_metrics, std::string("m"), grid, is_binary, is_ghosts, compression_level);
+      if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "n"))
+        write_vtk_vector(file_vtp, local_mechanical_metrics, std::string("n"), grid, is_binary, is_ghosts, compression_level);
+      if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "phi"))
+        write_vtk_vector(file_vtp, local_mechanical_metrics, std::string("phi"), grid, is_binary, is_ghosts, compression_level);
+      if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "dislo_line"))
+        write_vtk_vector(file_vtp, local_mechanical_metrics, std::string("dislo_line"), grid, is_binary, is_ghosts, compression_level);
+      if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "dislo_line_ortho"))
+        write_vtk_vector(file_vtp, local_mechanical_metrics, std::string("dislo_line_ortho"), grid, is_binary, is_ghosts, compression_level);      
+      if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "bispectrum")) {
+        // Needs to be improved, juste a walkaround here to get bispectrum size : use snap function in the future
+        size_t ncomps = 0;                  
+        for(size_t c=0; c<n_cells;++c)
+          {
+            if( !grid.is_ghost_cell(c) || is_ghosts )
+              {
+                ncomps = local_structural_metrics[c].bispectrum[0].size();
+              }
+          }             
+        write_vtk_bispectrum(file_vtp, local_structural_metrics, std::string("bispectrum"), ncomps, grid, is_binary, is_ghosts, compression_level);      
+      }
+        
+      // Write tensor fields associated to atoms      
+      if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "F"))
+        write_vtk_tensor(file_vtp, local_mechanical_metrics, std::string("F"), grid, is_binary, is_ghosts, compression_level);
+      if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "E"))
+        write_vtk_tensor(file_vtp, local_mechanical_metrics, std::string("E"), grid, is_binary, is_ghosts, compression_level);
+      if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "R"))
+        write_vtk_tensor(file_vtp, local_mechanical_metrics, std::string("R"), grid, is_binary, is_ghosts, compression_level);
+      if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "U"))
+        write_vtk_tensor(file_vtp, local_mechanical_metrics, std::string("U"), grid, is_binary, is_ghosts, compression_level);
+      if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "L"))
+        write_vtk_tensor(file_vtp, local_mechanical_metrics, std::string("L"), grid, is_binary, is_ghosts, compression_level);
+      if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), "vector_gradient_tensor"))
+        write_vtk_tensor(file_vtp, local_mechanical_metrics, std::string("vector_gradient_tensor"), grid, is_binary, is_ghosts, compression_level);
+      
+      if(is_ghosts)
+        {
+          ldbg << "write ghost" << std::endl;
+          if(is_binary)
+            {
+              std::vector<uint8_t> sources;
+              for(size_t c=0; c<n_cells;++c)
+                {
+                  if(grid.is_ghost_cell(c))
+                    for(size_t pos=0;pos<cells[c].size();++pos)
+                      sources.push_back(1);
+                  else
+                    for(size_t pos=0;pos<cells[c].size();++pos)
+                      sources.push_back(0);
+                }
+
+              file_vtp <<  vtk_space_offset_eight << "<DataArray type=\"UInt8\" Name=\"is_ghost\" format=\"binary\">"<< std::endl;
+              exanb::write_binary_datas(file_vtp, compression_level, sources);
+            }
+          else
+            {
+              file_vtp <<  vtk_space_offset_eight << "<DataArray type=\"UInt8\" Name=\"is_ghost\" format=\"ascii\">" << std::endl;
+              for(size_t c=0; c<n_cells;++c)
+                {
+                  if(grid.is_ghost_cell(c))
+                    for(size_t pos=0;pos<cells[c].size();++pos)
+                      file_vtp << vtk_space_offset_ten << 1;
+                  else
+                    for(size_t pos=0;pos<cells[c].size();++pos)
+                      file_vtp << vtk_space_offset_ten << 0;
+                }
+            }
+          file_vtp << std::endl
+                   <<  vtk_space_offset_eight << "</DataArray>" << std::endl;
+        }
+
+      file_vtp <<  vtk_space_offset_six << "</PointData>"  << std::endl
+               <<  vtk_space_offset_six << "<CellData>" << std::endl
+               <<  vtk_space_offset_six << "</CellData>" << std::endl
+               <<  vtk_space_offset_six << "<Points>" << std::endl;
+
+      if(is_binary)
+        {
+          exanb::write_binary_positions(grid, std::string(""), std::string("Float64"), file_vtp, compression_level, is_ghosts, xform);
+        }
+      else
+        {
+          exanb::write_ascii_positions(grid, std::string(""), std::string("Float64"), file_vtp, is_ghosts, xform);
+        }
+      file_vtp <<  vtk_space_offset_six << "</Points>" << std::endl
+               <<  vtk_space_offset_six << "<Verts>" << std::endl;
+      if(is_binary)
+        {
+          std::vector<int> sources;
+          int i = 0;
+          for(size_t c=0; c<n_cells;++c)
+            {
+              if(!grid.is_ghost_cell(c) || is_ghosts)
+                for(size_t pos=0;pos<cells[c].size();++pos)
+                  sources.push_back(i++);
+            }
+
+          file_vtp <<  vtk_space_offset_eight << "<DataArray type=\"Int32\" Name=\"connectivity\" format=\"binary\">"<< std::endl;
+          exanb::write_binary_datas(file_vtp, compression_level, sources);
+        }
+      else
+        {
+          file_vtp <<  vtk_space_offset_eight << "<DataArray type=\"Int32\" Name=\"connectivity\" format=\"ascii\">" << std::endl;
+          file_vtp << vtk_space_offset_ten;
+          for(size_t i=0; i<nb_particles;++i)
+            {
+              file_vtp << i << " ";
+            }
+        }
+      file_vtp << std::endl
+               <<  vtk_space_offset_eight << "</DataArray>" << std::endl;
+
+
+      ldbg << "write offsets" << std::endl;
+      exanb::write_ascii_datas_from_int(nb_particles, std::string("offsets"), file_vtp);
+
+      file_vtp <<  vtk_space_offset_six  << "</Verts>"<< std::endl
+               <<  vtk_space_offset_four << "</Piece>"<< std::endl
+               <<  vtk_space_offset_two  << "</PolyData>"<< std::endl
+               << "</VTKFile>"<< std::endl;
+      file_vtp.close();
+      //Stop writing .vtp file---------------------------------------------------------------------
+
+
+      //----------------------------------------------BOX------------------------------------------
+      // Simulation box
+      // TO DO : box will be dependant of the time
+      if(is_box && rank==0)
+        {
+          ldbg << "write box" << std::endl;
+          std::stringstream box_name_oss;
+          box_name_oss << *foldername << "/" << *filename << "/box.vtp";
+          std::string box_name = box_name_oss.str();
+
+          std::ifstream f(box_name);
+
+          if(!f.good())
+            {
+              std::ofstream box_vtp;
+
+              Vec3d a1 = xform * Vec3d{domain->origin().x, domain->origin().y, domain->origin().z};
+              Vec3d a2 = xform * Vec3d{domain->extent().x, domain->origin().y, domain->origin().z};
+              Vec3d a3 = xform * Vec3d{domain->extent().x, domain->extent().y, domain->origin().z};
+              Vec3d a4 = xform * Vec3d{domain->origin().x, domain->extent().y, domain->origin().z};
+              Vec3d a5 = xform * Vec3d{domain->origin().x, domain->origin().y, domain->extent().z};
+              Vec3d a6 = xform * Vec3d{domain->extent().x, domain->origin().y, domain->extent().z};
+              Vec3d a7 = xform * Vec3d{domain->extent().x, domain->extent().y, domain->extent().z};
+              Vec3d a8 = xform * Vec3d{domain->origin().x, domain->extent().y, domain->extent().z};
+
+              box_vtp.open(box_name);
+              box_vtp << "<?xml version=\"1.0\"?>" << std::endl
+                      << "<VTKFile type=\"PolyData\" version=\"1.0\" byte_order=\"LittleEndian\" >" << std::endl
+                      << vtk_space_offset_two << "<PolyData>" << std::endl
+                      << vtk_space_offset_four << "<Piece NumberOfPoints=\"8\" NumberOfVerts=\"0\" NumberOfLines=\"0\" NumberOfStrips=\"0\" NumberOfPolys=\"6\">" << std::endl
+                      << vtk_space_offset_six << "<Points>" << std::endl
+                      << vtk_space_offset_eight << "<DataArray type=\"Float32\" NumberOfComponents=\"3\" format=\"ascii\">" << std::endl
+                      << vtk_space_offset_ten
+                      << a1.x << " " << a1.y << " " << a1.z << " "
+                      << a2.x << " " << a2.y << " " << a2.z << " "
+                      << a3.x << " " << a3.y << " " << a3.z << " "
+                      << a4.x << " " << a4.y << " " << a4.z << " "
+                      << a5.x << " " << a5.y << " " << a5.z << " "
+                      << a6.x << " " << a6.y << " " << a6.z << " "
+                      << a7.x << " " << a7.y << " " << a7.z << " "
+                      << a8.x << " " << a8.y << " " << a8.z << std::endl
+                      << vtk_space_offset_eight << "</DataArray>" << std::endl
+                      << vtk_space_offset_six << "</Points>" << std::endl
+                      << vtk_space_offset_six << "<Polys>" << std::endl
+                      << vtk_space_offset_eight << "<DataArray type=\"Int32\" Name=\"connectivity\" format=\"ascii\">" << std::endl
+                      << vtk_space_offset_ten << "0 1 2 3 4 5 6 7 0 1 5 4 2 3 7 6 0 4 7 3 1 2 6 5" << std::endl
+                      << vtk_space_offset_eight << "</DataArray>" << std::endl
+                      << vtk_space_offset_eight << "<DataArray type=\"Int32\" Name=\"offsets\" format=\"ascii\"> " << std::endl
+                      << vtk_space_offset_ten << "4 8 12 16 20 24" << std::endl
+                      << vtk_space_offset_eight << "</DataArray>" << std::endl
+                      << vtk_space_offset_six << "</Polys>" << std::endl
+                      << vtk_space_offset_four << "</Piece>" << std::endl
+                      << vtk_space_offset_two << "</PolyData>" << std::endl
+                      << "</VTKFile>" << std::endl;
+
+              box_vtp.close();
+            }
+        }
+      //---------------------------------------------------------------------------------------
+
+
+
+      //----------------------------------EXTERNAL BOX-----------------------------------------
+      // External box is a box taking inside ghosts
+      // TO DO : box will be dependant of the time
+      if(is_external_box && is_ghosts && rank==0)
+        {
+          ldbg << "write external box" << std::endl;
+          std::stringstream box_name_oss;
+          box_name_oss << *foldername << "/" << *filename << "/external_box.vtp";
+          std::string box_name = box_name_oss.str();
+
+          std::ifstream f(box_name);
+
+          size_t glayers = grid.ghost_layers();
+
+          // origin of the box
+          // Depend if their are periodics conditions
+          double o_x = domain->periodic_boundary_x()?domain->origin().x - domain->cell_size()*glayers:domain->origin().x;
+          double o_y = domain->periodic_boundary_y()?domain->origin().y - domain->cell_size()*glayers:domain->origin().y;
+          double o_z = domain->periodic_boundary_z()?domain->origin().z - domain->cell_size()*glayers:domain->origin().z;
+
+          // end of the box
+          double e_x = domain->periodic_boundary_x()?domain->extent().x + domain->cell_size()*glayers:domain->extent().x;
+          double e_y = domain->periodic_boundary_y()?domain->extent().y + domain->cell_size()*glayers:domain->extent().y;
+          double e_z = domain->periodic_boundary_z()?domain->extent().z + domain->cell_size()*glayers:domain->extent().z;
+
+          Vec3d a1 = xform * Vec3d{o_x, o_y, o_z};
+          Vec3d a2 = xform * Vec3d{e_x, o_y, o_z};
+          Vec3d a3 = xform * Vec3d{e_x, e_y, o_z};
+          Vec3d a4 = xform * Vec3d{o_x, e_y, o_z};
+          Vec3d a5 = xform * Vec3d{o_x, o_y, e_z};
+          Vec3d a6 = xform * Vec3d{e_x, o_y, e_z};
+          Vec3d a7 = xform * Vec3d{e_x, e_y, e_z};
+          Vec3d a8 = xform * Vec3d{o_x, e_y, e_z};
+
+          if(!f.good())
+            {
+              std::ofstream box_vtp;
+              box_vtp.open(box_name);
+              box_vtp << "<?xml version=\"1.0\"?>" << std::endl
+                      << "<VTKFile type=\"PolyData\" version=\"1.0\" byte_order=\"LittleEndian\" >" << std::endl
+                      << vtk_space_offset_two << "<PolyData>" << std::endl
+                      << vtk_space_offset_four << "<Piece NumberOfPoints=\"8\" NumberOfVerts=\"0\" NumberOfLines=\"0\" NumberOfStrips=\"0\" NumberOfPolys=\"6\">" << std::endl
+                      << vtk_space_offset_six << "<Points>" << std::endl
+                      << vtk_space_offset_eight << "<DataArray type=\"Float32\" NumberOfComponents=\"3\" format=\"ascii\">" << std::endl
+                      << vtk_space_offset_ten
+                      << a1.x << " " << a1.y << " " << a1.z << " "
+                      << a2.x << " " << a2.y << " " << a2.z << " "
+                      << a3.x << " " << a3.y << " " << a3.z << " "
+                      << a4.x << " " << a4.y << " " << a4.z << " "
+                      << a5.x << " " << a5.y << " " << a5.z << " "
+                      << a6.x << " " << a6.y << " " << a6.z << " "
+                      << a7.x << " " << a7.y << " " << a7.z << " "
+                      << a8.x << " " << a8.y << " " << a8.z << std::endl
+                      << vtk_space_offset_eight << "</DataArray>" << std::endl
+                      << vtk_space_offset_six << "</Points>" << std::endl
+                      << vtk_space_offset_six << "<Polys>" << std::endl
+                      << vtk_space_offset_eight << "<DataArray type=\"Int32\" Name=\"connectivity\" format=\"ascii\">" << std::endl
+                      << vtk_space_offset_ten << "0 1 2 3 4 5 6 7 0 1 5 4 2 3 7 6 0 4 7 3 1 2 6 5" << std::endl
+                      << vtk_space_offset_eight << "</DataArray>" << std::endl
+                      << vtk_space_offset_eight << "<DataArray type=\"Int32\" Name=\"offsets\" format=\"ascii\"> " << std::endl
+                      << vtk_space_offset_ten << "4 8 12 16 20 24" << std::endl
+                      << vtk_space_offset_eight << "</DataArray>" << std::endl
+                      << vtk_space_offset_six << "</Polys>" << std::endl
+                      << vtk_space_offset_four << "</Piece>" << std::endl
+                      << vtk_space_offset_two << "</PolyData>" << std::endl
+                      << "</VTKFile>" << std::endl;
+
+              box_vtp.close();
+            }
+        }
+      //---------------------------------------------------------------------------------------
+      ldbg << "write END" << std::endl;
+    }
+  };
+
+  // === register factories ===
+  CONSTRUCTOR_FUNCTION
+  {
+    OperatorNodeFactory::instance()->register_factory( "write_vtk",make_grid_variant_operator<VtkMechanicalWriter>);
+  }
+
+}

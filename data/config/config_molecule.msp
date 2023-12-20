@@ -1,0 +1,23 @@
+# specific operations needed for molecules when particles move from cell to cell (and processor to processor)
++parallel_update_particles:
+  - id_map
+  - mol_extract_connectivity
+  - reorganize_molecule_improper
+  - intramolecular_pair_weight
+  - mol_optimize_connectivity
+
+# if user doesn't overload molecule_pair_weight, does nothing
+intramolecular_pair_weight: nop
+
+# Native ExaNB dump format for rigid molecules
+dump_data_molecule:
+  - timestep_file: "molecule_%09d.MpiIO"
+  - message: { mesg: "Write dump " , endl: false }
+  - print_dump_file:
+      rebind: { mesg: filename }
+      body:
+        - message: { endl: true }
+  - write_dump_molecule
+
+dump_data: dump_data_molecule
+

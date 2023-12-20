@@ -1,0 +1,61 @@
+# Notes
+# - you need to compile ParaView with the same compile chain than ExaStamp, and check the 'INSTALL_DEVELOPMENT_FILES' option.
+# - Qt >= 5.4 is needed for QOpenGLWindow
+
+
+# Compilation scenario for CentOs 7.6
+
+export PATH=/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/gcc-7.2.0/bin:/usr/cea/ssh/bin:/usr/cea/krb/bin:/usr/lib/jvm/java/bin:/bin:/usr/bin:/sbin:/usr/sbin:/usr/local/sr/bin:/usr/local/libre/bin:/usr/lib64/mpich/bin
+export LD_LIBRARY_PATH=/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/gcc-7.2.0/lib64
+
+/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/cmake-3.11.4/bin/ccmake \
+	-DCMAKE_CXX_COMPILER=/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/gcc-7.2.0/bin/g++ \
+	-DCMAKE_C_COMPILER=/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/gcc-7.2.0/bin/gcc \
+	-DOpenGL_GL_PREFERENCE=LEGACY \
+	-DCMAKE_MODULE_LINKER_FLAGS=-Wl,-rpath,/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/gcc-7.2.0/lib64 \
+	-DCMAKE_INSTALL_PREFIX=/cea/home/materio/materio/exaStamp-release/tools/paraview-centos7 \
+	-DCMAKE_BUILD_TYPE=Release \
+	-DPARAVIEW_ENABLE_CATALYST=OFF \
+	-DPARAVIEW_USE_VTKM=OFF \
+	-DPARAVIEW_INSTALL_DEVELOPMENT_FILES=ON \
+	-DPARAVIEW_USE_MPI=ON \
+	-DQt5Core_DIR=/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/qt5/lib/cmake/Qt5Core \
+	-DQt5Gui_DIR=/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/qt5/lib/cmake/Qt5Gui \
+	-DQt5Help_DIR=/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/qt-5.1.1/lib/cmake/Qt5Help \
+	-DQt5Network_DIR=/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/qt5/lib/cmake/Qt5Network \
+	-DQt5Widgets_DIR=/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/qt5/lib/cmake/Qt5Widgets \
+	-DQt5X11Extras_DIR=/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/qt5/lib/cmake/Qt5X11Extras \
+	-DQt5_DIR=/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/qt5/lib/cmake/Qt5 \
+	-DCMAKE_EXE_LINKER_FLAGS="-Wl,-rpath,/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/gcc-7.2.0/lib64 \
+	-DCMAKE_MODULE_LINKER_FLAGS="-Wl,-rpath,/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/gcc-7.2.0/lib64 \
+	-DCMAKE_SHARED_LINKER_FLAGS="-Wl,-rpath,/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/gcc-7.2.0/lib64 \
+	../ParaView-v5.6.0
+
+# compile scenario for RedHat 6
+
+export PATH=/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/gcc-7.2.0/bin:/usr/cea/ssh/bin:/usr/cea/krb/bin:/usr/lib/jvm/java/bin:/bin:/usr/bin:/sbin:/usr/sbin:/usr/local/sr/bin:/usr/local/libre/bin:/usr/lib64/mpich/bin
+export LD_LIBRARY_PATH=/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/gcc-7.2.0/lib64:/usr/lib64/firefox/bundled/lib64
+
+/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/cmake-3.11.4/bin/ccmake \
+        -DCMAKE_CXX_COMPILER=/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/gcc-7.2.0/bin/g++ \
+        -DCMAKE_C_COMPILER=/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/gcc-7.2.0/bin/gcc \
+        -DOpenGL_GL_PREFERENCE=LEGACY \
+        -DCMAKE_MODULE_LINKER_FLAGS=-Wl,-rpath,/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/gcc-7.2.0/lib64 \
+        -DCMAKE_INSTALL_PREFIX=/cea/home/materio/materio/exaStamp-release/tools/paraview-rh6 \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DPARAVIEW_ENABLE_CATALYST=OFF \
+        -DPARAVIEW_USE_VTKM=OFF \
+        -DPARAVIEW_INSTALL_DEVELOPMENT_FILES=ON \
+        -DPARAVIEW_USE_MPI=ON \
+        -DQt5Core_DIR=/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/qt5/lib/cmake/Qt5Core \
+        -DQt5Gui_DIR=/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/qt5/lib/cmake/Qt5Gui \
+        -DQt5Help_DIR=/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/qt-5.1.1/lib/cmake/Qt5Help \
+        -DQt5Network_DIR=/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/qt5/lib/cmake/Qt5Network \
+        -DQt5Widgets_DIR=/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/qt5/lib/cmake/Qt5Widgets \
+        -DQt5X11Extras_DIR=/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/qt5/lib/cmake/Qt5X11Extras \
+        -DQt5_DIR=/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/qt5/lib/cmake/Qt5 \
+        -DCMAKE_EXE_LINKER_FLAGS="-Wl,-rpath,/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/gcc-7.2.0/lib64 -Wl,-rpath,/usr/lib64/firefox/bundled/lib64" \
+        -DCMAKE_MODULE_LINKER_FLAGS="-Wl,-rpath,/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/gcc-7.2.0/lib64 -Wl,-rpath,/usr/lib64/firefox/bundled/lib64" \
+        -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-rpath,/cea/home/pmcdev/pmcdev/RedHat-6-x86_64/gcc-7.2.0/lib64 -Wl,-rpath,/usr/lib64/firefox/bundled/lib64" \
+        ../ParaView-v5.6.0
+

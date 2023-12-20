@@ -1,0 +1,44 @@
+# override parameters with user file :
+# ------------------------------------
+
+includes: [ stampv4_to_rigidmol_dump.msp ]
+
+# Domain properties (some will be overwritten by data reader)
+domain:
+  cell_size: 3.120656071797661e+01
+  bounds: [ [-3.744787286157193e+02,-3.744787286157193e+02,-3.744787286157193e+02] , [3.744787286157193e+02,3.744787286157193e+02,3.744787286157193e+02] ]
+  periodic: [ false , false , false ]
+  expandable: true
+
+# Species description
+species:
+  - H:
+      mass: 1.007000000000000e+00
+      z: 1
+      charge: 5.564000000000000e-01
+      molecule: H2O
+  - O:
+      mass: 1.600000000000000e+01
+      z: 8
+      charge: 0.000000000000000e+00
+      molecule: H2O
+  - M:
+      mass: 0.000000000000000e+00
+      z: 0
+      charge: -1.112800000000000e+00
+      molecule: H2O
+  - H2O:
+      mass: 1.801400000000000e+01
+      z: 0
+      charge: 0.000000000000000e+00
+      radius: 9.185687975082679e-01
+      rigid_molecule:
+        - O: [0.000000000000000e+00,0.000000000000000e+00,0.000000000000000e+00]
+        - H: [7.569503300000000e-01,5.203795092705673e-01,0.000000000000000e+00]
+        - H: [-7.569503300000000e-01,5.203795092705673e-01,0.000000000000000e+00]
+        - M: [1.043629936859198e-18,8.909722927056733e-02,0.000000000000000e+00]
+
+global:
+  input_file: droplet_h2o.StampV4
+  output_file: droplet_h2o.dump
+

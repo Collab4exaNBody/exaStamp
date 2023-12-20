@@ -1,0 +1,11 @@
+configuration:
+  profiling:
+    summary: true
+    memusage_threshold: 1024
+
+simulation:
+  parallel_tasks: true
+  body:
+    - task_c3d_vector_producer
+    - task_c3d_vector_consumer
+

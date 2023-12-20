@@ -1,0 +1,21 @@
+do_init_temperature:
+  - block1:
+      rebind: { value: init_temperature , result: enable_init_temperature }
+      body:
+        - greater_than: { threshold: 0.0 K }
+  - block2:
+      rebind: { value: scale_temperature , result: enable_scale_temperature }
+      body:
+        - greater_than: { threshold: 0.0 K }
+  - block3:
+      condition: enable_init_temperature
+      rebind: { temperature: init_temperature }
+      body:
+        - gaussian_noise_v
+        - init_temperature
+  - block4:
+      condition: enable_scale_temperature
+      rebind: { temperature: scale_temperature }
+      body:
+        - init_temperature
+

@@ -1,0 +1,69 @@
+# no-seq
+includes:
+  - config_molecule.msp
+  - PB.cfg
+
+# user-defined atomic/molecular structure
+input_data:
+  - read_stamp_v4:
+      file: molstampv4_PB_small.mpio
+      bounds_mode: FILE
+
+# user-defined domain data
+domain:
+  grid_dims: [2,2,2]
+  periodic: [true,true,true]
+
+# user-specified global values
+global:
+  dt: 0.1 fs
+  rcut_inc: 0.3 ang   # additional distance so that we don't have to rebuild neighbor list each time step
+  simulation_end_iteration: 10
+  simulation_log_frequency: 1
+  simulation_dump_frequency: 5
+  timestep: 0
+
+# user-specified force components
+compute_force:
+  - compute_extramolecular_forces
+  - compute_intramolecular_forces
+
+
+# user-specified dump data
+dump_data: nop
+#dump_data:
+#  - timestep_file: "molstampv4_%05d.mpio"
+#  - message: { mesg: "dump data to " , endl: false }
+#  - print_dump_file:
+#      rebind: { mesg: file }
+#      body:
+#        - message: { endl: true }
+#  - write_stamp_v4: dump.mpio
+
+# user-specified actions for end-of-simulation
+# ecriture/relecture de la protection generee pour validation
+simulation_epilog:
+   - message: "\n\n*****************************\n** Writing final prot file **\n*****************************\n"
+   - write_stamp_v4: molstampv4_FINAL.mpio
+   - message: "\n\n*****************************\n** Reading final prot file **\n*****************************\n"
+   - read_stamp_v4:
+      file: molstampv4_FINAL.mpio
+   - check_values:
+      file: molstampv4_PB_RF_small.dat
+      samples: 10
+      acc_threshold: 1.0e-11
+      pos_threshold: 1.0e-11
+
+##############################################################################"
+##############################################################################"
+##############################################################################"
+# user-specified grid content
+grid_flavor: grid_flavor_full
+
+# some user-specified configuration parameters
+configuration:
+  debug:
+    plugins: false
+    config: false
+    graph: false
+

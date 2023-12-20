@@ -1,0 +1,10 @@
+
+# Creation des deux outils :
+mpicxx -c  StampV3LegacyIOStructures.cpp
+mpicxx -o xyz2legacy xyz2legacy.cpp StampV3LegacyIOStructures.o
+mpicxx -o readDumpStampV3 readDumpStampV3.cpp StampV3LegacyIOStructures.o
+
+# Le code ./xyz2legacy lit le fichier conf_liquide_Ge.xyz et genere le fichier ExaStampDataBase.MpiIO
+
+# Le code  ./readDumpStampV3 affiche une partie de la base ExaStampDataBase.MpiIO
+

@@ -1,0 +1,8 @@
+Dans stamp pour les types atomiques on définit un nom "utilisateur", qui peut être personnalisé donc, et un nom format XYZ (regarde tous les cas tests "molecule flexible", fichier Fatomes, lu dans la routine src/ConditionsInitiales/LectureFichierAtomes.c).
+Par défaut le 2ème est égal au premier, mais si on spécifie c'est cette deuxième valeur qui prend le dessus.
+C'est pratique pour définir de façon différenciée plusieurs atomes de type chimique équivalent (surtout avec les champs de force où plusieurs atomes de même type peuvent utiliser des fonctions de forces ou des paramètres différents).
+(en réalité on a aussi une entrée nomFF pour les types de champ de force, mais ça n'apporte rien à la discussion).
+
+L'autre option
+serait d'imposer que les 2 premiers caractères du type correspondent à un type chimique standard, avec une extension non lue à l'écriture des fichiers de visualisation (séparée par un - ou _ par exemple).
+

@@ -1,0 +1,160 @@
+# enable-if-EXASTAMP_BUILD_LCHBOP
+includes: []
+
+## Careful : order is important
+configuration:
+  +plugins:
+    - microStampLCHBOP
+  logging:
+    parallel: false
+    profiling: false
+    debug: false
+#  debug:
+#    filter: [ ".*\\.update_force_energy_from_ghost" , ".*\\.ghost_comm_scheme" ]
+  profiling:
+    operator: false
+    operator_exectime: false
+    operator_summary: true
+  debug:
+    plugins: false
+    config: false
+    graph: true
+    graph_lod: 0
+
+global:
+  dt: 1.0e-4 ps
+  rcut_max: 8.4 ang
+  rcut_inc: 1.0 ang    # additional distance so that we don't have to rebuild neighbor list each time step
+  ghost_dist: 8.4 ang 
+  timestep: 0
+  simulation_end_iteration: 10000
+  simulation_log_frequency: 100
+  simulation_dump_frequency: 100000
+#  simulation_end_iteration: 1000
+#  simulation_log_frequency: 10
+#  simulation_dump_frequency: 10000
+  init_temperature: 0 K
+#  internal_units: true
+
+update_particle_neighbors: nop
+
+dump_data_if_triggered:
+  condition: trigger_dump_data
+  body:
+#    - cleanup_before_dump
+    - dump_data
+
+final_dump:
+    - cleanup_before_dump
+    - dump_data_stamp_v3
+
+#cleanup_before_dump: nop
+
+# atoms descriptions
+species:
+  - C:
+     z: 12
+     mass: 12.0107 Da
+     charge: 0.0 e-
+  - H:
+     z: 1
+     mass: 1.00794 Da
+     charge: -0.4680 e-
+
+LCHBOP_inits:
+  flag_vmr: true
+  NPT: false
+#  nbclist
+#   parameters
+#   LCHBOP_rc_perf         : [8e-10, 1.2e-10] 
+#   LCHBOP_rc: 8e-10 ang
+# atoms descriptions
+
+grid_flavor: grid_flavor_full
+
+input_data:
+  - read_xyz_file:
+#     bounds_mode: DOMAIN     # input in .msp file (bounds)
+     bounds_mode: FILE       # read from file
+#     bounds_mode: COMPUTED   # computed from atomic positions
+     file: CH216.xyz
+#     file: C216.xyz
+#     file: C216bug.xyz
+#     file: C2724.xyz
+#     file: C128_x.xyz
+#     file: C128_y.xyz
+#     file: C128_z.xyz
+#     file: C256.xyz
+#     file: C512.xyz
+#     file: C512bug.xyz
+#     file: C512vir.xyz
+#     file: Grn1008.xyz
+#     resize_factor: 0.0025381
+  - replicate_domain: [ 1 , 1 , 1 ]
+  - LCHBOP_inits
+
+domain:
+#   periodic: [false,false,false]
+   periodic: [true,true,true]
+#  grid_dims: [1,1,1]
+#  bounds: [ [0., 0., 0.] , [ 30.994289180000003, 30.994289180000003, 30.994289180000003 ] ]
+#  bounds: [ [0., 0., 0.] , [ 13.283266791429, 13.283266791429, 13.283266791429 ] ]
+   cell_size: 10.4660790 ang        # change for less updates
+#   cell_size: 2.2 ang
+#   cell_size: 2.21387779858 ang
+#   cell_size: 2.2138777985714286 ang
+
+dump_data:
+  - write_xyz_file
+#  - write_vtk: {is_binary: false}
+#  - copy_grid
+#  - restore_ghost_r0:
+#      rebind: { grid: grid_copy }
+#      body:
+#        - backup_r_lt_move_data
+#        - restore_r_lt
+#        - ghost_update_r
+#  - write_xyz_with_r0:
+#      rebind: { grid_t0 : grid_copy }
+#      body:
+#      - write_xyz_file:
+#         rcutdef: 2.20 ang
+#         lattice: [[10.4660790, 0.0, 0.0],
+#         	   [0.0,10.4660790 , 0.0],
+#                   [0.0, 0.0,10.4660790 ]]
+
+#init_rcut_max: nbh_dist        # change for less updates
+init_rcut_max:
+  - nbh_dist: { verbose : true }
+
++parallel_update_particles:
+  - cell_owner_rank
+  - LCHBOP_InitEF        # change for less updates
+
+compute_force:
+#  - grid_passthru
+#  - cell_owner_rank
+#  - LCHBOP_InitEF        # change for less updates
+  - LCHBOP_EF
+  - update_force_energy_from_ghost
+#  - langevin_thermostat: 
+#      gamma: 1.e11 1/s
+#      T: 3000 K
+#  - langevin_thermostat: { gamma: 1.e11 1/s , T: 3000 K }
+
+preinit_rcut_max:
+  profiling: false
+  rebind: { grid: null_grid, chunk_neighbors: null_neighbors, domain: empty_domain }
+  body:
+    - domain:
+        cell_size: 0.0 ang
+        grid_dims: [ 0 , 0 , 0 ]
+#    - nbh_dist                            # change for less updates
+    - nbh_dist: { verbose : true }        # change for less updates
+
+#compute_loop_prolog:
+#  - grid_passthru
+#  - grid_stats
+
+
+

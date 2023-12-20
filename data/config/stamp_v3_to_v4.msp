@@ -1,0 +1,41 @@
+# Usage, overrriding input file name
+# [run command] ./exaStamp stamp_v3_to_v4.msp --set-global-inputfile input.StampV3 --set-global-outputfile output.StampV4 --set-species "[ { H: { mass: 1.6605401867e-27 kg , z: 1 , charge: 1 e- } } , { Elect: { mass: 9.1093897540e-31 kg , z: 2 , charge: -1. e- } } ]"
+
+domain:
+  cell_size: 40.0 ang
+  periodic: [ false , false , false ]
+
+global:
+  dt: 1.0 ps
+  ghost_dist: 1.0 ang
+  inputfile: input.StampV3
+  outputfile: output.StampV4
+
+compute_force: nop
+
+simulation:
+  - mpi_comm_world
+  - grid_flavor_multimat
+  - global
+  - domain
+  - generate_default_species
+  - read_input_file:
+      rebind: { file: inputfile }
+      body:
+        - read_stamp_v3:
+            bounds_mode: FILE
+  - reduce_species
+  - simple_cost_model: { ccost: 1.0 , pdens: 4.0 , pdens2:0.0 , pdens3:0.003 }
+  - load_balance_rcb
+  - migrate_cell_particles
+  - ghost_comm_scheme
+  - ghost_update_all
+  - simulation_thermodynamic_state
+  - print_thermodynamic_state
+  - grid_stats
+  - write_output_file:
+      rebind: { filename: outputfile }
+      body:
+        - write_stamp_v4:
+            gen_user_input: true
+

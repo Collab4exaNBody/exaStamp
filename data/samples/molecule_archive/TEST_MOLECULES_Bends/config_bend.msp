@@ -1,0 +1,162 @@
+# Careful : order is important
++plugins:
+  - bond
+  - bend
+  - lennard_jones
+  - exp6
+  - reaction_field
+  - microStampIO
+  - microStampMpi
+  - microStampDebug
+  - microStampCompute
+  - microStampMolecule
+
+
+logging:
+  debug: false
+  profiling: false
+
+debug:
+  operator: false
+  plugins: false
+  config: true
+  graph: false
+  graph_lod: 3
+
+# default global values
+global:
+  dt: 1.0e-4 ps
+  rcut_max: 12.5 ang
+  rcut_inc: 0.3 ang   # additional distance so that we don't have to rebuild neighbor list each time step
+  compute_loop_continue: true
+  simulation_end_iteration: 1000
+  simulation_log_frequency: 1
+  timestep: 0
+
+
+# atoms descriptions
+species:
+  - A:
+     z: 12
+     mass: 12.0107 Da
+     charge: 0.34068 e-
+  - B:
+     z: 12
+     mass: 12.0107 Da
+     charge: -0.2430 e-
+
+_: # potential parameters, can be part of an external data base
+##################################################################
+######################  BOND INTERACTIONS  #######################
+##################################################################
+  - &bond_A_B
+        types: [A, B]
+        potential: harm_bond
+        parameters:
+           r0: 1.0 ang
+           k: 500 kcal/mol/ang^2
+  - &bend_A_B_A
+        types: [A, B, A]
+        potential: harm_bend
+        parameters:
+           theta0: 80 degree
+           k: 63 kcal/mol
+
+compute_LCHBOP:
+     rmin_r1c_range: [[1,2,3],[4,5,-]]
+     param2:
+
+
+
+
+compute_force_bond:
+      virial: false
+      potentials:
+         - *bond_A_B
+
+compute_force_bend:
+      virial: false
+      potentials_for_angles:
+         - *bend_A_B_A
+
+
+grid_flavor: grid_flavor_full
+
+
+input_data_xyz:
+  - read_xyz_file:
+     file: /home/chivotg/dev/C++/project/exaSTAMPCesimat/tools/microStamp/data/TEST_MOLECULES_Bends/chaine3.xyz
+
+domain:
+  #grid_dims: [1,1,1]
+  cell_size: 12.5 ang
+#  periodic: [true,true,true]
+
+connectivity:
+   connectivity_file: /home/chivotg/dev/C++/project/exaSTAMPCesimat/tools/microStamp/data/TEST_MOLECULES_Bends/connectivity.yml
+
+
+# define actions to initialize particles at startup, just after file read
+init_particles:
+  - load_balance
+  - migrate_cell_particles
+  #- replicate_domain: { repeat: [4,4,2] }
+  - load_balance_no_costs
+  - migrate_cell_particles
+  - id_map
+  - rebuild_amr
+  - backup_r
+  - ghost_comm_scheme
+  - ghost_update_all_no_fv
+  - update_particle_neighbors
+
+
+
+# define the verlet numerical scheme
+numerical_scheme_verlet:
+  body:
+    - push_position_2nd_order: { dt_scale: 1.0 }
+    - push_velocity_1st_order: { dt_scale: 0.5 }
+    - ghost_update_rv
+    - zero_force_energy
+    - compute_force_bond
+    - compute_force_bend
+    #- langevin_thermostat: {gamma : 1, T: 0.0000001}
+    - push_velocity_1st_order: { dt_scale: 0.5 }
+
+simulation:
+
+  - global
+  - domain
+  - grid_flavor
+  - species
+  - input_data_xyz
+  - init_particles
+  - zero_force_energy
+  # - compute_force_total
+  - init_molecule_from_yaml
+  - compute_force_bond
+  - compute_force_bend
+  - message: "--- Initialization done ---"
+
+  - compute_loop:
+      loop: true
+      condition: compute_loop_continue
+      name: "*** Compute loop ***"
+      body:
+        - update_particles
+        - numerical_scheme_verlet
+        - write_vtk: {is_binary: false}
+        - end_iteration
+        - compute_loop_stop
+
+
+init_molecule_from_yaml:
+  - connectivity
+  #- connectivity_debug
+  - set_connectivity
+  #- read_connectivity_debug
+  - id_map
+  - set_molecules_id
+  - ghost_update_idmol
+  - correct_molecules_id

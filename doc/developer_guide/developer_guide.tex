@@ -1,0 +1,98 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage{geometry}
+\geometry{total={210mm,297mm},
+left=20mm,right=20mm,top=20mm,bottom=20mm}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb}
+\usepackage{xcolor}
+\usepackage{siunitx}
+\usepackage{lineno}
+\usepackage{cite}
+\usepackage{stfloats}
+\usepackage{subcaption}
+\usepackage{avant}
+\usepackage{hyperref}
+\hypersetup{
+  colorlinks,
+  citecolor=black,
+  filecolor=black,
+  linkcolor=blue,
+  urlcolor=black
+}
+\renewcommand\familydefault{\sfdefault}
+\hypersetup{linktocpage}
+
+\usepackage{longtable}
+
+%\usepackage[french]{babel}
+\usepackage[english]{babel}
+\usepackage[T1]{fontenc}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+
+\newcommand{\T}[1]{\boldsymbol{#1}}
+\newcommand{\TT}[1]{\boldsymbol{#1}}
+\newcommand{\TTTT}[1]{\underline{\boldsymbol{#1}}}
+
+\usepackage[square,sort&compress,comma,numbers]{natbib}
+\input{setup.tex}
+
+\usepackage{setspace}
+%\doublespacing
+
+\begin{document}
+
+\begin{titlepage}
+  \hfill \Large \,
+  
+  \vspace*{5cm}
+  
+  \begin{figure}[!h]
+    \centering
+    \includegraphics[width=1.\textwidth]{fig/xstampv2.png} \\
+    \vspace{1cm}
+    \includegraphics[width=0.85\textwidth]{fig/img_title.png}    
+  \end{figure}  
+
+  \centering \Large \textbf{Contributors:}
+
+  \begin{center}
+    \normalsize
+    T. Carrard, L. Colombet, G. Chivot, O. Durand, C. Lemarchand, P. Lafourcade, J.-B. Maillet, N. Pineau, R. Prat, L. Soulard \\ \textit{add contributors}
+  \end{center}
+
+  \vfill
+
+  \centering \Large CEA, DAM, DIF \\
+  \centering \Large F-91297 Arpajon, France  
+\end{titlepage}
+
+\newpage
+
+\tableofcontents
+
+\newpage
+
+\newcommand{\currentdir}{01_introduction}
+\input{\currentdir/introduction.tex}
+
+\renewcommand{\currentdir}{02_git}
+\input{\currentdir/git.tex}
+
+\renewcommand{\currentdir}{03_operators}
+\input{\currentdir/operators.tex}
+
+\renewcommand{\currentdir}{04_coding_standards}
+\input{\currentdir/coding_standards.tex}
+
+\renewcommand{\currentdir}{05_grid_cell_values}
+\input{\currentdir/grid_cell_values.tex}
+
+\bibliographystyle{unsrt}
+\bibliography{biblio/biblio.bib}
+
+\end{document}

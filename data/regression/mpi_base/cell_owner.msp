@@ -1,0 +1,33 @@
+# no-seq
+
+configuration:
+  logging:
+    parallel: true
+    debug: true
+
+# atoms descriptions
+species:
+  - Copper:
+      mass: 105.486E-27 kg
+      z: 29
+      charge: 0 e-
+
+grid_flavor: grid_flavor_full
+
+input_data:
+  - read_stamp_v3:
+      file: small_lattice.mpio
+      bounds_mode: FILE
+
+domain:
+  grid_dims: [3,3,3]
+  periodic: [true,true,true]
+
+global:
+  simulation_end_iteration: 2
+  simulation_log_frequency: 1
+  rcut_max: 1.28 ang
+
+compute_force:
+  - cell_owner_rank
+

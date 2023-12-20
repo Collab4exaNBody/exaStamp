@@ -1,0 +1,124 @@
+#
+# Potentiel TIP4P/2005 - J.L.F. Abascal and C. Vega, J. Chem. Phys. 123, 234505 (2005)
+#
+
+# enable-if-XSTAMP_BUILD_PAIR_zero enable-if-XSTAMP_BUILD_PAIR_lennard_jones
+includes:
+  - config_rigidmol.msp
+  - h2o_molecule.inc
+
+configuration:
+  onika:
+    gpu_sm_mult: 6
+    gpu_block_size: 256
+  profiling:
+    summary: true
+  logging:
+    debug: false
+  debug:
+    filter: [".*wall"]
+#    filter: [".*write_stamp_v4",".*read_stamp_v4",".*species"]
+
+# define potential we'll reuse later
+compute_force_rf:
+  - compute_force_pair_rigidmol:
+      potentials:
+        - { type_a: O , type_b: O , potential: reaction_field , rcut: 8 ang , parameters: { epsilon: 100 , rc: 8 ang } }
+        - { type_a: O , type_b: M , potential: reaction_field , rcut: 8 ang , parameters: { epsilon: 100 , rc: 8 ang } }
+        - { type_a: O , type_b: H , potential: reaction_field , rcut: 8 ang , parameters: { epsilon: 100 , rc: 8 ang } }
+        - { type_a: H , type_b: M , potential: reaction_field , rcut: 8 ang , parameters: { epsilon: 100 , rc: 8 ang } }
+        - { type_a: M , type_b: M , potential: reaction_field , rcut: 8 ang , parameters: { epsilon: 100 , rc: 8 ang } }
+        - { type_a: H , type_b: H , potential: reaction_field , rcut: 8 ang , parameters: { epsilon: 100 , rc: 8 ang } }
+
+compute_force_lj:
+  - compute_force_pair_rigidmol:
+      potentials:
+        - { type_a: O , type_b: O , potential: lj , rcut: 8.0 ang , parameters: { epsilon: 1.286776984E-21 J , sigma: 0.31589E-09 m } }
+
+compute_force_ljrf:
+  - compute_force_pair_rigidmol:
+      potentials:
+        - { type_a: O , type_b: O , potential: ljrf , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } , lj_rcut: 8 ang , lj: { epsilon: 1.286776984E-21 J , sigma: 0.31589E-09 m } } }
+        - { type_a: O , type_b: M , potential: ljrf , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
+        - { type_a: O , type_b: H , potential: ljrf , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
+        - { type_a: H , type_b: M , potential: ljrf , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
+        - { type_a: M , type_b: M , potential: ljrf , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
+        - { type_a: H , type_b: H , potential: ljrf , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
+
+ljrf_rigidmol_force:
+  type: H2O
+  rcut: 8 ang
+  parameters:
+    - { type_a: O , type_b: O , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } , lj_rcut: 8 ang , lj: { epsilon: 1.286776984E-21 J , sigma: 0.31589E-09 m } } }
+    - { type_a: O , type_b: M , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: O , type_b: H , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: H , type_b: M , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: M , type_b: M , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: H , type_b: H , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
+
+compute_force: 
+#  - compute_force_rf
+#  - compute_force_lj
+#  - compute_force_ljrf
+  - ljrf_rigidmol_force
+  - wall_v2:
+      normal: [ 1.0, 0.0, 0.0 ]
+      offset: -360.0 ang
+      cutoff: 2.4 ang
+      epsilon: 1.0e-19 J
+      exponent: 2
+#      collective_stats: true
+
+grid_flavor: grid_flavor_rigidmol
+
+input_data:
+  - read_stamp_v4:
+      file: dropletH2O.StampV4
+      bounds_mode: FILE
+      enable_xform_scale: true
+#  - shift_v: [ 900 m/s , 0 , 0 ]
+
+#+first_iteration:
+#  - grid_stats
+
+domain:
+  periodic: [false,false,false]
+  cell_size: 30 ang
+  expandable: true
+
+chunk_neighbors:
+  config: { free_scratch_memory: false , shrink_stream_to_fit: false , build_particle_offset: true }
+  chunk_size: 8
+
+global:
+  dt: 5.0e-4 ps
+#  init_temperature: 280 K
+  simulation_end_iteration: 9000
+  simulation_log_frequency: 10
+#  simulation_dump_frequency: 200
+
+#thermostat:
+#  - langevin_rigidmol:
+#      T: 320 K
+#      friction : 5.0e1
+#      friction_ratio : 1.
+
+#write_stamp_v4:
+#  max_file_size: 67108864 # 128Mb file parts
+
+# this forces full update every time step
+#particle_displ_over:
+#  threshold: 0.0
+
+dump_data:
+  - write_dump_rigidmol:
+      filename: droplet_h2o.dump
+      compressionLevel: 9
+
+final_dump: nop
+
+xxx_simulation_epilog:
+  - check_values:
+      file: mydroplet.dat
+      threshold: 4.e-10
+

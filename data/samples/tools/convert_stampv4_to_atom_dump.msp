@@ -1,0 +1,24 @@
+# override parameters with user file :
+# ------------------------------------
+
+includes: [ stampv4_to_atom_dump.msp ]
+
+domain:
+  cell_size: 80.0 ang
+  periodic: [ true , true , true ]
+
+species:
+  - H:
+      mass: 1.6605401867e-27 kg
+      z: 1
+      charge: 1. e-
+  - Elect:
+      mass: 9.1093897540e-31 kg
+      z: 2
+      charge: -1. e-
+
+global:
+  inputfile: plasma.StampV4
+  outputfile: atoms.dump
+
+

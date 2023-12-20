@@ -1,0 +1,100 @@
+# no-seq
+includes:
+  - config_molecule.msp
+
+# default global values
+global:
+  dt: 0.1 fs
+  rcut_inc: 0.3 ang   # additional distance so that we don't have to rebuild neighbor list each time step
+  compute_loop_continue: true
+  simulation_end_iteration: 40
+  simulation_log_frequency: 1
+  simulation_dump_frequency: 10
+  timestep: 0
+
+# atoms descriptions
+species:
+  - C:
+     z: 12
+     mass: 12 Da
+     charge: 0 e-
+     molecule: OPLS
+
+_: # potential parameters, can be part of an external data base
+############################################################################
+######################  INTRAMOLECULAR INTERACTIONS  #######################
+############################################################################
+  - &bond_C_C
+        types: [C, C]
+        potential: quar_bond
+        parameters:
+           r0: 1.4 ang
+           k2:  100 kcal/mol/ang^2
+           k3: -100 kcal/mol/ang^3
+           k4:  100 kcal/mol/ang^4
+
+######################################################################
+######################  EXP6 INTERACTIONS      #######################
+######################################################################
+  - &lj_C_C
+      type_a: C
+      type_b: C
+      potential: lj
+      rcut: 6.75 ang
+      parameters:
+         - epsilon: 2.0E-24 J
+         - sigma: 2.7E-10 m
+
+compute_force_bond:
+  potentials_for_bonds:
+     - *bond_C_C
+
+reaction_field_compute_force_symetric:
+  enable_pair_weights: false
+  rcut: 12.5 ang
+  parameters:
+    epsilon: 80 
+    rc: 12.5 ang
+
+lj_compute_force_symetric:
+  parameters :
+    epsilon: 2.0e-24 J
+    sigma: 2.7e-10 m
+  rcut: 6.75 ang
+
+compute_force:
+  - lj_compute_force_symetric
+  - reaction_field_compute_force_symetric
+  - compute_force_bond
+
+grid_flavor: grid_flavor_full
+
+input_data:
+  - read_xyz_file:
+      file: bonds_test_value.xyz
+      bounds_mode: COMPUTED
+      enlarge_bounds: 10.0 ang
+  - mol_read_connectivity:
+     filename: bonds_test_con.yml
+  - init_particles
+  - set_molecules_id
+  - correct_molecules_id
+
+intramolecular_pair_weight: molecule_pair_weight
+
+domain:
+  grid_dims: [4,4,4]
+  periodic: [false,false,false]
+
+dump_data:
+  - write_vtk:
+      is_binary: true
+      compression: default
+      is_box: true
+      is_ghosts: false
+      is_external_box: true
+
+molecule_pair_weight:
+  weight:
+    OPLS: [0.5, 0.5, 0.0]
+

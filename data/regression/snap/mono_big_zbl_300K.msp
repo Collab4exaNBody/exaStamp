@@ -1,0 +1,71 @@
+# no-seq
+
+# performances should be : between 6.20e5 and 6.35e5 for snap_force time in loop block
+# with -pv100 -N1 -n4 -c12
+configuration:
+  profiling:
+    summary: true
+  logging:
+    debug: false
+  debug:
+    filter: [ ".*snap_force" ]
+
+snap_force:
+  parameters:
+    nt: 2
+    param: "data.snapparam"
+    coef: "data.snapcoeff"
+
+cpu_gpu_load_balance:
+  gpu_cell_particles_threshold: 0
+  cpu_gpu_perf_ratio: 5.0
+
+# atoms descriptions
+species:
+  - Copper:
+      mass: 105.486E-27 kg
+      z: 29
+      charge: 0 e-
+
+grid_flavor: grid_flavor_multimat
+
+input_data:
+  - read_stamp_v3:
+      file: snap_big_mo.mpio
+      bounds_mode: FILE
+
+#init_cuda:
+#  smem_bksize: 4
+
+domain:
+  cell_size: 40.0 ang
+  periodic: [true,true,true]
+
+global:
+  dt: 1.0e-3 ps
+  simulation_end_iteration: 6
+  simulation_log_frequency: 1
+#  simulation_dump_frequency: 1
+
+zbl_compute_force:
+  parameters: { r1: 0.1 ang , rc: 4.615858 ang }
+  rcut: 4.615858 ang
+
+# define potential we'll reuse later
+compute_force:
+  - snap_force
+  - zbl_compute_force
+
++first_iteration:
+  - grid_stats
+  - chunk_neighbors_stats
+
+simulation_epilog:
+  - memory_stats
+  - grid_clear
+
+#simulation_epilog:
+#  - check_values:
+#      file: monomat_snap_zbl_300K_ang.dat
+#      threshold: 1.e-10
+

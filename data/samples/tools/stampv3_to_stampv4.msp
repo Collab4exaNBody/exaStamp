@@ -1,0 +1,36 @@
+includes:
+  - config_species.msp
+
+domain:
+  cell_size: 40.0 ang
+
+global:
+  ghost_dist: 0.0 ang
+#  grid_subdiv: 3
+
+# allows for easy override from commande line
+read_stamp_v3:
+  bounds_mode: FILE
+
+input_mpio_file:
+  - user_source_file:
+      rebind: { text: file }
+      body: [ input_text: { mesg: "input file :\n" } ]
+  - read_stamp_v3
+
+simulation:
+  - mpi_comm_world
+  - grid_flavor_multimat
+  - global
+  - domain
+  - species
+  - input_mpio_file
+  - reduce_species
+  - simple_cost_model: { ccost: 1.0 , pdens: 4.0 , pdens2:0.0 , pdens3:0.003 }
+  - load_balance_rcb
+  - migrate_cell_particles
+  - simulation_thermodynamic_state
+  - print_thermodynamic_state
+  - timestep_file: "atoms_%09d.StampV4"
+  - write_stamp_v4
+

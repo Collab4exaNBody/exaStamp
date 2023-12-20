@@ -1,0 +1,7 @@
+# no-mpi no-mt
+
+simulation:
+  - tabeam_plot:
+      rcut: 7.29 ang
+      parameters: tab_sc.yaml
+

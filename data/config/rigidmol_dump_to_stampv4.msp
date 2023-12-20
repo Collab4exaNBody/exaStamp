@@ -1,0 +1,32 @@
+# override parameters with command line options :
+# -----------------------------------------------
+#
+# exaStamp  rigidmol_dump_to_stampv4.msp --set-global-inputfile rigidmol.dump --set-global-outputfile rigidmol.StampV4
+#
+
+global:
+  ghost_dist: 0.0 ang
+  inputfile: rigidmol.dump
+  outputfile: rigidmol.StampV4
+
+simulation:
+  - mpi_comm_world
+  - grid_flavor_rigidmol
+  - global
+  - domain
+  - species
+  - read_block:
+      rebind: { filename: inputfile }
+      body: [ read_dump_rigidmol ]
+  - reduce_species
+  - simple_cost_model: { ccost: 1.0 , pdens: 4.0 , pdens2:0.0 , pdens3:0.003 }
+  - load_balance_rcb
+  - migrate_cell_particles
+  - simulation_thermodynamic_state
+  - print_thermodynamic_state
+  - write_output_file:
+      rebind: { filename: outputfile }
+      body:
+        - write_stamp_v4:
+            gen_user_input: true
+

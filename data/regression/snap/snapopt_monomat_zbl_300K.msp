@@ -1,0 +1,15 @@
+# no-seq
+
+includes: [ "snaplmp_monomat_zbl_300K.msp" ]
+
+snap_force:
+  parameters:
+    nt: 2
+    param: "Mo_Chen_PRM2017.snapparam"
+    coef: "Mo_Chen_PRM2017.snapcoeff"
+
+# define potential we'll reuse later
+compute_force:
+  - zbl_compute_force
+  - snap_force
+

@@ -1,0 +1,8 @@
+# no-seq
+includes:
+  - default.msp
+
+global:
+  dt: 4.0e-3 ps
+  scale_temperature: 300.0 K
+

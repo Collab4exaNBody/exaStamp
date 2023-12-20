@@ -1,0 +1,167 @@
+configuration:
+    logging:
+        debug: false
+        profiling: false
+
+    debug:
+        operator: false
+        plugins: true
+        config: true
+        graph: true
+        graph_lod: 3
+
+    +plugins:
+      - microStampLogic
+      - microStampCompute
+      - microStampIO
+      - microStampMpi
+      - microStampDebug
+      - microStampPairPotentialForce
+      - microStampDefBox
+      - bond
+      - bend
+      - torsion
+      - improper
+      - null
+      - exp6
+      - lennard_jones
+      - reaction_field
+      - microStampMolecule
+
+
+# default global values
+global:
+  dt: 1.0e-3 ps
+  rcut_max: 12.5 ang
+  rcut_inc: 0.3 ang   # additional distance so that we don't have to rebuild neighbor list each time step
+  compute_loop_continue: true
+  simulation_end_iteration: 10000
+  simulation_log_frequency: 1
+  timestep: 0
+
+
+# atoms descriptions
+species:
+  - A:
+     z: 12
+     mass: 12.0107 Da
+     charge: 0.34068 e-
+  - B:
+     z: 12
+     mass: 12.0107 Da
+     charge: -0.2430 e-
+
+compute_forces:
+  - compute_force_pair:
+      symetric: true
+      virial: false
+      use_xform: false
+      use_weights: false
+      potentials:
+        - type_a: A
+          type_b: B
+          potential: exp6
+          rcut: 12.5 ang
+          parameters:
+            A: 48782.72 kcal/mol
+            B: 3.50555918 1/ang
+            C: 429.97818229 kcal/mol*ang^6
+            D: 5.0e-5 kcal/mol
+        - type_a: A
+          type_b: A
+          potential: exp6
+          rcut: 12.5 ang
+          parameters:
+            A: 48782.72 kcal/mol
+            B: 3.50555918 1/ang
+            C: 429.97818229 kcal/mol*ang^6
+            D: 0 kcal/mol
+        - type_a: B
+          type_b: B
+          potential: exp6
+          rcut: 12.5 ang
+          parameters:
+            A: 48782.72 kcal/mol
+            B: 3.50555918 1/ang
+            C: 429.97818229 kcal/mol*ang^6
+            D: 0 kcal/mol
+
+molecule_pair_weight:
+  weight:
+    TATB: [0.2,0.3,0.4,0.5]
+
+grid_flavor: grid_flavor_full
+
+
+input_data_xyz:
+  - read_xyz_file:
+      file: /home/chivotg/dev/C++/project/exaStamp/data/TEST_INTERACTION_EXP6/chaine3.xyz
+
+domain:
+  grid_dims: [2,2,2]
+  #cell_size: 12.5 ang
+  periodic: [true,true,true]
+
+connectivity:
+   connectivity_file: /home/chivotg/dev/C++/project/exaStamp/data/TEST_MOLECULES_Bonds/connectivity.yml
+
+
+# define actions to initialize particles at startup, just after file read
+init_particles:
+  - load_balance
+  - migrate_cell_particles
+  #- replicate_domain: { repeat: [5,5,5] }
+  - load_balance_no_costs
+  - migrate_cell_particles
+  - rebuild_amr
+  - backup_r
+  - ghost_comm_scheme
+  - ghost_update_all_no_fv
+  - update_particle_neighbors
+
+
+
+# define the verlet numerical scheme
+numerical_scheme_verlet:
+  body:
+    - push_position_2nd_order: { dt_scale: 1.0 }
+    - push_velocity_1st_order: { dt_scale: 0.5 }
+    - ghost_update_r
+    - zero_force_energy
+    - compute_forces
+    #- langevin_thermostat: {gamma : 1, T: 0.0000001}
+    - push_velocity_1st_order: { dt_scale: 0.5 }
+
+write_vtk:
+   is_binary: false
+   compression: default
+   is_box: true
+   is_ghosts: false
+   is_external_box: true
+
+simulation:
+
+  - global
+  - domain
+  - grid_flavor
+  - species
+  - input_data_xyz
+  - nbh_dist
+  - init_particles
+  - zero_force_energy
+  - compute_forces
+  - shift_v : {shift: [1,1,1] }
+  - message: "--- Initialization done ---"
+
+  - compute_loop:
+      loop: true
+      condition: compute_loop_continue
+      name: "*** Compute loop ***"
+      body:
+        - update_particles
+        - write_vtk
+        - numerical_scheme_verlet
+        - end_iteration
+        - compute_loop_stop
+
+

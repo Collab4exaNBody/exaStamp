@@ -1,0 +1,17 @@
+# override parameters with user file :
+# ------------------------------------
+
+includes:
+  - config_molecule.msp
+  - PB.cfg
+  - stampv4_to_molecule_dump.msp
+
+domain:
+  cell_size: 40.0 ang
+  periodic: [ true , true , true ]
+
+global:
+  inputfile: input.StampV4
+  outputfile: molecule.dump
+
+

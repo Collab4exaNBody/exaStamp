@@ -1,0 +1,659 @@
+
+configuration:
+    logging:
+        debug: false
+        profiling: false
+
+    debug:
+        operator: false
+        plugins: true
+        config: true
+        graph: true
+        graph_lod: 3
+    +plugins:
+      - microStampLogic
+      - microStampCompute
+      - microStampIO
+      - microStampMpi
+      - microStampDebug
+      - microStampPairPotentialForce
+      - microStampDefBox
+      - bond
+      - bend
+      - torsion
+      - improper
+      - null
+      - exp6
+      - lennard_jones
+      - reaction_field
+      - microStampMolecule
+
+# default global values
+global:
+  dt: 1.0e-4 ps
+  rcut_max: 12.5 ang
+  rcut_inc: 0.3 ang   # additional distance so that we don't have to rebuild neighbor list each time step
+  compute_loop_continue: true
+  simulation_end_iteration: 50000
+  simulation_log_frequency: 1
+  simulation_dump_frequency: 100000000
+  timestep: 0
+
+# atoms descriptions
+species:
+  - Cno2:
+     z: 12
+     mass: 12.0107 Da
+     charge: 0.34068 e-
+     molecule: TATB
+  - Cnh2:
+     z: 12
+     mass: 12.0107 Da
+     charge: -0.2430 e-
+     molecule: TATB
+  - No2:
+     z: 14
+     mass: 14.0067 Da
+     charge: 0.6798 e-
+     molecule: TATB
+  - Nh2:
+     z: 14
+     mass: 14.0067 Da
+     charge: -0.693 e-
+     molecule: TATB
+  - O_:
+     z: 16
+     mass: 15.999 Da
+     charge: -0.51024 e-
+     molecule: TATB
+  - H_:
+     z: 1
+     mass: 1.00794 Da
+     charge: -0.4680 e-
+     molecule: TATB
+
+_: # potential parameters, can be part of an external data base
+######################################################################
+######################  EXP6 INTERACTIONS TATB #######################
+######################################################################
+  - &exp6_Cno2_Cno2
+      type_a: Cno2
+      type_b: Cno2
+      potential: exp6
+      rcut: 11 ang
+      parameters:
+        A: 107023.9 kcal/mol
+        B: 3.6405 1/ang
+        C: 554.01 kcal/mol*ang^6
+        D: 5.0e-5 kcal/mol
+  - &exp6_Cnh2_Cnh2
+      type_a: Cnh2
+      type_b: Cnh2
+      potential: exp6
+      rcut: 11 ang
+      parameters:
+        A: 107023.9 kcal/mol
+        B: 3.6405 1/ang
+        C: 554.01 kcal/mol*ang^6
+        D: 5.0e-5 kcal/mol
+  - &exp6_No2_No2
+      type_a: No2
+      type_b: No2
+      potential: exp6
+      rcut: 11 ang
+      parameters:
+        A: 13789.9 kcal/mol
+        B: 3.3333 1/ang
+        C: 423.36 kcal/mol*ang^6
+        D: 5.0e-5 kcal/mol
+  - &exp6_Nh2_Nh2
+      type_a: Nh2
+      type_b: Nh2
+      potential: exp6
+      rcut: 11 ang
+      parameters:
+        A: 39091.8 kcal/mol
+        B: 3.3158 1/ang
+        C: 833.48 kcal/mol*ang^6
+        D: 5.0e-5 kcal/mol
+  - &exp6_O_O
+      type_a: O_
+      type_b: O_
+      potential: exp6
+      rcut: 11 ang
+      parameters:
+        A: 15923.1 kcal/mol
+        B: 3.6446 1/ang
+        C: 239.07 kcal/mol*ang^6
+        D: 5.0e-5 kcal/mol
+  - &exp6_H_H
+      type_a: H_
+      type_b: H_
+      potential: exp6
+      rcut: 11 ang
+      parameters:
+        A: 7584.2 kcal/mol
+        B: 5.2846 1/ang
+        C: 8.23 kcal/mol*ang^6
+        D: 5.0e-5 kcal/mol
+  - &exp6_Cno2_Cnh2
+      type_a: Cno2
+      type_b: Cnh2
+      potential: exp6
+      rcut: 12.5 ang
+      parameters:
+        A: 107023.9 kcal/mol
+        B: 3.6405 1/ang
+        C: 554.01 kcal/mol*ang^6
+        D: 5.0e-5 kcal/mol
+  - &exp6_Cno2_No2
+      type_a: Cno2
+      type_b: No2
+      potential: exp6
+      rcut: 12.5 ang
+      parameters:
+        A: 37111.29 kcal/mol
+        B: 3.46350030 1/ang
+        C: 484.2991571 kcal/mol*ang^6
+        D: 5.0e-5 kcal/mol
+  - &exp6_Cno2_Nh2
+      type_a: Cno2
+      type_b: Nh2
+      potential: exp6
+      rcut: 12.5 ang
+      parameters:
+        A: 62222.18 kcal/mol
+        B: 3.45198059 1/ang
+        C: 679.5264931 kcal/mol*ang^6
+        D: 5.0e-5 kcal/mol
+  - &exp6_Cno2_O
+      type_a: Cno2
+      type_b: O_
+      potential: exp6
+      rcut: 12.5 ang
+      parameters:
+        A: 41281.14 kcal/mol
+        B: 3.64254596 1/ang
+        C: 363.9329206 kcal/mol*ang^6
+        D: 5.0e-5 kcal/mol
+  - &exp6_Cno2_H
+      type_a: Cno2
+      type_b: H_
+      potential: exp6
+      rcut: 12.5 ang
+      parameters:
+        A: 16829.52 kcal/mol
+        B: 4.01774768 1/ang
+        C: 67.52408681 kcal/mol*ang^6
+        D: 5.0e-5 kcal/mol
+  - &exp6_Cnh2_No2
+      type_a: Cnh2
+      type_b: No2
+      potential: exp6
+      rcut: 12.5 ang
+      parameters:
+        A: 37111.29 kcal/mol
+        B: 3.46350030 1/ang
+        C: 484.2991571 kcal/mol*ang^6
+        D: 5.0e-5 kcal/mol
+  - &exp6_Cnh2_Nh2
+      type_a: Cnh2
+      type_b: Nh2
+      potential: exp6
+      rcut: 12.5 ang
+      parameters:
+        A: 62222.18 kcal/mol
+        B: 3.45198059 1/ang
+        C: 679.5264931 kcal/mol*ang^6
+        D: 5.0e-5 kcal/mol
+  - &exp6_Cnh2_O
+      type_a: Cnh2
+      type_b: O_
+      potential: exp6
+      rcut: 12.5 ang
+      parameters:
+        A: 41281.14 kcal/mol
+        B: 3.64254596 1/ang
+        C: 363.9329206 kcal/mol*ang^6
+        D: 5.0e-5 kcal/mol
+  - &exp6_Cnh2_H
+      type_a: Cnh2
+      type_b: H_
+      potential: exp6
+      rcut: 12.5 ang
+      parameters:
+        A: 16829.52 kcal/mol
+        B: 4.01774768 1/ang
+        C: 67.52408681 kcal/mol*ang^6
+        D: 5.0e-5 kcal/mol
+  - &exp6_No2_Nh2
+      type_a: No2
+      type_b: Nh2
+      potential: exp6
+      rcut: 12.5 ang
+      parameters:
+        A: 23215.03 kcal/mol
+        B: 3.32446940 1/ang
+        C: 594.0219632 kcal/mol*ang^6
+        D: 5.0e-5 kcal/mol
+  - &exp6_No2_O
+      type_a: No2
+      type_b: O_
+      potential: exp6
+      rcut: 12.5 ang
+      parameters:
+        A: 14302.04 kcal/mol
+        B: 3.46494293 1/ang
+        C: 318.1393959 kcal/mol*ang^6
+        D: 5.0e-5 kcal/mol
+  - &exp6_No2_H
+      type_a: No2
+      type_b: H_
+      potential: exp6
+      rcut: 12.5 ang
+      parameters:
+        A: 4828.685 kcal/mol
+        B: 3.70361219 1/ang
+        C: 59.02755966 kcal/mol*ang^6
+        D: 5.0e-5 kcal/mol
+  - &exp6_Nh2_O
+      type_a: Nh2
+      type_b: O_
+      potential: exp6
+      rcut: 12.5 ang
+      parameters:
+        A: 23978.15 kcal/mol
+        B: 3.45338993 1/ang
+        C: 446.3855549 kcal/mol*ang^6
+        D: 5.0e-5 kcal/mol
+  - &exp6_Nh2_H
+      type_a: Nh2
+      type_b: H_
+      potential: exp6
+      rcut: 12.5 ang
+      parameters:
+        A: 8017.401 kcal/mol
+        B: 3.68530023 1/ang
+        C: 82.82234240 kcal/mol*ang^6
+        D: 5.0e-5 kcal/mol
+  - &exp6_O_H
+      type_a: O_
+      type_b: H_
+      potential: exp6
+      rcut: 12.5 ang
+      parameters:
+        A: 6509.20 kcal/mol
+        B: 4.02183407 1/ang
+        C: 44.35702988 kcal/mol*ang^6
+        D: 5.0e-5 kcal/mol
+
+
+##################################################################
+######################  BOND INTERACTIONS  #######################
+##################################################################
+  - &bond_CNO2_CNO2
+        types: [Cno2, Cno2]
+        potential: harm_bond
+        parameters:
+           r0: 1.440 ang
+           k: 500 kcal/mol/ang^2
+  - &bond_CNO2_CNH2
+        types: [Cno2, Cnh2]
+        potential: harm_bond
+        parameters:
+           r0: 1.440 ang
+           k: 500 kcal/mol/ang^2
+  - &bond_CNH2_CNH2
+        types : [Cnh2, Cnh2]
+        potential: harm_bond
+        parameters:
+           r0: 1.440 ang
+           k: 500 kcal/mol/ang^2
+  - &bond_CNO2_NO2
+        types: [Cno2, No2]
+        potential: harm_bond
+        parameters:
+           r0: 1.427 ang
+           k: 300 kcal/mol/ang^2
+  - &bond_CNH2_NH2
+        types: [Cnh2, Nh2]
+        potential: harm_bond
+        parameters:
+           r0: 1.322 ang
+           k: 672 kcal/mol/ang^2
+  - &bond_NO2_O
+        types: [No2, O_]
+        potential: harm_bond
+        parameters:
+           r0: 1.23 ang
+           k: 878 kcal/mol/ang^2
+  - &bond_NH2_H
+        types: [Nh2, H_]
+        potential: harm_bond
+        parameters:
+           r0: 1.01 ang
+           k: 850 kcal/mol/ang^2
+
+  - &bend_CNO2_CNH2_CNO2
+       types: [CNO2, CNH2, CNO2]
+       potential: harm_bend
+       parameters:
+           theta0: 118.4 degree
+           k: 64 kcal/mol
+  - &bend_CNH2_CNO2_CNH2
+       types: [CNH2, CNO2, CNH2]
+       potential: harm_bend
+       parameters:
+           theta0: 121.6 degree
+           k: 64 kcal/mol
+  - &bend_CNO2_CNH2_NH2
+       types: [CNO2, CNH2, NH2]
+       potential: harm_bend
+       parameters:
+           theta0: 121.7 degree
+           k: 60 kcal/mol
+  - &bend_CNH2_CNO2_NO2
+       types: [CNH2, CNO2, NO2]
+       potential: harm_bend
+       parameters:
+            theta0: 119.2 degree
+            k: 60 kcal/mol
+  - &bend_CNO2_NO2_O
+       types: [CNO2, NO2, O]
+       potential: harm_bend
+       parameters:
+            theta0: 116.8 degree
+            k: 140 kcal/mol
+  - &bend_CNH2_NH2_H
+       types: [CNH2, NH2, H]
+       potential: harm_bend
+       parameters:
+            theta0: 112.0 degree
+            k: 64 kcal/mol
+  - &bend_O_NO2_O
+       types: [O, NO2, O]
+       potential: harm_bend
+       parameters:
+            theta0: 117.3 degree
+            k: 95 kcal/mol
+  - &bend_H_NH2_H
+       types: [H, NH2, H]
+       potential: harm_bend
+       parameters:
+            theta0: 119.0 degree
+            k: 64 kcal/mol
+
+  - &torsion_CNO2_CNH2_CNO2_CNH2
+       types: [CNO2, CNH2, CNO2, CNH2]
+       potential: cos_two
+       parameters:
+            phi0: 0 degree
+            k: 5.35 kcal/mol
+  - &torsion_CNO2_CNH2_CNO2_NO2
+       types: [CNO2, CNH2, CNO2, NO2]
+       potential: cos_two
+       parameters:
+            phi0: 0 degree
+            k: 20.0 kcal/mol
+  - &torsion_CNH2_CNO2_CNH2_NH2
+       types: [CNH2, CNO2, CNH2, NH2]
+       potential: cos_two
+       parameters:
+            phi0: 0 degree
+            k: 20.0 kcal/mol
+  - &torsion_NH2_CNH2_CNO2_NO2
+       types: [NH2, CNH2, CNO2, NO2]
+       potential: cos_two
+       parameters:
+            phi0: 0 degree
+            k: 20.0 kcal/mol
+  - &torsion_NO2_CNO2_CNH2_NH2
+       types: [NO2, CNO2, CNH2, NH2]
+       potential: cos_two
+       parameters:
+            phi0: 0 degree
+            k: 20.0 kcal/mol
+  - &torsion_H_NH2_CNH2_CNO2
+       types: [H, NH2, CNH2, CNO2]
+       potential: cos_two
+       parameters:
+            phi0: 0 degree
+            k: 8.88 kcal/mol
+  - &torsion_O_NO2_CNO2_CNH2
+       types: [O, NO2, CNO2, CNH2]
+       potential: cos_two
+       parameters:
+            phi0: 0 degree
+            k: 1.60 kcal/mol
+
+  - &improper_CNO2_CNH2_CNH2_NO2
+       types: [CNO2, CNH2, CNH2, NO2]
+       potential: harm_improper
+       parameters:
+            chi0: 0.0 degree
+            k: 36.5 kcal/mol/rad^2
+  - &improper_CNH2_CNO2_CNO2_NH2
+       types: [CNH2, CNO2, CNO2, NH2]
+       potential: harm_improper
+       parameters :
+            chi0: 0.0 degree
+            k: 36.5 kcal/mol/rad^2
+  - &improper_NO2_CNO2_O_O
+       types: [NO2, O, O, CNO2]
+       potential: harm_improper
+       parameters:
+            chi0: 0.0 degree
+            k: 89.3 kcal/mol/rad^2
+  - &improper_NH2_CNH2_H_H
+       types: [NH2, H, H, CNH2]
+       potential: harm_improper
+       parameters:
+            chi0: 0.0 degree
+            k: 2.1 kcal/mol/rad^2
+
+compute_force_bond:
+      virial: false
+      potentials_for_bonds:
+         - *bond_CNO2_CNO2
+         - *bond_CNO2_CNH2
+         - *bond_CNH2_CNH2
+         - *bond_CNO2_NO2
+         - *bond_CNH2_NH2
+         - *bond_NO2_O
+         - *bond_NH2_H
+
+compute_force_bend:
+      virial: false
+      potentials_for_angles:
+         - *bend_CNO2_CNH2_CNO2
+         - *bend_CNH2_CNO2_CNH2
+         - *bend_CNO2_CNH2_NH2
+         - *bend_CNH2_CNO2_NO2
+         - *bend_CNO2_NO2_O
+         - *bend_CNH2_NH2_H
+         - *bend_O_NO2_O
+         - *bend_H_NH2_H
+
+compute_force_torsion:
+      virial: false
+      potentials_for_torsions:
+         - *torsion_CNO2_CNH2_CNO2_CNH2
+         - *torsion_CNO2_CNH2_CNO2_NO2
+         - *torsion_CNH2_CNO2_CNH2_NH2
+         - *torsion_NH2_CNH2_CNO2_NO2
+         - *torsion_NO2_CNO2_CNH2_NH2
+         - *torsion_H_NH2_CNH2_CNO2
+         - *torsion_O_NO2_CNO2_CNH2
+
+compute_force_improper:
+      virial: false
+      potentials_for_impropers:
+         - *improper_CNO2_CNH2_CNH2_NO2
+         - *improper_CNH2_CNO2_CNO2_NH2
+         - *improper_NO2_CNO2_O_O
+         - *improper_NH2_CNH2_H_H
+
+compute_forces_potential:
+  - compute_force_pair:
+      symetric: true
+      virial: false
+      use_xform: true
+      use_weights: true
+      potentials:
+        - *exp6_Cno2_Cno2
+        - *exp6_Cnh2_Cnh2
+        - *exp6_No2_No2
+        - *exp6_Nh2_Nh2
+        - *exp6_O_O
+        - *exp6_H_H
+        - *exp6_Cno2_Cnh2
+        - *exp6_Cno2_No2
+        - *exp6_Cno2_Nh2
+        - *exp6_Cno2_O
+        - *exp6_Cno2_H
+        - *exp6_Cnh2_No2
+        - *exp6_Cnh2_Nh2
+        - *exp6_Cnh2_O
+        - *exp6_Cnh2_H
+        - *exp6_No2_Nh2
+        - *exp6_No2_O
+        - *exp6_No2_H
+        - *exp6_Nh2_O
+        - *exp6_Nh2_H
+        - *exp6_O_H
+
+grid_flavor: grid_flavor_full
+
+
+input_data_xyz:
+  - read_xyz_file:
+     file: /home/chivotg/dev/C++/project/exaStamp/data/TEST_MOLECULES_TATB_Ghosts/chaine3.xyz
+     #resize_factor: 2.0
+
+domain:
+  grid_dims: [1,1,1]
+  #cell_size: 12.5 ang
+  periodic: [true,true,true]
+
+connectivity:
+    connectivity_file: /home/chivotg/dev/C++/project/exaStamp/data/TEST_MOLECULES_TATB_Ghosts/connectivity.yml
+
+
+# define actions to initialize particles at startup, just after file read
+init_particles_start:
+  - load_balance
+  - migrate_cell_particles
+  - load_balance_no_costs
+  - migrate_cell_particles
+  - rebuild_amr
+  - backup_r
+  - ghost_comm_scheme
+  - ghost_update_all_no_fv
+  - update_particle_neighbors
+
+init_particles:
+  - load_balance
+  - migrate_cell_particles
+  #- replicate_domain_for_molecules: { repeat: [1,1,2] }
+  - load_balance_no_costs
+  - migrate_cell_particles
+  - rebuild_amr
+  - backup_r
+  - ghost_comm_scheme
+  - ghost_update_all_no_fv
+  - update_particle_neighbors
+
+
+# define the verlet numerical scheme
+numerical_scheme_verlet:
+  body:
+    - push_position_2nd_order: { dt_scale: 1.0 }
+    - push_velocity_1st_order: { dt_scale: 0.5 }
+    - ghost_update_r
+    - zero_force_energy
+    - id_map
+    - zero_force_energy
+    - compute_forces_potential
+    #- compute_force_bond
+    #- compute_force_bend
+    #- compute_force_torsion
+    #- compute_force_improper
+    #- langevin_thermostat: { gamma: 1 1/ps , T: 5000 K }
+    - push_velocity_1st_order: { dt_scale: 0.5 }
+
+molecule_pair_weight:
+  weight:
+    TATB: [0.2,0.3,0.4,0.5]
+
+write_vtk:
+   is_binary: true
+   compression: default
+   is_box: true
+   is_ghosts: true
+   is_external_box: true
+
+do_update_particles:
+  condition: trigger_move_particles
+  body:
+    - trigger_load_balance
+    - load_balancing_if_triggered
+    - move_particles
+    - migrate_cell_particles
+    - rebuild_amr
+    - backup_r
+    - ghost_comm_scheme
+    - ghost_update_all_no_fv
+    - update_particle_neighbors
+    - id_map
+    - set_connectivity
+    - reorganize_molecule_improper
+    - molecule_pair_weight
+    - debug_pair_weight
+
+simulation:
+
+  - global
+  - domain
+  - grid_flavor
+  - species
+  - input_data_xyz
+  - nbh_dist
+  - init_particles_start
+  - init_molecule_from_yaml
+  - init_particles
+  - message: "--- starting calcul forces ---"
+  - zero_force_energy
+  - compute_forces_potential
+  #- compute_force_bond
+  #- compute_force_bend
+  #- compute_force_torsion
+  #- compute_force_improper
+  - message: "--- ending calcul forces ---"
+  #- shift_r: {shift: [1.4,0,0]}
+  - write_vtk
+  - message: "--- Initialization done ---"
+
+  - compute_loop:
+      loop: true
+      condition: compute_loop_continue
+      name: "*** Compute loop ***"
+      body:
+        - update_particles
+        - numerical_scheme_verlet
+        - write_vtk
+        - end_iteration
+        - compute_loop_stop
+
+
+init_molecule_from_yaml:
+  - connectivity
+  #- connectivity_debug
+  - id_map
+  - set_connectivity
+  - molecule_pair_weight
+  - debug_pair_weight
+  #- read_connectivity_debug
+  - set_molecules_id
+  - ghost_update_idmol
+  - correct_molecules_id
+  #- debug_print_ghosts

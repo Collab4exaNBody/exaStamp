@@ -1,0 +1,25 @@
+Operator overload resolution :
+  - determined at graph setup, not at run time
+  - uses the pseudo sequential model :
+    types are infered as if pure sequential execution (w.r.t. slot connection model)
+    all batch operators are considered non conditional and single step (no loop)
+
+Slot connection :
+  - rules, redefine it clearly
+  - pre-connected, run time connected
+
+
+Operator instanciation and dynamic connection:
+  - first choose a branching model
+
+important topics :
+  - dump/restartable jobs, iterative batches depending on environment (ccc_user) w.r.t to ahead task spawn
+  - batch types ( loop-conditional, single-conditional, unconditional ), inner pipes connections rules
+
+
+Graph visualization :   
+  with dot :
+  ./xstampv2 data/samples/tools/xyz_to_stampv3.msp --debug-graph --debug-graph_fmt dot --debug-graph_filter '[".*do_init_temperature" , ".*output"]'
+  ./xstampv2 data/regression/wall_meam/standard.msp --debug-graph --debug-graph_fmt dot --debug-graph_filter '[".*do_init_temperature"]'
+  dot -Tpdf -o sim_graph.pdf sim_graph.dot ; okular sim_graph.pdf
+

@@ -1,0 +1,57 @@
+# enable-if-XSTAMP_BUILD_PAIR_zero enable-if-XSTAMP_BUILD_PAIR_lennard_jones
+includes:
+  - config_rigidmol.msp
+  - h2o_molecule.inc
+
+configuration:
+  profiling:
+    summary: true
+  logging:
+    debug: true
+  debug:
+    filter: [".*write_stamp_v4",".*read_stamp_v4"]
+
+
+# define potential we'll reuse later
+compute_force_rf:
+  - compute_force_pair_rigidmol:
+      potentials:
+        - { type_a: O , type_b: O , potential: reaction_field , rcut: 13.0 ang , parameters: { epsilon: 100 , rc: 13 ang } }
+        - { type_a: O , type_b: M , potential: reaction_field , rcut: 13 ang , parameters: { epsilon: 100.0 , rc: 13 ang } }
+        - { type_a: O , type_b: H , potential: reaction_field , rcut: 13 ang , parameters: { epsilon: 100.0 , rc: 13 ang } }
+        - { type_a: H , type_b: M , potential: reaction_field , rcut: 13 ang , parameters: { epsilon: 100.0 , rc: 13 ang } }
+        - { type_a: M , type_b: M , potential: reaction_field , rcut: 13 ang , parameters: { epsilon: 100.0 , rc: 13 ang } }
+        - { type_a: H , type_b: H , potential: reaction_field , rcut: 13 ang , parameters: { epsilon: 100.0 , rc: 13 ang } }
+
+compute_force_lj:
+  - compute_force_pair_rigidmol:
+      potentials:
+        - { type_a: O , type_b: O , potential: lj , rcut: 10.0 ang , parameters: { epsilon: 1.286776984E-21 J , sigma: 0.31589E-09 m } }
+
+compute_force: 
+  - compute_force_rf
+  - compute_force_lj
+
+grid_flavor: grid_flavor_rigidmol
+
+input_data:
+  - read_stamp_v4:
+      file: bulk_h2o_300K.StampV4
+      bounds_mode: FILE
+      enable_xform_scale: true
+#      enlarge_bounds: 1.0 ang
+
+domain:
+  cell_size: 14.0 ang
+  periodic: [true,true,true]
+
+global:
+  dt: 1.0e-4 ps
+  simulation_end_iteration: 210
+  simulation_log_frequency: 1
+
+simulation_epilog:
+  - check_values:
+      file: rigidmol_bulk_h2o_300K.dat
+      threshold: 2.e-10
+

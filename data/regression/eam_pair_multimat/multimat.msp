@@ -1,0 +1,60 @@
+# no-seq
+
+sutton_chen_force_multimat:
+  rcut: 7.29 ang
+  potentials:
+    - { type_a: Copper  , type_b: Copper , parameters: { c: 3.317E+01 , epsilon: 3.605E-21 J , a0: 0.327E-09 m , n: 9.050E+00 , m: 5.005E+00 } }
+
+compute_force_pair_multimat:
+  potentials:
+    - { type_a: Silicon , type_b: Copper , potential: zero }
+    - { type_a: Silicon , type_b: Zinc   , potential: zero }
+    - { type_a: Silicon , type_b: Silicon, potential: lj   , rcut: 8.47 ang , parameters: { epsilon: 4.117E-21 J , sigma: 0.339E-09 m } }
+    - { type_a: Copper  , type_b: Copper , potential: lj   , rcut: 5.68 ang , parameters: { epsilon: 9.340E-20 J , sigma: 0.227E-09 m } }
+    - { type_a: Zinc    , type_b: Zinc   , potential: lj   , rcut: 6.10 ang , parameters: { epsilon: 2.522E-20 J , sigma: 0.244E-09 m } }
+    - { type_a: Copper  , type_b: Zinc   , potential: lj   , rcut: 5.89 ang , parameters: { epsilon: 4.853E-20 J , sigma: 0.236E-09 m } }
+
+# atoms descriptions
+species:
+  - Silicon:
+      mass: 46.623E-27 kg
+      z: 14
+      charge: 0 e-
+  - Copper:
+      mass: 105.486E-27 kg
+      z: 29
+      charge: 0 e-
+  - Zinc:
+      mass: 108.531E-27 kg
+      z: 30
+      charge: 0 e-
+
+grid_flavor: grid_flavor_multimat
+
+input_data:
+  - read_stamp_v3:
+      file: multimat.mpio
+      bounds_mode: FILE
+
+# define potential we'll reuse later
+compute_force:
+  - sutton_chen_force_multimat
+  - compute_force_pair_multimat
+
+grid_flavor: grid_flavor_multimat
+
+domain:
+  cell_size: 7.3 ang
+  periodic: [true,true,true]
+
+global:
+  simulation_end_iteration: 30
+  simulation_log_frequency: 1
+  rcut_inc: 0.8 ang
+  dt: 1.0e-3 ps
+
+xxx_simulation_epilog:
+  - check_values:
+      file: eam_crg_multimat.dat
+      threshold: 1.5e-10
+

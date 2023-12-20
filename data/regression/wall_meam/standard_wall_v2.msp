@@ -1,0 +1,14 @@
+# no-seq
+
+includes: [ standard.msp ]
+
+wall_v2:
+  normal: [ 1.0, 0.0, 0.0 ]
+  offset: -5.0 ang # positionned at the limit of the domain
+  cutoff: 2.4 ang
+  epsilon: 1.0e-19 J
+
+compute_force:
+  - meam_force
+  - wall_v2
+

@@ -1,0 +1,167 @@
+#                            _________ __                         
+#      ____ ___  ________   /   _____//  |______    _____ ______  
+#    _/ __ \\  \/  /\__  \  \_____  \\   __\__  \  /     \\____ \ 
+#    \  ___/ >    <  / __ \_/        \|  |  / __ \|  Y Y  \  |_> >
+#     \___  >__/\_ \(____  /_______  /|__| (____  /__|_|  /   __/ 
+#         \/      \/     \/        \/           \/      \/|__|    
+#   
+
+
+
+## =============================================================================
+## CONTENTS 
+## 
+
+    - README       : this file
+    - bin          : project executable and utility scripts
+    - deps         : dependencies
+    - doc          : doxygen documentation 
+    - include      : header (.hpp) files
+    - Makefile     : generic makefile 
+    - Makefile.inc : makefile header
+    - obj          : objects (.o) files
+    - src          : source (.cpp) files
+    - tests        : all input (.xsp) files
+
+
+
+## =============================================================================
+## DEPENDENCIES
+##
+
+    - The Libevi (vectorization library), found in deps/libevi, needs to be
+    compiled before exaStamp
+
+## =============================================================================
+## HOW TO COMPILE (1) : compilers and versions 
+##
+
+    - The code has been successfully compiled with all g++ versions 4.9.X. Some
+    bugs involving lambda functions have been encountered with gcc 5.0.
+
+    - For Intel compiler, the code compiles with versions > 15.0. Note that
+    Intel uses some Gnu's includes, so a version of gcc/g++ > 4.8.0 must be 
+    available anyway.
+
+    - For TBB versions > 4, (delivered with Intel > 15.0), the flag 
+    '-DTBB_DEPRECATED_MUTEX_COPYING' must be added.
+
+    - To compile on MIC, load corresponding module and add flag -mmic (not tested
+    with gcc/g++).
+
+
+
+## =============================================================================
+## HOW TO COMPILE (2) : Makefile.inc
+##
+
+    WARNING : One should not need to edit the Makefile. All parameters are set
+    in Makefile.inc (type 'make help' to get a list of available targets).
+
+
+
+## =============================================================================
+## HOW TO COMPILE (3) : Makefile.inc parameters
+##
+
+    - Compiler choice is made with OMPI_CC/OMPI_CXX. According to MPI setup, 
+    this might not work and one needs to add '-cxx=$(OMPI_CXX)' to force your 
+    choice.
+
+    - According to MPI install, one may need to add -DMPICH_IGNORE_CXX_SEEK
+    flag.
+
+    - __Array_check_bounds will check accesses of classes Array<T> and 
+    ExtArray<T> versus the size of the container.
+
+    - __init_barrier will display progression of particle initialization.
+
+    - explicit vectorization is performed by linking to the rigth version of 
+    evi library
+
+    - If one wants to compile on MIC, one must use Intel compiler. As version 
+    14.0.2.144 is not (fully) C++11 compliant, __use_c_chrono flag must be 
+    defined to use an alternative method to measure time. If version > 15.0.0.090 
+    is used, this flag is not required anymore. 
+
+    - It is possible to enable/disable multithreading with USE_TBB (true/false). 
+    When TBBs are enabled, flag __use_tbb_affinity will enable the use of 
+    'affinity_partitioner', which may (or may not) increase performances.
+
+    - It is possible to enable/disable the use of HwLoc library. When enabled, 
+    one has the possibility to bind threads to cores (see input parameters), 
+    which may (or may not) increase performances.
+
+    WARNING : When compiling on MIC, one should use the right libraries when 
+    linking ('$(TBB_ROOT)/lib/mic/libtbb.so', ...).
+
+
+
+## =============================================================================
+## INPUT FILES
+##
+
+    - single-mat-lj.xsp     : copper only, using a Lennard-Jones potential
+    - multi-mat-lj.xsp      : copper and zinc, using Lennard-Jones potentials
+    - single-mat-sc.xsp     : copper only, with a Sutton-Chen potential (EAM)
+    - single-mat-vniitf.xsp : tin only, with a custom EAM potential
+
+    NOTE (1) : Lennard-Jones is a standard MD potential, often used as a 
+    benchmark. It is rather cheap compared to EAM potentials, which is the kind 
+    of potential this code was built for.
+
+    NOTE (2) : As it contains special functions (pow, ...) that are vectorized 
+    with Intel's SVML, EAM potential will only get poor performances if the code
+    has been compiled with gcc.
+
+    All input parameters are detailed in input files. 
+
+    The system size is controlled by 'n_cells' parameters: the number of 
+    particles will be given by [N = c*n_cells.x*n_cells.y*n_cells.z]. c values
+    depend on the crystal used (c=2 for bcc, c=4 for fcc).
+
+    If EAM potential is used, 'recovering' must be set to 'false'.
+
+    Flag 'bind_threads' works only if the code has been compiled with HwLoc. It
+    has only been tested with *ONE* MPI process.
+
+
+
+## =============================================================================
+## HOW TO RUN
+##
+
+    - type 'mpirun -np <number of procs> ./bin/stamp <input file>'
+    
+    - For example (on TGCC curie computer): 'ccc_mprun -n 16 -c 4 -p standard 
+    ./bin/stamp test-cases/single-mat-lj.xsp' (use 16 MPI processes x 4 TBBs 
+    = 64 cores of the computer).
+
+    WARNING : The number of procs specified in the mpirun command should match 
+    the field 'decoupage' in the input file: 'decoupage  = [4, 2, 2]' represents
+    the domain partitioning in the three space dimensions (4 in X, 2 in Y and 
+    2 in Z), so we must have [np = decoupage.x*decoupage.y*decoupage.z].
+
+    - For good performances (MIC not included), consider having at least 100K 
+    atoms per core. 
+
+    - Some parameters can be set with environment variables: in input file, 
+    instead of having 'field = value', one puts 'field = XSP_ENV' and set 
+    corresponding environment variable. Parameters that can be substituted are:
+
+      @ recovering           with env. var. XSP_RECOVERING
+      @ symetrization        with env. var. XSP_SYMETRIZE 
+      @ decoupage            with env. var. XSP_NPX, XSP_NPY and XSP_NPZ
+      @ max_threads_per_node with env. var. XSP_MAX_NUM_THREADS
+      @ n_cells              with env. var. XSP_NCX, XSP_NCY and XSP_NCZ
+
+
+
+## =============================================================================
+## KNOWN ISSUES
+##
+
+    - On MIC, simulation over 4M particles (n_cells > [100, 100, 100]) may block 
+    during initialization. This happens during neighbor lists build, when all
+    thread try to allocate some memory at the same time. We are working on it.
+

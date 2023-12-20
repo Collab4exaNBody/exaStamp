@@ -1,0 +1,61 @@
+#include <string>
+#include <functional>
+#include <cstring>
+#include <utility>
+
+#include <exanb/core/log.h>
+#include <exanb/core/basic_types_operators.h>
+
+${VARIANT:
+#undef USTAMP_POTENTIAL_WITH_VIRIAL
+#define USTAMP_POTENTIAL_WITH_VIRIAL 1
+}
+
+#include "pair_potential_force_op.h"
+
+namespace exaStamp
+{
+  using namespace exanb;
+
+  void _CLASS_NAME::set_rcut( double rcut )
+  {
+    m_rcut = rcut;
+    // compute energy shift such that energy function at rcut equals 0.
+    double tmp_e=0.;
+    if( m_rcut > 0.0 )
+    {
+      double tmp_de=0.;
+      USTAMP_POTENTIAL_COMPUTE(m_potential_params,m_pair_params,m_rcut,tmp_e,tmp_de);
+    }
+    m_ecut = tmp_e;
+    ldbg<<USTAMP_POTENTIAL_STRING<<"ComputeForceOperator: rcut="<<m_rcut<<", ecut="<<m_ecut<< std::endl;
+  }
+  
+  uint64_t _CLASS_NAME::signature() const
+  {
+    static_assert(sizeof(char)==1,"Assumption that sizeof(char) is 1 failed");
+    std::vector<char> signature_buffer;
+    
+    // add data from the specific pair potential parameter structure
+    const char* pot_params = reinterpret_cast<const char*>( &m_potential_params );
+    signature_buffer.assign( pot_params, pot_params+sizeof(m_potential_params) );
+    
+    // add data from the atom type pair parameters
+    auto pp = std::make_pair( m_rcut , USTAMP_POTENTIAL_PAIR_PARAMS_EXTRACT(m_pair_params) );
+    pot_params = reinterpret_cast<const char*>( &pp );
+    signature_buffer.insert( signature_buffer.end() , pot_params , pot_params+sizeof(pp) );
+    
+    // addthe name of potential (we assume that the compute function depends on it, equal name means equal compute function)
+    const char* potname = USTAMP_POTENTIAL_STRING ;
+    signature_buffer.insert( signature_buffer.end() , potname, potname+std::strlen(potname) );
+    
+    std::string hstr( signature_buffer.data() , signature_buffer.size() );
+    return std::hash<std::string>{}(hstr);
+  }
+
+  
+}
+
+#undef _CLASS_NAME
+#undef _CLASS_BASE
+
