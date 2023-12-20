@@ -1,7 +1,9 @@
 # exaStamp
 
-exaStamp is a high performance molecular dynamics simulation code, originated from CEA/DIF.
+![](doc/img/exaStamp-logo.png)
  
+exaStamp is a high performance molecular dynamics simulation code, originated from CEA/DIF.
+
 ## Important note for developpers working with legacy repository history
 Please check instructions in doc/transfer_from_legacy_repo.txt
 
