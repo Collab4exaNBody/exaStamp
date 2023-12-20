@@ -18,6 +18,7 @@
 namespace exaStamp
 {
 
+  /* This component computes minimum and maximum of particle charge */
   template<class GridT>
   class ChargeMinMax : public OperatorNode
   {      
