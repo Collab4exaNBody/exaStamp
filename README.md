@@ -13,10 +13,7 @@ To proceed with the installation, your system must meet the minimum prerequisite
 
 ```
 git clone https://github.com/Collab4exaNBody/exaNBody.git
-mkdir build-exaNBody/ && cd build-exaNBody/
-cmake ../exaNBody/ -DCMAKE_INSTALL_PREFIX=path_to_install
-make install
-export exaNBody_DIR=path_to_install
+export exaNBody_DIR=`pwd`/exaNBody
 ```
 
 The next step involves the installation of yaml-cpp and MPI, which can be achieved using either the spack package manager or cmake:
