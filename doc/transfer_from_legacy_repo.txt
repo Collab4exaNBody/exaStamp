@@ -32,9 +32,16 @@ the strategy is 2-fold
 
 5. exemple
 a) i created a dev branch on the legacy trunk
-git checkout -b my_test_dev
-** create some commits ***
+> git checkout -b xsp-my_test_dev2
+> ** create some commits ***
 
+b) rebase my branch from before-github-2024 point
+> git rebase before-github-2024
+Rebasage et mise à jour de refs/heads/xsp-my_test_dev2 avec succès.
+
+c) jump to the new main branch, and re-apply the commits from your branch
+> git checkout main
+> git 
 
 git cherry-pick <start-commit-hash>^..<end-commit-hash>
 
