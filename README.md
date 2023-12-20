@@ -52,10 +52,16 @@ mkdir build && cd build
 Run CMake to configure the exaStamp build, specifying that CUDA support should be turned on (or off):
 
 ```
-cmake ../exaStamp -DXSTAMP_BUILD_CUDA=OFF 
+ccmake -DXNB_PRODUCT_VARIANT=all \
+       -DXSTAMP_BUILD_CUDA=ON \
+       -DXSTAMP_CUDA_ARCH=80 \
+       -DONIKA_HAVE_OPENMP_DETACH=OFF \
+       -DONIKA_HAVE_OPENMP_TOOLS=OFF \
+       -DCMAKE_BUILD_TYPE=Release \
+       ../exaStamp
 ```
 
-Build ExaDEM using the make command with a specified number of parallel jobs (e.g., -j 4 for 4 parallel jobs):
+Build exaStamp using the make command with a specified number of parallel jobs (e.g., -j 4 for 4 parallel jobs):
 
 ```
 make -j 4
