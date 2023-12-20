@@ -25,6 +25,10 @@ Date:   Wed Nov 13 08:38:00 2013 +0000
 
     Dir organization
 
+3-bis) how to add github repository and fetch main branch locally ?
+git remote add github git@github.com:Collab4exaNBody/exaStamp.git
+git fetch github
+
 4. how to transfer a development made on legacy trunk to new branch 'main' ?
 the strategy is 2-fold
   - first, rebase your development from before-github-2024 tag, so that you have this tag back in the history of your dev branch
@@ -41,7 +45,16 @@ Rebasage et mise à jour de refs/heads/xsp-my_test_dev2 avec succès.
 
 c) jump to the new main branch, and re-apply the commits from your branch
 > git checkout main
-> git 
+> git cherry-pick before-github-2024..xsp-my_test_dev2 
+[my_cherrypick_test f24a451ff] added a comment
+ Date: Wed Dec 20 09:44:18 2023 +0100
+ 1 file changed, 1 insertion(+)
+[my_cherrypick_test 817f00dbc] removed commented out cmake code
+ Date: Wed Dec 20 09:45:27 2023 +0100
+ 1 file changed, 6 insertions(+), 9 deletions(-)
+ rewrite src/tutorial/CMakeLists.txt (72%)
 
-git cherry-pick <start-commit-hash>^..<end-commit-hash>
+d) check everything's fine and push to github
+git log
+git push github main
 
