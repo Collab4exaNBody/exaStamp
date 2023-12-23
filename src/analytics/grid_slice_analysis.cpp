@@ -56,7 +56,7 @@ namespace exaStamp
 
     ADD_SLOT( bool           , fields_time_diagrams , INPUT , false );
     ADD_SLOT( long           , timestep             , INPUT , REQUIRED );
-    ADD_SLOT( std::string    , simulation_name      , INPUT , "Nobody" ); // Its name is Nobody (obscur ref) if you don't give it a name.  
+    ADD_SLOT( std::string    , simulation_name      , INPUT , "simulation" );
     ADD_SLOT( std::string    , file_extension       , INPUT , "csv" );
 
     ADD_SLOT( std::string    , contribution_field_name        , INPUT , REQUIRED );
@@ -90,7 +90,7 @@ namespace exaStamp
       //using has_vx_field_t = typename GridT::CellParticles::template HasField < field::_vx > ;
       //using has_vy_field_t = typename GridT::CellParticles::template HasField < field::_vy > ;
       //using has_vz_field_t = typename GridT::CellParticles::template HasField < field::_vz > ;
-      //using has_virial_field_t = typename GridT::CellParticles::template HasField < field::_virial > ;
+      //using has_virial_field_t = typename GridT::CellParticles::template HasField < field::_virial > ; 
       // static_assert( sizeof(ssize_t) == sizeof(double) ); // the module works only in this case
       // static_assert( sizeof(long long) == sizeof(ssize_t) ); // ensures we can send ssize_t with MPI_LONG_LONG
       
@@ -188,9 +188,9 @@ namespace exaStamp
       // local grid boundaries
       // const GridBlock local_space = {grid_offset, grid_offset + grid_dims};
       // number of sub-cells per cell
-      const size_t n_subcells = subdiv*subdiv*subdiv;
+      //const size_t n_subcells = subdiv*subdiv*subdiv;
       // dimension of the subdivided simulation's grid
-      const IJK domain_subdiv_dims = domain_dims * subdiv; 
+      //const IJK domain_subdiv_dims = domain_dims * subdiv; 
       // side size of a sub-cell
       const double subcell_size = cell_size / subdiv;
       // sub-cell's volume
@@ -781,7 +781,7 @@ namespace exaStamp
               const double density_cst = 1.660539066;
               const double velocity_cst = 100.0;
               const double pressure_cst = 1.660539066 * 0.01;
-              for(ssize_t i = 0; i < g_nb_slices-1; i++) // all exept the last slice
+              for(size_t i = 0; i < g_nb_slices-1; i++) // all exept the last slice
                 {
                   if((*enable_velocity || *enable_temperature || *enable_pressure || *enable_stress_tensor) && sl_density[i] > 0.0)
                     {
@@ -990,52 +990,52 @@ namespace exaStamp
                   fprintf(output,"pos(A)");
                   if(*enable_density)
                     {
-                      fprintf(output,(*data_separator).c_str());
+                      fprintf(output,"%s",(*data_separator).c_str());
                       fprintf(output,"density(g/cm3)");
                     }
                   if(*enable_velocity)
                     {
-                      fprintf(output,(*data_separator).c_str());
+                      fprintf(output,"%s",(*data_separator).c_str());
                       fprintf(output,"vx(m/s)");
-                      fprintf(output,(*data_separator).c_str());
+                      fprintf(output,"%s",(*data_separator).c_str());
                       fprintf(output,"vy(m/s)");
-                      fprintf(output,(*data_separator).c_str());
+                      fprintf(output,"%s",(*data_separator).c_str());
                       fprintf(output,"vz(m/s)");
                     }
                   if(*enable_temperature)
                     {
-                      fprintf(output,(*data_separator).c_str());
+                      fprintf(output,"%s",(*data_separator).c_str());
                       fprintf(output,"temperature(K)");
                     }
                   if(*enable_pressure)
                     {
-                      fprintf(output,(*data_separator).c_str());
+                      fprintf(output,"%s",(*data_separator).c_str());
                       fprintf(output,"pressure(GPa)");
                     }
                   if(*enable_stress_tensor)
                     {
-                      fprintf(output,(*data_separator).c_str());
+                      fprintf(output,"%s",(*data_separator).c_str());
                       fprintf(output,"sigma_xx(GPa)");
-                      fprintf(output,(*data_separator).c_str());
+                      fprintf(output,"%s",(*data_separator).c_str());
                       fprintf(output,"sigma_xy(GPa)");
-                      fprintf(output,(*data_separator).c_str());
+                      fprintf(output,"%s",(*data_separator).c_str());
                       fprintf(output,"sigma_xz(GPa)");
-                      fprintf(output,(*data_separator).c_str());
+                      fprintf(output,"%s",(*data_separator).c_str());
                       fprintf(output,"sigma_yx(GPa)");
-                      fprintf(output,(*data_separator).c_str());
+                      fprintf(output,"%s",(*data_separator).c_str());
                       fprintf(output,"sigma_yy(GPa)");
-                      fprintf(output,(*data_separator).c_str());
+                      fprintf(output,"%s",(*data_separator).c_str());
                       fprintf(output,"sigma_yz(GPa)");
-                      fprintf(output,(*data_separator).c_str());
+                      fprintf(output,"%s",(*data_separator).c_str());
                       fprintf(output,"sigma_zx(GPa)");
-                      fprintf(output,(*data_separator).c_str());
+                      fprintf(output,"%s",(*data_separator).c_str());
                       fprintf(output,"sigma_zy(GPa)");
-                      fprintf(output,(*data_separator).c_str());
+                      fprintf(output,"%s",(*data_separator).c_str());
                       fprintf(output,"sigma_zz(GPa)");
                     }
                   if(*enable_porosity)
                     {
-                      fprintf(output,(*data_separator).c_str());
+                      fprintf(output,"%s",(*data_separator).c_str());
                       fprintf(output,"porosity(-)");
                     }
                   fprintf(output,"\n");
@@ -1045,52 +1045,52 @@ namespace exaStamp
                       fprintf(output,"%.16lf", i * (*slice_thickness) * subcell_size);
                       if(*enable_density)
                         {
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_density[i]);
                         }
                       if(*enable_velocity)
                         {
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_vx[i]);
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_vy[i]);
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_vz[i]);
                         }
                       if(*enable_temperature)
                         {
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_temperature[i]);
                         }
                       if(*enable_pressure)
                         {
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_pressure[i]);
                         }
                       if(*enable_stress_tensor)
                         {
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_sigma_11[i]);
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_sigma_12[i]);
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_sigma_13[i]);
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_sigma_21[i]);
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_sigma_22[i]);
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_sigma_23[i]);
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_sigma_31[i]);
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_sigma_32[i]);
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_sigma_33[i]);
                         }
                       if(*enable_porosity)
                         {
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_porosity[i]);
                         }
                       fprintf(output,"\n");
@@ -1105,9 +1105,9 @@ namespace exaStamp
                       std::string field_filename = *simulation_name + ".density-time_diagram." + *file_extension;
                       FILE *output = fopen(field_filename.c_str(), "a");
                       fprintf(output,"%ld",*timestep);
-                      for(int i=0; i < g_nb_slices; i++)
+                      for(size_t i=0; i < g_nb_slices; i++)
                         {
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_density[i]);
                         }
                       fprintf(output,"\n");
@@ -1118,9 +1118,9 @@ namespace exaStamp
                       std::string field_filename = *simulation_name + ".x_velocity-time_diagram." + *file_extension;
                       FILE *output = fopen(field_filename.c_str(), "a");
                       fprintf(output,"%ld",*timestep);
-                      for(int i=0; i < g_nb_slices; i++)
+                      for(size_t i=0; i < g_nb_slices; i++)
                         {
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_vx[i]);
                         }
                       fprintf(output,"\n");
@@ -1129,9 +1129,9 @@ namespace exaStamp
                       field_filename = *simulation_name + ".y_velocity-time_diagram." + *file_extension;
                       output = fopen(field_filename.c_str(), "a");
                       fprintf(output,"%ld",*timestep);
-                      for(int i=0; i < g_nb_slices; i++)
+                      for(size_t i=0; i < g_nb_slices; i++)
                         {
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_vy[i]);
                         }
                       fprintf(output,"\n");
@@ -1140,9 +1140,9 @@ namespace exaStamp
                       field_filename = *simulation_name + ".z_velocity-time_diagram." + *file_extension;
                       output = fopen(field_filename.c_str(), "a");
                       fprintf(output,"%ld",*timestep);
-                      for(int i=0; i < g_nb_slices; i++)
+                      for(size_t i=0; i < g_nb_slices; i++)
                         {
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_vz[i]);
                         }
                       fprintf(output,"\n");
@@ -1153,9 +1153,9 @@ namespace exaStamp
                       std::string field_filename = *simulation_name + ".temperature-time_diagram." + *file_extension;
                       FILE *output = fopen(field_filename.c_str(), "a");
                       fprintf(output,"%ld",*timestep);
-                      for(int i=0; i < g_nb_slices; i++)
+                      for(size_t i=0; i < g_nb_slices; i++)
                         {
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_temperature[i]);
                         }
                       fprintf(output,"\n");
@@ -1166,9 +1166,9 @@ namespace exaStamp
                       std::string field_filename = *simulation_name + ".pressure-time_diagram." + *file_extension;
                       FILE *output = fopen(field_filename.c_str(), "a");
                       fprintf(output,"%ld",*timestep);
-                      for(int i=0; i < g_nb_slices; i++)
+                      for(size_t i=0; i < g_nb_slices; i++)
                         {
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_pressure[i]);
                         }
                       fprintf(output,"\n");
@@ -1179,9 +1179,9 @@ namespace exaStamp
                       std::string field_filename = *simulation_name + ".sigma_xx-time_diagram." + *file_extension;
                       FILE *output = fopen(field_filename.c_str(), "a");
                       fprintf(output,"%ld",*timestep);
-                      for(int i=0; i < g_nb_slices; i++)
+                      for(size_t i=0; i < g_nb_slices; i++)
                         {
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_sigma_11[i]);
                         }
                       fprintf(output,"\n");
@@ -1190,9 +1190,9 @@ namespace exaStamp
                       field_filename = *simulation_name + ".sigma_xy-time_diagram." + *file_extension;
                       output = fopen(field_filename.c_str(), "a");
                       fprintf(output,"%ld",*timestep);
-                      for(int i=0; i < g_nb_slices; i++)
+                      for(size_t i=0; i < g_nb_slices; i++)
                         {
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_sigma_12[i]);
                         }
                       fprintf(output,"\n");
@@ -1201,9 +1201,9 @@ namespace exaStamp
                       field_filename = *simulation_name + ".sigma_xz-time_diagram." + *file_extension;
                       output = fopen(field_filename.c_str(), "a");
                       fprintf(output,"%ld",*timestep);
-                      for(int i=0; i < g_nb_slices; i++)
+                      for(size_t i=0; i < g_nb_slices; i++)
                         {
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_sigma_13[i]);
                         }
                       fprintf(output,"\n");
@@ -1212,9 +1212,9 @@ namespace exaStamp
                       field_filename = *simulation_name + ".sigma_yx-time_diagram." + *file_extension;
                       output = fopen(field_filename.c_str(), "a");
                       fprintf(output,"%ld",*timestep);
-                      for(int i=0; i < g_nb_slices; i++)
+                      for(size_t i=0; i < g_nb_slices; i++)
                         {
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_sigma_21[i]);
                         }
                       fprintf(output,"\n");
@@ -1223,9 +1223,9 @@ namespace exaStamp
                       field_filename = *simulation_name + ".sigma_yy-time_diagram." + *file_extension;
                       output = fopen(field_filename.c_str(), "a");
                       fprintf(output,"%ld",*timestep);
-                      for(int i=0; i < g_nb_slices; i++)
+                      for(size_t i=0; i < g_nb_slices; i++)
                         {
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_sigma_22[i]);
                         }
                       fprintf(output,"\n");
@@ -1234,9 +1234,9 @@ namespace exaStamp
                       field_filename = *simulation_name + ".sigma_yz-time_diagram." + *file_extension;
                       output = fopen(field_filename.c_str(), "a");
                       fprintf(output,"%ld",*timestep);
-                      for(int i=0; i < g_nb_slices; i++)
+                      for(size_t i=0; i < g_nb_slices; i++)
                         {
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_sigma_23[i]);
                         }
                       fprintf(output,"\n");
@@ -1245,9 +1245,9 @@ namespace exaStamp
                       field_filename = *simulation_name + ".sigma_zx-time_diagram." + *file_extension;
                       output = fopen(field_filename.c_str(), "a");
                       fprintf(output,"%ld",*timestep);
-                      for(int i=0; i < g_nb_slices; i++)
+                      for(size_t i=0; i < g_nb_slices; i++)
                         {
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_sigma_31[i]);
                         }
                       fprintf(output,"\n");
@@ -1256,9 +1256,9 @@ namespace exaStamp
                       field_filename = *simulation_name + ".sigma_zy-time_diagram." + *file_extension;
                       output = fopen(field_filename.c_str(), "a");
                       fprintf(output,"%ld",*timestep);
-                      for(int i=0; i < g_nb_slices; i++)
+                      for(size_t i=0; i < g_nb_slices; i++)
                         {
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_sigma_32[i]);
                         }
                       fprintf(output,"\n");
@@ -1267,9 +1267,9 @@ namespace exaStamp
                       field_filename = *simulation_name + ".sigma_zz-time_diagram." + *file_extension;
                       output = fopen(field_filename.c_str(), "a");
                       fprintf(output,"%ld",*timestep);
-                      for(int i=0; i < g_nb_slices; i++)
+                      for(size_t i=0; i < g_nb_slices; i++)
                         {
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_sigma_33[i]);
                         }
                       fprintf(output,"\n");
@@ -1280,9 +1280,9 @@ namespace exaStamp
                       std::string field_filename = *simulation_name + ".porosity-time_diagram." + *file_extension;
                       FILE *output = fopen(field_filename.c_str(), "a");
                       fprintf(output,"%ld",*timestep);
-                      for(int i=0; i < g_nb_slices; i++)
+                      for(size_t i=0; i < g_nb_slices; i++)
                         {
-                          fprintf(output,(*data_separator).c_str());
+                          fprintf(output,"%s",(*data_separator).c_str());
                           fprintf(output,"%.16lf",sl_porosity[i]);
                         }
                       fprintf(output,"\n");
@@ -1302,7 +1302,7 @@ namespace exaStamp
                 sl_density_ptr = grid_cell_values->field_data(*sl_density_field_name).m_data_ptr;
               }
             double * __restrict__ sl_velocity_ptr = nullptr;
-            double *vx, *vy, *vz = nullptr;
+            double *vx=nullptr, *vy=nullptr, *vz=nullptr;
             if (*enable_velocity)
               {
                 sl_velocity_ptr = grid_cell_values->field_data(*sl_velocity_field_name).m_data_ptr;
@@ -1325,7 +1325,7 @@ namespace exaStamp
                 pressure = tr_virial; // same as tr_virial adress but know it is the pressure so we change the name. 
               }
             double * __restrict__ sl_stress_tensor_ptr = nullptr;
-            double *sigma_xx, *sigma_xy, *sigma_xz, *sigma_yx, *sigma_yy, *sigma_yz, *sigma_zx, *sigma_zy, *sigma_zz = nullptr;
+            double *sigma_xx=nullptr, *sigma_xy=nullptr, *sigma_xz=nullptr, *sigma_yx=nullptr, *sigma_yy=nullptr, *sigma_yz=nullptr, *sigma_zx=nullptr, *sigma_zy=nullptr, *sigma_zz=nullptr;
             if (*enable_stress_tensor)
               {
                 sl_stress_tensor_ptr = grid_cell_values->field_data(*sl_stress_tensor_field_name).m_data_ptr;

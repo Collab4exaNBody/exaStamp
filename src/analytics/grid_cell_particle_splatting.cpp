@@ -110,7 +110,7 @@ namespace exaStamp
       const ssize_t subdiv = *grid_subdiv;
       const ssize_t n_subcells = subdiv * subdiv * subdiv;
       const double subcell_size = cell_size / subdiv;
-      const double subcell_volume = subcell_size * subcell_size * subcell_size;
+      //const double subcell_volume = subcell_size * subcell_size * subcell_size;
 
       // -------------------------------------------------------------------------------------------------------------
 
@@ -128,53 +128,53 @@ namespace exaStamp
       
       // create cell data fields if needed
       if(!output_contrib)
-	{
-	  return;
-	}
+	    {
+	      return;
+	    }
       if(output_contrib && ! grid_cell_values->has_field(*contribution_field_name))
-	{
-	  grid_cell_values->add_field(*contribution_field_name, subdiv,1);
-	}
+	    {
+	      grid_cell_values->add_field(*contribution_field_name, subdiv,1);
+	    }
       if( output_mass && ! grid_cell_values->has_field(*mass_field_name))
-	{
-	  grid_cell_values->add_field(*mass_field_name,subdiv,1);
-	}
+	    {
+	      grid_cell_values->add_field(*mass_field_name,subdiv,1);
+	    }
       if( output_momentum_x && ! grid_cell_values->has_field(*momentum_x_field_name) )
-	{
-	  grid_cell_values->add_field(*momentum_x_field_name,subdiv,1);
-	}
+	    {
+	      grid_cell_values->add_field(*momentum_x_field_name,subdiv,1);
+	    }
       if( output_momentum_y && ! grid_cell_values->has_field(*momentum_y_field_name) )
-	{
-	  grid_cell_values->add_field(*momentum_y_field_name,subdiv,1);
-	}
+	    {
+	      grid_cell_values->add_field(*momentum_y_field_name,subdiv,1);
+	    }
       if( output_momentum_z && ! grid_cell_values->has_field(*momentum_z_field_name) )
-	{
-	  grid_cell_values->add_field(*momentum_z_field_name,subdiv,1);
-	}
+	    {
+	      grid_cell_values->add_field(*momentum_z_field_name,subdiv,1);
+	    }
       if( output_momentum_vector && ! grid_cell_values->has_field(*momentum_vector_field_name) )
-	{
-	  grid_cell_values->add_field(*momentum_vector_field_name,subdiv,3);
-	}
+	    {
+	      grid_cell_values->add_field(*momentum_vector_field_name,subdiv,3);
+	    }
       if( output_virial_tensor && ! grid_cell_values->has_field(*virial_tensor_field_name) )
-	{
-	  grid_cell_values->add_field(*virial_tensor_field_name,subdiv,9);
-	} 
+	    {
+	      grid_cell_values->add_field(*virial_tensor_field_name,subdiv,9);
+	    } 
       if( output_m_v2 && ! grid_cell_values->has_field(*m_v2_field_name) )
-	{
-	  grid_cell_values->add_field(*m_v2_field_name,subdiv,1);
-	}
+	    {
+	      grid_cell_values->add_field(*m_v2_field_name,subdiv,1);
+	    }
       if( output_m_v2_tensor && ! grid_cell_values->has_field(*m_v2_tensor_field_name) )
-	{
-	  grid_cell_values->add_field(*m_v2_tensor_field_name,subdiv,9);
-	}
+	    {
+	      grid_cell_values->add_field(*m_v2_tensor_field_name,subdiv,9);
+	    }
       if( output_tr_virial && ! grid_cell_values->has_field(*tr_virial_field_name) )
-	{
-	  grid_cell_values->add_field(*tr_virial_field_name,subdiv,1);
-	}
+	    {
+	      grid_cell_values->add_field(*tr_virial_field_name,subdiv,1);
+	    }
       if( output_deformation_gradient_tensor && ! grid_cell_values->has_field(*deformation_gradient_tensor_field_name) )
-	{
-	  grid_cell_values->add_field(*deformation_gradient_tensor_field_name,subdiv,9);
-	}
+	    {
+	      grid_cell_values->add_field(*deformation_gradient_tensor_field_name,subdiv,9);
+	    }
 
       // -------------------------------------------------------------------------------------------------------------
       
@@ -393,31 +393,31 @@ namespace exaStamp
       {
 	// we need to set our fields to 0 
 	_Pragma(USTAMP_STR(omp for collapse(2) schedule(dynamic)))
-	  for(ssize_t i = 0; i < dims.i*dims.j*dims.k; ++i)
-	    for(ssize_t j = 0; j < subdiv*subdiv*subdiv; ++j)
-	      {
-		size_t index = i * ctb_stride + j;
-		if( output_contrib )
+  for(ssize_t i = 0; i < dims.i*dims.j*dims.k; ++i)
+    for(ssize_t j = 0; j < subdiv*subdiv*subdiv; ++j)
+    {
+		  size_t index = i * ctb_stride + j;
+		  if( output_contrib )
 		  {
 		    ctb_ptr[ index ] = 0.0;
 		  }
-		if( output_mass )
+  		if( output_mass )
 		  {
 		    mass_ptr[ index ] = 0.0;
 		  }
-		if( output_momentum_x )
+	  	if( output_momentum_x )
 		  {
 		    momentum_x_ptr[ index ] = 0.0;
 		  }
-		if( output_momentum_y )
+  		if( output_momentum_y )
 		  {
 		    momentum_y_ptr[ index ] = 0.0;
 		  }
-		if( output_momentum_z )
+  		if( output_momentum_z )
 		  {
 		    momentum_z_ptr[ index ] = 0.0;
 		  }
-		if( output_momentum_vector )
+		  if( output_momentum_vector )
 		  {
 		    size_t index_vec_0 = i * ctb_stride + j * 3 + 0;
 		    size_t index_vec_1 = i * ctb_stride + j * 3 + 1;
@@ -426,7 +426,7 @@ namespace exaStamp
 		    momentum_vector_ptr[ index_vec_1 ] = 0.0;
 		    momentum_vector_ptr[ index_vec_2 ] = 0.0;
 		  }
-		if( output_virial_tensor )
+  		if( output_virial_tensor )
 		  {
 		    size_t index_tens_0 = i * ctb_stride + j * 9 + 0;
 		    size_t index_tens_1 = i * ctb_stride + j * 9 + 1;
@@ -447,11 +447,11 @@ namespace exaStamp
 		    virial_tensor_ptr[ index_tens_7 ] = 0.0;
 		    virial_tensor_ptr[ index_tens_8 ] = 0.0;
 		  }
-		if( output_m_v2 )
+  		if( output_m_v2 )
 		  {
 		    m_v2_ptr[ index ] = 0.0;
 		  }
-		if( output_m_v2_tensor )
+  		if( output_m_v2_tensor )
 		  {
 		    size_t index_tens_0 = i * ctb_stride + j * 9 + 0;
 		    size_t index_tens_1 = i * ctb_stride + j * 9 + 1;
@@ -472,11 +472,11 @@ namespace exaStamp
 		    m_v2_tensor_ptr[ index_tens_7 ] = 0.0;
 		    m_v2_tensor_ptr[ index_tens_8 ] = 0.0;
 		  }
-		if( output_tr_virial )
+  		if( output_tr_virial )
 		  {
 		    tr_virial_ptr[ index ] = 0.0;
 		  }
-		if( output_deformation_gradient_tensor )
+  		if( output_deformation_gradient_tensor )
 		  {
 		    size_t index_tens_0 = i * ctb_stride + j * 9 + 0;
 		    size_t index_tens_1 = i * ctb_stride + j * 9 + 1;
@@ -497,250 +497,250 @@ namespace exaStamp
 		    deformation_gradient_tensor_ptr[ index_tens_7 ] = 0.0;
 		    deformation_gradient_tensor_ptr[ index_tens_8 ] = 0.0;
 		  }
-	      }
+    }
 	
-        GRID_OMP_FOR_BEGIN(dims,i,cell_loc, schedule(dynamic) )
-          {
-            const Vec3d cell_origin = grid->cell_position( cell_loc );
-            const auto* __restrict__ rx = cells[i][field::rx];
-            const auto* __restrict__ ry = cells[i][field::ry];
-            const auto* __restrict__ rz = cells[i][field::rz];
-            const auto* __restrict__ atom_type = cells[i].field_pointer_or_null(field::type);
-            const auto* __restrict__ vx = cells[i].field_pointer_or_null(field::vx);
-            const auto* __restrict__ vy = cells[i].field_pointer_or_null(field::vy);
-            const auto* __restrict__ vz = cells[i].field_pointer_or_null(field::vz);
-            const auto* __restrict__ vir = cells[i].field_pointer_or_null(field::virial);
-            const unsigned int n = cells[i].size();
-            for(unsigned int j=0;j<n;j++)
+    GRID_OMP_FOR_BEGIN(dims,i,cell_loc, schedule(dynamic) )
+    {
+      const Vec3d cell_origin = grid->cell_position( cell_loc );
+      const auto* __restrict__ rx = cells[i][field::rx];
+      const auto* __restrict__ ry = cells[i][field::ry];
+      const auto* __restrict__ rz = cells[i][field::rz];
+      const auto* __restrict__ atom_type = cells[i].field_pointer_or_null(field::type);
+      const auto* __restrict__ vx = cells[i].field_pointer_or_null(field::vx);
+      const auto* __restrict__ vy = cells[i].field_pointer_or_null(field::vy);
+      const auto* __restrict__ vz = cells[i].field_pointer_or_null(field::vz);
+      const auto* __restrict__ vir = cells[i].field_pointer_or_null(field::virial);
+      const unsigned int n = cells[i].size();
+      for(unsigned int j=0;j<n;j++)
+      {
+        Vec3d r { rx[j] , ry[j] , rz[j] };
+        const double mass = get_mass( j, atom_type, masses, has_type_field );
+        const double v2   = get_square_velocity( j, vx,vy,vz, has_velocity );
+        const double velx = get_velocity_x( j, vx, has_velocity );
+        const double vely = get_velocity_y( j, vy, has_velocity );
+        const double velz = get_velocity_z( j, vz, has_velocity );
+        
+        const Mat3d  pvir = get_particle_virial<has_virial_field>( vir, j );
+        const double tr_vir = pvir.m11 + pvir.m22 + pvir.m33;
+
+		    Mat3d deformation_gradient_tensor_tmp;
+		    if (*enable_deformation_gradient_tensor)
+	      {
+	        deformation_gradient_tensor_tmp = (*local_mechanical_data)[i].F[j];
+	      }
+    		const Mat3d deformation_gradient_tensor = deformation_gradient_tensor_tmp;
+
+        IJK center_cell_loc;
+        IJK center_subcell_loc;
+        Vec3d rco = r - cell_origin;
+        localize_subcell( rco, cell_size, subcell_size, subdiv, center_cell_loc, center_subcell_loc );
+        center_cell_loc += cell_loc;
+
+        for(int ck=-1;ck<=1;ck++)
+          for(int cj=-1;cj<=1;cj++)
+            for(int ci=-1;ci<=1;ci++)
+            {
+              IJK nbh_cell_loc;
+              IJK nbh_subcell_loc;
+              subcell_neighbor( center_cell_loc, center_subcell_loc, subdiv, IJK{ci,cj,ck}, nbh_cell_loc, nbh_subcell_loc );
+              if( grid->contains(nbh_cell_loc) )
               {
-                Vec3d r { rx[j] , ry[j] , rz[j] };
-                const double mass = get_mass( j, atom_type, masses, has_type_field );
-                const double v2   = get_square_velocity( j, vx,vy,vz, has_velocity );
-                const double velx = get_velocity_x( j, vx, has_velocity );
-                const double vely = get_velocity_y( j, vy, has_velocity );
-                const double velz = get_velocity_z( j, vz, has_velocity );
+                ssize_t nbh_cell_i = grid_ijk_to_index( dims , nbh_cell_loc );
+                ssize_t nbh_subcell_i = grid_ijk_to_index( IJK{subdiv,subdiv,subdiv} , nbh_subcell_loc );
+                assert( nbh_cell_i>=0 && nbh_cell_i<n_cells );
+                assert( nbh_subcell_i>=0 && nbh_subcell_i<n_subcells );
+
+                // compute weighted contribution of particle to sub cell
+                Vec3d nbh_cell_origin = grid->cell_position(nbh_cell_loc);
+                AABB subcell_box = { nbh_cell_origin + nbh_subcell_loc*subcell_size , nbh_cell_origin + (nbh_subcell_loc+1)*subcell_size };
+                const double w = particle_smoothing(r, sp_size, subcell_box);
+                double mass_contrib = mass * w;
+                double momentum_x_contrib = velx * mass_contrib;
+                double momentum_y_contrib = vely * mass_contrib;
+                double momentum_z_contrib = velz * mass_contrib;
+                double virial_11_contrib = pvir.m11 * w;
+                double virial_12_contrib = pvir.m12 * w;
+                double virial_13_contrib = pvir.m13 * w;
+                double virial_21_contrib = pvir.m21 * w;
+                double virial_22_contrib = pvir.m22 * w;
+                double virial_23_contrib = pvir.m23 * w;
+                double virial_31_contrib = pvir.m31 * w;
+                double virial_32_contrib = pvir.m32 * w;
+                double virial_33_contrib = pvir.m33 * w;
+                double m_v2_contrib = v2 * mass_contrib;
+                double m_v1_v1_contrib = velx * velx * mass_contrib;
+                double m_v1_v2_contrib = velx * vely * mass_contrib;
+                double m_v1_v3_contrib = velx * velz * mass_contrib;
+                double m_v2_v1_contrib = vely * velx * mass_contrib;
+                double m_v2_v2_contrib = vely * vely * mass_contrib;
+                double m_v2_v3_contrib = vely * velz * mass_contrib;
+                double m_v3_v1_contrib = velz * velx * mass_contrib;
+                double m_v3_v2_contrib = velz * vely * mass_contrib;
+                double m_v3_v3_contrib = velz * velz * mass_contrib;
+                double tr_virial_contrib = tr_vir * w;
+
+			          double F_11_contrib = deformation_gradient_tensor.m11 * w; // w is choosen for now but may be the mass contrib is more judicious
+			          double F_12_contrib = deformation_gradient_tensor.m12 * w;
+			          double F_13_contrib = deformation_gradient_tensor.m13 * w;
+			          double F_21_contrib = deformation_gradient_tensor.m21 * w;
+			          double F_22_contrib = deformation_gradient_tensor.m22 * w;
+			          double F_23_contrib = deformation_gradient_tensor.m23 * w;
+			          double F_31_contrib = deformation_gradient_tensor.m31 * w;
+			          double F_32_contrib = deformation_gradient_tensor.m32 * w;
+			          double F_33_contrib = deformation_gradient_tensor.m33 * w;
+			    
+                size_t scindex = nbh_cell_i * ctb_stride + nbh_subcell_i;
+                            
+                if( output_contrib )
+                {
+#                 pragma omp atomic update
+                  ctb_ptr[ scindex ] += w;
+                }
+
+                if( output_mass )
+                {
+#                 pragma omp atomic update
+                  mass_ptr[ scindex ] += mass_contrib;
+                }
                 
-                const Mat3d  pvir = get_particle_virial<has_virial_field>( vir, j );
-                const double tr_vir = pvir.m11 + pvir.m22 + pvir.m33;
+                if( output_momentum_x )
+                {
+#                 pragma omp atomic update
+                  momentum_x_ptr[ scindex ] += momentum_x_contrib;
+                }
 
-		Mat3d deformation_gradient_tensor_tmp;
-		if (*enable_deformation_gradient_tensor)
-		  {
-		    deformation_gradient_tensor_tmp = (*local_mechanical_data)[i].F[j];
-		  }
-		const Mat3d deformation_gradient_tensor = deformation_gradient_tensor_tmp;
+                if( output_momentum_y )
+                {
+#                 pragma omp atomic update
+                  momentum_y_ptr[ scindex ] += momentum_y_contrib;
+                }
 
-                IJK center_cell_loc;
-                IJK center_subcell_loc;
-                Vec3d rco = r - cell_origin;
-                localize_subcell( rco, cell_size, subcell_size, subdiv, center_cell_loc, center_subcell_loc );
-                center_cell_loc += cell_loc;
+                if( output_momentum_z )
+                {
+#                 pragma omp atomic update
+                  momentum_z_ptr[ scindex ] += momentum_z_contrib;
+                }                         
 
-                for(int ck=-1;ck<=1;ck++)
-                  for(int cj=-1;cj<=1;cj++)
-                    for(int ci=-1;ci<=1;ci++)
-                      {
-                        IJK nbh_cell_loc;
-                        IJK nbh_subcell_loc;
-                        subcell_neighbor( center_cell_loc, center_subcell_loc, subdiv, IJK{ci,cj,ck}, nbh_cell_loc, nbh_subcell_loc );
-                        if( grid->contains(nbh_cell_loc) )
-                          {
-                            ssize_t nbh_cell_i = grid_ijk_to_index( dims , nbh_cell_loc );
-                            ssize_t nbh_subcell_i = grid_ijk_to_index( IJK{subdiv,subdiv,subdiv} , nbh_subcell_loc );
-                            assert( nbh_cell_i>=0 && nbh_cell_i<n_cells );
-                            assert( nbh_subcell_i>=0 && nbh_subcell_i<n_subcells );
+                if( output_momentum_vector )
+                {
+                  size_t scindex_vec_0 = nbh_cell_i * ctb_stride + nbh_subcell_i * 3 + 0;
+                  size_t scindex_vec_1 = nbh_cell_i * ctb_stride + nbh_subcell_i * 3 + 1;
+                  size_t scindex_vec_2 = nbh_cell_i * ctb_stride + nbh_subcell_i * 3 + 2;
+#                 pragma omp atomic update
+                  momentum_vector_ptr[ scindex_vec_0 ] += momentum_x_contrib;
+#                 pragma omp atomic update
+                  momentum_vector_ptr[ scindex_vec_1 ] += momentum_y_contrib;
+#                 pragma omp atomic update
+                  momentum_vector_ptr[ scindex_vec_2 ] += momentum_z_contrib;
+                }
 
-                            // compute weighted contribution of particle to sub cell
-                            Vec3d nbh_cell_origin = grid->cell_position(nbh_cell_loc);
-                            AABB subcell_box = { nbh_cell_origin + nbh_subcell_loc*subcell_size , nbh_cell_origin + (nbh_subcell_loc+1)*subcell_size };
-                            const double w = particle_smoothing(r, sp_size, subcell_box);
-                            double mass_contrib = mass * w;
-                            double momentum_x_contrib = velx * mass_contrib;
-                            double momentum_y_contrib = vely * mass_contrib;
-                            double momentum_z_contrib = velz * mass_contrib;
-                            double virial_11_contrib = pvir.m11 * w;
-                            double virial_12_contrib = pvir.m12 * w;
-                            double virial_13_contrib = pvir.m13 * w;
-                            double virial_21_contrib = pvir.m21 * w;
-                            double virial_22_contrib = pvir.m22 * w;
-                            double virial_23_contrib = pvir.m23 * w;
-                            double virial_31_contrib = pvir.m31 * w;
-                            double virial_32_contrib = pvir.m32 * w;
-                            double virial_33_contrib = pvir.m33 * w;
-                            double m_v2_contrib = v2 * mass_contrib;
-                            double m_v1_v1_contrib = velx * velx * mass_contrib;
-                            double m_v1_v2_contrib = velx * vely * mass_contrib;
-                            double m_v1_v3_contrib = velx * velz * mass_contrib;
-                            double m_v2_v1_contrib = vely * velx * mass_contrib;
-                            double m_v2_v2_contrib = vely * vely * mass_contrib;
-                            double m_v2_v3_contrib = vely * velz * mass_contrib;
-                            double m_v3_v1_contrib = velz * velx * mass_contrib;
-                            double m_v3_v2_contrib = velz * vely * mass_contrib;
-                            double m_v3_v3_contrib = velz * velz * mass_contrib;
-                            double tr_virial_contrib = tr_vir * w;
+                if( output_virial_tensor )
+                  {
+                    size_t scindex_vec_0 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 0;
+                    size_t scindex_vec_1 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 1;
+                    size_t scindex_vec_2 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 2;
+                    size_t scindex_vec_3 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 3;
+                    size_t scindex_vec_4 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 4;
+                    size_t scindex_vec_5 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 5;
+                    size_t scindex_vec_6 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 6;
+                    size_t scindex_vec_7 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 7;
+                    size_t scindex_vec_8 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 8;
+#                   pragma omp atomic update
+                    virial_tensor_ptr[ scindex_vec_0 ] += virial_11_contrib;
+#                   pragma omp atomic update
+                    virial_tensor_ptr[ scindex_vec_1 ] += virial_12_contrib;
+#                   pragma omp atomic update
+                    virial_tensor_ptr[ scindex_vec_2 ] += virial_13_contrib;
+#                   pragma omp atomic update
+                    virial_tensor_ptr[ scindex_vec_3 ] += virial_21_contrib;
+#                   pragma omp atomic update
+                    virial_tensor_ptr[ scindex_vec_4 ] += virial_22_contrib;
+#                   pragma omp atomic update
+                    virial_tensor_ptr[ scindex_vec_5 ] += virial_23_contrib;
+#                   pragma omp atomic update
+                    virial_tensor_ptr[ scindex_vec_6 ] += virial_31_contrib;
+#                   pragma omp atomic update
+                    virial_tensor_ptr[ scindex_vec_7 ] += virial_32_contrib;
+#                   pragma omp atomic update
+                    virial_tensor_ptr[ scindex_vec_8 ] += virial_33_contrib;
+                  }
 
-			    double F_11_contrib = deformation_gradient_tensor.m11 * w; // w is choosen for now but may be the mass contrib is more judicious
-			    double F_12_contrib = deformation_gradient_tensor.m12 * w;
-			    double F_13_contrib = deformation_gradient_tensor.m13 * w;
-			    double F_21_contrib = deformation_gradient_tensor.m21 * w;
-			    double F_22_contrib = deformation_gradient_tensor.m22 * w;
-			    double F_23_contrib = deformation_gradient_tensor.m23 * w;
-			    double F_31_contrib = deformation_gradient_tensor.m31 * w;
-			    double F_32_contrib = deformation_gradient_tensor.m32 * w;
-			    double F_33_contrib = deformation_gradient_tensor.m33 * w;
+                  if( output_m_v2 && m_v2_contrib>0.0 )
+                  {
+#                   pragma omp atomic update
+                    m_v2_ptr[ scindex ] += m_v2_contrib; 
+                  }
+
+                  if( output_m_v2_tensor )
+                  {
+                    size_t scindex_vec_0 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 0;
+                    size_t scindex_vec_1 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 1;
+                    size_t scindex_vec_2 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 2;
+                    size_t scindex_vec_3 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 3;
+                    size_t scindex_vec_4 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 4;
+                    size_t scindex_vec_5 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 5;
+                    size_t scindex_vec_6 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 6;
+                    size_t scindex_vec_7 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 7;
+                    size_t scindex_vec_8 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 8;
+#                   pragma omp atomic update
+                    m_v2_tensor_ptr[ scindex_vec_0 ] += m_v1_v1_contrib;
+#                   pragma omp atomic update
+                    m_v2_tensor_ptr[ scindex_vec_1 ] += m_v1_v2_contrib;
+#                   pragma omp atomic update
+                    m_v2_tensor_ptr[ scindex_vec_2 ] += m_v1_v3_contrib;
+#                   pragma omp atomic update
+                    m_v2_tensor_ptr[ scindex_vec_3 ] += m_v2_v1_contrib;
+#                   pragma omp atomic update
+                    m_v2_tensor_ptr[ scindex_vec_4 ] += m_v2_v2_contrib;
+#                   pragma omp atomic update
+                    m_v2_tensor_ptr[ scindex_vec_5 ] += m_v2_v3_contrib;
+#                   pragma omp atomic update
+                    m_v2_tensor_ptr[ scindex_vec_6 ] += m_v3_v1_contrib;
+#                   pragma omp atomic update
+                    m_v2_tensor_ptr[ scindex_vec_7 ] += m_v3_v2_contrib;
+#                   pragma omp atomic update
+                    m_v2_tensor_ptr[ scindex_vec_8 ] += m_v3_v3_contrib;
+                  }
+                            
+                  if( output_tr_virial )
+                  {
+#                   pragma omp atomic update
+                    tr_virial_ptr[ scindex ] += tr_virial_contrib; 
+                  }
 			    
-                            size_t scindex = nbh_cell_i * ctb_stride + nbh_subcell_i;
-                            
-                            if( output_contrib )
-                              {
-#                               pragma omp atomic update
-                                ctb_ptr[ scindex ] += w;
-                              }
-
-                            if( output_mass )
-                              {
-#                               pragma omp atomic update
-                                mass_ptr[ scindex ] += mass_contrib;
-                              }
-                            
-                            if( output_momentum_x )
-                              {
-#                               pragma omp atomic update
-                                momentum_x_ptr[ scindex ] += momentum_x_contrib;
-                              }
-
-                            if( output_momentum_y )
-                              {
-#                               pragma omp atomic update
-                                momentum_y_ptr[ scindex ] += momentum_y_contrib;
-                              }
-
-                            if( output_momentum_z )
-                              {
-#                               pragma omp atomic update
-                                momentum_z_ptr[ scindex ] += momentum_z_contrib;
-                              }                         
-
-                            if( output_momentum_vector )
-                              {
-                                size_t scindex_vec_0 = nbh_cell_i * ctb_stride + nbh_subcell_i * 3 + 0;
-                                size_t scindex_vec_1 = nbh_cell_i * ctb_stride + nbh_subcell_i * 3 + 1;
-                                size_t scindex_vec_2 = nbh_cell_i * ctb_stride + nbh_subcell_i * 3 + 2;
-#                               pragma omp atomic update
-                                momentum_vector_ptr[ scindex_vec_0 ] += momentum_x_contrib;
-#                               pragma omp atomic update
-                                momentum_vector_ptr[ scindex_vec_1 ] += momentum_y_contrib;
-#                               pragma omp atomic update
-                                momentum_vector_ptr[ scindex_vec_2 ] += momentum_z_contrib;
-                              }
-
-                            if( output_virial_tensor )
-                              {
-                                size_t scindex_vec_0 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 0;
-                                size_t scindex_vec_1 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 1;
-                                size_t scindex_vec_2 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 2;
-                                size_t scindex_vec_3 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 3;
-                                size_t scindex_vec_4 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 4;
-                                size_t scindex_vec_5 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 5;
-                                size_t scindex_vec_6 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 6;
-                                size_t scindex_vec_7 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 7;
-                                size_t scindex_vec_8 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 8;
-#                               pragma omp atomic update
-                                virial_tensor_ptr[ scindex_vec_0 ] += virial_11_contrib;
-#                               pragma omp atomic update
-                                virial_tensor_ptr[ scindex_vec_1 ] += virial_12_contrib;
-#                               pragma omp atomic update
-                                virial_tensor_ptr[ scindex_vec_2 ] += virial_13_contrib;
-#                               pragma omp atomic update
-                                virial_tensor_ptr[ scindex_vec_3 ] += virial_21_contrib;
-#                               pragma omp atomic update
-                                virial_tensor_ptr[ scindex_vec_4 ] += virial_22_contrib;
-#                               pragma omp atomic update
-                                virial_tensor_ptr[ scindex_vec_5 ] += virial_23_contrib;
-#                               pragma omp atomic update
-                                virial_tensor_ptr[ scindex_vec_6 ] += virial_31_contrib;
-#                               pragma omp atomic update
-                                virial_tensor_ptr[ scindex_vec_7 ] += virial_32_contrib;
-#                               pragma omp atomic update
-                                virial_tensor_ptr[ scindex_vec_8 ] += virial_33_contrib;
-                              }
-
-                            if( output_m_v2 && m_v2_contrib>0.0 )
-                              {
-#                               pragma omp atomic update
-                                m_v2_ptr[ scindex ] += m_v2_contrib; 
-                              }
-
-                            if( output_m_v2_tensor )
-                              {
-                                size_t scindex_vec_0 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 0;
-                                size_t scindex_vec_1 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 1;
-                                size_t scindex_vec_2 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 2;
-                                size_t scindex_vec_3 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 3;
-                                size_t scindex_vec_4 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 4;
-                                size_t scindex_vec_5 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 5;
-                                size_t scindex_vec_6 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 6;
-                                size_t scindex_vec_7 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 7;
-                                size_t scindex_vec_8 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 8;
-#                               pragma omp atomic update
-                                m_v2_tensor_ptr[ scindex_vec_0 ] += m_v1_v1_contrib;
-#                               pragma omp atomic update
-                                m_v2_tensor_ptr[ scindex_vec_1 ] += m_v1_v2_contrib;
-#                               pragma omp atomic update
-                                m_v2_tensor_ptr[ scindex_vec_2 ] += m_v1_v3_contrib;
-#                               pragma omp atomic update
-                                m_v2_tensor_ptr[ scindex_vec_3 ] += m_v2_v1_contrib;
-#                               pragma omp atomic update
-                                m_v2_tensor_ptr[ scindex_vec_4 ] += m_v2_v2_contrib;
-#                               pragma omp atomic update
-                                m_v2_tensor_ptr[ scindex_vec_5 ] += m_v2_v3_contrib;
-#                               pragma omp atomic update
-                                m_v2_tensor_ptr[ scindex_vec_6 ] += m_v3_v1_contrib;
-#                               pragma omp atomic update
-                                m_v2_tensor_ptr[ scindex_vec_7 ] += m_v3_v2_contrib;
-#                               pragma omp atomic update
-                                m_v2_tensor_ptr[ scindex_vec_8 ] += m_v3_v3_contrib;
-                              }
-                            
-                            if( output_tr_virial )
-                              {
-#                               pragma omp atomic update
-                                tr_virial_ptr[ scindex ] += tr_virial_contrib; 
-                              }
-			    
-			    if( output_deformation_gradient_tensor )
-                              {
-                                size_t scindex_vec_0 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 0;
-                                size_t scindex_vec_1 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 1;
-                                size_t scindex_vec_2 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 2;
-                                size_t scindex_vec_3 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 3;
-                                size_t scindex_vec_4 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 4;
-                                size_t scindex_vec_5 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 5;
-                                size_t scindex_vec_6 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 6;
-                                size_t scindex_vec_7 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 7;
-                                size_t scindex_vec_8 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 8;
-#                               pragma omp atomic update
-                                deformation_gradient_tensor_ptr[ scindex_vec_0 ] += F_11_contrib;
-#                               pragma omp atomic update
-                                deformation_gradient_tensor_ptr[ scindex_vec_1 ] += F_12_contrib;
-#                               pragma omp atomic update
-                                deformation_gradient_tensor_ptr[ scindex_vec_2 ] += F_13_contrib;
-#                               pragma omp atomic update
-                                deformation_gradient_tensor_ptr[ scindex_vec_3 ] += F_21_contrib;
-#                               pragma omp atomic update
-                                deformation_gradient_tensor_ptr[ scindex_vec_4 ] += F_22_contrib;
-#                               pragma omp atomic update
-                                deformation_gradient_tensor_ptr[ scindex_vec_5 ] += F_23_contrib;
-#                               pragma omp atomic update
-                                deformation_gradient_tensor_ptr[ scindex_vec_6 ] += F_31_contrib;
-#                               pragma omp atomic update
-                                deformation_gradient_tensor_ptr[ scindex_vec_7 ] += F_32_contrib;
-#                               pragma omp atomic update
-                                deformation_gradient_tensor_ptr[ scindex_vec_8 ] += F_33_contrib;
-                              }
-                          }
-                      }
+			            if( output_deformation_gradient_tensor )
+                  {
+                    size_t scindex_vec_0 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 0;
+                    size_t scindex_vec_1 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 1;
+                    size_t scindex_vec_2 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 2;
+                    size_t scindex_vec_3 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 3;
+                    size_t scindex_vec_4 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 4;
+                    size_t scindex_vec_5 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 5;
+                    size_t scindex_vec_6 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 6;
+                    size_t scindex_vec_7 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 7;
+                    size_t scindex_vec_8 = nbh_cell_i * ctb_stride + nbh_subcell_i * 9 + 8;
+#                   pragma omp atomic update
+                    deformation_gradient_tensor_ptr[ scindex_vec_0 ] += F_11_contrib;
+#                   pragma omp atomic update
+                    deformation_gradient_tensor_ptr[ scindex_vec_1 ] += F_12_contrib;
+#                   pragma omp atomic update
+                    deformation_gradient_tensor_ptr[ scindex_vec_2 ] += F_13_contrib;
+#                   pragma omp atomic update
+                    deformation_gradient_tensor_ptr[ scindex_vec_3 ] += F_21_contrib;
+#                   pragma omp atomic update
+                    deformation_gradient_tensor_ptr[ scindex_vec_4 ] += F_22_contrib;
+#                   pragma omp atomic update
+                    deformation_gradient_tensor_ptr[ scindex_vec_5 ] += F_23_contrib;
+#                   pragma omp atomic update
+                    deformation_gradient_tensor_ptr[ scindex_vec_6 ] += F_31_contrib;
+#                   pragma omp atomic update
+                    deformation_gradient_tensor_ptr[ scindex_vec_7 ] += F_32_contrib;
+#                   pragma omp atomic update
+                    deformation_gradient_tensor_ptr[ scindex_vec_8 ] += F_33_contrib;
+                  }
+                }
               }
+            }
           }
         GRID_OMP_FOR_END;
         

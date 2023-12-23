@@ -218,7 +218,7 @@ for(int i=0;i<NbAtomesParMaille[itype];i++){
 // Nombre de motifs
 numligne=6;
 for(int i=0;i<3;i++){
-	sscanf(ligne[numligne+i], "%d",&NbMailles[itype][i] );
+	sscanf(ligne[numligne+i], "%ld",&NbMailles[itype][i] );
 }
 
 NbMaillesTotal = NbMailles[itype][0] * NbMailles[itype][1] * NbMailles[itype][2];
@@ -330,7 +330,7 @@ if(strcmp(MoleculeRigide,"o")==0){
 iOrientationMoleculesRigides=NON;
 if(strcmp(OrientationMoleculesRigides,"aleatoire")==0)
 	iOrientationMoleculesRigides=OUI;
-printf("iOrientationMoleculesRigides=%d\n",iOrientationMoleculesRigides);
+printf("iOrientationMoleculesRigides=%ld\n",iOrientationMoleculesRigides);
 
 // Lecture des parametres de la géométrie 
 numligne=22;

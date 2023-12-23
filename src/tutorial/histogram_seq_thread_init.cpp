@@ -9,7 +9,8 @@
 
 namespace exaStamp
 {
-
+  using namespace exanb;
+  
   struct TutorialHistoThreadInit : public OperatorNode
   {      
     ADD_SLOT( MPI_Comm        , mpi_dup       , INPUT , REQUIRED);
