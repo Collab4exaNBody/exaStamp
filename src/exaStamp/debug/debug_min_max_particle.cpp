@@ -22,6 +22,8 @@ namespace exaStamp
     ssize_t m_max_part = -1;
     double m_min = std::numeric_limits<double>::max();
     double m_max = std::numeric_limits<double>::lowest();
+    int m_min_rank = -1;
+    int m_max_rank = -1;
     
     inline void update(size_t cell, size_t part)
     {
@@ -60,6 +62,7 @@ namespace exaStamp
   class DebugMinMaxParticle : public OperatorNode
   {
     ADD_SLOT( MPI_Comm           , mpi             , INPUT , MPI_COMM_WORLD  );
+    ADD_SLOT( bool , abort_on_out_of_range , false, INPUT);
     ADD_SLOT( GridT , grid , INPUT);
 
   public:
@@ -91,42 +94,69 @@ namespace exaStamp
       }
 
       int rank = 0;
+      int np = 1;
       MPI_Comm_rank(*mpi,&rank);
+      MPI_Comm_size(*mpi,&np);
 
       MPI_Allreduce(MPI_IN_PLACE,&total_particles,1,MPI_UNSIGNED_LONG_LONG,MPI_SUM,*mpi);
       
-
       for(auto & f:min_max_finders)
       {
         double all_min = f.m_min;
         MPI_Allreduce(MPI_IN_PLACE,&all_min,1,MPI_DOUBLE,MPI_MIN,*mpi);
-        if(all_min != f.m_min) f.m_min_cell = f.m_min_part = -1;
+        if(all_min != f.m_min) 
+        {
+          f.m_min_cell = -1;
+          f.m_min_part = -1;
+          f.m_min_rank = np;
+        }
+        else
+        {
+          f.m_min_rank = rank;
+        }
+        f.m_min = all_min;
+        MPI_Allreduce(MPI_IN_PLACE,&(f.m_min_rank),1,MPI_INT,MPI_MIN,*mpi);
 
         double all_max = f.m_max;
         MPI_Allreduce(MPI_IN_PLACE,&all_max,1,MPI_DOUBLE,MPI_MAX,*mpi);
-        if(all_max != f.m_max) f.m_max_cell = f.m_max_part = -1;
+        if(all_max != f.m_max)
+        {
+          f.m_max_cell = -1;
+          f.m_max_part = -1;
+          f.m_max_rank = np;
+        }
+        else
+        {
+          f.m_max_rank = rank;
+        }
+        f.m_max = all_max;
+        MPI_Allreduce(MPI_IN_PLACE,&(f.m_max_rank),1,MPI_INT,MPI_MIN,*mpi);
       }
 
       lout << "total particles = "<<total_particles<<std::endl;
       for(const auto & f:min_max_finders)
       {
-        if( ( f.m_min_cell>=0 && f.m_min_part>=0 ) || ( f.m_max_cell>=0 && f.m_max_part>=0 ) )
+        if( ( f.m_min_cell>=0 && f.m_min_part>=0 && f.m_min_rank == rank ) || ( f.m_max_cell>=0 && f.m_max_part>=0 && f.m_max_rank == rank ) )
         {
           std::ostringstream oss;
           oss<< default_stream_format;
-          if( f.m_min_cell>=0 && f.m_min_part>=0 )
+          if( f.m_min_cell>=0 && f.m_min_part>=0 && f.m_min_rank == rank )
           {
             oss << f.m_name << " MIN : P"<<rank<<", cell="<<f.m_min_cell<<", part="<<f.m_min_part<<" : ";
             print_particle( oss , cells[f.m_min_cell][f.m_min_part] );
 //            oss << "\n";
           }
-          if( f.m_max_cell>=0 && f.m_max_part>=0 )
+          if( f.m_max_cell>=0 && f.m_max_part>=0  && f.m_max_rank == rank )
           {
             oss << f.m_name << " MAX : P"<<rank<<", cell="<<f.m_max_cell<<", part="<<f.m_max_part<<" : ";
             print_particle( oss , cells[f.m_max_cell][f.m_max_part] );
 //            oss << "\n";
           }
           std::cout << oss.str() << std::flush;
+        }
+        if( *abort_on_out_of_range && ( std::isnan(f.m_min) || std::isinf(f.m_min) || std::isnan(f.m_max) || std::isinf(f.m_max) ) )
+        {
+          std::abort();
         }
       }
     }
