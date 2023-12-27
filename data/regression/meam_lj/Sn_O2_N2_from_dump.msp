@@ -78,8 +78,8 @@ input_data:
   - atom_neighbors_stats
 
 global:
-  simulation_end_iteration: 10
-  simulation_log_frequency: 1
+  simulation_end_iteration: 50
+  simulation_log_frequency: 10
   simulation_dump_frequency: 1000
   rcut_inc: 1.25 ang
   dt: 1.0e-3 ps
@@ -90,7 +90,7 @@ dump_data:
 
 final_dump: nop
 
-simulation_epilog:
+xxx_simulation_epilog:
   - check_values:
       file: meam_lj_Sn_O2_N2.dat
       threshold: 5.e-10

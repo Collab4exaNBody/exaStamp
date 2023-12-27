@@ -109,7 +109,7 @@ namespace exaStamp
       ForceOp cp_force;
       double rcut_max = 0.0; // max neighbor search distance
       USTAMP_POTENTIAL_PARAMS common_parameters = {};
-#     ifdef USTAMP_POTENTIAL_MULTI_PARAM
+#     if defined(USTAMP_POTENTIAL_RIGIDMOL) || defined(USTAMP_POTENTIAL_MULTI_PARAM)
       onika::memory::CudaMMVector<PotParameters> parameters_storage;
 #     endif
       unsigned int species_index = 0;
@@ -232,7 +232,7 @@ namespace exaStamp
             lerr_stream() << "Rigid molecule pair potential cannot be applied on mono-atomic molecule '"<<species.at(specy_index).name()<<"'"<<std::endl;
             std::abort();
           }
-          bool rebuild_force_op_parameters = ( compute_pair_scratch.cp_force.p.m_n_atoms != species.at(specy_index).m_rigid_atom_count );
+          bool rebuild_force_op_parameters = ( compute_pair_scratch.cp_force.p==nullptr ) ? true : ( compute_pair_scratch.cp_force.p->m_n_atoms != species.at(specy_index).m_rigid_atom_count );
 #         endif
 
 #         ifdef USTAMP_POTENTIAL_MULTI_PARAM
@@ -245,23 +245,19 @@ namespace exaStamp
           {
             ldbg << "rebuild_force_op_parameters" <<std::endl;
 
-#           ifdef USTAMP_POTENTIAL_RIGIDMOL
-            compute_pair_scratch.cp_force.p = parameters;
-            compute_pair_scratch.cp_force.p.m_n_atoms = species.at(specy_index).m_rigid_atom_count;
-            for(unsigned int a=0;a<compute_pair_scratch.cp_force.p.m_n_atoms;a++)
-            {
-              compute_pair_scratch.cp_force.p.m_atoms[a] = species.at(specy_index).m_rigid_atoms[a];
-            }
-            compute_pair_scratch.cp_force.p.m_user_pot_parameters = nullptr;
-            auto & pot_params = compute_pair_scratch.cp_force.p;
-#           endif
-
-#           ifdef USTAMP_POTENTIAL_MULTI_PARAM
+#           if defined(USTAMP_POTENTIAL_RIGIDMOL) || defined(USTAMP_POTENTIAL_MULTI_PARAM)
             compute_pair_scratch.parameters_storage.resize(1);
-            //compute_pair_scratch.parameters_storage[0] = parameters;
             compute_pair_scratch.parameters_storage[0].m_user_pot_parameters = nullptr;
             compute_pair_scratch.cp_force.p = compute_pair_scratch.parameters_storage.data();
             auto & pot_params = compute_pair_scratch.parameters_storage[0];
+#           endif
+
+#           ifdef USTAMP_POTENTIAL_RIGIDMOL
+            pot_params.m_n_atoms = species.at(specy_index).m_rigid_atom_count;
+            for(unsigned int a=0;a<pot_params.m_n_atoms;a++)
+            {
+              pot_params.m_atoms[a] = species.at(specy_index).m_rigid_atoms[a];
+            }
 #           endif
 
             const unsigned int n_type_pairs = unique_pair_count( species.size() );
