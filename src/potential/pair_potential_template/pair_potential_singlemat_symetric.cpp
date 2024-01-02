@@ -80,7 +80,8 @@ namespace exaStamp
     struct SymetricForceOp
     {
       USTAMP_POTENTIAL_PARAMS p;
-      PairPotentialParameters pair_params;
+      //PairPotentialParameters
+      PairPotentialMinimalParameters pair_params;
       double ecut;
 
       // version with virial computation
@@ -380,13 +381,13 @@ namespace exaStamp
         {
           CompactPairWeightIterator cp_weight = { compact_nbh_weight->m_cell_weights.data() };
           auto optional = make_compute_pair_optional_args( nbh_it, cp_weight, cp_xform, ComputePairOptionalLocks<true> { particle_locks->data() } );
-          compute_cell_particle_pairs( *grid, *rcut, true, optional, cp_force_buf, force_op , compute_fields );
+          compute_cell_particle_pairs( *grid, *rcut, true, optional, cp_force_buf, force_op , compute_fields , parallel_execution_context() );
         }
         else
         {
           ComputePairNullWeightIterator cp_weight = {};
           auto optional = make_compute_pair_optional_args( nbh_it, cp_weight, cp_xform, ComputePairOptionalLocks<true> { particle_locks->data() } );
-          compute_cell_particle_pairs( *grid, *rcut, true, optional, cp_force_buf, force_op , compute_fields );
+          compute_cell_particle_pairs( *grid, *rcut, true, optional, cp_force_buf, force_op , compute_fields , parallel_execution_context() );
         }
       }
       else
@@ -396,13 +397,13 @@ namespace exaStamp
         {
           CompactPairWeightIterator cp_weight = { compact_nbh_weight->m_cell_weights.data() };
           auto optional = make_compute_pair_optional_args( nbh_it, cp_weight, cp_xform, ComputePairOptionalLocks<true> { particle_locks->data() } );
-          compute_cell_particle_pairs( *grid, *rcut, true, optional, cp_force_buf, force_op , compute_fields );
+          compute_cell_particle_pairs( *grid, *rcut, true, optional, cp_force_buf, force_op , compute_fields , parallel_execution_context() );
         }
         else
         {
           ComputePairNullWeightIterator cp_weight = {};
           auto optional = make_compute_pair_optional_args( nbh_it, cp_weight, cp_xform, ComputePairOptionalLocks<true> { particle_locks->data() } );
-          compute_cell_particle_pairs( *grid, *rcut, true, optional, cp_force_buf, force_op , compute_fields );
+          compute_cell_particle_pairs( *grid, *rcut, true, optional, cp_force_buf, force_op , compute_fields , parallel_execution_context() );
         }
       }
     }

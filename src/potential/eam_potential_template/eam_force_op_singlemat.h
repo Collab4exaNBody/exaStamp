@@ -20,7 +20,7 @@ namespace exaStamp
 
     struct EmbOp
     {
-      const USTAMP_POTENTIAL_PARMS p;
+      const onika::cuda::ro_shallow_copy_t<USTAMP_POTENTIAL_PARMS> p;
       const double rhoCut;
       const double phiCut;
       const size_t* m_cell_emb_offset = nullptr;
@@ -62,7 +62,7 @@ namespace exaStamp
 
     struct ForceOp
     {
-      const USTAMP_POTENTIAL_PARMS p;
+      const onika::cuda::ro_shallow_copy_t<USTAMP_POTENTIAL_PARMS> p;
       const double rhoCut;
       const double phiCut;
       const size_t* m_cell_emb_offset = nullptr;

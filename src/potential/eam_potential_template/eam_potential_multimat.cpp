@@ -37,6 +37,8 @@ namespace exaStamp
     using CellParticles = typename GridT::CellParticles;
     using EamMultiMatParams = EamMultimatParameters<USTAMP_POTENTIAL_PARMS>;
     using EamParamVector = std::vector<EamMultiMatParams>;
+    using EamPotParmRO = PRIV_NAMESPACE_NAME::EamMultiMatParamsReadOnly;
+    using EamScratch = EamMultimatPotentialScratch< EamPotParmRO >;
     using EmbOp = PRIV_NAMESPACE_NAME::EmbOp;
     using ForceOp = PRIV_NAMESPACE_NAME::ForceOp;
 
@@ -59,7 +61,7 @@ namespace exaStamp
     ADD_SLOT( exanb::GridChunkNeighbors    , chunk_neighbors  , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
     ADD_SLOT( GridT                 , grid             , INPUT_OUTPUT );
     ADD_SLOT( Domain                , domain           , INPUT , REQUIRED );
-    ADD_SLOT( EamPotentialScratch   , eam_scratch      , PRIVATE );
+    ADD_SLOT( EamScratch            , eam_scratch      , PRIVATE );
 
   public:
 
@@ -128,6 +130,7 @@ namespace exaStamp
 
       assert( potentials->size() == n_type_pairs );
       eam_scratch->m_phi_rho_cutoff.resize( n_type_pairs );
+      eam_scratch->m_ro_potentials.resize( n_type_pairs );
       for(size_t i=0;i<n_type_pairs;i++)
       {
         double phiCut = 0.;
@@ -147,6 +150,8 @@ namespace exaStamp
         }
 #       endif
         eam_scratch->m_phi_rho_cutoff[i] = { phiCut , rhoCut };
+        const auto & pot = potentials->at(i);
+        eam_scratch->m_ro_potentials[i] = { pot.m_parameters , pot.m_specy_pair };
       }
 
       // TODO: emb data should be an in/out slot of this operator, not a member
@@ -171,26 +176,26 @@ namespace exaStamp
       // 1st pass parameters : compute per particle EMB term, including ghost particles
       using EmbCPBuf = ComputePairBuffer2<false,false ,EamComputeBufferTypeExt,EamCopyParticleType>;
       ComputePairBufferFactory< EmbCPBuf > emb_buf;
-      EmbOp emb_op { potentials->data(), eam_scratch->m_phi_rho_cutoff.data(), grid->cell_particle_offset_data() /*eam_scratch->m_offset.data()*/, eam_scratch->m_emb.data(), eam_scratch->m_pair_enabled.data() };
+      EmbOp emb_op { eam_scratch->m_ro_potentials.data(), eam_scratch->m_phi_rho_cutoff.data(), grid->cell_particle_offset_data() /*eam_scratch->m_offset.data()*/, eam_scratch->m_emb.data(), eam_scratch->m_pair_enabled.data() };
 
       // 2nd pass parameters: compute final force using the emb term, only for non ghost particles (but reading EMB terms from neighbor particles)
       using ForceCPBuf = ComputePairBuffer2<false,false,EamComputeBufferEmbTypeExt,EamCopyParticleEmbType>;
       ComputePairBufferFactory< ForceCPBuf , EamCopyParticleEmbInitFunc > force_buf = { grid->cell_particle_offset_data() /*eam_scratch->m_offset.data()*/ , eam_scratch->m_emb.data() };
-      ForceOp force_op { potentials->data(), eam_scratch->m_phi_rho_cutoff.data(), grid->cell_particle_offset_data()/*eam_scratch->m_offset.data()*/ , eam_scratch->m_emb.data(), eam_scratch->m_pair_enabled.data() };
+      ForceOp force_op { eam_scratch->m_ro_potentials.data(), eam_scratch->m_phi_rho_cutoff.data(), grid->cell_particle_offset_data()/*eam_scratch->m_offset.data()*/ , eam_scratch->m_emb.data(), eam_scratch->m_pair_enabled.data() };
 
       // execute the 2 passes
       if( domain->xform_is_identity() )
       {
         auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , NullXForm{} , cp_locks );
-        compute_cell_particle_pairs( *grid, *rcut, true, optional, emb_buf, emb_op, emb_compute_fields_v );
-        compute_cell_particle_pairs( *grid, *rcut, false, optional, force_buf, force_op, force_compute_fields_v );
+        compute_cell_particle_pairs( *grid, *rcut, true, optional, emb_buf, emb_op, emb_compute_fields_v, parallel_execution_context() );
+        compute_cell_particle_pairs( *grid, *rcut, false, optional, force_buf, force_op, force_compute_fields_v, parallel_execution_context() );
       }
       else
       {
         ldbg << "xform = " << domain->xform() << std::endl;
         auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , LinearXForm{ domain->xform() } , cp_locks );
-        compute_cell_particle_pairs( *grid, *rcut, true, optional, emb_buf, emb_op, emb_compute_fields_v );
-        compute_cell_particle_pairs( *grid, *rcut, false, optional, force_buf, force_op, force_compute_fields_v );
+        compute_cell_particle_pairs( *grid, *rcut, true, optional, emb_buf, emb_op, emb_compute_fields_v, parallel_execution_context() );
+        compute_cell_particle_pairs( *grid, *rcut, false, optional, force_buf, force_op, force_compute_fields_v, parallel_execution_context() );
       }
     }
 

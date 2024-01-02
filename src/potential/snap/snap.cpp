@@ -167,21 +167,19 @@ namespace exaStamp
 #     ifdef XSTAMP_CUDA_VERSION
       static SnapGPUContext<SnapExt::CUDA_BLOCK_SIZE,3> snap_gpu_jmax3;
       static SnapGPUContext<SnapExt::CUDA_BLOCK_SIZE,4> snap_gpu_jmax4;
-      auto * gpu_exec_ctx = parallel_execution_context();
       bool go_gpu = false;
-      if( gpu_exec_ctx != nullptr ) if( gpu_exec_ctx->m_cuda_ctx != nullptr ) go_gpu = gpu_exec_ctx->m_cuda_ctx->has_devices() && ( m_cg->get_jmax()==3 || m_cg->get_jmax()==4 );
+      if( global_cuda_ctx() != nullptr ) go_gpu = global_cuda_ctx()->has_devices() && ( m_cg->get_jmax()==3 || m_cg->get_jmax()==4 );
       if( go_gpu )
       {
-      
 #       pragma omp critical(cuda_snap_alloc)
         {
           switch( int( m_cg->get_jmax() ) )
           {
             case 3 :
-              if( snap_gpu_jmax3.d_bs_fblock == nullptr ) snap_gpu_jmax3.initialize( * (gpu_exec_ctx->m_cuda_ctx) , *(m_thread_ctx[0].m_snapbs) );
+              if( snap_gpu_jmax3.d_bs_fblock == nullptr ) snap_gpu_jmax3.initialize( * (global_cuda_ctx()) , *(m_thread_ctx[0].m_snapbs) );
               break;
             case 4 :
-              if( snap_gpu_jmax4.d_bs_fblock == nullptr ) snap_gpu_jmax4.initialize( * (gpu_exec_ctx->m_cuda_ctx) , *(m_thread_ctx[0].m_snapbs) );
+              if( snap_gpu_jmax4.d_bs_fblock == nullptr ) snap_gpu_jmax4.initialize( * (global_cuda_ctx()) , *(m_thread_ctx[0].m_snapbs) );
               break;
             default:
               std::abort();
@@ -218,7 +216,7 @@ namespace exaStamp
       {
         LinearXForm cp_xform { domain->xform() };
         auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform, ComputePairOptionalLocks<true>{ particle_locks->data() } );
-        compute_cell_particle_pairs( *grid, m_rcut, *ghost, optional, force_buf, force_op , compute_force_field_set );
+        compute_cell_particle_pairs( *grid, m_rcut, *ghost, optional, force_buf, force_op, compute_force_field_set, parallel_execution_context()  );
       }
 
     }

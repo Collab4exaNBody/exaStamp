@@ -27,17 +27,18 @@ namespace exaStamp
     onika::memory::CudaMMVector< PhiRhoCutoff > m_phi_rho_cutoff;
     onika::memory::CudaMMVector< uint8_t > m_pair_enabled;
   };
-  
-/*
-  // temporary storage for emb terms, used to pass emb across the 2 compute passes
-  struct EamScratchBuffer
-  {
-    std::vector< std::vector<double> > m_emb;
-    std::vector< std::pair<double,double> > m_phi_rho_cutoff;
-    std::vector< bool > m_pair_enabled;
-  };
-*/
 
+  template<class EamMultimatPotentialParmT>
+  struct EamMultimatPotentialScratch
+  {
+    //onika::memory::CudaMMVector< size_t > m_offset; 
+    onika::memory::CudaMMVector< double > m_emb;
+    onika::memory::CudaMMVector< PhiRhoCutoff > m_phi_rho_cutoff;
+    onika::memory::CudaMMVector< uint8_t > m_pair_enabled;
+    onika::memory::CudaMMVector< EamMultimatPotentialParmT > m_ro_potentials;
+  };
+
+  
   // additional storage space added to compute buffer created by compute_cell_particle_pairs
   struct alignas(DEFAULT_ALIGNMENT) EamComputeBufferExt
   {
@@ -124,6 +125,13 @@ namespace exaStamp
     EAMSpecyPairInfo m_specy_pair;
     std::string m_type_a;
     std::string m_type_b;
+  };
+
+  template<class EamParametersT>
+  struct EamMultimatParametersRO
+  {
+    EamParametersT m_parameters;
+    EAMSpecyPairInfo m_specy_pair;
   };
 
 }

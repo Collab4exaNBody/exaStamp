@@ -173,13 +173,13 @@ namespace exaStamp
       {
         NullXForm cp_xform;
         auto optional = make_compute_pair_optional_args( nbh_it, ComputePairNullWeightIterator{} , cp_xform, cp_locks );
-        compute_cell_particle_pairs( *grid, m_rcut, *ghost, optional, force_buf, force_op , compute_force_field_set );
+        compute_cell_particle_pairs( *grid, m_rcut, *ghost, optional, force_buf, force_op , compute_force_field_set , parallel_execution_context() );
       }
       else
       {
         LinearXForm cp_xform { domain->xform() };
         auto optional = make_compute_pair_optional_args( nbh_it, ComputePairNullWeightIterator{} , cp_xform, cp_locks );
-        compute_cell_particle_pairs( *grid, m_rcut, *ghost, optional, force_buf, force_op , compute_force_field_set );
+        compute_cell_particle_pairs( *grid, m_rcut, *ghost, optional, force_buf, force_op , compute_force_field_set , parallel_execution_context() );
       }
     }
 

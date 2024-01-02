@@ -23,7 +23,8 @@ namespace exaStamp
 # ifndef USTAMP_POTENTIAL_EAM_PHI_MM
 # define EamPotentialPhiMMName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_phi_mm)
 # define USTAMP_POTENTIAL_EAM_PHI_MM EamPotentialPhiMMName
-  inline void EamPotentialPhiMMName(const USTAMP_POTENTIAL_PARMS & p, double r, double& phiValue, double& dphi, const EAMSpecyPairInfo& /*unused*/ , bool = false /*unused*/ )
+  template<class EAMPotentialParmsT>
+  inline void EamPotentialPhiMMName(const EAMPotentialParmsT & p, double r, double& phiValue, double& dphi, const EAMSpecyPairInfo& /*unused*/ , bool = false /*unused*/ )
   {
     USTAMP_POTENTIAL_EAM_PHI( p, r, phiValue, dphi );
   }
@@ -32,7 +33,8 @@ namespace exaStamp
 # ifndef USTAMP_POTENTIAL_EAM_RHO_MM
 # define EamPotentialRhoMMName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_rho_mm)
 # define USTAMP_POTENTIAL_EAM_RHO_MM EamPotentialRhoMMName
-  inline void EamPotentialRhoMMName(const USTAMP_POTENTIAL_PARMS & p, double r, double& rhoValue, double& drho, const EAMSpecyPairInfo& /*unused*/ , bool = false /*unused*/ )
+  template<class EAMPotentialParmsT>
+  inline void EamPotentialRhoMMName(const EAMPotentialParmsT & p, double r, double& rhoValue, double& drho, const EAMSpecyPairInfo& /*unused*/ , bool = false /*unused*/ )
   {
     USTAMP_POTENTIAL_EAM_RHO( p, r, rhoValue, drho );
   }
@@ -41,11 +43,12 @@ namespace exaStamp
   namespace PRIV_NAMESPACE_NAME
   {
 
-    using EamMultiMatParams = EamMultimatParameters<USTAMP_POTENTIAL_PARMS>;
+    using EamMultiMatParams = EamMultimatParameters< USTAMP_POTENTIAL_PARMS >;
+    using EamMultiMatParamsReadOnly = EamMultimatParametersRO< onika::cuda::ro_shallow_copy_t<USTAMP_POTENTIAL_PARMS> >;
 
     struct EmbOp
     {
-      const EamMultiMatParams* p = nullptr;
+      const EamMultiMatParamsReadOnly* p = nullptr;
       const PhiRhoCutoff* phi_rho_cutoff = nullptr;
       const size_t* m_cell_emb_offset = nullptr;
       double* m_particle_emb = nullptr;
@@ -78,20 +81,20 @@ namespace exaStamp
 	  
           double rholoc = 0.;
           double drholoc = 0.;
-	  if( m_pair_enabled[pair_id] )
-	    {
-	      USTAMP_POTENTIAL_EAM_RHO_MM( p[unique_pair_id( type_b, type_b )].m_parameters, r, rholoc, drholoc, p[pair_id].m_specy_pair, pair_inversed );
-	      //rholoc -= phi_rho_cutoff[unique_pair_id( type_a, type_a )].m_rho_cutoff;
-	      rho += rholoc;
-	    }
+          if( m_pair_enabled[pair_id] )
+          {
+            USTAMP_POTENTIAL_EAM_RHO_MM( p[unique_pair_id( type_b, type_b )].m_parameters, r, rholoc, drholoc, p[pair_id].m_specy_pair, pair_inversed );
+            //rholoc -= phi_rho_cutoff[unique_pair_id( type_a, type_a )].m_rho_cutoff;
+            rho += rholoc;
+          }
         }
 
         double emb = 0.;
         double demb = 0.;
-	double rhomax = 100.;
+	      double rhomax = 100.;
         USTAMP_POTENTIAL_EAM_EMB( p[unique_pair_id(type_a,type_a)].m_parameters, rho, emb, demb );
         m_particle_emb[ m_cell_emb_offset[tab.cell] + tab.part ] = demb;	
-	if (rho > rhomax) emb += demb * (rho-rhomax);
+	      if (rho > rhomax) emb += demb * (rho-rhomax);
         ep += emb;
       }
 
@@ -100,7 +103,7 @@ namespace exaStamp
 
     struct ForceOp
     {
-      const EamMultiMatParams* p;
+      const EamMultiMatParamsReadOnly* p;
       const PhiRhoCutoff* phi_rho_cutoff = nullptr;
       const size_t* m_cell_emb_offset = nullptr;
       double* m_particle_emb = nullptr;

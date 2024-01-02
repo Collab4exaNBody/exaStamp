@@ -68,7 +68,7 @@ namespace exanb
       RemoveZeroDistParticlesFunctor force_op = { mdist*mdist };
       LinearXForm cp_xform { domain->xform() };
       auto optional = make_compute_pair_optional_args( nbh_it, ComputePairNullWeightIterator{} , cp_xform, cp_locks );
-      compute_cell_particle_pairs(*grid, mdist, false, optional, force_buf, force_op, FieldSet<field::_id>{}, DefaultPositionFields{}, parallel_execution_context() );
+      compute_cell_particle_pairs(*grid, mdist, false, optional, force_buf, force_op, FieldSet<field::_id>{}, parallel_execution_context(), DefaultPositionFields{} );
 
       auto cells = grid->cells();
       size_t number_of_removed_particles = 0;

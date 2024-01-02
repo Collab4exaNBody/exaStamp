@@ -126,15 +126,15 @@ namespace exaStamp
       if( domain->xform_is_identity() )
       {
         auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , exanb::NullXForm{} , cp_locks );
-        compute_cell_particle_pairs( *grid, *rcut, true, optional, emb_buf, emb_op, FieldSet<field::_ep>{} , DefaultPositionFields{} , parallel_execution_context() );
-        compute_cell_particle_pairs( *grid, *rcut, false, optional, force_buf, force_op, ComputeFields{} , DefaultPositionFields{} , parallel_execution_context() );
+        compute_cell_particle_pairs( *grid, *rcut, true, optional, emb_buf, emb_op, FieldSet<field::_ep>{} , parallel_execution_context() );
+        compute_cell_particle_pairs( *grid, *rcut, false, optional, force_buf, force_op, ComputeFields{} , parallel_execution_context() );
       }
       else
       {
         ldbg << "xform = " << domain->xform() << std::endl;
         auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , exanb::LinearXForm{ domain->xform() } , cp_locks );
-        compute_cell_particle_pairs( *grid, *rcut, true, optional, emb_buf, emb_op, FieldSet<field::_ep>{} , DefaultPositionFields{} , parallel_execution_context() );
-        compute_cell_particle_pairs( *grid, *rcut, false, optional, force_buf, force_op, ComputeFields{} , DefaultPositionFields{} , parallel_execution_context() );
+        compute_cell_particle_pairs( *grid, *rcut, true, optional, emb_buf, emb_op, FieldSet<field::_ep>{} , parallel_execution_context() );
+        compute_cell_particle_pairs( *grid, *rcut, false, optional, force_buf, force_op, ComputeFields{} , parallel_execution_context() );
       }
     }
 

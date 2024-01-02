@@ -180,25 +180,25 @@ namespace exaStamp
       exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
       auto optional = make_compute_pair_optional_args( nbh_it, ComputePairNullWeightIterator{} , cp_xform, cp_locks );
       
-      if (use_filtered_positions) {	
-
-	PosititionFields< field::_rxf , field::_ryf, field::_rzf> FilteredPositionFields;
-	compute_cell_particle_pairs( grid, *rcut_max , false, optional, cp_force_buf, deformation_gradient_compute_op , FieldSet<>{}, FilteredPositionFields);
-	if (perform_dislocation_analysis) {
-	  RefGradientComputeOp<GridT> dislocation_measure_compute_op {grid_t0->cells(), local_mechanical_data, xform_t0, xform, lattice, rrDef, weight_function_mode};	  
-	  compute_cell_particle_pairs( grid, *rcut_max , false, optional, cp_force_buf, dislocation_measure_compute_op, FieldSet<>{}, FilteredPositionFields);	  
-	}
-	
-      } else {
-
-	compute_cell_particle_pairs( grid, *rcut_max , false, optional, cp_force_buf, deformation_gradient_compute_op , FieldSet<>{});
-	if (perform_dislocation_analysis) {
-	  RefGradientComputeOp<GridT> dislocation_measure_compute_op {grid_t0->cells(), local_mechanical_data, xform_t0, xform, lattice, rrDef, weight_function_mode};	  
-	  compute_cell_particle_pairs( grid, *rcut_max , false, optional, cp_force_buf, dislocation_measure_compute_op, FieldSet<>{});	  
-	}
-	
+      if (use_filtered_positions)
+      {	
+	      PosititionFields< field::_rxf , field::_ryf, field::_rzf> FilteredPositionFields;
+	      compute_cell_particle_pairs( grid, *rcut_max , false, optional, cp_force_buf, deformation_gradient_compute_op , FieldSet<>{}, parallel_execution_context() , FilteredPositionFields);
+	      if (perform_dislocation_analysis) 
+	      {
+	        RefGradientComputeOp<GridT> dislocation_measure_compute_op {grid_t0->cells(), local_mechanical_data, xform_t0, xform, lattice, rrDef, weight_function_mode};	  
+	        compute_cell_particle_pairs( grid, *rcut_max , false, optional, cp_force_buf, dislocation_measure_compute_op, FieldSet<>{}, parallel_execution_context() , FilteredPositionFields);	  
+	      }	
       }
-                  
+      else
+      {
+	      compute_cell_particle_pairs( grid, *rcut_max , false, optional, cp_force_buf, deformation_gradient_compute_op , FieldSet<>{}, parallel_execution_context() );
+	      if (perform_dislocation_analysis)
+	      {
+	        RefGradientComputeOp<GridT> dislocation_measure_compute_op {grid_t0->cells(), local_mechanical_data, xform_t0, xform, lattice, rrDef, weight_function_mode};	  
+	        compute_cell_particle_pairs( grid, *rcut_max , false, optional, cp_force_buf, dislocation_measure_compute_op, FieldSet<>{}, parallel_execution_context() );	  
+	      }
+      }         
     }
 
     struct alignas(onika::memory::DEFAULT_ALIGNMENT) R0VExtraStorage
