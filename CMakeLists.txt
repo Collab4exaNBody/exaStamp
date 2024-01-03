@@ -1,8 +1,20 @@
+cmake_minimum_required(VERSION 3.18)
+
+# ========================================
+# === Compiler toolchain configuration ===
+# ========================================
+# C++ standard
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS NO)
+if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+  set(CMAKE_CUDA_ARCHITECTURES 86)
+endif()
+
 # ===============
 # === Project ===
 # ===============
-cmake_minimum_required(VERSION 3.16)
-project(exaStamp LANGUAGES C CXX)
+project(exaStamp VERSION 3.3 LANGUAGES C CXX CUDA)
 
 # ===========================
 # === CMake customization ===
