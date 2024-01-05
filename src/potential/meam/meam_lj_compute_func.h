@@ -172,8 +172,8 @@ namespace exaStamp
       ) const
     {
       // get central particle's type
-      const unsigned int type_a = tab.ta; // static_cast<unsigned int>( tab.ext.S[0] );
-      assert( n==0 || type_a==m_meam_lj_multimat.m_meam_type );
+      //const unsigned int type_a = tab.ta; // static_cast<unsigned int>( tab.ext.S[0] );
+      assert( n==0 || tab.ta==m_meam_lj_multimat.m_meam_type );
 
       // get contributions from LJ pairs stored in S array
 

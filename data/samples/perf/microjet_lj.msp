@@ -24,7 +24,6 @@ replicate_domain:
 input_data:
   - read_dump_atoms:
       filename: microjet.dump
-      scale_cell_size: 2.0
   - replicate_domain
 
 global:
