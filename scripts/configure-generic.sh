@@ -1,3 +1,33 @@
+######################## Ubuntu GCC version ##########################
+export PROJECT_SETUP_ENV_COMMANDS=""
+#eval ${PROJECT_SETUP_ENV_COMMANDS}
+
+export XSNVCC=/usr/local/cuda/bin/nvcc
+export XSNVARCH=86
+BUILD_DIR=$CCCSCRATCHDIR/build/generic-gcc
+SRC_DIR=$HOME/dev/exaStamp-main
+XNB_DIR=$HOME/dev/exaNBody
+
+mkdir -p $BUILD_DIR
+rm -rf $BUILD_DIR/*
+cd $BUILD_DIR
+
+ccmake -DXNB_PRODUCT_VARIANT=rigidmol \
+       -DXSTAMP_BUILD_CUDA=ON \
+       -DCMAKE_CUDA_ARCHITECTURES=86 \
+       -DONIKA_HAVE_OPENMP_DETACH=OFF \
+       -DONIKA_HAVE_OPENMP_TOOLS=OFF \
+       -DCMAKE_CUDA_COMPILER=${XSNVCC} \
+       -DCMAKE_BUILD_TYPE=Release \
+       -DXSTAMP_BUILD_exaStampLCHBOP=OFF \
+       -DEXASTAMP_TEST_DATA_DIR=${HOME}/data \
+       -DPROJECT_SETUP_ENV_COMMANDS="${PROJECT_SETUP_ENV_COMMANDS}" \
+       -DexaNBody_DIR=${XNB_DIR} \
+       ${SRC_DIR}
+
+exit 0
+
+
 # OpenMPI (bxi only)
 export PROJECT_SETUP_ENV_COMMANDS="module purge ; module load inteloneapi/22.1.2 gnu/8.4.0 nvhpc/23.1 mpi/openmpi/4.1.4 texlive cmake/3.20.3"
 eval ${PROJECT_SETUP_ENV_COMMANDS}
@@ -44,7 +74,7 @@ echo "Compile with : cd $BUILD_DIR && make -j8 && make UpdatePluginDataBase"
 # OMP_NUM_THREADS=64 ccc_mprun -n4 -c32 -pa100 ./exaStamp myInput.msp
 echo "In build dir, run with : OMP_NUM_THREADS=XX mpirun <mpi options> ./exaStamp myInput.msp"
 echo "Note: use one mpi process per GPU card, i.e. 4 GPU per node => 4 mpi process per node"
-
+exit 0
 
 
 ######################## GCC version ##########################
@@ -76,4 +106,7 @@ ccmake -DXNB_PRODUCT_VARIANT=rigidmol \
        -DPROJECT_SETUP_ENV_COMMANDS="${PROJECT_SETUP_ENV_COMMANDS}" \
        -DexaNBody_DIR=${XNB_DIR} \
        ${SRC_DIR}
+
+exit 0
+
 
