@@ -94,7 +94,7 @@ input_data:
 ###################################
   - particle_regions:
       - BOX:
-          bounds: [ [ 800 ang , 0 ang , 0 ang ] , [ 1000 ang , 1000 ang , 1000 ang ] ]
+          bounds: [ [ 700 ang , 100 ang , 100 ang ] , [ 900 ang , 900 ang , 900 ang ] ]
       - SPHERE:
           quadric:
             shape: sphere
@@ -132,8 +132,8 @@ input_data:
 #     *** Domain configuration ***
         - domain:
             cell_size: 30.0 ang
-            periodic: [false,false,false]
-            expandable: true
+            periodic: [true,true,true]
+#            expandable: true
 #     *** Generate lattice with geometrical constraints ***
         - lattice:
             structure: SC
