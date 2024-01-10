@@ -13,6 +13,7 @@ configuration:
   profiling:
     summary: true
   logging:
+    parallel: false
     debug: false
   debug:
     filter: [".*wall"]
@@ -72,7 +73,7 @@ grid_flavor: grid_flavor_rigidmol
 
 global:
   dt: 5.0e-4 ps
-  simulation_end_iteration: 100
+  simulation_end_iteration: 10
   simulation_log_frequency: 10
   simulation_dump_frequency: 1000
   rcut_inc: 1.5 ang
@@ -100,7 +101,7 @@ input_data:
             shape: sphere
             transform:
               - scale: [ 200 ang , 200 ang , 200 ang ] 
-              - translate: [ 250 ang , 500 ang , 500 ang ]
+              - translate: [ 210 ang , 210 ang , 210 ang ]
 #
   - has_dump_file:
       rebind: { result: has_dump_file }
@@ -138,11 +139,11 @@ input_data:
         - lattice:
             structure: SC
             types: [ H2O ]
-            size: [ 8. ang , 8. ang , 8. ang ]
-            noise: 0.2 ang
-            noise_cutoff: 0.4 ang
-            repeats: [ 121 , 121 , 121 ]
-            region: BOX or SPHERE
+            size: [ 3.103 ang , 3.103 ang , 3.103 ang ]
+            noise: 0.1 ang
+            noise_cutoff: 0.2 ang
+            repeats: [ 110 , 110 , 110 ]
+            region: SPHERE
 #     *** Initialize temperature ***
         - random_orient
 #

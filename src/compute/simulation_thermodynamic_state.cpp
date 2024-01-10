@@ -136,8 +136,6 @@ namespace exaStamp
       kinetic_energy *= 0.5; // later is here
       Mat3d ke_tensor = 0.5 * kinetic_tensor;
 
-      auto prof_section = profile_begin_section("mpi");
-
       // reduce partial sums and share the result
       {
         // tmp size = 3*3 + 3 + 3 + 1 + 1 + 1 = 18
@@ -180,8 +178,6 @@ namespace exaStamp
         total_particles = tmp[26];
       }
 
-      profile_end_section(prof_section);
-      
 //      ldbg << "Bounds = " << domain->bounds() << std::endl;
 //      ldbg << "Avg speed = " << momentum / mass << std::endl;
 
