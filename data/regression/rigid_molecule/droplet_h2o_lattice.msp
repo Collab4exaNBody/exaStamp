@@ -78,6 +78,12 @@ global:
   simulation_dump_frequency: 1000
   rcut_inc: 1.5 ang
 
+grid_cell_particle_splatting:
+  splat_size: 4.0 ang
+  grid_subdiv: 3
+
+dump_data: dump_data_grid_vtk
+
 thermostat:
   - langevin_rigidmol:
       T: 320 K
@@ -100,8 +106,8 @@ input_data:
           quadric:
             shape: sphere
             transform:
-              - scale: [ 200 ang , 200 ang , 200 ang ] 
-              - translate: [ 210 ang , 210 ang , 210 ang ]
+              - scale: [ 150 ang , 150 ang , 150 ang ] 
+              - translate: [ 170.665 ang , 170.665 ang , 170.665 ang ]
 #
   - has_dump_file:
       rebind: { result: has_dump_file }
