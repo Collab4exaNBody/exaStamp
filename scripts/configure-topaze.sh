@@ -133,7 +133,7 @@ read -r -d '' CMAKE_CONFIG_VARS <<- EOF
     EXASTAMP_TEST_DATA_DIR      = /ccc/store/cont002/exadem22/exadem22/data
     SOATL_ENABLE_BENCHMARKS     = OFF
     CMAKE_CUDA_COMPILER         = ${XSNVCC}
-    XSTAMP_BUILD_CUDA           = ON
+    XNB_BUILD_CUDA           = ON
     CMAKE_CUDA_ARCHITECTURES    = ${XSNVARCH}
     EXASTAMP_BUILD_TAZ          = OFF
     XSTAMP_ENABLE_SLIPLINK      = OFF

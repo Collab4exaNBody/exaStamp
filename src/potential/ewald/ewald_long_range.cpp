@@ -213,7 +213,7 @@ namespace exaStamp
       {
         // const int streamIndex = 0;
 	      //lout << "Ewald rho : Cuda version" << std::endl;
-        checkCudaErrors( ONIKA_CU_MEMSET( ewald_rho->rho.data(), 0, sizeof(Complexd)*nk, global_cuda_ctx()->getThreadStream(0) ) );
+        ONIKA_CU_CHECK_ERRORS( ONIKA_CU_MEMSET( ewald_rho->rho.data(), 0, sizeof(Complexd)*nk, global_cuda_ctx()->getThreadStream(0) ) );
         /* if( domain->xform_is_identity() )
         {
           EwaldLongRangeRhoComputeFunc<NullXForm> func = { {} , get_species() , *ewald_config , ewald_rho->rho.data() };

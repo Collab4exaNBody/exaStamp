@@ -24,7 +24,7 @@
 #include "snapCg.h"
 #include "snapBs.h"
 
-#ifdef XSTAMP_CUDA_VERSION
+#ifdef XNB_CUDA_VERSION
 #include <onika/cuda/cuda_context.h>
 #include "snap_gpu.h"
 #endif
@@ -164,7 +164,7 @@ namespace exaStamp
       exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
       auto force_buf = make_compute_pair_buffer<ComputeBuffer>();
 
-#     ifdef XSTAMP_CUDA_VERSION
+#     ifdef XNB_CUDA_VERSION
       static SnapGPUContext<SnapExt::CUDA_BLOCK_SIZE,3> snap_gpu_jmax3;
       static SnapGPUContext<SnapExt::CUDA_BLOCK_SIZE,4> snap_gpu_jmax4;
       bool go_gpu = false;

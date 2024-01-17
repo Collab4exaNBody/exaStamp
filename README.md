@@ -52,7 +52,7 @@ Run CMake to configure the exaStamp build, specifying that CUDA support should b
 
 ```
 ccmake -DXNB_PRODUCT_VARIANT=all \
-       -DXSTAMP_BUILD_CUDA=ON \
+       -DXNB_BUILD_CUDA=ON \
        -DXSTAMP_CUDA_ARCH=80 \
        -DONIKA_HAVE_OPENMP_DETACH=OFF \
        -DONIKA_HAVE_OPENMP_TOOLS=OFF \

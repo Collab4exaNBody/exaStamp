@@ -13,7 +13,7 @@ rm -rf $BUILD_DIR/*
 cd $BUILD_DIR
 
 ccmake -DXNB_PRODUCT_VARIANT=rigidmol \
-       -DXSTAMP_BUILD_CUDA=ON \
+       -DXNB_BUILD_CUDA=ON \
        -DCMAKE_CUDA_ARCHITECTURES=86 \
        -DONIKA_HAVE_OPENMP_DETACH=OFF \
        -DONIKA_HAVE_OPENMP_TOOLS=OFF \
@@ -43,7 +43,7 @@ cd $BUILD_DIR
 ccmake -DXNB_PRODUCT_VARIANT=rigidmol \
        -DCMAKE_C_COMPILER=hipcc \
        -DCMAKE_CXX_COMPILER=hipcc \
-       -DXSTAMP_BUILD_CUDA=ON \
+       -DXNB_BUILD_CUDA=ON \
        -DXNB_ENABLE_HIP=ON \
        -DCMAKE_HIP_ARCHITECTURES=sm_86 \
        -DONIKA_HAVE_OPENMP_DETACH=OFF \
@@ -83,7 +83,7 @@ cd $BUILD_DIR
 # remove -Dyaml-cpp_DIR if yamlcpp-dev is installed as a standard package
 # # remove compiler specification if default compiler used
 ccmake -DXNB_PRODUCT_VARIANT=rigidmol \
-       -DXSTAMP_BUILD_CUDA=ON \
+       -DXNB_BUILD_CUDA=ON \
        -DXSTAMP_CUDA_ARCH=80 \
        -DONIKA_HAVE_OPENMP_DETACH=OFF \
        -DONIKA_HAVE_OPENMP_TOOLS=OFF \
@@ -125,7 +125,7 @@ rm -rf $BUILD_DIR/*
 cd $BUILD_DIR
 
 ccmake -DXNB_PRODUCT_VARIANT=rigidmol \
-       -DXSTAMP_BUILD_CUDA=ON \
+       -DXNB_BUILD_CUDA=ON \
        -DXSTAMP_CUDA_ARCH=80 \
        -DONIKA_HAVE_OPENMP_DETACH=OFF \
        -DONIKA_HAVE_OPENMP_TOOLS=OFF \
