@@ -43,7 +43,9 @@ cd $BUILD_DIR
 ccmake -DXNB_PRODUCT_VARIANT=rigidmol \
        -DCMAKE_C_COMPILER=hipcc \
        -DCMAKE_CXX_COMPILER=hipcc \
+       -DXSTAMP_BUILD_CUDA=ON \
        -DXNB_ENABLE_HIP=ON \
+       -DCMAKE_HIP_ARCHITECTURES=sm_86 \
        -DONIKA_HAVE_OPENMP_DETACH=OFF \
        -DONIKA_HAVE_OPENMP_TOOLS=OFF \
        -DCMAKE_BUILD_TYPE=Release \
@@ -52,8 +54,6 @@ ccmake -DXNB_PRODUCT_VARIANT=rigidmol \
        -DPROJECT_SETUP_ENV_COMMANDS="${PROJECT_SETUP_ENV_COMMANDS}" \
        -DexaNBody_DIR=${XNB_DIR} \
        ${SRC_DIR}
-
-#       -DCMAKE_CXX_FLAGS="-architecture=sm_86" \
 
 exit 0
 
