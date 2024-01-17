@@ -99,7 +99,7 @@ namespace SnapExt
     SnapConstantPointers constants = { ctx.n_fblocks, ctx.d_bs_fblock };
     SnapGpuForceOp<BlockSize,JMax> force_op { rcut, factor, coef, rfac0, rmin0 , ( bzflag ? snap_bs.en_zero_val() : 0.0 ) , constants , { ctx.d_block_scratch } , ctx.d_kernel_counters };
     const unsigned int cs = optional.nbh.m_chunk_size;
-    cudaStream_t custr = ctx.custream; // ctx.m_threadStream[0];
+    onikaStream_t custr = ctx.custream; // ctx.m_threadStream[0];
 /*
     static bool first_time=true;
     if(first_time)

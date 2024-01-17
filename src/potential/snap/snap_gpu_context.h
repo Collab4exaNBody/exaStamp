@@ -21,7 +21,7 @@ namespace SnapExt
     BSFullBlockWorkItem* d_bs_fblock = nullptr;
     SnapBlockScratch<BlockSize,JMax>* d_block_scratch = nullptr;
     SnapKernelCounters * d_kernel_counters = nullptr;
-    cudaStream_t custream = 0;
+    onikaStream_t custream = 0;
     unsigned int n_fblocks = 0;
     unsigned int n_cu_blocks = 0;
     snapBs* bound_bs_ctx = nullptr;
