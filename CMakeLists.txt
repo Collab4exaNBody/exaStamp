@@ -14,7 +14,7 @@ endif()
 # ===============
 # === Project ===
 # ===============
-project(exaStamp VERSION 3.3 LANGUAGES C CXX CUDA)
+project(exaStamp VERSION 3.3 LANGUAGES C CXX)
 
 # ===========================
 # === CMake customization ===
@@ -26,7 +26,6 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 # === exaNBody application framework ===
 # ======================================
 find_package(exaNBody)
-
 
 # =============================
 # === Field sets selection  ===
@@ -61,7 +60,6 @@ endforeach()
 # ==============================
 set(EXASTAMP_VERSION "exaStamp-3.3") 
 message(STATUS "Project version : ${EXASTAMP_VERSION}")
-
 
 # ==================================
 # === environment setup commands ===

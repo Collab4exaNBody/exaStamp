@@ -71,24 +71,20 @@ grid_flavor: grid_flavor_rigidmol
   - grid_stats
   - memory_stats
 
-dump_analysis:
-  - message: "--- Analysis ---"
-  - grid_particle_slicing:
-      thickness: 1.0 ang
-      direction: [ 1.0 , 1.0 , 1.0 ]
-      fields: [ ep , id ]
-      average: [ id ]
-      caption: { ep: "Potential Energy" , id: "Particle Id" }
-  - timestep_file: "plot_%06d.csv"
-  - write_plot1d: [ ep , id ]
+#dump_analysis:
+#  - message: "--- Analysis ---"
+#  - grid_particle_slicing:
+#      thickness: 1.0 ang
+#      direction: [ 1.0 , 1.0 , 1.0 ]
+#      fields: [ ep , id ]
+#      average: [ id ]
+#      caption: { ep: "Potential Energy" , id: "Particle Id" }
+#  - timestep_file: "plot_%06d.csv"
+#  - write_plot1d: [ ep , id ]
 
 global:
   dt: 5.0e-4 ps
-<<<<<<< HEAD
   simulation_end_iteration: 10
-=======
-  simulation_end_iteration: 1000
->>>>>>> main
   simulation_log_frequency: 10
   analysis_dump_frequency: 10
   simulation_dump_frequency: 1000

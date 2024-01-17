@@ -28,6 +28,37 @@ ccmake -DXNB_PRODUCT_VARIANT=rigidmol \
 exit 0
 
 
+######################## Ubuntu GCC+HIP version ##########################
+PROJECT_SETUP_ENV_COMMANDS=""
+#eval ${PROJECT_SETUP_ENV_COMMANDS}
+
+BUILD_DIR=$HOME/build/exaStamp-hip
+SRC_DIR=$HOME/dev/exaStamp-main
+XNB_DIR=$HOME/dev/exaNBody
+
+mkdir -p $BUILD_DIR
+rm -rf $BUILD_DIR/*
+cd $BUILD_DIR
+
+ccmake -DXNB_PRODUCT_VARIANT=rigidmol \
+       -DCMAKE_C_COMPILER=hipcc \
+       -DCMAKE_CXX_COMPILER=hipcc \
+       -DXNB_ENABLE_HIP=ON \
+       -DONIKA_HAVE_OPENMP_DETACH=OFF \
+       -DONIKA_HAVE_OPENMP_TOOLS=OFF \
+       -DCMAKE_BUILD_TYPE=Release \
+       -DXSTAMP_BUILD_exaStampLCHBOP=OFF \
+       -DEXASTAMP_TEST_DATA_DIR=${HOME}/data \
+       -DPROJECT_SETUP_ENV_COMMANDS="${PROJECT_SETUP_ENV_COMMANDS}" \
+       -DexaNBody_DIR=${XNB_DIR} \
+       ${SRC_DIR}
+
+#       -DCMAKE_CXX_FLAGS="-architecture=sm_86" \
+
+exit 0
+
+
+
 # OpenMPI (bxi only)
 export PROJECT_SETUP_ENV_COMMANDS="module purge ; module load inteloneapi/22.1.2 gnu/8.4.0 nvhpc/23.1 mpi/openmpi/4.1.4 texlive cmake/3.20.3"
 eval ${PROJECT_SETUP_ENV_COMMANDS}

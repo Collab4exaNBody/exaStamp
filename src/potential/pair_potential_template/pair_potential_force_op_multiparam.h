@@ -146,7 +146,7 @@ namespace exaStamp
         double weight ) const
       {
         assert( cells != nullptr );
-        double ep = 0.0;
+        // double ep = 0.0;
         const double r = sqrt(d2);
         const unsigned int type_b = cells[cell_b][field::type][p_b];
         const unsigned int pair_id = unique_pair_id(type_a,type_b);
@@ -156,7 +156,7 @@ namespace exaStamp
           double e=0.0, de=0.0;
           auto tp = pp.pair_params; if( type_a > type_b ) { auto x=tp.m_atom_a; tp.m_atom_a=tp.m_atom_b; tp.m_atom_b=x; }
           USTAMP_POTENTIAL_COMPUTE( pp.p, tp , r, e, de );
-	  e -= pp.ecut;
+      	  e -= pp.ecut;
           de /= r;
           e *= weight;
           de *= weight;        
@@ -164,7 +164,7 @@ namespace exaStamp
           fx += fe.x;
           fy += fe.y;
           fz += fe.z;
-          ep += .5 * e;
+          // ep += .5 * e;
           vir += tensor(fe,dr) * -0.5;
         }
       }
@@ -180,7 +180,7 @@ namespace exaStamp
         double weight ) const
       {
         assert( cells != nullptr );
-        double ep = 0.0;
+        // double ep = 0.0;
         const double r = sqrt(d2);
         const auto type_b = cells[cell_b][field::type][p_b];
         const unsigned int pair_id = unique_pair_id(type_a,type_b);
@@ -190,7 +190,7 @@ namespace exaStamp
           double e=0.0, de=0.0;
           auto tp = pp.pair_params; if( type_a > type_b ) { auto x=tp.m_atom_a; tp.m_atom_a=tp.m_atom_b; tp.m_atom_b=x; }
           USTAMP_POTENTIAL_COMPUTE( pp.p, tp , r, e, de );
-	  e -= pp.ecut;
+      	  e -= pp.ecut;
           de /= r;
           e *= weight;
           de *= weight;        
@@ -198,7 +198,7 @@ namespace exaStamp
           fx += fe.x;
           fy += fe.y;
           fz += fe.z;
-          ep += .5 * e;
+          // ep += .5 * e;
         }
       }
 

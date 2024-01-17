@@ -21,11 +21,6 @@ namespace exaStamp
 {
   using namespace exanb;
 
-  // get particle virial tensor. assume the virial is null if particle hasn't virial field
-  template<bool> static Mat3d get_particle_virial(const Mat3d* __restrict__, size_t);
-  template<> inline Mat3d get_particle_virial<false>(const Mat3d* __restrict__ virials, size_t p_i) { return Mat3d(); }
-  template<> inline Mat3d get_particle_virial<true>(const Mat3d* __restrict__ virials, size_t p_i) { return virials[p_i]; }
-  
   template<
     class GridT ,
     class = AssertGridHasFields< GridT, field::_ep, field::_ax, field::_ay, field::_az, field::_vx, field::_vy, field::_vz >
@@ -193,7 +188,7 @@ namespace exaStamp
 
       // retreive mass field data accessor. create data field if needed
       double * __restrict__ mass_ptr = nullptr;
-      size_t mass_stride = ctb_stride;
+      [[maybe_unused]] size_t mass_stride = ctb_stride;
       if( output_mass )
         {
           assert( size_t(subdiv) == grid_cell_values->field(*mass_field_name).m_subdiv );
@@ -207,7 +202,7 @@ namespace exaStamp
 
       // retreive momentum_x field data accessor. create data field if needed
       double * __restrict__ momentum_x_ptr = nullptr;
-      size_t momentum_x_stride = ctb_stride;
+      [[maybe_unused]] size_t momentum_x_stride = ctb_stride;
       if( output_momentum_x )
         {
           assert( subdiv == grid_cell_values->field(*momentum_x_field_name).m_subdiv );
@@ -220,7 +215,7 @@ namespace exaStamp
         }
 
       // retreive momentum_y field data accessor. create data field if needed
-      double * __restrict__ momentum_y_ptr = nullptr;
+      [[maybe_unused]] double * __restrict__ momentum_y_ptr = nullptr;
       size_t momentum_y_stride = ctb_stride;
       if( output_momentum_y )
         {
@@ -234,7 +229,7 @@ namespace exaStamp
         }
 
       // retreive momentum_z field data accessor. create data field if needed
-      double * __restrict__ momentum_z_ptr = nullptr;
+      [[maybe_unused]] double * __restrict__ momentum_z_ptr = nullptr;
       size_t momentum_z_stride = ctb_stride;
       if( output_momentum_z )
         {
@@ -248,7 +243,7 @@ namespace exaStamp
         }
       
       // retreive momentum vector field data accessor. create data field if needed
-      double * __restrict__ momentum_vector_ptr = nullptr;
+      [[maybe_unused]] double * __restrict__ momentum_vector_ptr = nullptr;
       size_t momentum_vector_stride = 0;
       if( output_momentum_vector )
         {
@@ -264,7 +259,7 @@ namespace exaStamp
 
       // retreive virial tensor field data accessor. create data field if needed
       double * __restrict__ virial_tensor_ptr = nullptr;
-      size_t virial_tensor_stride = ctb_stride;
+      [[maybe_unused]] size_t virial_tensor_stride = ctb_stride;
       if( output_virial_tensor )
         {
           assert( subdiv == grid_cell_values->field(*virial_tensor_field_name).m_subdiv );
@@ -292,7 +287,7 @@ namespace exaStamp
 
       // retreive mass * v^2 field data accessor. create data field if needed
       double * __restrict__ m_v2_ptr = nullptr;
-      size_t m_v2_stride = ctb_stride;
+      [[maybe_unused]] size_t m_v2_stride = ctb_stride;
       if( output_m_v2 )
         {
           assert( subdiv == grid_cell_values->field(*m_v2_field_name).m_subdiv );
@@ -306,7 +301,7 @@ namespace exaStamp
 
       // retreive m_v2 tensor field data accessor. create data field if needed
       double * __restrict__ m_v2_tensor_ptr = nullptr;
-      size_t m_v2_tensor_stride = ctb_stride;
+      [[maybe_unused]] size_t m_v2_tensor_stride = ctb_stride;
       if( output_m_v2_tensor )
         {
           assert( subdiv == grid_cell_values->field(*m_v2_tensor_field_name).m_subdiv );
@@ -334,7 +329,7 @@ namespace exaStamp
       
       // retreive tr_virial field data accessor. create data field if needed
       double * __restrict__ tr_virial_ptr = nullptr;
-      size_t tr_virial_stride = ctb_stride;
+      [[maybe_unused]] size_t tr_virial_stride = ctb_stride;
       if( output_tr_virial )
         {
           assert( subdiv == grid_cell_values->field(*tr_virial_field_name).m_subdiv );
@@ -348,7 +343,7 @@ namespace exaStamp
 
       // retreive deformation gradient tensor field data accessor. create data field if needed
       double * __restrict__ deformation_gradient_tensor_ptr = nullptr;
-      size_t deformation_gradient_tensor_stride = ctb_stride;
+      [[maybe_unused]] size_t deformation_gradient_tensor_stride = ctb_stride;
       if( output_deformation_gradient_tensor )
         {
           assert( subdiv == grid_cell_values->field(*deformation_gradient_tensor_field_name).m_subdiv );
@@ -520,15 +515,16 @@ namespace exaStamp
         const double vely = get_velocity_y( j, vy, has_velocity );
         const double velz = get_velocity_z( j, vz, has_velocity );
         
-        const Mat3d  pvir = get_particle_virial<has_virial_field>( vir, j );
+        Mat3d  pvir;
+	if constexpr ( has_virial_field ) pvir = vir[ j ];
         const double tr_vir = pvir.m11 + pvir.m22 + pvir.m33;
 
-		    Mat3d deformation_gradient_tensor_tmp;
-		    if (*enable_deformation_gradient_tensor)
-	      {
-	        deformation_gradient_tensor_tmp = (*local_mechanical_data)[i].F[j];
-	      }
-    		const Mat3d deformation_gradient_tensor = deformation_gradient_tensor_tmp;
+        Mat3d deformation_gradient_tensor_tmp;
+        if (*enable_deformation_gradient_tensor)
+	{
+	  deformation_gradient_tensor_tmp = (*local_mechanical_data)[i].F[j];
+	}
+        const Mat3d deformation_gradient_tensor = deformation_gradient_tensor_tmp;
 
         IJK center_cell_loc;
         IJK center_subcell_loc;

@@ -29,8 +29,12 @@ namespace exaStamp
 {
 
   // get particle virial tensor. assume the virial is null if particle hasn't virial field
-  static inline constexpr Mat3d get_particle_virial(const Mat3d*, size_t, std::false_type ) { return Mat3d(); }
-  static inline Mat3d get_particle_virial(const Mat3d* __restrict__ virials, size_t p_i, std::true_type ) { return virials[p_i]; }
+  template<bool has_virial>
+  static inline Mat3d get_particle_virial(const Mat3d* virials, size_t p_i, std::integral_constant<bool,has_virial> )
+  {
+    if constexpr (has_virial) { return virials[p_i]; }
+    return Mat3d();
+  }
   
   template<
     class GridT,

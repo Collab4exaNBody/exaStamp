@@ -35,11 +35,6 @@ namespace exaStamp
     return species[0].m_mass;
   }
 
-  // get particle virial tensor. assume the virial is null if particle hasn't virial field
-  template<bool> static Mat3d get_particle_virial(const Mat3d* __restrict__, size_t);
-  template<> inline Mat3d get_particle_virial<false>(const Mat3d* __restrict__ virials, size_t p_i) { return Mat3d(); }
-  template<> inline Mat3d get_particle_virial<true>(const Mat3d* __restrict__ virials, size_t p_i) { return virials[p_i]; }
-
   // ================== Thermodynamic state compute operator ======================
 
   template<
@@ -117,7 +112,7 @@ namespace exaStamp
             local_momentum += v * mass;
             local_kinetic_ernergy += v * v * mass; // * 0.5 later
             if constexpr (has_ep_field) { local_potential_energy += ep[j]; }
-            local_virial += get_particle_virial<has_virial_field>( vir, j );
+	    if constexpr (has_virial_field) { local_virial += vir[j]; }
             local_kinetic_tensor += (tensor(v,v) * mass);
           }
 
@@ -264,7 +259,7 @@ namespace exaStamp
     }
   };
     
-  template<class GridT> using ThermodynamicStateNodeTmpl = ThermodynamicStateNode<GridT>;
+  template<class SomeT> using ThermodynamicStateNodeTmpl = ThermodynamicStateNode<SomeT>;
     
   // === register factories ===  
   CONSTRUCTOR_FUNCTION
