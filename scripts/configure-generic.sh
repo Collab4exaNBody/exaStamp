@@ -4,7 +4,7 @@ export PROJECT_SETUP_ENV_COMMANDS=""
 
 export XSNVCC=/usr/local/cuda/bin/nvcc
 export XSNVARCH=86
-BUILD_DIR=$CCCSCRATCHDIR/build/generic-gcc
+BUILD_DIR=$HOME/build/exaStamp-cuda
 SRC_DIR=$HOME/dev/exaStamp-main
 XNB_DIR=$HOME/dev/exaNBody
 
