@@ -43,6 +43,7 @@ cd $BUILD_DIR
 ccmake -DXNB_PRODUCT_VARIANT=rigidmol \
        -DCMAKE_C_COMPILER=hipcc \
        -DCMAKE_CXX_COMPILER=hipcc \
+       -DCMAKE_CXX_FLAGS="-Wpass-failed" \
        -DXNB_BUILD_CUDA=ON \
        -DXNB_ENABLE_HIP=ON \
        -DCMAKE_HIP_ARCHITECTURES=gfx1031 \

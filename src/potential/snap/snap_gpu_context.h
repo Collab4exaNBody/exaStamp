@@ -2,9 +2,10 @@
 
 #include <onika/integral_constant.h>
 #include <onika/cuda/stl_adaptors.h>
-#include <onika/cuda/cuda_error.h>
 #include <onika/force_assert.h>
 #include <onika/parallel/parallel_execution_context.h>
+#include <onika/cuda/cuda_context.h>
+#include <onika/cuda/cuda_error.h>
 
 #include "snap_ext.h"
 #include "snap_block_scratch.h"
@@ -51,27 +52,27 @@ namespace SnapExt
         // std::cout << "Scratch: blocks="<<n_cu_blocks<<", bytes ="<<scratch_size<<std::endl;
         // std::cout << "LBS: BlockSize="<<BlockSize<<" , JMax="<<JMax<<" , n_fblocks="<<n_fblocks<<std::endl;
 
-        ONIKA_CU_CHECK_ERRORS( cudaMalloc(&d_block_scratch   , scratch_size ) );        
-        ONIKA_CU_CHECK_ERRORS( cudaMalloc(&d_bs_fblock       , fb_data_size  ) );            
-        ONIKA_CU_CHECK_ERRORS( cudaMalloc(&d_kernel_counters , kernel_counters_size ) );
+        ONIKA_CU_CHECK_ERRORS( ONIKA_CU_MALLOC(&d_block_scratch   , scratch_size ) );        
+        ONIKA_CU_CHECK_ERRORS( ONIKA_CU_MALLOC(&d_bs_fblock       , fb_data_size  ) );            
+        ONIKA_CU_CHECK_ERRORS( ONIKA_CU_MALLOC(&d_kernel_counters , kernel_counters_size ) );
 
-        ONIKA_CU_CHECK_ERRORS( cudaMemset(d_block_scratch  , 0, scratch_size ) );
-        ONIKA_CU_CHECK_ERRORS( cudaMemset(d_bs_fblock      , 0, fb_data_size ) );
-        ONIKA_CU_CHECK_ERRORS( cudaMemset(d_kernel_counters, 0, kernel_counters_size ) );
+        ONIKA_CU_CHECK_ERRORS( ONIKA_CU_MEMSET(d_block_scratch  , 0, scratch_size ) );
+        ONIKA_CU_CHECK_ERRORS( ONIKA_CU_MEMSET(d_bs_fblock      , 0, fb_data_size ) );
+        ONIKA_CU_CHECK_ERRORS( ONIKA_CU_MEMSET(d_kernel_counters, 0, kernel_counters_size ) );
         
-        ONIKA_CU_CHECK_ERRORS( cudaMemcpy(d_bs_fblock  , fb_data.data()  , fb_data_size , cudaMemcpyHostToDevice) );
+        ONIKA_CU_CHECK_ERRORS( ONIKA_CU_MEMCPY_KIND(d_bs_fblock  , fb_data.data()  , fb_data_size , onikaMemcpyHostToDevice) );
       }
     }
     
     inline void reset_cell_counters()
     {
-      ONIKA_CU_CHECK_ERRORS( cudaMemset( d_kernel_counters, 0, sizeof(SnapKernelCounters) ) );
+      ONIKA_CU_CHECK_ERRORS( ONIKA_CU_MEMSET( d_kernel_counters, 0, sizeof(SnapKernelCounters) ) );
       //ONIKA_CU_CHECK_ERRORS( cudaMemsetAsync( d_kernel_counters, 0, sizeof(SnapExt::SnapKernelCounters) , custream ) );
     }
 
     inline void synchronize()
     {
-      ONIKA_CU_CHECK_ERRORS( cudaStreamSynchronize(custream) );
+      ONIKA_CU_CHECK_ERRORS( ONIKA_CU_STREAM_SYNCHRONIZE(custream) );
       
 #     ifdef SNAP_PROFILING_ENABLE
       {
@@ -89,9 +90,9 @@ namespace SnapExt
     inline void finalize()
     {
       // std::cout<<"Free SnapGPUContext\n";
-      if( d_bs_fblock       != nullptr ) { ONIKA_CU_CHECK_ERRORS( cudaFree(d_bs_fblock      ) ); d_bs_fblock      =nullptr; }
-      if( d_block_scratch   != nullptr ) { ONIKA_CU_CHECK_ERRORS( cudaFree(d_block_scratch  ) ); d_block_scratch  =nullptr; }
-      if( d_kernel_counters != nullptr ) { ONIKA_CU_CHECK_ERRORS( cudaFree(d_kernel_counters) ); d_kernel_counters=nullptr; }
+      if( d_bs_fblock       != nullptr ) { ONIKA_CU_CHECK_ERRORS( ONIKA_CU_FREE(d_bs_fblock      ) ); d_bs_fblock      =nullptr; }
+      if( d_block_scratch   != nullptr ) { ONIKA_CU_CHECK_ERRORS( ONIKA_CU_FREE(d_block_scratch  ) ); d_block_scratch  =nullptr; }
+      if( d_kernel_counters != nullptr ) { ONIKA_CU_CHECK_ERRORS( ONIKA_CU_FREE(d_kernel_counters) ); d_kernel_counters=nullptr; }
       bound_bs_ctx = nullptr;
       n_fblocks = 0;
       n_cu_blocks = 0;
