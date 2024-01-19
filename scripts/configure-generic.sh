@@ -1,4 +1,4 @@
-######################## Ubuntu GCC version ##########################
+######################## Ubuntu GCC+Cuda version ##########################
 export PROJECT_SETUP_ENV_COMMANDS=""
 #eval ${PROJECT_SETUP_ENV_COMMANDS}
 
@@ -46,7 +46,7 @@ ccmake -DXNB_PRODUCT_VARIANT=rigidmol \
        -DCMAKE_CXX_FLAGS="-Wpass-failed" \
        -DXNB_BUILD_CUDA=ON \
        -DXNB_ENABLE_HIP=ON \
-       -DCMAKE_HIP_ARCHITECTURES=gfx1031 \
+       -DCMAKE_HIP_PLATFORM=amd \
        -DONIKA_HAVE_OPENMP_DETACH=OFF \
        -DONIKA_HAVE_OPENMP_TOOLS=OFF \
        -DCMAKE_BUILD_TYPE=Release \
