@@ -2,8 +2,7 @@
 export PROJECT_SETUP_ENV_COMMANDS=""
 #eval ${PROJECT_SETUP_ENV_COMMANDS}
 
-export XSNVCC=/usr/local/cuda/bin/nvcc
-export XSNVARCH=86
+export CUDA_SDK=/usr/local/cuda
 BUILD_DIR=$HOME/build/exaStamp-cuda
 SRC_DIR=$HOME/dev/exaStamp-main
 XNB_DIR=$HOME/dev/exaNBody
@@ -17,7 +16,8 @@ ccmake -DXNB_PRODUCT_VARIANT=rigidmol \
        -DCMAKE_CUDA_ARCHITECTURES=86 \
        -DONIKA_HAVE_OPENMP_DETACH=OFF \
        -DONIKA_HAVE_OPENMP_TOOLS=OFF \
-       -DCMAKE_CUDA_COMPILER=${XSNVCC} \
+       -DCUDA_SDK_ROOT_DIR=${CUDA_SDK} \
+       -DCMAKE_CUDA_COMPILER=${CUDA_SDK}/bin/nvcc \
        -DCMAKE_BUILD_TYPE=Release \
        -DXSTAMP_BUILD_exaStampLCHBOP=OFF \
        -DEXASTAMP_TEST_DATA_DIR=${HOME}/data \
