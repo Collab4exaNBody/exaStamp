@@ -237,7 +237,7 @@ namespace exaStamp
       const double m_rmin0;
       const size_t m_bzflag;
 
-      template<class GridCellLocksT, class ParticleLockT>
+      template<class CellsAccessorT, class GridCellLocksT, class ParticleLockT>
       inline void operator ()
         (
         size_t n,
@@ -246,7 +246,7 @@ namespace exaStamp
         double& fx,
         double& fy,
         double& fz,
-        CellParticles* cells,
+        CellsAccessorT cells,
         GridCellLocksT locks,
         ParticleLockT& lock_a
         ) const
@@ -255,7 +255,7 @@ namespace exaStamp
         this->operator () ( n,buf,en,fx,fy,fz,virial, cells,locks,lock_a );
       }
 
-      template<class Mat3dT,class GridCellLocksT, class ParticleLockT>
+      template<class CellsAccessorT, class Mat3dT,class GridCellLocksT, class ParticleLockT>
       inline void operator ()
         (
         size_t n,
@@ -265,7 +265,7 @@ namespace exaStamp
         double& fy,
         double& fz,
         Mat3dT& virial ,
-        CellParticles* cells,
+        CellsAccessorT cells,
         GridCellLocksT locks,
         ParticleLockT& lock_a
         ) const

@@ -31,11 +31,11 @@ namespace exaStamp
       double& fy,
       double& fz,
       double charge,    // per particle (read only)
-      CellParticlesT* unused
+      CellParticlesT
       ) const
     {
       FakeMat3d virial;
-      this->operator() ( n,tab,ep, fx,fy,fz, charge, virial, unused );
+      this->operator() ( n,tab,ep, fx,fy,fz, charge, virial, nullptr );
     }
 
     template<class ComputeBufferT,class Mat3dT, class CellParticlesT>
@@ -49,7 +49,7 @@ namespace exaStamp
       double& fz,
       double charge,    // per particle (read only)
       Mat3dT& virial,
-      CellParticlesT*
+      CellParticlesT
       ) const
     {
 

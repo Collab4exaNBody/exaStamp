@@ -220,7 +220,7 @@ namespace exaStamp
       CellsT m_cells_t0 = nullptr;
 
       template<class ComputeBufferT, class FieldArraysT, class NbhDataT >
-      ONIKA_HOST_DEVICE_FUNC inline void operator () (ComputeBufferT& tab, const Vec3d& dr, double d2, const FieldArraysT * cells, size_t cell_b, size_t p_b, const NbhDataT& nbh_data) const noexcept
+      ONIKA_HOST_DEVICE_FUNC inline void operator () (ComputeBufferT& tab, const Vec3d& dr, double d2, FieldArraysT cells, size_t cell_b, size_t p_b, const NbhDataT& nbh_data) const noexcept
       {
         const auto i = tab.count;
         
@@ -252,7 +252,7 @@ namespace exaStamp
       CellsT m_cells_t0 = nullptr;
 
       template<class ComputeBufferT, class FieldArraysT, class NbhDataT >
-      ONIKA_HOST_DEVICE_FUNC inline void operator () (ComputeBufferT& tab, const Vec3d& dr, double d2, const FieldArraysT * cells, size_t cell_b, size_t p_b, const NbhDataT& nbh_data) const noexcept
+      ONIKA_HOST_DEVICE_FUNC inline void operator () (ComputeBufferT& tab, const Vec3d& dr, double d2, FieldArraysT cells, size_t cell_b, size_t p_b, const NbhDataT& nbh_data) const noexcept
       {
         const auto i = tab.count;
         

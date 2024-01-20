@@ -68,7 +68,7 @@ namespace exaStamp
      const ComputeBufferT& tab,
                 
      // data and locks accessors for neighbors
-     CellParticlesT* cells
+     CellParticlesT cells
      //        , GridParticleLocksT locks
      //        , ParticleLockT & particle_lock
      ) const
@@ -384,7 +384,7 @@ namespace exaStamp
         const ComputeBufferT& tab,
                 
         // data and locks accessors for neighbors
-        CellParticlesT* cells
+        CellParticlesT cells
 	//	,GridParticleLocksT locks
 	//	,ParticleLockT & particle_lock
         ) const

@@ -65,7 +65,7 @@ namespace exaStamp
     const double* m_particle_emb = nullptr;
 
     template<typename ComputeBufferT, typename FieldArraysT, class NbhDataT>
-    ONIKA_HOST_DEVICE_FUNC inline void operator () (ComputeBufferT& tab, const Vec3d& dr, double d2, const FieldArraysT * cells, size_t cell_b, size_t p_b, const NbhDataT& nbh_data) const noexcept
+    ONIKA_HOST_DEVICE_FUNC inline void operator () (ComputeBufferT& tab, const Vec3d& dr, double d2, const FieldArraysT& cells, size_t cell_b, size_t p_b, const NbhDataT& nbh_data) const noexcept
     {
       assert( ssize_t(tab.count) < ssize_t(tab.MaxNeighbors) );
       tab.ext.emb[tab.count] = m_particle_emb[ m_cell_emb_offset[cell_b] + p_b ];
@@ -80,7 +80,7 @@ namespace exaStamp
     const double* m_particle_emb = nullptr;
     
     template<typename ComputeBufferT, typename FieldArraysT, class NbhDataT>
-    ONIKA_HOST_DEVICE_FUNC inline void operator () (ComputeBufferT& tab, const Vec3d& dr, double d2, const FieldArraysT * cells, size_t cell_b, size_t p_b, const NbhDataT& nbh_data) const noexcept
+    ONIKA_HOST_DEVICE_FUNC inline void operator () (ComputeBufferT& tab, const Vec3d& dr, double d2, const FieldArraysT& cells, size_t cell_b, size_t p_b, const NbhDataT& nbh_data) const noexcept
     {
       assert( ssize_t(tab.count) < ssize_t(tab.MaxNeighbors) );
       tab.ext.emb[tab.count] = m_particle_emb[ m_cell_emb_offset[cell_b] + p_b ];
@@ -104,7 +104,7 @@ namespace exaStamp
   struct EamCopyParticleType
   {
     template<typename ComputeBufferT, typename FieldArraysT, class NbhDataT>
-    ONIKA_HOST_DEVICE_FUNC inline void operator () (ComputeBufferT& tab, const Vec3d& dr, double d2, const FieldArraysT * cells, size_t cell_b, size_t p_b, const NbhDataT& nbh_data) const noexcept
+    ONIKA_HOST_DEVICE_FUNC inline void operator () (ComputeBufferT& tab, const Vec3d& dr, double d2, const FieldArraysT& cells, size_t cell_b, size_t p_b, const NbhDataT& nbh_data) const noexcept
     {
       assert( ssize_t(tab.count) < ssize_t(tab.MaxNeighbors) );
       tab.ext.type[tab.count] = cells[cell_b][field::type][p_b];

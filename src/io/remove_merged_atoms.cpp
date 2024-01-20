@@ -23,7 +23,7 @@ namespace exanb
     const double epsilon2 = 0.0;
     // ComputeBuffer less computation without virial
     template<class CellParticlesT, class NbhDataT>
-    ONIKA_HOST_DEVICE_FUNC inline void operator () (const Vec3d& dr, double d2, uint64_t& id, CellParticlesT*, size_t, size_t, const NbhDataT&) const
+    ONIKA_HOST_DEVICE_FUNC inline void operator () (const Vec3d& dr, double d2, uint64_t& id, CellParticlesT, size_t, size_t, const NbhDataT&) const
     {
       if( d2 <= epsilon2 ) id = onika::cuda::numeric_limits<uint64_t>::max;
     }
@@ -68,7 +68,7 @@ namespace exanb
       RemoveZeroDistParticlesFunctor force_op = { mdist*mdist };
       LinearXForm cp_xform { domain->xform() };
       auto optional = make_compute_pair_optional_args( nbh_it, ComputePairNullWeightIterator{} , cp_xform, cp_locks );
-      compute_cell_particle_pairs(*grid, mdist, false, optional, force_buf, force_op, FieldSet<field::_id>{}, parallel_execution_context(), DefaultPositionFields{} );
+      compute_cell_particle_pairs(*grid, mdist, false, optional, force_buf, force_op, FieldSet<field::_id>{}, parallel_execution_context() );
 
       auto cells = grid->cells();
       size_t number_of_removed_particles = 0;

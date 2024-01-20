@@ -80,7 +80,7 @@ namespace exaStamp
         const Quaternion& orient_a,
         Vec3d& _couple,
         DEBUG_ADDITIONAL_PARAMETERS
-        CellParticlesT* cells
+        CellParticlesT cells
         ) const
       {
         const auto & p = *(this->p);
@@ -173,7 +173,7 @@ namespace exaStamp
         const Quaternion& orient_a,
         Vec3d& couple_a,
         DEBUG_ADDITIONAL_PARAMETERS
-        CellParticlesT* cells
+        CellParticlesT cells
         ) const
       {
         //using Mat3d = ::exanb::FakeMat3d;
@@ -210,7 +210,7 @@ namespace exaStamp
         const Quaternion& orient_a,
         Vec3d& _couple,
         DEBUG_ADDITIONAL_PARAMETERS
-        CellParticlesT* cells,size_t cell_b,size_t p_b,
+        CellParticlesT cells,size_t cell_b,size_t p_b,
         double weight
         ) const
       {
@@ -285,7 +285,7 @@ namespace exaStamp
         const Quaternion& orient_a,
         Vec3d& _couple,
         DEBUG_ADDITIONAL_PARAMETERS
-        CellParticlesT* cells,size_t cell_b,size_t p_b,
+        CellParticlesT cells,size_t cell_b,size_t p_b,
         double weight
         ) const
       {

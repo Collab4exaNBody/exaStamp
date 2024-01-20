@@ -37,7 +37,7 @@ namespace exaStamp
       int jnum ,
       ComputeBufferT& buf,
       int type,
-      CellParticlesT* cells
+      CellParticlesT cells
       ) const
     {
       size_t tid = omp_get_thread_num();

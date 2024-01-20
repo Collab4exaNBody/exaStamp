@@ -18,8 +18,8 @@ namespace exaStamp
   // functor that populate compute buffer's extended storage for particle charges
   struct CopyParticleType
   {
-    template<typename ComputeBufferT, typename FieldArraysT>
-    /* ONIKA_HOST_DEVICE_FUNC */ inline void operator () (ComputeBufferT& tab, const Vec3d& dr, double d2, const FieldArraysT * cells, size_t cell_b, size_t p_b, double weight) const noexcept
+    template<class ComputeBufferT, class FieldArraysT>
+    /* ONIKA_HOST_DEVICE_FUNC */ inline void operator () (ComputeBufferT& tab, const Vec3d& dr, double d2, FieldArraysT cells, size_t cell_b, size_t p_b, double weight) const noexcept
     {
       assert( ssize_t(tab.count) < ssize_t(tab.MaxNeighbors) );
       tab.ext.type[tab.count] = cells[cell_b][field::type][p_b];
@@ -66,7 +66,7 @@ namespace exaStamp
       double& fy,
       double& fz,
       int type,
-      CellParticlesT* cells,
+      CellParticlesT cells,
       GridCellLocksT locks,
       ParticleLockT& lock_a
       ) const
@@ -86,7 +86,7 @@ namespace exaStamp
       double& fz,
       int type,
       Mat3dT& virial ,
-      CellParticlesT* cells,
+      CellParticlesT cells,
       GridCellLocksT locks,
       ParticleLockT& lock_a
       ) const

@@ -64,7 +64,7 @@ namespace exaStamp
         int type_a,
 
         // data and locks accessors for neighbors (not used)
-        CellParticlesT*
+        CellParticlesT
         ) const
       {
         if( ! m_pair_enabled[unique_pair_id(type_a,type_a)] ) return;
@@ -118,11 +118,11 @@ namespace exaStamp
         double& _fy,
         double& _fz,
         int type_a,
-        CellParticlesT* _unused
+        CellParticlesT
         ) const
       {
         FakeMat3d virial;
-        (*this) ( n,tab,_ep,_fx,_fy,_fz, type_a, virial, _unused );
+        (*this) ( n,tab,_ep,_fx,_fy,_fz, type_a, virial, nullptr );
       }
 
       template<class ComputePairBufferT, class Mat3dT, class CellParticlesT>
@@ -135,7 +135,7 @@ namespace exaStamp
         double& _fz,
         int type_a,
         Mat3dT& virial,
-        CellParticlesT*
+        CellParticlesT
         ) const
       {
         if( ! m_pair_enabled[unique_pair_id(type_a,type_a)] ) return;
@@ -174,18 +174,19 @@ namespace exaStamp
           double phip = 0.;
           double rhoip = 0.;
           double rhojp = 0.;	  
-	  if( m_pair_enabled[pair_id] ) {
-	    // rhoip = derivative of (density at neighbor atom j due to central atom i)
-	    USTAMP_POTENTIAL_EAM_RHO_MM( p[unique_pair_id( type_a, type_a )].m_parameters, r, Rho, rhoip , p[pair_id].m_specy_pair , pair_inversed );
-	    // rhojp = derivative of (density at central atom i due to neighbor atom j)
-	    USTAMP_POTENTIAL_EAM_RHO_MM( p[unique_pair_id( type_b, type_b )].m_parameters, r, Rho, rhojp , p[pair_id].m_specy_pair , pair_inversed );
-	    // phi = pair potential energy
-	    // phip = phi'
-	    USTAMP_POTENTIAL_EAM_PHI_MM( p[pair_id].m_parameters, r, phi, phip , p[pair_id].m_specy_pair , pair_inversed );
-	  }
-	  double fpj = tab.ext.emb[i];
-	  double psip = fpi * rhojp + fpj * rhoip + phip;	  
-	  double fpair = psip/r;
+	        if( m_pair_enabled[pair_id] )
+	        {
+	          // rhoip = derivative of (density at neighbor atom j due to central atom i)
+	          USTAMP_POTENTIAL_EAM_RHO_MM( p[unique_pair_id( type_a, type_a )].m_parameters, r, Rho, rhoip , p[pair_id].m_specy_pair , pair_inversed );
+	          // rhojp = derivative of (density at central atom i due to neighbor atom j)
+	          USTAMP_POTENTIAL_EAM_RHO_MM( p[unique_pair_id( type_b, type_b )].m_parameters, r, Rho, rhojp , p[pair_id].m_specy_pair , pair_inversed );
+	          // phi = pair potential energy
+	          // phip = phi'
+	          USTAMP_POTENTIAL_EAM_PHI_MM( p[pair_id].m_parameters, r, phi, phip , p[pair_id].m_specy_pair , pair_inversed );
+	        }
+	        double fpj = tab.ext.emb[i];
+	        double psip = fpi * rhojp + fpj * rhoip + phip;	  
+	        double fpair = psip/r;
 	  
           const double drx = tab.drx[i];
           const double dry = tab.dry[i];

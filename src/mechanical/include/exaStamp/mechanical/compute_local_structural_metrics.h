@@ -42,7 +42,7 @@ namespace exaStamp
         (
     	 size_t n,
     	 ComputePairBuffer2<false,false>& buf,
-    	 CellParticlesT*
+    	 CellParticlesT
     	 ) const	
       {
     	GridParticleLocalStructuralMetrics & local_structural_data = m_local_structural_data;

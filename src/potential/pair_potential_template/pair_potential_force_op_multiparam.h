@@ -68,7 +68,7 @@ namespace exaStamp
         Mat3d& vir,
         unsigned int type_a, 
         DEBUG_ADDITIONAL_PARAMETERS 
-        CellParticlesT* cells,size_t cell_b,size_t p_b,
+        CellParticlesT cells,size_t cell_b,size_t p_b,
         double weight ) const
       {
         assert( cells != nullptr );
@@ -109,7 +109,7 @@ namespace exaStamp
         double& fx,double& fy,double& fz,
         unsigned int type_a,
         DEBUG_ADDITIONAL_PARAMETERS
-        CellParticlesT* cells,size_t cell_b,size_t p_b,
+        CellParticlesT cells,size_t cell_b,size_t p_b,
         double weight ) const
       {
         assert( cells != nullptr );
@@ -122,7 +122,7 @@ namespace exaStamp
           double e=0.0, de=0.0;
           auto tp = pp.pair_params; if( type_a > type_b ) { auto x=tp.m_atom_a; tp.m_atom_a=tp.m_atom_b; tp.m_atom_b=x; }
           USTAMP_POTENTIAL_COMPUTE( pp.p, tp , r, e, de );
-	  e -= pp.ecut;
+	        e -= pp.ecut;
           de /= r;
           e *= weight;
           de *= weight;        
@@ -142,7 +142,7 @@ namespace exaStamp
         Mat3d& vir,
         unsigned int type_a, 
         DEBUG_ADDITIONAL_PARAMETERS 
-        CellParticlesT* cells,size_t cell_b,size_t p_b,
+        CellParticlesT cells,size_t cell_b,size_t p_b,
         double weight ) const
       {
         assert( cells != nullptr );
@@ -176,10 +176,10 @@ namespace exaStamp
         double& fx,double& fy,double& fz,
         unsigned int type_a,
         DEBUG_ADDITIONAL_PARAMETERS
-        CellParticlesT* cells,size_t cell_b,size_t p_b,
+        CellParticlesT cells,size_t cell_b,size_t p_b,
         double weight ) const
       {
-        assert( cells != nullptr );
+        //assert( cells != nullptr );
         // double ep = 0.0;
         const double r = sqrt(d2);
         const auto type_b = cells[cell_b][field::type][p_b];

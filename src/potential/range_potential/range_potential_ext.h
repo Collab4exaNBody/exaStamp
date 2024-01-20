@@ -58,7 +58,7 @@ namespace exaStamp
     double r2max = 0.0;
 
     template<typename ComputeBufferT, typename FieldArraysT, class NbhDataT>
-    ONIKA_HOST_DEVICE_FUNC inline void operator () (ComputeBufferT& tab, const Vec3d& dr, double d2, const FieldArraysT * cells, size_t cell_b, size_t p_b, const NbhDataT& nbh_data) const noexcept
+    ONIKA_HOST_DEVICE_FUNC inline void operator () (ComputeBufferT& tab, const Vec3d& dr, double d2, FieldArraysT cells, size_t cell_b, size_t p_b, const NbhDataT& nbh_data) const noexcept
     {
       assert( ssize_t(tab.count) < ssize_t(tab.MaxNeighbors) );
       

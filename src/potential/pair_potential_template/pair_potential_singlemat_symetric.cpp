@@ -85,7 +85,7 @@ namespace exaStamp
       double ecut;
 
       // version with virial computation
-      template<bool UseWeights/*, class GridCellParticleLocks, class ParticleLock*/>
+      template<bool UseWeights, class CellsAccessorT>
       inline void operator ()
         (
         size_t n,
@@ -94,7 +94,7 @@ namespace exaStamp
         double& _fx,
         double& _fy,
         double& _fz,
-        CellParticles* cells
+        CellsAccessorT cells
         ) const
       {
         FakeMat3d fake_virial;
@@ -102,7 +102,7 @@ namespace exaStamp
         this-> operator () ( n,tab,_ep,_fx,_fy,_fz, fake_virial, cells, fake_locks , fake_locks[0][0] );
       }
 
-      template<bool UseWeights/*, class GridCellParticleLocks, class ParticleLock*/>
+      template<bool UseWeights, class CellsAccessorT>
       inline void operator ()
         (
         size_t n,
@@ -110,7 +110,7 @@ namespace exaStamp
         double& _fx,
         double& _fy,
         double& _fz,
-        CellParticles* cells
+        CellsAccessorT cells
         ) const
       {
         double _ep = 0.0;
@@ -119,7 +119,7 @@ namespace exaStamp
         this-> operator () ( n,tab,_ep,_fx,_fy,_fz, fake_virial, cells, fake_locks , fake_locks[0][0] );
       }
 
-      template<bool UseWeights, class GridCellLocksT, class ParticleLockT>
+      template<bool UseWeights, class CellsAccessorT, class GridCellLocksT, class ParticleLockT>
       inline void operator ()
         (
         size_t n,
@@ -128,7 +128,7 @@ namespace exaStamp
         double& _fx,
         double& _fy,
         double& _fz,
-        CellParticles* cells,
+        CellsAccessorT cells,
         GridCellLocksT& cell_locks,
         ParticleLockT& particle_lock
         ) const
@@ -137,7 +137,7 @@ namespace exaStamp
         this-> operator () ( n,tab,_ep,_fx,_fy,_fz, fake_virial, cells, cell_locks , particle_lock );
       }
 
-      template<bool UseWeights, class GridCellLocksT, class ParticleLockT>
+      template<bool UseWeights, class CellsAccessorT, class GridCellLocksT, class ParticleLockT>
       inline void operator ()
         (
         size_t n,
@@ -145,7 +145,7 @@ namespace exaStamp
         double& _fx,
         double& _fy,
         double& _fz,
-        CellParticles* cells,
+        CellsAccessorT cells,
         GridCellLocksT& cell_locks,
         ParticleLockT& particle_lock
         ) const
@@ -155,7 +155,7 @@ namespace exaStamp
         this-> operator () ( n,tab,_ep,_fx,_fy,_fz, fake_virial, cells, cell_locks , particle_lock );
       }
 
-      template<bool UseWeights, class Mat3dT>
+      template<bool UseWeights, class CellsAccessorT, class Mat3dT>
       inline void operator ()
         (
         size_t n,
@@ -165,13 +165,13 @@ namespace exaStamp
         double& _fy,
         double& _fz,
         Mat3dT& virial,
-        CellParticles* cells
+        CellsAccessorT cells
         ) const
       {
         NullGridParticleLocks fake_locks;
         this-> operator () ( n,tab,_ep,_fx,_fy,_fz, virial, cells, fake_locks , fake_locks[0][0] );
       }
-      template<bool UseWeights, class Mat3dT>
+      template<bool UseWeights, class CellsAccessorT, class Mat3dT>
       inline void operator ()
         (
         size_t n,
@@ -180,7 +180,7 @@ namespace exaStamp
         double& _fy,
         double& _fz,
         Mat3dT& virial,
-        CellParticles* cells
+        CellsAccessorT cells
         ) const
       {
         double _ep = 0.0;
@@ -188,7 +188,7 @@ namespace exaStamp
         this-> operator () ( n,tab,_ep,_fx,_fy,_fz, virial, cells, fake_locks , fake_locks[0][0] );
       }
       
-      template<bool UseWeights, class Mat3dT, class GridCellLocksT, class ParticleLockT >
+      template<bool UseWeights, class CellsAccessorT, class Mat3dT, class GridCellLocksT, class ParticleLockT >
       inline void operator ()
         (
         size_t n,
@@ -197,7 +197,7 @@ namespace exaStamp
         double& _fy,
         double& _fz,
         Mat3dT& virial,
-        CellParticles* cells,
+        CellsAccessorT cells,
         GridCellLocksT locks,
         ParticleLockT& lock_a
         ) const
@@ -207,7 +207,7 @@ namespace exaStamp
       }
       
       // version with virial computation
-      template<bool UseWeights, class Mat3dT, class GridCellLocksT, class ParticleLockT >
+      template<bool UseWeights, class CellsAccessorT, class Mat3dT, class GridCellLocksT, class ParticleLockT >
       inline void operator ()
         (
         size_t n,
@@ -217,13 +217,12 @@ namespace exaStamp
         double& _fy,
         double& _fz,
         Mat3dT& virial,
-        CellParticles* cells,
+        CellsAccessorT cells,
         GridCellLocksT locks,
         ParticleLockT& lock_a
         ) const
       {
         static constexpr bool compute_virial = std::is_same_v< Mat3dT , Mat3d >;
-        using PointerTuple = onika::soatl::FieldPointerTuple<GridT::CellParticles::Alignment,GridT::CellParticles::ChunkSize, field::_ep ,field::_fx ,field::_fy ,field::_fz, field::_virial >;
 
         double* __restrict__ ep_b = nullptr; 
         double* __restrict__ fx_b = nullptr; 
@@ -247,13 +246,11 @@ namespace exaStamp
           if( cell_b != current_cell_b )
           {
             current_cell_b = cell_b;
-            PointerTuple pt;
-            cells[cell_b].capture_pointers(pt);
-            ep_b = pt[field::ep];
-            fx_b = pt[field::fx];
-            fy_b = pt[field::fy];
-            fz_b = pt[field::fz];
-            if constexpr (compute_virial) { vir_b = pt[field::virial]; }
+            ep_b = cells[cell_b][field::ep];
+            fx_b = cells[cell_b][field::fx];
+            fy_b = cells[cell_b][field::fy];
+            fz_b = cells[cell_b][field::fz];
+            if constexpr (compute_virial) { vir_b = cells[cell_b][field::virial]; }
           }
 
           const double r = std::sqrt(tab.d2[i]); 

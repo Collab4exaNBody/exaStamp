@@ -35,7 +35,7 @@ namespace exaStamp
         double& ep,
 
         // data and locks accessors for neighbors (not used)
-        CellParticlesT*
+        CellParticlesT
         ) const
       {
         double particle_rho = 0.;
@@ -76,11 +76,11 @@ namespace exaStamp
         double& _fx,
         double& _fy,
         double& _fz,
-        CellParticlesT* _unused
+        CellParticlesT 
         ) const
       {
         FakeMat3d virial;
-        (*this) ( n,tab,_ep,_fx,_fy,_fz, virial, _unused );
+        (*this) ( n,tab,_ep,_fx,_fy,_fz, virial, nullptr );
       }
 
       template<class ComputePairBufferT, class Mat3dT, class CellParticlesT>
@@ -92,7 +92,7 @@ namespace exaStamp
         double& _fy,
         double& _fz,
         Mat3dT& virial,
-        CellParticlesT*
+        CellParticlesT
         ) const
       {
         const double emb = m_particle_emb[ m_cell_emb_offset[tab.cell] + tab.part ];

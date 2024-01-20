@@ -49,6 +49,7 @@ namespace exaStamp
     // core computations and parameters
     MeamPotential m_pot;
 
+    template<class CellsAccessorT>
     ONIKA_HOST_DEVICE_FUNC inline void operator ()
       (
       size_t n,
@@ -58,7 +59,7 @@ namespace exaStamp
       double& _fy,
       double& _fz,
       Mat3d& , // UNUSED virial
-      CellParticles* cells
+      CellsAccessorT cells
       ) const
     {
       ComputePairOptionalLocks<false> locks;
@@ -66,6 +67,7 @@ namespace exaStamp
       (*this) ( n,tab,_ep,_fx,_fy,_fz,cells,locks,particle_lock );
     }
 
+    template<class CellsAccessorT>
     ONIKA_HOST_DEVICE_FUNC inline void operator ()
       (
       size_t n,
@@ -74,7 +76,7 @@ namespace exaStamp
       double& _fx,
       double& _fy,
       double& _fz,
-      CellParticles* cells
+      CellsAccessorT cells
       ) const
     {
       ComputePairOptionalLocks<false> locks;
@@ -82,7 +84,7 @@ namespace exaStamp
       (*this) ( n,tab,_ep,_fx,_fy,_fz,cells,locks,particle_lock );
     }
 
-    template<class GridCellParticleLocksT , class ParticleLockT >
+    template<class CellsAccessorT, class GridCellParticleLocksT , class ParticleLockT >
     ONIKA_HOST_DEVICE_FUNC inline void operator ()
       (
       size_t n,
@@ -92,7 +94,7 @@ namespace exaStamp
       double& _fy,
       double& _fz,
       Mat3d& , // UNUSED virial
-      CellParticles* cells,
+      CellsAccessorT cells,
       GridCellParticleLocksT locks,
       ParticleLockT & particle_lock
       ) const
@@ -100,7 +102,7 @@ namespace exaStamp
       (*this) ( n,tab,_ep,_fx,_fy,_fz,cells,locks,particle_lock );
     }
 
-    template<class GridCellParticleLocksT , class ParticleLockT >
+    template<class CellsAccessorT, class GridCellParticleLocksT , class ParticleLockT >
     ONIKA_HOST_DEVICE_FUNC inline void operator ()
       (
       size_t n,
@@ -109,7 +111,7 @@ namespace exaStamp
       double& _fx,
       double& _fy,
       double& _fz,
-      CellParticles* cells,
+      CellsAccessorT cells,
       GridCellParticleLocksT locks,
       ParticleLockT & particle_lock
       ) const
@@ -268,7 +270,7 @@ namespace exaStamp
       {
         size_t cell_j=0, p_j=0;
         tab.nbh.get( i, cell_j, p_j );
-        auto & cell = cells[cell_j];
+        // auto cell = cells[cell_j];
         const double nbh_fx_contrib = tab.ext.dfSx[i] +
           Coeff*(rho0*tmpdG*(tmpRho0*tab.ext.drho0x[i]+tmpRho1*tab.ext.drho1x[i]+tmpRho2*tab.ext.drho2x[i]+tmpRho3*tab.ext.drho3x[i])+tmpG*tab.ext.drho0x[i]) ;
         const double nbh_fy_contrib = tab.ext.dfSy[i] +
@@ -276,9 +278,9 @@ namespace exaStamp
         const double nbh_fz_contrib = tab.ext.dfSz[i] +
           Coeff*(rho0*tmpdG*(tmpRho0*tab.ext.drho0z[i]+tmpRho1*tab.ext.drho1z[i]+tmpRho2*tab.ext.drho2z[i]+tmpRho3*tab.ext.drho3z[i])+tmpG*tab.ext.drho0z[i]) ;
         locks[cell_j][p_j].lock();
-        ONIKA_CU_BLOCK_ATOMIC_ADD( cell[field::fx][p_j] , -nbh_fx_contrib );
-        ONIKA_CU_BLOCK_ATOMIC_ADD( cell[field::fy][p_j] , -nbh_fy_contrib );
-        ONIKA_CU_BLOCK_ATOMIC_ADD( cell[field::fz][p_j] , -nbh_fz_contrib );
+        ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_j][field::fx][p_j] , -nbh_fx_contrib );
+        ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_j][field::fy][p_j] , -nbh_fy_contrib );
+        ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_j][field::fz][p_j] , -nbh_fz_contrib );
         locks[cell_j][p_j].unlock();
       }
     }
