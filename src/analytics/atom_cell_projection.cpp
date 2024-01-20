@@ -7,7 +7,7 @@
 
 #include <exaStamp/compute/physics_functors.h>
 #include <exanb/grid_cell_particles/particle_cell_projection.h>
-#include <exanb/grid_cell_particles/grid_particle_field_accessor.h>
+#include <exanb/core/grid_particle_field_accessor.h>
 
 #include <exaStamp/compute/physics_functors.h>
 #include <exanb/compute/field_combiners.h>

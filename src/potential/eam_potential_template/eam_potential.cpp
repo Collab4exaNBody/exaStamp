@@ -122,19 +122,22 @@ namespace exaStamp
       ComputePairBufferFactory< ForceCPBuf , EamCopyParticleEmbInitFunc > force_buf = { grid->cell_particle_offset_data() /*eam_scratch->m_offset.data()*/ , eam_scratch->m_emb.data() };      
       ForceOp force_op { *parameters, rhoCut, phiCut, grid->cell_particle_offset_data()/*eam_scratch->m_offset.data()*/ , eam_scratch->m_emb.data() };
 
+      field_accessor_tuple_from_field_set_t< FieldSet<field::_ep> > emb_fields = {};
+      field_accessor_tuple_from_field_set_t<ComputeFields> cp_fields = {};
+
       // execute the 2 passes
       if( domain->xform_is_identity() )
       {
         auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , exanb::NullXForm{} , cp_locks );
-        compute_cell_particle_pairs( *grid, *rcut, true, optional, emb_buf, emb_op, FieldSet<field::_ep>{} , parallel_execution_context() );
-        compute_cell_particle_pairs( *grid, *rcut, false, optional, force_buf, force_op, ComputeFields{} , parallel_execution_context() );
+        compute_cell_particle_pairs( *grid, *rcut, true, optional, emb_buf, emb_op, emb_fields , parallel_execution_context() );
+        compute_cell_particle_pairs( *grid, *rcut, false, optional, force_buf, force_op, cp_fields , parallel_execution_context() );
       }
       else
       {
         ldbg << "xform = " << domain->xform() << std::endl;
         auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , exanb::LinearXForm{ domain->xform() } , cp_locks );
-        compute_cell_particle_pairs( *grid, *rcut, true, optional, emb_buf, emb_op, FieldSet<field::_ep>{} , parallel_execution_context() );
-        compute_cell_particle_pairs( *grid, *rcut, false, optional, force_buf, force_op, ComputeFields{} , parallel_execution_context() );
+        compute_cell_particle_pairs( *grid, *rcut, true, optional, emb_buf, emb_op, emb_fields , parallel_execution_context() );
+        compute_cell_particle_pairs( *grid, *rcut, false, optional, force_buf, force_op, cp_fields , parallel_execution_context() );
       }
     }
 
