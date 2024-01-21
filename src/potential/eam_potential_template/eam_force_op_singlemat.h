@@ -23,8 +23,8 @@ namespace exaStamp
       const onika::cuda::ro_shallow_copy_t<USTAMP_POTENTIAL_PARMS> p;
       const double rhoCut;
       const double phiCut;
-      const size_t* m_cell_emb_offset = nullptr;
-      double* m_particle_emb = nullptr;
+      // const size_t* m_cell_emb_offset = nullptr;
+      // double* m_particle_emb = nullptr;
 
       template<class ComputePairBufferT, class CellParticlesT>
       ONIKA_HOST_DEVICE_FUNC inline void operator () (
@@ -33,6 +33,7 @@ namespace exaStamp
 
         // particles fields to compute                
         double& ep,
+        double& dEmb,
 
         // data and locks accessors for neighbors (not used)
         CellParticlesT
@@ -52,10 +53,10 @@ namespace exaStamp
         }
 
         double Emb = 0.;
-        double dEmb = 0.;
+        /*double*/ dEmb = 0.;
         USTAMP_POTENTIAL_EAM_EMB( p, particle_rho, Emb, dEmb );
         ep += Emb;
-        m_particle_emb[ m_cell_emb_offset[tab.cell] + tab.part ] = dEmb;
+        // m_particle_emb[ m_cell_emb_offset[tab.cell] + tab.part ] = dEmb;
       }
 
     };
@@ -65,8 +66,8 @@ namespace exaStamp
       const onika::cuda::ro_shallow_copy_t<USTAMP_POTENTIAL_PARMS> p;
       const double rhoCut;
       const double phiCut;
-      const size_t* m_cell_emb_offset = nullptr;
-      const double* m_particle_emb = nullptr;
+      //const size_t* m_cell_emb_offset = nullptr;
+      //const double* m_particle_emb = nullptr;
 
       template<class ComputePairBufferT, class CellParticlesT>
       ONIKA_HOST_DEVICE_FUNC inline void operator () (
@@ -76,11 +77,12 @@ namespace exaStamp
         double& _fx,
         double& _fy,
         double& _fz,
+        double dEmb,
         CellParticlesT 
         ) const
       {
         FakeMat3d virial;
-        (*this) ( n,tab,_ep,_fx,_fy,_fz, virial, nullptr );
+        (*this) ( n,tab,_ep,_fx,_fy,_fz, virial, dEmb, nullptr );
       }
 
       template<class ComputePairBufferT, class Mat3dT, class CellParticlesT>
@@ -92,10 +94,11 @@ namespace exaStamp
         double& _fy,
         double& _fz,
         Mat3dT& virial,
+        double dEmb,
         CellParticlesT
         ) const
       {
-        const double emb = m_particle_emb[ m_cell_emb_offset[tab.cell] + tab.part ];
+        //const double emb = m_particle_emb[ m_cell_emb_offset[tab.cell] + tab.part ];
         double ep=0., fx=0., fy=0., fz=0.;
 
         Mat3dT vir; // default constructor defines all elements to 0
@@ -115,7 +118,7 @@ namespace exaStamp
           USTAMP_POTENTIAL_EAM_PHI( p, r, Phi, dPhi );          
           Rho -= rhoCut;   
           Phi -= phiCut;      
-          double de = (dRho * (emb + tab.ext.emb[i]) + dPhi) / r;
+          double de = (dRho * (dEmb + tab.ext.emb[i]) + dPhi) / r;
 
           const double drx = tab.drx[i];
           const double dry = tab.dry[i];

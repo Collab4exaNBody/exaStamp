@@ -115,15 +115,21 @@ namespace exaStamp
       // 1st pass parameters : compute per particle EMB term, including ghost particles
       using EmbCPBuf = ComputePairBuffer2<false,false ,NoExtraStorage,DefaultComputePairBufferAppendFunc>;
       ComputePairBufferFactory< EmbCPBuf > emb_buf;
-      EmbOp emb_op { *parameters, rhoCut, phiCut, grid->cell_particle_offset_data() /*eam_scratch->m_offset.data()*/ , eam_scratch->m_emb.data() };
+      EmbOp emb_op { *parameters, rhoCut, phiCut /*, grid->cell_particle_offset_data() , eam_scratch->m_emb.data() */ };
 
       // 2nd pass parameters: compute final force using the emb term, only for non ghost particles (but reading EMB terms from neighbor particles)
       using ForceCPBuf = ComputePairBuffer2<false,false,EamComputeBufferExt,EamCopyParticleEmb>;
-      ComputePairBufferFactory< ForceCPBuf , EamCopyParticleEmbInitFunc > force_buf = { grid->cell_particle_offset_data() /*eam_scratch->m_offset.data()*/ , eam_scratch->m_emb.data() };      
-      ForceOp force_op { *parameters, rhoCut, phiCut, grid->cell_particle_offset_data()/*eam_scratch->m_offset.data()*/ , eam_scratch->m_emb.data() };
+      ComputePairBufferFactory< ForceCPBuf , EamCopyParticleEmbInitFunc > force_buf = { grid->cell_particle_offset_data() , eam_scratch->m_emb.data() };      
+      ForceOp force_op { *parameters, rhoCut, phiCut /*, grid->cell_particle_offset_data() , eam_scratch->m_emb.data() */ };
 
-      field_accessor_tuple_from_field_set_t< FieldSet<field::_ep> > emb_fields = {};
-      field_accessor_tuple_from_field_set_t<ComputeFields> cp_fields = {};
+      double * emb_ptr = eam_scratch->m_emb.data();
+      auto emb_field = make_external_field_flat_array_accessor( *grid , emb_ptr , field::dEmb );
+
+      const double * c_emb_ptr = eam_scratch->m_emb.data();
+      auto c_emb_field = make_external_field_flat_array_accessor( *grid , c_emb_ptr , field::dEmb );
+      
+      auto emb_fields = make_field_tuple_from_field_set( FieldSet<field::_ep>{} , emb_field );
+      auto cp_fields = make_field_tuple_from_field_set( ComputeFields{} , c_emb_field );
 
       // execute the 2 passes
       if( domain->xform_is_identity() )

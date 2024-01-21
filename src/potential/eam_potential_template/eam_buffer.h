@@ -7,6 +7,9 @@
 
 #include <exanb/fields.h>
 #include <exanb/core/config.h>
+#include <exanb/core/declare_field.h>
+
+XSTAMP_DECLARE_FIELD(double , dEmb ,"Embedding derivative");
 
 namespace exaStamp
 {
