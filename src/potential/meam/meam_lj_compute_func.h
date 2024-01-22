@@ -106,11 +106,13 @@ namespace exaStamp
       else if ( d2 <= mmp->m_meam_rcut2 )
       {
 #       ifdef XSTAMP_MEAM_ENFORCE_OVERFLOW_CHECK
-        const auto overflow_check = std::true_type {};
-#       else
-        const auto overflow_check = std::false_type {};
+        if( ssize_t(count) >= ssize_t(MaxNeighbors) )
+        {
+          printf("Compute buffer overflow : max capacity (%d) reached (count=%d)\n" , int(MaxNeighbors) , int(count) );
+          ONIKA_CU_ABORT();
+        }
 #       endif
-        exanb::DefaultComputePairBufferAppendFunc{} ( tab, dr, d2, cells, cell_b, p_b, weight, overflow_check );
+        exanb::DefaultComputePairBufferAppendFunc{} ( tab, dr, d2, cells, cell_b, p_b, weight );
       }
     }
   };

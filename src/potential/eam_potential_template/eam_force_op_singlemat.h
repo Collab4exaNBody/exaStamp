@@ -117,8 +117,8 @@ namespace exaStamp
           USTAMP_POTENTIAL_EAM_RHO( p, r, Rho, dRho );          
           USTAMP_POTENTIAL_EAM_PHI( p, r, Phi, dPhi );          
           Rho -= rhoCut;   
-          Phi -= phiCut;      
-          double de = (dRho * (dEmb + tab.ext.emb[i]) + dPhi) / r;
+          Phi -= phiCut;
+          double de = ( dRho * ( dEmb + tab.nbh_pt[i][field::dEmb] ) + dPhi ) / r;
 
           const double drx = tab.drx[i];
           const double dry = tab.dry[i];
