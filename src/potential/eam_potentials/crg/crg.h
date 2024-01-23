@@ -8,7 +8,7 @@
 #include <exanb/core/physics_constants.h>
 #include <onika/cuda/cuda.h>
 
-#include "eam_buffer.h"
+#include <exaStamp/potential/eam/eam_buffer.h>
 
 namespace exaStamp
 {

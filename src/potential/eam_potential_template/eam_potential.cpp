@@ -18,7 +18,7 @@
 #include <exanb/compute/compute_cell_particle_pairs.h>
 #include <exanb/core/xform.h>
 
-#include "eam_buffer.h"
+#include <exaStamp/potential/eam/eam_buffer.h>
 #include "potential.h"
 #include "eam_force_op_singlemat.h"
 
@@ -27,7 +27,12 @@
 
 
 #define EamPotentialOperatorName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_force)
+#define EamPotentialComputeEmbNoGhostName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_emb)
+#define EamPotentialComputeForceOnlyName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_force_reuse_emb)
+
 #define EamPotentialStr USTAMP_STR(EamPotentialOperatorName)
+#define EamPotentialEmbNoGhostStr USTAMP_STR(EamPotentialComputeEmbNoGhostName)
+#define EamPotentialForceOnlyStr USTAMP_STR(EamPotentialComputeForceOnlyName)
 
 namespace exaStamp
 {
@@ -35,6 +40,9 @@ namespace exaStamp
 
   template<
     class GridT,
+    bool ComputeEmb = true ,
+    bool ComputeGhostEmb = true ,
+    bool ComputeForce = true ,
     class = AssertGridHasFields< GridT, field::_ep ,field::_fx ,field::_fy ,field::_fz >
     >
   class EamPotentialOperatorName : public OperatorNode
@@ -61,7 +69,7 @@ namespace exaStamp
     ADD_SLOT( GridT                 , grid              , INPUT_OUTPUT );
     ADD_SLOT( Domain                , domain            , INPUT , REQUIRED );
  
-    ADD_SLOT( EamPotentialScratch   , eam_scratch       , PRIVATE );
+    ADD_SLOT( EamParticleEmbField   , eam_particle_emb  , INPUT_OUTPUT );
 
   public:
 
@@ -70,7 +78,10 @@ namespace exaStamp
     {
       ///MeamPotential meam( *rcut, *parameters );
       *rcut_max = std::max( *rcut , *rcut_max );
-      *ghost_dist_max = std::max( *ghost_dist_max , (*rcut) * 2.0 );
+      if constexpr ( ComputeGhostEmb )
+      {
+        *ghost_dist_max = std::max( *ghost_dist_max , (*rcut) * 2.0 );
+      }
  
       size_t n_cells = grid->number_of_cells();
       if( n_cells == 0 )
@@ -93,9 +104,6 @@ namespace exaStamp
       }
 #     endif
 
-      eam_scratch->m_emb.clear(); // avoid useless copy of scratch values (we don't need previous values)
-      eam_scratch->m_emb.assign( grid->number_of_particles() , 0.0 );
-
       auto compute_eam_force = [&]( const auto& cp_xform )
       {
         // common building blocks for both compute passes
@@ -104,29 +112,39 @@ namespace exaStamp
         ComputePairOptionalLocks<false> cp_locks;
 
         // 1st pass parameters : compute per particle EMB term, including ghost particles
-        using EmbCPBuf = ComputePairBuffer2<>;
-        ComputePairBufferFactory< EmbCPBuf > emb_buf;
-        EmbOp emb_op { *parameters, rhoCut, phiCut };
+        if constexpr ( ComputeEmb )
+        {
+          // reset emb field to zero
+          eam_particle_emb->m_emb.assign( grid->number_of_particles() , 0.0 );
 
-        // Emb term computation will access, for each central atom, potential energy (internal field) and emb_field (externally stored extra field)
-        double * emb_ptr = eam_scratch->m_emb.data();
-        auto emb_field = make_external_field_flat_array_accessor( *grid , emb_ptr , field::dEmb );
-        auto emb_op_fields = make_field_tuple_from_field_set( FieldSet<field::_ep>{} , emb_field );
-        auto emb_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks /* no additional fields required for neighbors */ );
-        compute_cell_particle_pairs( *grid, *rcut, true, emb_optional, emb_buf, emb_op, emb_op_fields , parallel_execution_context() );      
+          // build compute buffer
+          using EmbCPBuf = ComputePairBuffer2<>;
+          ComputePairBufferFactory< EmbCPBuf > emb_buf;
+          EmbOp emb_op { *parameters, rhoCut, phiCut };
+
+          // Emb term computation will access, for each central atom, potential energy (internal field) and emb_field (externally stored extra field)
+          double * emb_ptr = eam_particle_emb->m_emb.data();
+          auto emb_field = make_external_field_flat_array_accessor( *grid , emb_ptr , field::dEmb );
+          auto emb_op_fields = make_field_tuple_from_field_set( FieldSet<field::_ep>{} , emb_field );
+          auto emb_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks /* no additional fields required for neighbors */ );
+          compute_cell_particle_pairs( *grid, *rcut, ComputeGhostEmb, emb_optional, emb_buf, emb_op, emb_op_fields , parallel_execution_context() );      
+        }
 
         // 2nd pass parameters: compute final force using the emb term, only for non ghost particles (but reading EMB terms from neighbor particles)
-        using ForceCPBuf = SimpleNbhComputeBuffer< FieldSet<field::_dEmb> >; /* we want extra neighbor storage space to store these fields */
-        ComputePairBufferFactory< ForceCPBuf > force_buf;  
-        ForceOp force_op { *parameters, rhoCut, phiCut };
-        const double * c_emb_ptr = eam_scratch->m_emb.data();
-        auto c_emb_field = make_external_field_flat_array_accessor( *grid , c_emb_ptr , field::dEmb );
+        if constexpr ( ComputeForce )
+        {
+          using ForceCPBuf = SimpleNbhComputeBuffer< FieldSet<field::_dEmb> >; /* we want extra neighbor storage space to store these fields */
+          ComputePairBufferFactory< ForceCPBuf > force_buf;  
+          ForceOp force_op { *parameters, rhoCut, phiCut };
+          const double * c_emb_ptr = eam_particle_emb->m_emb.data();
+          auto c_emb_field = make_external_field_flat_array_accessor( *grid , c_emb_ptr , field::dEmb );
 
-        // force computation will access, for each central atom, fields defined in ComputeFields plus external constant field c_emb_field
-        auto force_op_fields = make_field_tuple_from_field_set( ComputeFields{} , c_emb_field );
-        auto force_nbh_fields = onika::make_flat_tuple(c_emb_field); // we want external field c_emb_field to be populated for each neighbor
-        auto force_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks, ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{}, force_nbh_fields );
-        compute_cell_particle_pairs( *grid, *rcut, false, force_optional, force_buf, force_op, force_op_fields , parallel_execution_context() );
+          // force computation will access, for each central atom, fields defined in ComputeFields plus external constant field c_emb_field
+          auto force_op_fields = make_field_tuple_from_field_set( ComputeFields{} , c_emb_field );
+          auto force_nbh_fields = onika::make_flat_tuple(c_emb_field); // we want external field c_emb_field to be populated for each neighbor
+          auto force_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks, ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{}, force_nbh_fields );
+          compute_cell_particle_pairs( *grid, *rcut, false, force_optional, force_buf, force_op, force_op_fields , parallel_execution_context() );
+        }
       };
 
       if( domain->xform_is_identity() ) compute_eam_force( exanb::NullXForm{} );
@@ -138,12 +156,16 @@ namespace exaStamp
   namespace tmplhelper
   {
     template<class GridT> using EamPotentialOperatorName = ::exaStamp::EamPotentialOperatorName<GridT>;
+    template<class GridT> using EamPotentialComputeEmbNoGhostName = ::exaStamp::EamPotentialOperatorName<GridT,true,false,false>;
+    template<class GridT> using EamPotentialComputeForceOnlyName = ::exaStamp::EamPotentialOperatorName<GridT,false,false,true>;
   }
 
   // === register factories ===  
   CONSTRUCTOR_FUNCTION
   {
-    OperatorNodeFactory::instance()->register_factory( EamPotentialStr , make_grid_variant_operator< tmplhelper::EamPotentialOperatorName > );
+    OperatorNodeFactory::instance()->register_factory( EamPotentialStr           , make_grid_variant_operator< tmplhelper::EamPotentialOperatorName          > );
+    OperatorNodeFactory::instance()->register_factory( EamPotentialEmbNoGhostStr , make_grid_variant_operator< tmplhelper::EamPotentialComputeEmbNoGhostName > );
+    OperatorNodeFactory::instance()->register_factory( EamPotentialForceOnlyStr  , make_grid_variant_operator< tmplhelper::EamPotentialComputeForceOnlyName  > );
   }
 
 }

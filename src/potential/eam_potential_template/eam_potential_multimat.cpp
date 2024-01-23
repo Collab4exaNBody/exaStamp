@@ -13,8 +13,8 @@
 #include <exanb/core/log.h>
 #include <exanb/core/cpp_utils.h>
 
-#include "eam_buffer.h"
-#include "eam_yaml.h"
+#include <exaStamp/potential/eam/eam_buffer.h>
+#include <exaStamp/potential/eam/eam_yaml.h>
 #include "potential.h"
 #include "eam_force_op_multimat.h"
 
@@ -60,6 +60,8 @@ namespace exaStamp
     ADD_SLOT( exanb::GridChunkNeighbors    , chunk_neighbors  , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
     ADD_SLOT( GridT                 , grid             , INPUT_OUTPUT );
     ADD_SLOT( Domain                , domain           , INPUT , REQUIRED );
+        
+    ADD_SLOT( EamParticleEmbField   , eam_particle_emb  , INPUT_OUTPUT );
     ADD_SLOT( EamScratch            , eam_scratch      , PRIVATE );
 
   public:
@@ -153,8 +155,8 @@ namespace exaStamp
         eam_scratch->m_ro_potentials[i] = { pot.m_parameters , pot.m_specy_pair };
       }
 
-      eam_scratch->m_emb.clear(); // avoid useless copy of scratch values (we don't need previous values)
-      eam_scratch->m_emb.assign( grid->number_of_particles() , 0.0 );
+      eam_particle_emb->m_emb.clear(); // avoid useless copy of scratch values (we don't need previous values)
+      eam_particle_emb->m_emb.assign( grid->number_of_particles() , 0.0 );
 
       // execute the 2 passes
       auto compute_eam_force = [&]( const auto& cp_xform )
@@ -167,7 +169,7 @@ namespace exaStamp
         // 1st pass parameters : compute per particle EMB term, including ghost particles
         using EmbCPBuf = SimpleNbhComputeBuffer< FieldSet<field::_type> >; 
         ComputePairBufferFactory< EmbCPBuf > emb_buf;
-        double * emb_ptr = eam_scratch->m_emb.data();
+        double * emb_ptr = eam_particle_emb->m_emb.data();
         auto emb_field = make_external_field_flat_array_accessor( *grid , emb_ptr , field::dEmb );
         auto emb_op_fields = make_field_tuple_from_field_set( FieldSet< field::_ep , field::_type >{} , emb_field );
         auto emb_nbh_fields = onika::make_flat_tuple( field::type ); // we want internal type field for each neighbor atom
@@ -178,7 +180,7 @@ namespace exaStamp
         // 2nd pass parameters: compute final force using the emb term, only for non ghost particles (but reading EMB terms from neighbor particles)
         using ForceCPBuf = SimpleNbhComputeBuffer< FieldSet< field::_type , field::_dEmb > >; //ComputePairBuffer2<false,false,EamComputeBufferEmbTypeExt,EamCopyParticleEmbType>;
         ComputePairBufferFactory<ForceCPBuf> force_buf = {};
-        double * c_emb_ptr = eam_scratch->m_emb.data();
+        double * c_emb_ptr = eam_particle_emb->m_emb.data();
         auto c_emb_field = make_external_field_flat_array_accessor( *grid , c_emb_ptr , field::dEmb );
         auto force_op_fields = make_field_tuple_from_field_set( force_compute_fields_v , c_emb_field );
         auto force_nbh_fields = onika::make_flat_tuple( field::type , c_emb_field); // we want type and emb for each neighbor atom

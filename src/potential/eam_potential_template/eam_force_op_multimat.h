@@ -6,7 +6,7 @@
 #include <exanb/compute/compute_pair_traits.h>
 #include <onika/cuda/cuda.h>
 
-#include "eam_buffer.h"
+#include <exaStamp/potential/eam/eam_buffer.h>
 #include "potential.h"
 
 #ifndef PRIV_NAMESPACE_NAME

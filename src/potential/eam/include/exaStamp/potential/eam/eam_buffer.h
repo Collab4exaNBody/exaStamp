@@ -1,4 +1,6 @@
+
 #pragma once
+
 #include <onika/memory/allocator.h>
 #include <onika/cuda/cuda.h>
 #include <vector>
@@ -23,19 +25,14 @@ namespace exaStamp
     double m_rho_cutoff;
   };
 
-  struct EamPotentialScratch
+  struct EamParticleEmbField
   {
-    //onika::memory::CudaMMVector< size_t > m_offset; 
     onika::memory::CudaMMVector< double > m_emb;
-    onika::memory::CudaMMVector< PhiRhoCutoff > m_phi_rho_cutoff;
-    onika::memory::CudaMMVector< uint8_t > m_pair_enabled;
   };
 
   template<class EamMultimatPotentialParmT>
   struct EamMultimatPotentialScratch
   {
-    //onika::memory::CudaMMVector< size_t > m_offset; 
-    onika::memory::CudaMMVector< double > m_emb;
     onika::memory::CudaMMVector< PhiRhoCutoff > m_phi_rho_cutoff;
     onika::memory::CudaMMVector< uint8_t > m_pair_enabled;
     onika::memory::CudaMMVector< EamMultimatPotentialParmT > m_ro_potentials;
