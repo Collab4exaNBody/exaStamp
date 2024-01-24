@@ -5,11 +5,10 @@
 #include <cstdlib>
 
 #include <exanb/core/basic_types.h>
+#include <exanb/core/grid_particle_field_accessor.h>
 
 namespace exaStamp
 {
-
-  using namespace exanb;
 
   struct CellParticleLocalMechanicalMetrics
   {
@@ -43,65 +42,54 @@ namespace exaStamp
 
   using GridParticleLocalMechanicalMetrics = std::vector< CellParticleLocalMechanicalMetrics >;
 
-  template<class FieldIdT> struct IsMechanicalExternalField : public std::false_type {};
-
-  namespace mechanical
+  /*
+   * Allows a particle field, stored as a flat 1D array, to be used as a particle field through the ExternalCellParticleFieldAccessor envelop
+   */
+  template<class FieldIdT> struct GridLocalMechanicalMetricsAccessor
   {
-    template<class FieldIdT> struct ExternalField;
-  }
-
-# define MECHANICAL_DECLARE_FIELD(field,member) \
-  namespace mechanical { \
-  struct _##field {}; \
-  template<> struct ExternalField< _##field > { \
-    using value_type = std::remove_reference_t< decltype( CellParticleLocalMechanicalMetrics{}. member [0] ) >; \
-    static const char* short_name() { return #field; } \
-    static const char* name() { return #field; } \
-    static inline value_type get_from_mechanical_data(const CellParticleLocalMechanicalMetrics * __restrict__ mech_data, size_t cell_i, size_t p_j) { return mech_data[cell_i]. member [p_j] ; } \
-  }; \
-  static constexpr ExternalField< _##field > field = {}; \
-  } \
-  template<> struct IsMechanicalExternalField< mechanical::ExternalField< mechanical::_##field > > : public std::true_type {};
-
-  MECHANICAL_DECLARE_FIELD(defgrad,F)
-  MECHANICAL_DECLARE_FIELD(greenlag,E)
-  MECHANICAL_DECLARE_FIELD(rot,R)
-  MECHANICAL_DECLARE_FIELD(stretch,U)
-  MECHANICAL_DECLARE_FIELD(microrot,mu)
-  MECHANICAL_DECLARE_FIELD(slip,s)
-  MECHANICAL_DECLARE_FIELD(burgerpar,l)
-  MECHANICAL_DECLARE_FIELD(burgerortho,m)
-  MECHANICAL_DECLARE_FIELD(glide,n)
-  MECHANICAL_DECLARE_FIELD(velgrad,L)
-  MECHANICAL_DECLARE_FIELD(vort,phi)
-  MECHANICAL_DECLARE_FIELD(vecgrad,vector_gradient_tensor)
-  MECHANICAL_DECLARE_FIELD(dislo,dislo_indic)
-  MECHANICAL_DECLARE_FIELD(vis,vis)
-  MECHANICAL_DECLARE_FIELD(coin,coin)
-  MECHANICAL_DECLARE_FIELD(dislol,dislo_line)
-  MECHANICAL_DECLARE_FIELD(dislolo,dislo_line_ortho)
-
-  template<class FieldIdT> static inline constexpr bool is_mechanical_field_v = IsMechanicalExternalField<FieldIdT>::value ;
-
-  template<class CellsT>
-  struct GridParticleMechanicalAccessor
-  {
-    CellsT m_cells;
+    using value_type = typename FieldIdT::value_type;
+    using reference_t = const value_type &;
     const CellParticleLocalMechanicalMetrics * __restrict__ mech_data = nullptr;
-    template<class FieldIdT>
-    ONIKA_HOST_DEVICE_FUNC inline typename FieldIdT::value_type get(size_t cell_i, size_t p_j, const FieldIdT& f ) const
+    template<class CellsT>
+    ONIKA_HOST_DEVICE_FUNC
+    inline reference_t operator () ( size_t cell_i, size_t p_i , CellsT ) const
     {
-      if constexpr ( is_mechanical_field_v<FieldIdT> )
-      {
-        return FieldIdT::get_from_mechanical_data( mech_data , cell_i, p_j );
-      }
-      if constexpr ( ! is_mechanical_field_v<FieldIdT> )
-      {
-        return m_cells[cell_i][f][p_j];
-      }
-      return {};
+      return get_from_mechanical_data( mech_data, cell_i, p_i, FieldIdT{} );
     }
   };
 
 }
+
+#define MECHANICAL_DECLARE_FIELD(name,member) \
+XSTAMP_DECLARE_FIELD( std::remove_reference_t<decltype(exaStamp::CellParticleLocalMechanicalMetrics{}.member[0])> , name , #name ); \
+namespace exaStamp { \
+  static inline const auto& get_from_mechanical_data( const CellParticleLocalMechanicalMetrics * __restrict__ mech_data, size_t cell_i, size_t p_i, onika::soatl::FieldId<field::_##name> ) \
+  { \
+    return mech_data[cell_i].member[p_i]; \
+  } \
+  static inline auto mechanical_field( const CellParticleLocalMechanicalMetrics * __restrict__ mech_data, onika::soatl::FieldId<field::_##name> ) \
+  { \
+    using FieldIdT = onika::soatl::FieldId<field::_##name>; \
+    using ExternalFieldT = exanb::ExternalCellParticleFieldAccessor< GridLocalMechanicalMetricsAccessor<FieldIdT> , FieldIdT >; \
+    return ExternalFieldT{ .m_func = { mech_data } }; \
+  } \
+}
+
+MECHANICAL_DECLARE_FIELD(defgrad,F)
+MECHANICAL_DECLARE_FIELD(greenlag,E)
+MECHANICAL_DECLARE_FIELD(rot,R)
+MECHANICAL_DECLARE_FIELD(stretch,U)
+MECHANICAL_DECLARE_FIELD(microrot,mu)
+MECHANICAL_DECLARE_FIELD(slip,s)
+MECHANICAL_DECLARE_FIELD(burgerpar,l)
+MECHANICAL_DECLARE_FIELD(burgerortho,m)
+MECHANICAL_DECLARE_FIELD(glide,n)
+MECHANICAL_DECLARE_FIELD(velgrad,L)
+MECHANICAL_DECLARE_FIELD(vort,phi)
+MECHANICAL_DECLARE_FIELD(vecgrad,vector_gradient_tensor)
+MECHANICAL_DECLARE_FIELD(dislo,dislo_indic)
+MECHANICAL_DECLARE_FIELD(vis,vis)
+MECHANICAL_DECLARE_FIELD(coin,coin)
+MECHANICAL_DECLARE_FIELD(dislol,dislo_line)
+MECHANICAL_DECLARE_FIELD(dislolo,dislo_line_ortho)
 

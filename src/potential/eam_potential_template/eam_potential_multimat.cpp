@@ -30,6 +30,9 @@ namespace exaStamp
 
   template<
     class GridT,
+    bool ComputeEmb = true ,
+    bool ComputeGhostEmb = true ,
+    bool ComputeForce = true ,
     class = AssertGridHasFields< GridT, field::_ep ,field::_fx ,field::_fy ,field::_fz, field::_type >
     >
   class EamPotentialOperatorName : public OperatorNode
@@ -71,7 +74,10 @@ namespace exaStamp
     {
       //MeamPotential meam( *rcut, *parameters );
       *rcut_max = std::max( *rcut , *rcut_max );
-      *ghost_dist_max = std::max( *ghost_dist_max , (*rcut) * 2.0 );
+      if constexpr ( ComputeGhostEmb )
+      {
+        *ghost_dist_max = std::max( *ghost_dist_max , (*rcut) * 2.0 );
+      }
  
       size_t n_cells = grid->number_of_cells();
       if( n_cells == 0 )
@@ -155,9 +161,6 @@ namespace exaStamp
         eam_scratch->m_ro_potentials[i] = { pot.m_parameters , pot.m_specy_pair };
       }
 
-      eam_particle_emb->m_emb.clear(); // avoid useless copy of scratch values (we don't need previous values)
-      eam_particle_emb->m_emb.assign( grid->number_of_particles() , 0.0 );
-
       // execute the 2 passes
       auto compute_eam_force = [&]( const auto& cp_xform )
       {
@@ -167,26 +170,33 @@ namespace exaStamp
         ComputePairOptionalLocks<false> cp_locks;
 
         // 1st pass parameters : compute per particle EMB term, including ghost particles
-        using EmbCPBuf = SimpleNbhComputeBuffer< FieldSet<field::_type> >; 
-        ComputePairBufferFactory< EmbCPBuf > emb_buf;
-        double * emb_ptr = eam_particle_emb->m_emb.data();
-        auto emb_field = make_external_field_flat_array_accessor( *grid , emb_ptr , field::dEmb );
-        auto emb_op_fields = make_field_tuple_from_field_set( FieldSet< field::_ep , field::_type >{} , emb_field );
-        auto emb_nbh_fields = onika::make_flat_tuple( field::type ); // we want internal type field for each neighbor atom
-        auto emb_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks, ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{}, emb_nbh_fields );
-        EmbOp emb_op { eam_scratch->m_ro_potentials.data(), eam_scratch->m_phi_rho_cutoff.data(), eam_scratch->m_pair_enabled.data() };
-        compute_cell_particle_pairs( *grid, *rcut, true, emb_optional, emb_buf, emb_op, emb_op_fields, parallel_execution_context() );
+        if constexpr ( ComputeEmb )
+        {
+          eam_particle_emb->m_emb.assign( grid->number_of_particles() , 0.0 );
+          using EmbCPBuf = SimpleNbhComputeBuffer< FieldSet<field::_type> >; 
+          ComputePairBufferFactory< EmbCPBuf > emb_buf;
+          double * emb_ptr = eam_particle_emb->m_emb.data();
+          auto emb_field = make_external_field_flat_array_accessor( *grid , emb_ptr , field::dEmb );
+          auto emb_op_fields = make_field_tuple_from_field_set( FieldSet< field::_ep , field::_type >{} , emb_field );
+          auto emb_nbh_fields = onika::make_flat_tuple( field::type ); // we want internal type field for each neighbor atom
+          auto emb_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks, ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{}, emb_nbh_fields );
+          EmbOp emb_op { eam_scratch->m_ro_potentials.data(), eam_scratch->m_phi_rho_cutoff.data(), eam_scratch->m_pair_enabled.data() };
+          compute_cell_particle_pairs( *grid, *rcut, ComputeGhostEmb, emb_optional, emb_buf, emb_op, emb_op_fields, parallel_execution_context() );
+        }
 
         // 2nd pass parameters: compute final force using the emb term, only for non ghost particles (but reading EMB terms from neighbor particles)
-        using ForceCPBuf = SimpleNbhComputeBuffer< FieldSet< field::_type , field::_dEmb > >; //ComputePairBuffer2<false,false,EamComputeBufferEmbTypeExt,EamCopyParticleEmbType>;
-        ComputePairBufferFactory<ForceCPBuf> force_buf = {};
-        double * c_emb_ptr = eam_particle_emb->m_emb.data();
-        auto c_emb_field = make_external_field_flat_array_accessor( *grid , c_emb_ptr , field::dEmb );
-        auto force_op_fields = make_field_tuple_from_field_set( force_compute_fields_v , c_emb_field );
-        auto force_nbh_fields = onika::make_flat_tuple( field::type , c_emb_field); // we want type and emb for each neighbor atom
-        auto force_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks, ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{}, force_nbh_fields );
-        ForceOp force_op { eam_scratch->m_ro_potentials.data(), eam_scratch->m_phi_rho_cutoff.data(), eam_scratch->m_pair_enabled.data() };
-        compute_cell_particle_pairs( *grid, *rcut, false, force_optional, force_buf, force_op, force_op_fields, parallel_execution_context() );
+        if constexpr ( ComputeForce )
+        {
+          using ForceCPBuf = SimpleNbhComputeBuffer< FieldSet< field::_type , field::_dEmb > >; //ComputePairBuffer2<false,false,EamComputeBufferEmbTypeExt,EamCopyParticleEmbType>;
+          ComputePairBufferFactory<ForceCPBuf> force_buf = {};
+          double * c_emb_ptr = eam_particle_emb->m_emb.data();
+          auto c_emb_field = make_external_field_flat_array_accessor( *grid , c_emb_ptr , field::dEmb );
+          auto force_op_fields = make_field_tuple_from_field_set( force_compute_fields_v , c_emb_field );
+          auto force_nbh_fields = onika::make_flat_tuple( field::type , c_emb_field); // we want type and emb for each neighbor atom
+          auto force_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks, ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{}, force_nbh_fields );
+          ForceOp force_op { eam_scratch->m_ro_potentials.data(), eam_scratch->m_phi_rho_cutoff.data(), eam_scratch->m_pair_enabled.data() };
+          compute_cell_particle_pairs( *grid, *rcut, false, force_optional, force_buf, force_op, force_op_fields, parallel_execution_context() );
+        }
       };
 
       if( domain->xform_is_identity() ) compute_eam_force( exanb::NullXForm{} );
@@ -197,13 +207,17 @@ namespace exaStamp
 
   namespace tmplhelper
   {
-    template<class GridT> using EamPotentialOperatorName = ::exaStamp::EamPotentialOperatorName<GridT>;
+    template<class GridT> using EamPotentialOperatorName  = ::exaStamp::EamPotentialOperatorName<GridT,true,true,true>;
+    template<class GridT> using EamPotentialEmbOnlyName   = ::exaStamp::EamPotentialOperatorName<GridT,true,false,false>;
+    template<class GridT> using EamPotentialForceOnlyName = ::exaStamp::EamPotentialOperatorName<GridT,false,false,true>;
   }
 
   // === register factories ===  
   CONSTRUCTOR_FUNCTION
   {
-    OperatorNodeFactory::instance()->register_factory( EamPotentialStr , make_grid_variant_operator< tmplhelper::EamPotentialOperatorName > );
+    OperatorNodeFactory::instance()->register_factory( EamPotentialStr          , make_grid_variant_operator< tmplhelper::EamPotentialOperatorName  > );
+    OperatorNodeFactory::instance()->register_factory( EamPotentialEmbOnlyStr   , make_grid_variant_operator< tmplhelper::EamPotentialEmbOnlyName   > );
+    OperatorNodeFactory::instance()->register_factory( EamPotentialForceOnlyStr , make_grid_variant_operator< tmplhelper::EamPotentialForceOnlyName > );
   }
 
 }

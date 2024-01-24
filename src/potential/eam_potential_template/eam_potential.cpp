@@ -155,9 +155,9 @@ namespace exaStamp
 
   namespace tmplhelper
   {
-    template<class GridT> using EamPotentialOperatorName = ::exaStamp::EamPotentialOperatorName<GridT>;
+    template<class GridT> using EamPotentialOperatorName          = ::exaStamp::EamPotentialOperatorName<GridT,true,true,true>;
     template<class GridT> using EamPotentialComputeEmbNoGhostName = ::exaStamp::EamPotentialOperatorName<GridT,true,false,false>;
-    template<class GridT> using EamPotentialComputeForceOnlyName = ::exaStamp::EamPotentialOperatorName<GridT,false,false,true>;
+    template<class GridT> using EamPotentialComputeForceOnlyName  = ::exaStamp::EamPotentialOperatorName<GridT,false,false,true>;
   }
 
   // === register factories ===  

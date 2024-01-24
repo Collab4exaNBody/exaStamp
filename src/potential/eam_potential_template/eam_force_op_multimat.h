@@ -14,7 +14,12 @@
 #endif
 
 # define EamPotentialOperatorName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_force_multimat)
+# define EamPotentialEmbOnlyName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_emb_multimat)
+# define EamPotentialForceOnlyName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_force_reuse_emb_multimat)
+
 # define EamPotentialStr USTAMP_STR(EamPotentialOperatorName)
+# define EamPotentialEmbOnlyStr USTAMP_STR(EamPotentialEmbOnlyName)
+# define EamPotentialForceOnlyStr USTAMP_STR(EamPotentialForceOnlyName)
 
 namespace exaStamp
 {

@@ -10,6 +10,8 @@
 
 #include <exanb/compute/field_combiners.h>
 #include <exaStamp/compute/field_combiners.h>
+#include <exaStamp/mechanical/cell_particles_local_mechanical_metrics.h>
+#include <exaStamp/mechanical/cell_particles_local_structural_metrics.h>
 
 #include <exanb/io/vtk_writer.h>
 #include <exanb/io/vtk_writer_binary.h>
@@ -25,7 +27,7 @@ namespace exaStamp
   using namespace exanb;
 
   template<typename GridT>
-  class ParaviewWriter : public OperatorNode
+  class MechanicalParaviewWriter : public OperatorNode
   {
     using StringList = std::vector<std::string>;
 
@@ -47,6 +49,9 @@ namespace exaStamp
     ADD_SLOT( std::string , compression          , INPUT , "default");
     ADD_SLOT( std::string , filename             , INPUT , "output"); // default value for backward compatibility
     ADD_SLOT( StringList  , fields               , INPUT , StringList({".*"}) , DocString{"List of regular expressions to select fields to project"} );
+
+    ADD_SLOT( GridParticleLocalMechanicalMetrics, local_mechanical_data , INPUT, OPTIONAL );
+    ADD_SLOT( GridParticleLocalStructuralMetrics, local_structural_data , INPUT_OUTPUT, OPTIONAL);
 
     template<class... GridFields>
     inline void execute_on_fields( const GridFields& ... grid_fields) 
@@ -79,7 +84,18 @@ namespace exaStamp
       MomentumCombiner momentum = { { species->data() , 0 } };
       //KineticEnergyTensorCombiner mv2tensor = { { species->data() , 0 } }; // too big for full outputs
 
-      execute_on_fields( processor_id, vnorm2, mv2, mass, momentum, onika::soatl::FieldId<fid>{} ... );
+      const CellParticleLocalMechanicalMetrics * __restrict__ mech_data = nullptr;
+      if( local_mechanical_data.has_value() ) mech_data = local_mechanical_data->data();
+      auto defgrad = mechanical_field(mech_data,field::defgrad);
+      auto greenlag = mechanical_field(mech_data,field::greenlag);
+      auto rot     = mechanical_field(mech_data,field::rot);
+      auto stretch = mechanical_field(mech_data,field::stretch);
+
+      const CellParticleLocalStructuralMetrics * __restrict__ structural_data = nullptr;
+      if( local_structural_data.has_value() ) structural_data = local_structural_data->data();
+      auto crystal = structural_field( structural_data , field::crystal );
+
+      execute_on_fields( processor_id, vnorm2, mv2, mass, momentum, defgrad, greenlag, rot, stretch, crystal, onika::soatl::FieldId<fid>{} ... );
     }
 
   public:
@@ -93,7 +109,7 @@ namespace exaStamp
   // === register factories ===
   CONSTRUCTOR_FUNCTION
   {
-    OperatorNodeFactory::instance()->register_factory( "write_paraview",make_grid_variant_operator<ParaviewWriter>);
+    OperatorNodeFactory::instance()->register_factory( "mechanical_write_paraview",make_grid_variant_operator<MechanicalParaviewWriter>);
   }
 
 }

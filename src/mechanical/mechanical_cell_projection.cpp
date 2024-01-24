@@ -13,6 +13,7 @@
 #include <exanb/compute/field_combiners.h>
 #include <exaStamp/compute/field_combiners.h>
 #include <exaStamp/particle_species/particle_specie.h>
+#include <exaStamp/mechanical/cell_particles_local_mechanical_metrics.h>
 
 #include <mpi.h>
 #include <regex>
@@ -22,7 +23,7 @@ namespace exaStamp
   using namespace exanb;
 
   template< class GridT >
-  class AtomCellProjection : public OperatorNode
+  class MechanicalCellProjection : public OperatorNode
   {    
     using StringList = std::vector<std::string>;
     using has_field_type_t = typename GridT:: template HasField < field::_type >;
@@ -38,6 +39,8 @@ namespace exaStamp
     ADD_SLOT( GridT          , grid              , INPUT , REQUIRED );
     ADD_SLOT( double         , splat_size        , INPUT , REQUIRED );
     ADD_SLOT( StringList  , fields            , INPUT , StringList({".*"}) , DocString{"List of regular expressions to select fields to project"} );
+
+    ADD_SLOT( GridParticleLocalMechanicalMetrics, local_mechanical_data , INPUT, OPTIONAL );
 
     ADD_SLOT( long           , grid_subdiv       , INPUT_OUTPUT , 1 );
     ADD_SLOT( GridCellValues , grid_cell_values  , INPUT_OUTPUT );
@@ -61,8 +64,17 @@ namespace exaStamp
       MassCombiner mass = { { species->data() , 0 } };
       MomentumCombiner momentum = { { species->data() , 0 } };
       KineticEnergyTensorCombiner mv2tensor = { { species->data() , 0 } };
+
+      // mechanical fields
+      const CellParticleLocalMechanicalMetrics * __restrict__ mech_data = nullptr;
+      if( local_mechanical_data.has_value() ) mech_data = local_mechanical_data->data();
       
-      auto proj_fields = make_field_tuple_from_field_set( grid->field_set, count, processor_id, vnorm, mv2, mass, momentum, mv2tensor );
+      auto defgrad = mechanical_field(mech_data,field::defgrad);
+      auto greenlag = mechanical_field(mech_data,field::greenlag);
+      auto rot     = mechanical_field(mech_data,field::rot);
+      auto stretch = mechanical_field(mech_data,field::stretch);
+      
+      auto proj_fields = make_field_tuple_from_field_set( grid->field_set, count, processor_id, vnorm, mv2, mass, momentum, mv2tensor, defgrad, greenlag, rot, stretch );
       auto field_selector = [flist = *fields] ( const std::string& name ) -> bool { for(const auto& f:flist) if( std::regex_match(name,std::regex(f)) ) return true; return false; } ;
       project_particle_fields_to_grid( ldbg, *grid, *grid_cell_values, *grid_subdiv, *splat_size, field_selector, proj_fields );
     }
@@ -79,7 +91,7 @@ namespace exaStamp
   // === register factories ===
   CONSTRUCTOR_FUNCTION
   {
-    OperatorNodeFactory::instance()->register_factory("atom_cell_projection", make_grid_variant_operator< AtomCellProjection > );
+    OperatorNodeFactory::instance()->register_factory("mechanical_cell_projection", make_grid_variant_operator< MechanicalCellProjection > );
   }
 
 }
