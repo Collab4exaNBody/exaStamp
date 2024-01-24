@@ -115,7 +115,9 @@ namespace exaStamp
         if constexpr ( ComputeEmb )
         {
           // reset emb field to zero
-          eam_particle_emb->m_emb.assign( grid->number_of_particles() , 0.0 );
+          eam_particle_emb->clear();
+          eam_particle_emb->m_emb.resize( grid->number_of_particles() );
+          //eam_particle_emb->m_emb.assign( grid->number_of_particles() , 0.0 );
 
           // build compute buffer
           using EmbCPBuf = ComputePairBuffer2<>;

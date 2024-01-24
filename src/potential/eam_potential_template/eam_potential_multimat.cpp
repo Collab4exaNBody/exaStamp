@@ -172,7 +172,10 @@ namespace exaStamp
         // 1st pass parameters : compute per particle EMB term, including ghost particles
         if constexpr ( ComputeEmb )
         {
-          eam_particle_emb->m_emb.assign( grid->number_of_particles() , 0.0 );
+          eam_particle_emb->clear();
+          eam_particle_emb->m_emb.resize( grid->number_of_particles() );
+          //eam_particle_emb->m_emb.assign( grid->number_of_particles() , 0.0 );
+
           using EmbCPBuf = SimpleNbhComputeBuffer< FieldSet<field::_type> >; 
           ComputePairBufferFactory< EmbCPBuf > emb_buf;
           double * emb_ptr = eam_particle_emb->m_emb.data();
