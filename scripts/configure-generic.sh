@@ -109,16 +109,14 @@ echo "Note: use one mpi process per GPU card, i.e. 4 GPU per node => 4 mpi proce
 exit 0
 
 
-######################## GCC version ##########################
+######################## GCC+Cuda version ##########################
 export PROJECT_SETUP_ENV_COMMANDS="module purge ; module load gnu/11.2.0 nvhpc/23.11 mpi/openmpi texlive cmake"
 eval ${PROJECT_SETUP_ENV_COMMANDS}
 
-export XSNVCC=/ccc/products/nvhpc-23.11/system/default/Linux_x86_64/23.11/cuda/12.3/bin/nvcc
-export XSNVARCH=80
-export YAML_CPP_ROOT=/ccc/home/cont001/xstampdev/xstampdev/tools/yaml-cpp-intl21.4-gcc8.4
+export CUDA_SDK=/ccc/products/nvhpc-23.11/system/default/Linux_x86_64/23.11/cuda/12.3
 unset TBB_ROOT MPI_ROOT
 BUILD_DIR=$CCCSCRATCHDIR/build/generic-gcc
-SRC_DIR=$HOME/dev/ExaStamp-xsp-release-3.3
+SRC_DIR=$HOME/dev/ExaStamp-main
 XNB_DIR=$HOME/dev/exaNBody
 
 mkdir -p $BUILD_DIR
@@ -127,17 +125,57 @@ cd $BUILD_DIR
 
 ccmake -DXNB_PRODUCT_VARIANT=rigidmol \
        -DXNB_BUILD_CUDA=ON \
-       -DXSTAMP_CUDA_ARCH=80 \
+       -DCMAKE_CUDA_ARCHITECTURES=80 \
        -DONIKA_HAVE_OPENMP_DETACH=OFF \
        -DONIKA_HAVE_OPENMP_TOOLS=OFF \
-       -DCMAKE_CUDA_COMPILER=${XSNVCC} \
+       -DCUDA_SDK_ROOT_DIR=${CUDA_SDK} \
+       -DCMAKE_CUDA_COMPILER=${CUDA_SDK}/bin/nvcc \
        -Dyaml-cpp_DIR=/ccc/home/cont001/xstampdev/xstampdev/tools/yaml-cpp-gcc8.4/lib/cmake/yaml-cpp \
        -DCMAKE_BUILD_TYPE=Release \
        -DXSTAMP_BUILD_exaStampLCHBOP=OFF \
-       -DEXASTAMP_TEST_DATA_DIR=/ccc/home/cont001/xstampdev/xstampdev/data \
+       -DEXASTAMP_TEST_DATA_DIR=${HOME}/data \
        -DPROJECT_SETUP_ENV_COMMANDS="${PROJECT_SETUP_ENV_COMMANDS}" \
        -DexaNBody_DIR=${XNB_DIR} \
        ${SRC_DIR}
+
+exit 0
+
+######################## GCC+HIP version ##########################
+export PROJECT_SETUP_ENV_COMMANDS="module purge ; module load rocm/5.6.0 mpi/intelmpi/21.4.0 cmake/3.26.4"
+eval ${PROJECT_SETUP_ENV_COMMANDS}
+
+unset TBB_ROOT MPI_ROOT
+BUILD_DIR=$CCCSCRATCHDIR/build/generic-hip
+SRC_DIR=$HOME/dev/ExaStamp-main
+XNB_DIR=$HOME/dev/exaNBody
+
+mkdir -p $BUILD_DIR
+rm -rf $BUILD_DIR/*
+cd $BUILD_DIR
+
+ccmake -DXNB_PRODUCT_VARIANT=rigidmol \
+       -DCMAKE_C_COMPILER=hipcc \
+       -DCMAKE_CXX_COMPILER=hipcc \
+       -DCMAKE_CXX_FLAGS="-Wpass-failed" \
+       -DXNB_BUILD_CUDA=ON \
+       -DXNB_ENABLE_HIP=ON \
+       -DCMAKE_HIP_PLATFORM=amd \
+       -DCMAKE_HIP_ARCHITECTURES=gfx90a \
+       -DOpenMP_CXX_LIB_NAMES="gomp;pthread" \
+       -DOpenMP_gomp_LIBRARY=/opt/rocm-5.6.0/llvm/lib/libgomp.so \
+       -DHOST_HW_CORES=128 \
+       -DHOST_HW_THREADS=256 \
+       -DONIKA_HAVE_OPENMP_DETACH=OFF \
+       -DONIKA_HAVE_OPENMP_TOOLS=OFF \
+       -Dyaml-cpp_DIR=/ccc/home/cont001/xstampdev/xstampdev/tools/yaml-cpp-gcc8.4/lib/cmake/yaml-cpp \
+       -DCMAKE_BUILD_TYPE=Release \
+       -DXSTAMP_BUILD_exaStampLCHBOP=OFF \
+       -DEXASTAMP_TEST_DATA_DIR=${HOME}/data \
+       -DPROJECT_SETUP_ENV_COMMANDS="${PROJECT_SETUP_ENV_COMMANDS}" \
+       -DexaNBody_DIR=${XNB_DIR} \
+       ${SRC_DIR}
+
+# -DCMAKE_C_FLAGS="-march=znver3" -DCMAKE_CXX_FLAGS="-march=znver3" 
 
 exit 0
 
