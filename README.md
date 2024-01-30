@@ -31,6 +31,8 @@ Before proceeding further, you have the option to consider the following depende
 
 - Cuda
 - Zoltan and parmetis
+- Cuda, see https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html
+- HIP, see https://rocm.docs.amd.com/projects/install-on-linux/en/latest/
 
 ### exaStamp installation
 
@@ -48,12 +50,28 @@ Create a directory named build and navigate into it:
 mkdir build && cd build
 ```
 
-Run CMake to configure the exaStamp build, specifying that CUDA support should be turned on (or off):
+Run CMake to configure the exaStamp build, with CUDA support
 
 ```
 ccmake -DXNB_PRODUCT_VARIANT=all \
        -DXNB_BUILD_CUDA=ON \
-       -DXSTAMP_CUDA_ARCH=80 \
+       -DXSTAMP_CUDA_ARCH=86 \
+       -DONIKA_HAVE_OPENMP_DETACH=OFF \
+       -DONIKA_HAVE_OPENMP_TOOLS=OFF \
+       -DCMAKE_BUILD_TYPE=Release \
+       ../exaStamp
+``
+
+OR with HIP support
+
+```
+ccmake -DXNB_PRODUCT_VARIANT=rigidmol \
+       -DCMAKE_C_COMPILER=hipcc \
+       -DCMAKE_CXX_COMPILER=hipcc \
+       -DCMAKE_CXX_FLAGS="-Wpass-failed" \
+       -DXNB_BUILD_CUDA=ON \
+       -DXNB_ENABLE_HIP=ON \
+       -DCMAKE_HIP_PLATFORM=amd \
        -DONIKA_HAVE_OPENMP_DETACH=OFF \
        -DONIKA_HAVE_OPENMP_TOOLS=OFF \
        -DCMAKE_BUILD_TYPE=Release \
