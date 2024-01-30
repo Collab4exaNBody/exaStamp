@@ -72,8 +72,8 @@ export XSNVCC=/ccc/products/cuda-12.0/system/nvhpc-231/bin/nvcc
 export XSNVARCH=80
 export YAML_CPP_ROOT=/ccc/home/cont001/xstampdev/xstampdev/tools/yaml-cpp-intl21.4-gcc8.4
 unset TBB_ROOT MPI_ROOT
-BUILD_DIR=$CCCSCRATCHDIR/build/generic
-SRC_DIR=$HOME/dev/ExaStamp-xsp-release-3.3
+BUILD_DIR=$CCCSCRATCHDIR/build/exaStamp-cuda
+SRC_DIR=$HOME/dev/ExaStamp-main
 XNB_DIR=$HOME/dev/exaNBody
 
 mkdir -p $BUILD_DIR
@@ -83,29 +83,34 @@ cd $BUILD_DIR
 # Note:
 # remove -Dyaml-cpp_DIR if yamlcpp-dev is installed as a standard package
 # # remove compiler specification if default compiler used
-ccmake -DXNB_PRODUCT_VARIANT=rigidmol \
+cmake -DXNB_PRODUCT_VARIANT=rigidmol \
        -DXNB_BUILD_CUDA=ON \
-       -DXSTAMP_CUDA_ARCH=80 \
+       -DCMAKE_CUDA_ARCHITECTURES=80 \
        -DONIKA_HAVE_OPENMP_DETACH=OFF \
        -DONIKA_HAVE_OPENMP_TOOLS=OFF \
        -DCMAKE_C_COMPILER=icc \
        -DCMAKE_CXX_COMPILER=icpc \
        -DCMAKE_Fortran_COMPILER=ifort \
        -DCMAKE_CUDA_COMPILER=/ccc/products/cuda-12.0/system/nvhpc-231/bin/nvcc \
+       -DMPIEXEC_MAX_NUMPROCS=32 \
+       -DMPIEXEC_PREFLAGS="-pa100-bxi" \
+       -DMPIEXEC_EXECUTABLE="/usr/bin/ccc_mprun" \
+       -DMPIEXEC_NUMCORE_FLAG="-c" \
+       -DMPIEXEC_NUMPROC_FLAG="-n" \
+       -DMPIEXEC_PREFLAGS_DBG="-pa100-bxi;-Xall;xterm;-e" \
+       -DMPIEXEC_PREALLOC_FLAG="-K" \
+       -DHOST_HW_CORES=128 \
+       -DHOST_HW_THREADS=256 \
        -Dyaml-cpp_DIR=/ccc/home/cont001/xstampdev/xstampdev/tools/yaml-cpp-gcc8.4/lib/cmake/yaml-cpp \
        -DCMAKE_BUILD_TYPE=Release \
        -DXSTAMP_BUILD_exaStampLCHBOP=OFF \
        -DEXASTAMP_TEST_DATA_DIR=/ccc/home/cont001/xstampdev/xstampdev/data \
        -DPROJECT_SETUP_ENV_COMMANDS="${PROJECT_SETUP_ENV_COMMANDS}" \
        -DexaNBody_DIR=${XNB_DIR} \
-       $HOME/dev/ExaStamp-xsp-release-3.3
-# compile
-echo "Compile with : cd $BUILD_DIR && make -j8 && make UpdatePluginDataBase"
+       ${SRC_DIR}
 
-# execute
-# OMP_NUM_THREADS=64 ccc_mprun -n4 -c32 -pa100 ./exaStamp myInput.msp
-echo "In build dir, run with : OMP_NUM_THREADS=XX mpirun <mpi options> ./exaStamp myInput.msp"
-echo "Note: use one mpi process per GPU card, i.e. 4 GPU per node => 4 mpi process per node"
+cat README.txt
+
 exit 0
 
 
