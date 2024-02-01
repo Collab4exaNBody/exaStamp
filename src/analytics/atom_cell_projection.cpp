@@ -33,14 +33,14 @@ namespace exaStamp
     using MomentumCombiner = std::conditional_t< has_field_type , MultimatMomentumCombiner , MonomatMomentumCombiner >;
     using KineticEnergyTensorCombiner = std::conditional_t< has_field_type , MultimatKineticEnergyTensorCombiner , MonomatKineticEnergyTensorCombiner >;
 
-    ADD_SLOT( MPI_Comm    , mpi             , INPUT );
-    ADD_SLOT( ParticleSpecies, species                    , INPUT , REQUIRED );    
-    ADD_SLOT( GridT          , grid              , INPUT , REQUIRED );
-    ADD_SLOT( double         , splat_size        , INPUT , REQUIRED );
-    ADD_SLOT( StringList  , fields            , INPUT , StringList({".*"}) , DocString{"List of regular expressions to select fields to project"} );
+    ADD_SLOT( MPI_Comm       , mpi              , INPUT );
+    ADD_SLOT( ParticleSpecies, species          , INPUT , REQUIRED );    
+    ADD_SLOT( GridT          , grid             , INPUT , REQUIRED );
+    ADD_SLOT( double         , splat_size       , INPUT , 1.0 );
+    ADD_SLOT( StringList     , fields           , INPUT , StringList({".*"}) , DocString{"List of regular expressions to select fields to project"} );
 
-    ADD_SLOT( long           , grid_subdiv       , INPUT_OUTPUT , 1 );
-    ADD_SLOT( GridCellValues , grid_cell_values  , INPUT_OUTPUT );
+    ADD_SLOT( long           , grid_subdiv      , INPUT_OUTPUT , 1 );
+    ADD_SLOT( GridCellValues , grid_cell_values , INPUT_OUTPUT );
     
   public:
 
