@@ -56,13 +56,12 @@ namespace exaStamp
 
       VelocityNormCombiner vnorm = {};
       ParticleCountCombiner count = {};
-      ProcessorRankCombiner processor_id = { {rank} };
       KineticEnergyCombiner mv2 = { { species->data() , 0 } };
       MassCombiner mass = { { species->data() , 0 } };
       MomentumCombiner momentum = { { species->data() , 0 } };
       KineticEnergyTensorCombiner mv2tensor = { { species->data() , 0 } };
       
-      auto proj_fields = make_field_tuple_from_field_set( grid->field_set, count, processor_id, vnorm, mv2, mass, momentum, mv2tensor );
+      auto proj_fields = make_field_tuple_from_field_set( grid->field_set, count, vnorm, mv2, mass, momentum, mv2tensor );
       auto field_selector = [flist = *fields] ( const std::string& name ) -> bool { for(const auto& f:flist) if( std::regex_match(name,std::regex(f)) ) return true; return false; } ;
       project_particle_fields_to_grid( ldbg, *grid, *grid_cell_values, *grid_subdiv, *splat_size, field_selector, proj_fields );
     }
