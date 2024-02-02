@@ -258,7 +258,7 @@ namespace exaStamp
                            eflag, quadraticflag,
                            switchinnerflag, chemflag
                            };
-        compute_cell_particle_pairs( *grid, snap_ctx->m_rcut, *ghost, optional, force_buf, bispectrum_op , compute_bispectrum_field_set );
+        compute_cell_particle_pairs( *grid, snap_ctx->m_rcut, *ghost, optional, force_buf, bispectrum_op , compute_bispectrum_field_set , parallel_execution_context() );
         // *********************************************
       }
 
@@ -315,7 +315,7 @@ namespace exaStamp
                            switchinnerflag, chemflag,
                            ! (*conv_coef_units) // if coefficients were not converted, then output energy/force must be converted
                            };      
-        compute_cell_particle_pairs( *grid, snap_ctx->m_rcut, *ghost, optional, force_buf, force_op , compute_force_field_set );
+        compute_cell_particle_pairs( *grid, snap_ctx->m_rcut, *ghost, optional, force_buf, force_op , compute_force_field_set , parallel_execution_context() );
       }
     }
 
