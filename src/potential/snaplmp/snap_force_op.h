@@ -56,6 +56,44 @@ namespace exaStamp
     //    static inline constexpr double conv_energy_factor = 1e-4 * exanb::legacy_constant::elementaryCharge / exanb::legacy_constant::atomicMass;
     double conv_energy_factor = UnityConverterHelper::convert(1., "eV");
 
+    template<class ComputeBufferT, class CellParticlesT>
+    inline void operator ()
+      (
+      size_t n,
+      ComputeBufferT& buf,
+      double& en,
+      double& fx,
+      double& fy,
+      double& fz,
+      int type,
+      CellParticlesT cells
+      ) const
+    {
+      FakeMat3d virial;
+      ComputePairOptionalLocks<false> locks;
+      FakeParticleLock lock_a;
+      this->operator () ( n,buf,en,fx,fy,fz,type,virial,cells,locks,lock_a);
+    }
+
+    template<class ComputeBufferT, class CellParticlesT>
+    inline void operator ()
+      (
+      size_t n,
+      ComputeBufferT& buf,
+      double& en,
+      double& fx,
+      double& fy,
+      double& fz,
+      int type,
+      Mat3d& virial,
+      CellParticlesT cells
+      ) const
+    {
+      ComputePairOptionalLocks<false> locks;
+      FakeParticleLock lock_a;
+      this->operator () ( n,buf,en,fx,fy,fz,type,virial,cells,locks,lock_a);
+    }
+
     template<class ComputeBufferT, class CellParticlesT, class GridCellLocksT, class ParticleLockT>
     inline void operator ()
       (

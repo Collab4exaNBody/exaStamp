@@ -64,7 +64,7 @@ namespace exaStamp
     // shortcut to the Compute buffer used (and passed to functor) by compute_cell_particle_pairs
     static constexpr bool UseWeights = false;
     static constexpr bool UseNeighbors = true;
-    static constexpr bool UseLocks = true;
+    //static constexpr bool UseLocks = true;
     //    using ComputeBuffer = ComputePairBuffer2<UseWeights,UseNeighbors>;
     using ComputeBuffer = ComputePairBuffer2<UseWeights,UseNeighbors,SnapComputeBuffer,CopyParticleType>;
 
@@ -302,8 +302,8 @@ namespace exaStamp
       // }
       // // *********************************************
 
+      auto compute_opt_locks = [&](auto cp_locks)
       {
-        ComputePairOptionalLocks<UseLocks> cp_locks { particle_locks->data() };
         auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform, cp_locks );
         ForceOp force_op { snap_ctx->m_thread_ctx.data(), snap_ctx->m_thread_ctx.size(),
                            grid->cell_particle_offset_data(), snap_ctx->m_beta.data(), snap_ctx->m_bispectrum.data(),
@@ -316,7 +316,13 @@ namespace exaStamp
                            ! (*conv_coef_units) // if coefficients were not converted, then output energy/force must be converted
                            };      
         compute_cell_particle_pairs( *grid, snap_ctx->m_rcut, *ghost, optional, force_buf, force_op , compute_force_field_set , parallel_execution_context() );
-      }
+      };
+      ldbg << "snaplmp: nthreads="<< omp_get_max_threads() <<std::endl;
+      
+      if( omp_get_max_threads() > 1 ) compute_opt_locks( ComputePairOptionalLocks<true>{ particle_locks->data() } );
+      else                            compute_opt_locks( ComputePairOptionalLocks<false>{} );
+
+      ldbg << "snaplmp: done"<<std::endl;
     }
 
   };

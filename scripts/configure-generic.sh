@@ -74,7 +74,8 @@ cd $BUILD_DIR
 
 # Note:
 # remove -Dyaml-cpp_DIR if yamlcpp-dev is installed as a standard package
-# # remove compiler specification if default compiler used
+# remove compiler specification if default compiler used
+# optional flags to reproduce the same optimization as LAMMPS : (-xHost) -fp-model fast=2 -no-prec-div -qoverride-limits
 cmake -DXNB_PRODUCT_VARIANT=rigidmol \
        -DXNB_BUILD_CUDA=ON \
        -DCMAKE_CUDA_ARCHITECTURES=80 \
@@ -82,6 +83,7 @@ cmake -DXNB_PRODUCT_VARIANT=rigidmol \
        -DONIKA_HAVE_OPENMP_TOOLS=OFF \
        -DCMAKE_C_COMPILER=icc \
        -DCMAKE_CXX_COMPILER=icpc \
+       -DCMAKE_CXX_FLAGS="-diag-disable=15518 -diag-disable=15552 -fp-model fast=2 -no-prec-div -qoverride-limits" \
        -DCMAKE_Fortran_COMPILER=ifort \
        -DCMAKE_CUDA_COMPILER=/ccc/products/cuda-12.0/system/nvhpc-231/bin/nvcc \
        -DCMAKE_CUDA_FLAGS="-ccbin /ccc/products/icx-22.1.2/system/default/22.1.2/bin/intel64/icpc" \
