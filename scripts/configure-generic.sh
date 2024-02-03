@@ -64,14 +64,6 @@ exit 0
 export PROJECT_SETUP_ENV_COMMANDS="module purge ; module load inteloneapi/22.1.2 gnu/8.4.0 nvhpc/23.1 mpi/openmpi/4.1.4 texlive cmake/3.20.3"
 eval ${PROJECT_SETUP_ENV_COMMANDS}
 
-export COMPILER_LIBDIRS=/ccc/products/icx-22.1.2/system/default/22.1.2/compiler/lib/intel64_lin:/ccc/products/icx-22.1.2/system/default/22.1.2/lib
-export COMPILER_FORTRAN_EXE=/ccc/products/ifx-22.1.2/system/default/22.1.2/bin/intel64/ifort
-export COMPILER_CC_EXE=/ccc/products/icx-22.1.2/system/default/22.1.2/bin/intel64/icc
-export COMPILER_CXX_EXE=/ccc/products/icx-22.1.2/system/default/22.1.2/bin/intel64/icpc
-export XSNVCC=/ccc/products/cuda-12.0/system/nvhpc-231/bin/nvcc
-export XSNVARCH=80
-export YAML_CPP_ROOT=/ccc/home/cont001/xstampdev/xstampdev/tools/yaml-cpp-intl21.4-gcc8.4
-unset TBB_ROOT MPI_ROOT
 BUILD_DIR=$CCCSCRATCHDIR/build/exaStamp-cuda
 SRC_DIR=$HOME/dev/ExaStamp-main
 XNB_DIR=$HOME/dev/exaNBody
@@ -82,7 +74,8 @@ cd $BUILD_DIR
 
 # Note:
 # remove -Dyaml-cpp_DIR if yamlcpp-dev is installed as a standard package
-# # remove compiler specification if default compiler used
+# remove compiler specification if default compiler used
+# optional flags to reproduce the same optimization as LAMMPS : (-xHost) -fp-model fast=2 -no-prec-div -qoverride-limits
 cmake -DXNB_PRODUCT_VARIANT=rigidmol \
        -DXNB_BUILD_CUDA=ON \
        -DCMAKE_CUDA_ARCHITECTURES=80 \
@@ -90,8 +83,10 @@ cmake -DXNB_PRODUCT_VARIANT=rigidmol \
        -DONIKA_HAVE_OPENMP_TOOLS=OFF \
        -DCMAKE_C_COMPILER=icc \
        -DCMAKE_CXX_COMPILER=icpc \
+       -DCMAKE_CXX_FLAGS="-diag-disable=15518 -diag-disable=15552 -fp-model fast=2 -no-prec-div -qoverride-limits" \
        -DCMAKE_Fortran_COMPILER=ifort \
        -DCMAKE_CUDA_COMPILER=/ccc/products/cuda-12.0/system/nvhpc-231/bin/nvcc \
+       -DCMAKE_CUDA_FLAGS="-ccbin /ccc/products/icx-22.1.2/system/default/22.1.2/bin/intel64/icpc" \
        -DMPIEXEC_MAX_NUMPROCS=32 \
        -DMPIEXEC_PREFLAGS="-pa100-bxi" \
        -DMPIEXEC_EXECUTABLE="/usr/bin/ccc_mprun" \
@@ -99,11 +94,14 @@ cmake -DXNB_PRODUCT_VARIANT=rigidmol \
        -DMPIEXEC_NUMPROC_FLAG="-n" \
        -DMPIEXEC_PREFLAGS_DBG="-pa100-bxi;-Xall;xterm;-e" \
        -DMPIEXEC_PREALLOC_FLAG="-K" \
+       -DHOST_ALWAYS_USE_MPIRUN=ON \
        -DHOST_HW_CORES=128 \
        -DHOST_HW_THREADS=256 \
        -Dyaml-cpp_DIR=/ccc/home/cont001/xstampdev/xstampdev/tools/yaml-cpp-gcc8.4/lib/cmake/yaml-cpp \
        -DCMAKE_BUILD_TYPE=Release \
        -DXSTAMP_BUILD_exaStampLCHBOP=OFF \
+       -DXSTAMP_BUILD_exaStampSnapLMP=ON \
+       -DXSTAMP_THIRD_PARTY_TOOLS_ROOT=/ccc/home/cont001/xstampdev/xstampdev/tools \
        -DEXASTAMP_TEST_DATA_DIR=/ccc/home/cont001/xstampdev/xstampdev/data \
        -DPROJECT_SETUP_ENV_COMMANDS="${PROJECT_SETUP_ENV_COMMANDS}" \
        -DexaNBody_DIR=${XNB_DIR} \
