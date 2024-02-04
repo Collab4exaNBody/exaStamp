@@ -57,7 +57,7 @@ namespace exaStamp
     // helper functor, with templated call operator (with/without weights)
     struct PairMultiForceOp
     {
-      const PotentialMultiParameters* p = nullptr;
+      const PotentialMultiParameters* __restrict__ p = nullptr;
 
       // ComputeBuffer less computation with virial
       template<class CellParticlesT>

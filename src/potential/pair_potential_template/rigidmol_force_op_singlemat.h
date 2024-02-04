@@ -65,7 +65,7 @@ namespace exaStamp
     // helper functor, with templated call operator (with/without weights)
     struct RigidMolForceOp
     {
-      RigidMolPotentialParameters p;
+      const RigidMolPotentialParameters* __restrict__ p;
 
      // without virial computation
       template<bool UseWeights, class CellParticlesT, class Mat3dT>
@@ -83,6 +83,8 @@ namespace exaStamp
         CellParticlesT* cells
         ) const
       {
+        const auto & p = *(this->p);
+        
         Vec3d mol_atom_ra[MAX_RIGID_MOLECULE_ATOMS];
 
         // pre-compute atom a force site positions
@@ -188,6 +190,7 @@ namespace exaStamp
         exanb::ComputePairParticleContextStart
         ) const
       {
+        const auto & p = *(this->p);
         const Mat3d mat_a = quaternion_to_matrix( cells[cell_a][field::orient][p_a] );
         for(unsigned int sub_atom_a=0; sub_atom_a<p.m_n_atoms; ++sub_atom_a)
         {
@@ -211,6 +214,7 @@ namespace exaStamp
         double weight
         ) const
       {
+        const auto & p = *(this->p);
         //int nPairs = 0;
         //for(size_t i=0;i<n;i++)
         //{
