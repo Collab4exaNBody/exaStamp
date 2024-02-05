@@ -29,20 +29,6 @@ namespace exaStamp
     std::cout << "array size = "<< N << std::endl;
   }
 
-
-  template<bool has_atom_type> static double get_particle_mass(const ParticleSpecies&, const uint8_t* __restrict__, size_t);
-  template<> inline double get_particle_mass<true>( const ParticleSpecies& species , const uint8_t* __restrict__ atom_type, size_t particle)
-  {
-    uint8_t t = atom_type[particle];
-    assert( t>=0 && t<species.size() );
-    return species[ t ].m_mass;
-  }
-  template<> inline double get_particle_mass<false>( const ParticleSpecies& species , const uint8_t* __restrict__ , size_t )
-  {
-    assert( species.size() >= 1 );
-    return species[0].m_mass;
-  }
-
   template<
     class GridT,
     class = AssertGridHasFields< GridT, field::_vx, field::_vy, field::_vz, field::_ax, field::_ay, field::_az, field::_virial>
@@ -196,7 +182,9 @@ namespace exaStamp
                 const Vec3d p = (0.5 * dt) * (data.Giht * f) + vSaved;
                 const Mat3d q = (0.5 * dt) * data.GiGp + (1. + 0.5 * dt * data.m_gammaNVT * conv_gammadt) * make_identity_matrix();
                 const Vec3d v = inverse(q) * p;
-                const double mk = get_particle_mass<has_type_field>( *species, types, k );
+                double mk = 0.0;
+		if constexpr ( has_type_field ) mk = (*species)[ types[k] ].m_mass;
+		else mk = (*species)[0].m_mass;
                 const Mat3d hpp_part = mk * multiply(data.h, tensor(v, v)) + transpose(multiply(data.hi, vir[k]));
                 hpp_k += hpp_part;
                 const double gammaNVTp_part = mk * dot(v, data.G * v);

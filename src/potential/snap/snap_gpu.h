@@ -44,12 +44,16 @@ namespace SnapExt
         ONIKA_CU_BLOCK_FENCE(); ONIKA_CU_BLOCK_SYNC();
         if( cell_a_no_gl < ncells_no_gl )
         {
+          using FieldTuple = field_accessor_tuple_from_field_set_t< FieldSetT >;
+          static constexpr size_t nb_fields = onika::tuple_size_const_v<FieldTuple>;
+          static constexpr FieldTuple cp_fields = {};
+          
           const IJK loc_a_no_gl = grid_index_to_ijk( dimsNoGL, cell_a_no_gl );
           const IJK loc_a = { loc_a_no_gl.i+gl , loc_a_no_gl.j+gl , loc_a_no_gl.k+gl };
           const size_t cell_a = grid_ijk_to_index( dims, loc_a );
           compute_cell_particle_pairs_cell(cells,dims,loc_a,cell_a,rcut2 ,cpbuf_factory, optional, force_op,
-                                      CS, std::integral_constant<bool,false>{}, FieldSetT{},
-                                      DefaultPositionFields{} , UseComputeBuffer );
+                                      cp_fields, CS, std::integral_constant<bool,false>{},
+                                      DefaultPositionFields{} , UseComputeBuffer , std::make_index_sequence<nb_fields>{} );
         }
       }
       while( cell_a_no_gl < ncells_no_gl );
@@ -99,7 +103,7 @@ namespace SnapExt
     SnapConstantPointers constants = { ctx.n_fblocks, ctx.d_bs_fblock };
     SnapGpuForceOp<BlockSize,JMax> force_op { rcut, factor, coef, rfac0, rmin0 , ( bzflag ? snap_bs.en_zero_val() : 0.0 ) , constants , { ctx.d_block_scratch } , ctx.d_kernel_counters };
     const unsigned int cs = optional.nbh.m_chunk_size;
-    cudaStream_t custr = ctx.custream; // ctx.m_threadStream[0];
+    onikaStream_t custr = ctx.custream; // ctx.m_threadStream[0];
 /*
     static bool first_time=true;
     if(first_time)

@@ -67,15 +67,15 @@ void snap_read_lammps(const std::string& paramFileName, const std::string& coefF
 
   for(size_t m=0;m<n_materials;m++)
     {
-      std::cout << "Material #" << m << std::endl;
+//      std::cout << "Material #" << m << std::endl;
       std::getline(coefs,line);
-      std::cout << line << std::endl;
+//      std::cout << line << std::endl;
       if( line.find('#') != 0 )
 	{
 	  std::string name;
 	  double radelem=0., weight=1.;
 	  std::istringstream(line) >> name >> radelem >> weight;
-	  std::cout << "name radelem weight :" << name << " " << radelem << " " << weight << std::endl;
+//	  std::cout << "name radelem weight :" << name << " " << radelem << " " << weight << std::endl;
 	  SnapMaterial mat;
 	  mat.set_name(name);
 	  mat.set_radelem(radelem);

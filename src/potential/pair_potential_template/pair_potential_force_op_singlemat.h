@@ -32,9 +32,9 @@ namespace exaStamp
       double ecut;
 
       template<class CellParticlesT>
-      ONIKA_HOST_DEVICE_FUNC inline void operator () (Vec3d dr,double d2,double& fx,double& fy,double& fz,Mat3d& vir,DEBUG_ADDITIONAL_PARAMETERS CellParticlesT*,size_t,size_t, double weight ) const
+      ONIKA_HOST_DEVICE_FUNC inline void operator () (Vec3d dr,double d2,double& fx,double& fy,double& fz,Mat3d& vir,DEBUG_ADDITIONAL_PARAMETERS CellParticlesT,size_t,size_t, double weight ) const
       {
-        double ep = 0.0;
+        // double ep = 0.0;
         const double r = sqrt(d2);
         double e=0.0, de=0.0;
         
@@ -52,15 +52,15 @@ namespace exaStamp
         fx += fe.x;
         fy += fe.y;
         fz += fe.z;
-        ep += .5 * e;
+        // ep += .5 * e;
         vir += tensor(fe,dr) * -0.5;
       }
 
       // ComputeBuffer less computation without virial
       template<class CellParticlesT>
-      ONIKA_HOST_DEVICE_FUNC inline void operator () (Vec3d dr,double d2,double& fx,double& fy,double& fz,DEBUG_ADDITIONAL_PARAMETERS CellParticlesT*,size_t,size_t, double weight ) const
+      ONIKA_HOST_DEVICE_FUNC inline void operator () (Vec3d dr,double d2,double& fx,double& fy,double& fz,DEBUG_ADDITIONAL_PARAMETERS CellParticlesT,size_t,size_t, double weight ) const
       {
-        double ep = 0.0;
+        // double ep = 0.0;
         const double r = sqrt(d2);
         double e=0.0, de=0.0;
 
@@ -77,12 +77,12 @@ namespace exaStamp
         fx += de * dr.x;
         fy += de * dr.y;
         fz += de * dr.z;
-        ep += .5 * e;
+        // ep += .5 * e;
       }
 
       // ComputeBuffer less computation with virial
       template<class CellParticlesT>
-      ONIKA_HOST_DEVICE_FUNC inline void operator () (Vec3d dr,double d2,double& ep,double& fx,double& fy,double& fz,Mat3d& vir,DEBUG_ADDITIONAL_PARAMETERS CellParticlesT*,size_t,size_t, double weight ) const
+      ONIKA_HOST_DEVICE_FUNC inline void operator () (Vec3d dr,double d2,double& ep,double& fx,double& fy,double& fz,Mat3d& vir,DEBUG_ADDITIONAL_PARAMETERS CellParticlesT,size_t,size_t, double weight ) const
       {
         const double r = sqrt(d2);
         double e=0.0, de=0.0;
@@ -107,7 +107,7 @@ namespace exaStamp
 
       // ComputeBuffer less computation without virial
       template<class CellParticlesT>
-      ONIKA_HOST_DEVICE_FUNC inline void operator () (Vec3d dr,double d2,double& ep,double& fx,double& fy,double& fz,DEBUG_ADDITIONAL_PARAMETERS CellParticlesT*,size_t,size_t, double weight ) const
+      ONIKA_HOST_DEVICE_FUNC inline void operator () (Vec3d dr,double d2,double& ep,double& fx,double& fy,double& fz,DEBUG_ADDITIONAL_PARAMETERS CellParticlesT,size_t,size_t, double weight ) const
       {
         const double r = sqrt(d2);
         double e=0.0, de=0.0;
@@ -138,7 +138,7 @@ namespace exaStamp
         double& ay,
         double& az,
         DEBUG_ADDITIONAL_PARAMETERS
-        CellParticlesT*
+        CellParticlesT
         ) const
       {
         using Mat3d = ::exanb::FakeMat3d;
@@ -157,7 +157,7 @@ namespace exaStamp
         double& az,
         Mat3d& virial,
         DEBUG_ADDITIONAL_PARAMETERS
-        CellParticlesT*
+        CellParticlesT
         ) const
       {
 #       include "force_op_impl2.hxx"
@@ -172,10 +172,10 @@ namespace exaStamp
         double& ay,
         double& az,
         DEBUG_ADDITIONAL_PARAMETERS
-        CellParticlesT*
+        CellParticlesT
         ) const
       {
-        double ep = 0.0;
+        [[maybe_unused]] double ep = 0.0;
         using Mat3d = ::exanb::FakeMat3d;
         FakeMat3d virial; // unused virial
 #       include "force_op_impl2.hxx"
@@ -191,10 +191,10 @@ namespace exaStamp
         double& az,
         Mat3d& virial,
         DEBUG_ADDITIONAL_PARAMETERS
-        CellParticlesT*
+        CellParticlesT
         ) const
       {
-        double ep = 0.0;
+        [[maybe_unused]] double ep = 0.0;
 #       include "force_op_impl2.hxx"
       }
 

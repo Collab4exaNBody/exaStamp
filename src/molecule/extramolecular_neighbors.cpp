@@ -47,7 +47,7 @@ namespace exaStamp
     using has_idmol_field_t = typename GridT::CellParticles::template HasField < field::_idmol > ;
     static constexpr bool has_idmol_field = has_idmol_field_t::value;
 
-#ifdef XSTAMP_CUDA_VERSION
+#ifdef XNB_CUDA_VERSION
     ADD_SLOT( onika::cuda::CudaContext , cuda_ctx , INPUT , OPTIONAL );
 #endif
 
@@ -81,7 +81,7 @@ namespace exaStamp
       }
 
       bool gpu_enabled = false;
-#     ifdef XSTAMP_CUDA_VERSION
+#     ifdef XNB_CUDA_VERSION
       if( cuda_ctx.has_value() )
       {
         gpu_enabled = cuda_ctx->has_devices() ;

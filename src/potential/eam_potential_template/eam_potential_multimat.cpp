@@ -13,8 +13,8 @@
 #include <exanb/core/log.h>
 #include <exanb/core/cpp_utils.h>
 
-#include "eam_buffer.h"
-#include "eam_yaml.h"
+#include <exaStamp/potential/eam/eam_buffer.h>
+#include <exaStamp/potential/eam/eam_yaml.h>
 #include "potential.h"
 #include "eam_force_op_multimat.h"
 
@@ -30,6 +30,9 @@ namespace exaStamp
 
   template<
     class GridT,
+    bool ComputeEmb = true ,
+    bool ComputeGhostEmb = true ,
+    bool ComputeForce = true ,
     class = AssertGridHasFields< GridT, field::_ep ,field::_fx ,field::_fy ,field::_fz, field::_type >
     >
   class EamPotentialOperatorName : public OperatorNode
@@ -37,6 +40,8 @@ namespace exaStamp
     using CellParticles = typename GridT::CellParticles;
     using EamMultiMatParams = EamMultimatParameters<USTAMP_POTENTIAL_PARMS>;
     using EamParamVector = std::vector<EamMultiMatParams>;
+    using EamPotParmRO = PRIV_NAMESPACE_NAME::EamMultiMatParamsReadOnly;
+    using EamScratch = EamMultimatPotentialScratch< EamPotParmRO >;
     using EmbOp = PRIV_NAMESPACE_NAME::EmbOp;
     using ForceOp = PRIV_NAMESPACE_NAME::ForceOp;
 
@@ -48,7 +53,6 @@ namespace exaStamp
     using ComputeFieldsWithVirial    = FieldSet< field::_ep ,field::_fx ,field::_fy ,field::_fz, field::_type, field::_virial >;
     using ComputeFields = std::conditional_t< has_virial_field , ComputeFieldsWithVirial , ComputeFieldsWithoutVirial >;
     static inline constexpr ComputeFields force_compute_fields_v{};
-    static inline constexpr FieldSet<field::_ep,field::_type> emb_compute_fields_v{};
 
     // ========= I/O slots =======================
     ADD_SLOT( ParticleSpecies       , species          , INPUT , REQUIRED );
@@ -59,7 +63,9 @@ namespace exaStamp
     ADD_SLOT( exanb::GridChunkNeighbors    , chunk_neighbors  , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
     ADD_SLOT( GridT                 , grid             , INPUT_OUTPUT );
     ADD_SLOT( Domain                , domain           , INPUT , REQUIRED );
-    ADD_SLOT( EamPotentialScratch   , eam_scratch      , PRIVATE );
+        
+    ADD_SLOT( EamParticleEmbField   , eam_particle_emb  , INPUT_OUTPUT );
+    ADD_SLOT( EamScratch            , eam_scratch      , PRIVATE );
 
   public:
 
@@ -68,7 +74,10 @@ namespace exaStamp
     {
       //MeamPotential meam( *rcut, *parameters );
       *rcut_max = std::max( *rcut , *rcut_max );
-      *ghost_dist_max = std::max( *ghost_dist_max , (*rcut) * 2.0 );
+      if constexpr ( ComputeGhostEmb )
+      {
+        *ghost_dist_max = std::max( *ghost_dist_max , (*rcut) * 2.0 );
+      }
  
       size_t n_cells = grid->number_of_cells();
       if( n_cells == 0 )
@@ -128,6 +137,7 @@ namespace exaStamp
 
       assert( potentials->size() == n_type_pairs );
       eam_scratch->m_phi_rho_cutoff.resize( n_type_pairs );
+      eam_scratch->m_ro_potentials.resize( n_type_pairs );
       for(size_t i=0;i<n_type_pairs;i++)
       {
         double phiCut = 0.;
@@ -147,64 +157,70 @@ namespace exaStamp
         }
 #       endif
         eam_scratch->m_phi_rho_cutoff[i] = { phiCut , rhoCut };
+        const auto & pot = potentials->at(i);
+        eam_scratch->m_ro_potentials[i] = { pot.m_parameters , pot.m_specy_pair };
       }
-
-      // TODO: emb data should be an in/out slot of this operator, not a member
-      //auto cells = grid->cells();
-      /*
-      eam_scratch->m_offset.resize( n_cells );
-      size_t total_particles = 0;
-      for(size_t i=0;i<n_cells;i++)
-      {
-        eam_scratch->m_offset[i] = total_particles;
-        total_particles += cells[i].size();
-      }
-      */
-      eam_scratch->m_emb.clear(); // avoid useless copy of scratch values (we don't need previous values)
-      eam_scratch->m_emb.resize( grid->number_of_particles() );
-
-      // common bricks for both compute passes
-      exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
-      ComputePairNullWeightIterator cp_weight {};
-      ComputePairOptionalLocks<false> cp_locks;
-
-      // 1st pass parameters : compute per particle EMB term, including ghost particles
-      using EmbCPBuf = ComputePairBuffer2<false,false ,EamComputeBufferTypeExt,EamCopyParticleType>;
-      ComputePairBufferFactory< EmbCPBuf > emb_buf;
-      EmbOp emb_op { potentials->data(), eam_scratch->m_phi_rho_cutoff.data(), grid->cell_particle_offset_data() /*eam_scratch->m_offset.data()*/, eam_scratch->m_emb.data(), eam_scratch->m_pair_enabled.data() };
-
-      // 2nd pass parameters: compute final force using the emb term, only for non ghost particles (but reading EMB terms from neighbor particles)
-      using ForceCPBuf = ComputePairBuffer2<false,false,EamComputeBufferEmbTypeExt,EamCopyParticleEmbType>;
-      ComputePairBufferFactory< ForceCPBuf , EamCopyParticleEmbInitFunc > force_buf = { grid->cell_particle_offset_data() /*eam_scratch->m_offset.data()*/ , eam_scratch->m_emb.data() };
-      ForceOp force_op { potentials->data(), eam_scratch->m_phi_rho_cutoff.data(), grid->cell_particle_offset_data()/*eam_scratch->m_offset.data()*/ , eam_scratch->m_emb.data(), eam_scratch->m_pair_enabled.data() };
 
       // execute the 2 passes
-      if( domain->xform_is_identity() )
+      auto compute_eam_force = [&]( const auto& cp_xform )
       {
-        auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , NullXForm{} , cp_locks );
-        compute_cell_particle_pairs( *grid, *rcut, true, optional, emb_buf, emb_op, emb_compute_fields_v );
-        compute_cell_particle_pairs( *grid, *rcut, false, optional, force_buf, force_op, force_compute_fields_v );
-      }
-      else
-      {
-        ldbg << "xform = " << domain->xform() << std::endl;
-        auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , LinearXForm{ domain->xform() } , cp_locks );
-        compute_cell_particle_pairs( *grid, *rcut, true, optional, emb_buf, emb_op, emb_compute_fields_v );
-        compute_cell_particle_pairs( *grid, *rcut, false, optional, force_buf, force_op, force_compute_fields_v );
-      }
+        // common bricks for both compute passes
+        exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
+        ComputePairNullWeightIterator cp_weight {};
+        ComputePairOptionalLocks<false> cp_locks;
+
+        // 1st pass parameters : compute per particle EMB term, including ghost particles
+        if constexpr ( ComputeEmb )
+        {
+          eam_particle_emb->m_emb.clear();
+          eam_particle_emb->m_emb.resize( grid->number_of_particles() );
+          //eam_particle_emb->m_emb.assign( grid->number_of_particles() , 0.0 );
+
+          using EmbCPBuf = SimpleNbhComputeBuffer< FieldSet<field::_type> >; 
+          ComputePairBufferFactory< EmbCPBuf > emb_buf;
+          double * emb_ptr = eam_particle_emb->m_emb.data();
+          auto emb_field = make_external_field_flat_array_accessor( *grid , emb_ptr , field::dEmb );
+          auto emb_op_fields = make_field_tuple_from_field_set( FieldSet< field::_ep , field::_type >{} , emb_field );
+          auto emb_nbh_fields = onika::make_flat_tuple( field::type ); // we want internal type field for each neighbor atom
+          auto emb_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks, ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{}, emb_nbh_fields );
+          EmbOp emb_op { eam_scratch->m_ro_potentials.data(), eam_scratch->m_phi_rho_cutoff.data(), eam_scratch->m_pair_enabled.data() };
+          compute_cell_particle_pairs( *grid, *rcut, ComputeGhostEmb, emb_optional, emb_buf, emb_op, emb_op_fields, parallel_execution_context() );
+        }
+
+        // 2nd pass parameters: compute final force using the emb term, only for non ghost particles (but reading EMB terms from neighbor particles)
+        if constexpr ( ComputeForce )
+        {
+          using ForceCPBuf = SimpleNbhComputeBuffer< FieldSet< field::_type , field::_dEmb > >; //ComputePairBuffer2<false,false,EamComputeBufferEmbTypeExt,EamCopyParticleEmbType>;
+          ComputePairBufferFactory<ForceCPBuf> force_buf = {};
+          double * c_emb_ptr = eam_particle_emb->m_emb.data();
+          auto c_emb_field = make_external_field_flat_array_accessor( *grid , c_emb_ptr , field::dEmb );
+          auto force_op_fields = make_field_tuple_from_field_set( force_compute_fields_v , c_emb_field );
+          auto force_nbh_fields = onika::make_flat_tuple( field::type , c_emb_field); // we want type and emb for each neighbor atom
+          auto force_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks, ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{}, force_nbh_fields );
+          ForceOp force_op { eam_scratch->m_ro_potentials.data(), eam_scratch->m_phi_rho_cutoff.data(), eam_scratch->m_pair_enabled.data() };
+          compute_cell_particle_pairs( *grid, *rcut, false, force_optional, force_buf, force_op, force_op_fields, parallel_execution_context() );
+        }
+      };
+
+      if( domain->xform_is_identity() ) compute_eam_force( exanb::NullXForm{} );
+      else                              compute_eam_force( exanb::LinearXForm{ domain->xform() } );
     }
 
   };
 
   namespace tmplhelper
   {
-    template<class GridT> using EamPotentialOperatorName = ::exaStamp::EamPotentialOperatorName<GridT>;
+    template<class GridT> using EamPotentialOperatorName  = ::exaStamp::EamPotentialOperatorName<GridT,true,true,true>;
+    template<class GridT> using EamPotentialEmbOnlyName   = ::exaStamp::EamPotentialOperatorName<GridT,true,false,false>;
+    template<class GridT> using EamPotentialForceOnlyName = ::exaStamp::EamPotentialOperatorName<GridT,false,false,true>;
   }
 
   // === register factories ===  
   CONSTRUCTOR_FUNCTION
   {
-    OperatorNodeFactory::instance()->register_factory( EamPotentialStr , make_grid_variant_operator< tmplhelper::EamPotentialOperatorName > );
+    OperatorNodeFactory::instance()->register_factory( EamPotentialStr          , make_grid_variant_operator< tmplhelper::EamPotentialOperatorName  > );
+    OperatorNodeFactory::instance()->register_factory( EamPotentialEmbOnlyStr   , make_grid_variant_operator< tmplhelper::EamPotentialEmbOnlyName   > );
+    OperatorNodeFactory::instance()->register_factory( EamPotentialForceOnlyStr , make_grid_variant_operator< tmplhelper::EamPotentialForceOnlyName > );
   }
 
 }

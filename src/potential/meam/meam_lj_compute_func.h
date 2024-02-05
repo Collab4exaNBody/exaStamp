@@ -75,8 +75,8 @@ namespace exaStamp
 
   struct MeamLJNeighborFilter
   {
-    template<typename ComputeBufferT, typename FieldArraysT>
-    ONIKA_HOST_DEVICE_FUNC inline void operator () (ComputeBufferT& tab, const Vec3d& dr, double d2, const FieldArraysT * cells, size_t cell_b, size_t p_b, double weight) const noexcept
+    template<class ComputeBufferT, class FieldArraysT>
+    ONIKA_HOST_DEVICE_FUNC inline void operator () (ComputeBufferT& tab, const Vec3d& dr, double d2, FieldArraysT cells, size_t cell_b, size_t p_b, double weight) const noexcept
     {      
       const MeamLJMultiMatParms* mmp = tab.ext.m_meam_lj_multimat;
       const unsigned int type_a = tab.ta;
@@ -106,11 +106,13 @@ namespace exaStamp
       else if ( d2 <= mmp->m_meam_rcut2 )
       {
 #       ifdef XSTAMP_MEAM_ENFORCE_OVERFLOW_CHECK
-        const auto overflow_check = std::true_type {};
-#       else
-        const auto overflow_check = std::false_type {};
+        if( ssize_t(count) >= ssize_t(MaxNeighbors) )
+        {
+          printf("Compute buffer overflow : max capacity (%d) reached (count=%d)\n" , int(MaxNeighbors) , int(count) );
+          ONIKA_CU_ABORT();
+        }
 #       endif
-        exanb::DefaultComputePairBufferAppendFunc{} ( tab, dr, d2, cells, cell_b, p_b, weight, overflow_check );
+        exanb::DefaultComputePairBufferAppendFunc{} ( tab, dr, d2, cells, cell_b, p_b, weight );
       }
     }
   };
@@ -126,7 +128,8 @@ namespace exaStamp
     BaseMeamFunctor m_nofilter_func;
     MeamLJMultiMatParms m_meam_lj_multimat;
 
-    ONIKA_HOST_DEVICE_FUNC inline void operator () (ComputeBufferT& tab, CellParticles* cells, size_t cell_a, size_t p_a, exanb::ComputePairParticleContextStart) const
+    template<class CellsAccessorT>
+    ONIKA_HOST_DEVICE_FUNC inline void operator () (ComputeBufferT& tab, CellsAccessorT cells, size_t cell_a, size_t p_a, exanb::ComputePairParticleContextStart) const
     {
       tab.ext.m_meam_lj_multimat = & m_meam_lj_multimat;
       tab.ext.m_meam_lj_nb_lj_pairs = 0;
@@ -137,27 +140,29 @@ namespace exaStamp
       tab.ext.S[3] = 0.0;
     }
 
-    ONIKA_HOST_DEVICE_FUNC inline void operator () (int n, ComputeBufferT& tab, double& _ep, double& _fx, double& _fy, double& _fz, Mat3d&, CellParticles* cells) const
+    template<class CellsAccessorT>
+    ONIKA_HOST_DEVICE_FUNC inline void operator () (int n, ComputeBufferT& tab, double& _ep, double& _fx, double& _fy, double& _fz, Mat3d&, CellsAccessorT cells) const
     {
       ComputePairOptionalLocks<false> locks;
       FakeParticleLock particle_lock;
       (*this) ( n,tab,_ep,_fx,_fy,_fz,cells,locks,particle_lock );
     }
 
-    ONIKA_HOST_DEVICE_FUNC inline void operator () (int n, ComputeBufferT& tab,double& _ep,double& _fx,double& _fy,double& _fz,CellParticles* cells) const
+    template<class CellsAccessorT>
+    ONIKA_HOST_DEVICE_FUNC inline void operator () (int n, ComputeBufferT& tab,double& _ep,double& _fx,double& _fy,double& _fz,CellsAccessorT cells) const
     {
       ComputePairOptionalLocks<false> locks;
       FakeParticleLock particle_lock;
       (*this) ( n,tab,_ep,_fx,_fy,_fz,cells,locks,particle_lock );
     }
 
-    template<class GridCellParticleLocksT , class ParticleLockT >
-    ONIKA_HOST_DEVICE_FUNC inline void operator () (int n, ComputeBufferT& tab,double& _ep,double& _fx,double& _fy,double& _fz,Mat3d&,CellParticles* cells,GridCellParticleLocksT locks,ParticleLockT & particle_lock) const
+    template<class CellsAccessorT, class GridCellParticleLocksT , class ParticleLockT >
+    ONIKA_HOST_DEVICE_FUNC inline void operator () (int n, ComputeBufferT& tab,double& _ep,double& _fx,double& _fy,double& _fz,Mat3d&,CellsAccessorT cells,GridCellParticleLocksT locks,ParticleLockT & particle_lock) const
     {
       (*this) ( n,tab,_ep,_fx,_fy,_fz,cells,locks,particle_lock );
     }
 
-    template<class GridCellParticleLocksT , class ParticleLockT >
+    template<class CellsAccessorT, class GridCellParticleLocksT , class ParticleLockT >
     ONIKA_HOST_DEVICE_FUNC inline void operator ()
       (
       int n,
@@ -166,14 +171,14 @@ namespace exaStamp
       double& _fx,
       double& _fy,
       double& _fz,
-      CellParticles* cells,
+      CellsAccessorT cells,
       GridCellParticleLocksT locks,
       ParticleLockT & particle_lock
       ) const
     {
       // get central particle's type
-      const unsigned int type_a = tab.ta; // static_cast<unsigned int>( tab.ext.S[0] );
-      assert( n==0 || type_a==m_meam_lj_multimat.m_meam_type );
+      //const unsigned int type_a = tab.ta; // static_cast<unsigned int>( tab.ext.S[0] );
+      assert( n==0 || tab.ta==m_meam_lj_multimat.m_meam_type );
 
       // get contributions from LJ pairs stored in S array
 

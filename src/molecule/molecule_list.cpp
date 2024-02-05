@@ -41,10 +41,9 @@ namespace exaStamp
       
 #     pragma omp parallel
       {      
-        const int nt = omp_get_num_threads();
         const int tid = omp_get_thread_num();
-        assert( nt <= max_nt );
-        assert( tid < nt );
+        assert( omp_get_num_threads() <= max_nt );
+        assert( tid < omp_get_num_threads() );
         auto & id_map = mol_id_maps[tid];
         
 #       pragma omp for schedule(dynamic)        

@@ -1,8 +1,20 @@
+cmake_minimum_required(VERSION 3.22)
+
+# ========================================
+# === Compiler toolchain configuration ===
+# ========================================
+# C++ standard
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS NO)
+if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+  set(CMAKE_CUDA_ARCHITECTURES 86)
+endif()
+
 # ===============
 # === Project ===
 # ===============
-cmake_minimum_required(VERSION 3.16)
-project(exaStamp LANGUAGES C CXX)
+project(exaStamp VERSION 3.3 LANGUAGES C CXX)
 
 # ===========================
 # === CMake customization ===
@@ -14,7 +26,6 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 # === exaNBody application framework ===
 # ======================================
 find_package(exaNBody)
-
 
 # =============================
 # === Field sets selection  ===
@@ -49,7 +60,6 @@ endforeach()
 # ==============================
 set(EXASTAMP_VERSION "exaStamp-3.3") 
 message(STATUS "Project version : ${EXASTAMP_VERSION}")
-
 
 # ==================================
 # === environment setup commands ===

@@ -204,18 +204,16 @@ namespace exaStamp
       ldbg<<"      number of k points : "<<nk<<std::endl<<std::flush;
       ldbg<<"      number of threads : "<<max_nt<<std::endl<<std::flush;
 
-      size_t total_particles = 0;
+      // size_t total_particles = 0;
       Mat3d xform = domain->xform();
 
-      auto exec_ctx = parallel_execution_context();
-      bool allow_cuda_exec = ( exec_ctx != nullptr );
-      if( allow_cuda_exec ) allow_cuda_exec = ( exec_ctx->m_cuda_ctx != nullptr );
-      if( allow_cuda_exec ) allow_cuda_exec = exec_ctx->m_cuda_ctx->has_devices();
+      bool allow_cuda_exec = ( global_cuda_ctx() != nullptr );
+      if( allow_cuda_exec ) allow_cuda_exec = global_cuda_ctx()->has_devices();
       if( allow_cuda_exec )
       {
-        const int streamIndex = 0;
+        // const int streamIndex = 0;
 	      //lout << "Ewald rho : Cuda version" << std::endl;
-        checkCudaErrors( ONIKA_CU_MEMSET( ewald_rho->rho.data(), 0, sizeof(Complexd)*nk, exec_ctx->m_cuda_ctx->m_threadStream[streamIndex] ) );
+        ONIKA_CU_CHECK_ERRORS( ONIKA_CU_MEMSET( ewald_rho->rho.data(), 0, sizeof(Complexd)*nk, global_cuda_ctx()->getThreadStream(0) ) );
         /* if( domain->xform_is_identity() )
         {
           EwaldLongRangeRhoComputeFunc<NullXForm> func = { {} , get_species() , *ewald_config , ewald_rho->rho.data() };
@@ -223,7 +221,7 @@ namespace exaStamp
         }
         else */
         {
-          EwaldLongRangeRhoComputeFunc<LinearXForm> func = { xform , get_species() , *ewald_config , ewald_rho->rho.data() };
+          EwaldLongRangeRhoComputeFunc<LinearXForm> func = { {xform} , get_species() , *ewald_config , ewald_rho->rho.data() };
           compute_cell_particles( *grid , false , func , ewald_rho_field_set , parallel_execution_context() );
         }
       }
@@ -242,11 +240,11 @@ namespace exaStamp
           Complexd * __restrict__ local_rho = tmp_rho.data() + ( tid * nk );
           for(size_t k=0; k<nk; ++k) { local_rho[k] = Complexd{0.,0.}; }
           
-          GRID_OMP_FOR_BEGIN(dims-2*gl,_,loc, schedule(dynamic) nowait reduction(+:total_particles) )
+          GRID_OMP_FOR_BEGIN(dims-2*gl,_,loc, schedule(dynamic) nowait /*reduction(+:total_particles)*/ )
           {
             size_t i = grid_ijk_to_index( dims , loc + gl );
             size_t n = cells[i].size();
-            total_particles += n;
+            // total_particles += n;
             
             const double* __restrict__ charges = cells[i].field_pointer_or_null(field::charge); ONIKA_ASSUME_ALIGNED(charges);
             const uint8_t* __restrict__ types = cells[i].field_pointer_or_null(field::type); ONIKA_ASSUME_ALIGNED(types);
@@ -305,7 +303,7 @@ namespace exaStamp
         }
         else */
         {
-          EwaldLongRangeForceComputeFunc<LinearXForm> func = { xform , get_species() , *ewald_config , ewald_rho->rho.data() };
+          EwaldLongRangeForceComputeFunc<LinearXForm> func = { {xform} , get_species() , *ewald_config , ewald_rho->rho.data() };
           compute_cell_particles( *grid , false , func , ewald_force_field_set , parallel_execution_context() );
         }
       }

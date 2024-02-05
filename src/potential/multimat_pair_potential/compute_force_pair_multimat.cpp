@@ -22,8 +22,15 @@ namespace exaStamp
   using namespace exanb;
 
   // helper function to get the right force operator  
-  static inline std::shared_ptr<PairPotentialComputeOperator> get_potential_force_op( PairPotential& pot, std::false_type ) { return pot.force_op(); }
-  static inline std::shared_ptr<PairPotentialComputeVirialOperator> get_potential_force_op( PairPotential& pot, std::true_type ) { return pot.force_virial_op(); }
+  template<bool has_virial>
+  static inline 
+  std::shared_ptr< std::conditional_t<has_virial,PairPotentialComputeVirialOperator,PairPotentialComputeOperator> >
+  get_potential_force_op( PairPotential& pot, std::integral_constant<bool,has_virial> )
+  {
+    if constexpr ( has_virial ) return pot.force_virial_op();
+    if constexpr ( ! has_virial ) return pot.force_op();
+    return nullptr;
+  }
 
   template<
     class GridT,

@@ -16,6 +16,7 @@ add_subdirectory(pair_potentials)
 add_subdirectory(multimat_pair_potential)
 
 # EAM potentials
+add_subdirectory(eam)
 add_subdirectory(eam_potentials)
 
 add_subdirectory(LCHBOP)
