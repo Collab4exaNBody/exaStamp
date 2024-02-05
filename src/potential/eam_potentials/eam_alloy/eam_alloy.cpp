@@ -7,15 +7,10 @@
 // Yaml conversion operators, allows to read potential parameters from config file
 namespace YAML
 {
-
   bool convert<exaStamp::EamAlloyParameters>::decode(const Node& _node, exaStamp::EamAlloyParameters& v)
   {
-    using exanb::UnityConverterHelper;
-    using exanb::Quantity;
-    using exanb::lout;
-    using exanb::lerr;
-    using exanb::ldbg;
-    
+    using exaStamp::EamAlloyTools::interpolate;
+
     Node node = _node;
     std::string file_to_load;
     if( node.IsScalar() )
@@ -201,33 +196,6 @@ namespace YAML
 
     return true;
   }
-  
-  void convert<exaStamp::EamAlloyParameters>::interpolate(int n, double delta, std::vector<double> f, std::vector<std::vector<double>>& spline)
-  {
-    for (int m = 0; m < n; m++) spline[m][6] = f[m];
-
-    spline[0][5] = spline[1][6] - spline[0][6];
-    spline[0][5] = 0.5 * (spline[2][6]-spline[0][6]);
-    spline[n-2][5] = 0.5 * (spline[n-1][6]-spline[n-3][6]);
-    spline[n-1][5] = spline[n-1][6] - spline[n-2][6];
-
-    for (int m = 2; m < n-2; m++)
-      spline[m][5] = ((spline[m-2][6]-spline[m+2][6]) + 8.0*(spline[m+1][6]-spline[m-1][6])) / 12.0;
-
-    for (int m = 0; m < n-1; m++) {
-      spline[m][4] = 3.0*(spline[m+1][6]-spline[m][6]) - 2.0*spline[m][5] - spline[m+1][5];
-      spline[m][3] = spline[m][5] + spline[m+1][5] - 2.0*(spline[m+1][6]-spline[m][6]);
-    }
-
-    spline[n-1][4] = 0.0;
-    spline[n-1][3] = 0.0;
-
-    for (int m = 0; m < n; m++) {
-      spline[m][2] = spline[m][5]/delta;
-      spline[m][1] = 2.0*spline[m][4]/delta;
-      spline[m][0] = 3.0*spline[m][3]/delta;
-    }
-  }
-  
+    
 }
 
