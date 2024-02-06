@@ -40,6 +40,8 @@ namespace exaStamp
 
   struct EAMSpecyPairInfo
   {
+    int32_t m_type_a = 0;
+    int32_t m_type_b = 0;
     double m_charge_a = 0.0;
     double m_charge_b = 0.0;
   };

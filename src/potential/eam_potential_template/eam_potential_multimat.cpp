@@ -132,6 +132,8 @@ namespace exaStamp
           pot.m_parameters = p.second;
           pot.m_specy_pair.m_charge_a = species->at(ta).m_charge;
           pot.m_specy_pair.m_charge_b = species->at(tb).m_charge;
+          pot.m_specy_pair.m_type_a = ta;
+          pot.m_specy_pair.m_type_b = tb;
         }	
       }
 

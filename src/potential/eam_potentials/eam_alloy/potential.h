@@ -6,6 +6,8 @@
 #define USTAMP_POTENTIAL_PARMS EamAlloyParameters
 #define USTAMP_POTENTIAL_RCUT 1
 #define USTAMP_POTENTIAL_EAM_PHI eam_alloy_phi
+#define USTAMP_POTENTIAL_EAM_PHI_MM eam_alloy_phi_mm
 #define USTAMP_POTENTIAL_EAM_RHO eam_alloy_rho
+#define USTAMP_POTENTIAL_EAM_RHO_MM eam_alloy_rho_mm
 #define USTAMP_POTENTIAL_EAM_EMB eam_alloy_fEmbed
 
