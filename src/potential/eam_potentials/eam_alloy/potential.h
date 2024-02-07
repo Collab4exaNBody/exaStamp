@@ -11,3 +11,8 @@
 #define USTAMP_POTENTIAL_EAM_RHO_MM eam_alloy_rho_mm
 #define USTAMP_POTENTIAL_EAM_EMB eam_alloy_fEmbed
 
+// if defined, tells that multimat needs only one parameter set, and not one per atom type pair,
+// also changes how phi and rho functions are called. if this is defined, the same correctly ordered type_i and tye_j are passed
+// to phi and rho functions instead of EAMSpecyPairInfo
+#define USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET 1
+

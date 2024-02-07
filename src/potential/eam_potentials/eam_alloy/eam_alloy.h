@@ -57,14 +57,10 @@ namespace exaStamp
   }
 
   // ONIKA_HOST_DEVICE_FUNC
-  static inline void eam_alloy_phi_mm(const EamAlloyParameters& eam, double r, double& phi, double& dphi, const EAMSpecyPairInfo& pair_info , bool pair_inversed = false)
+  static inline void eam_alloy_phi_mm(const EamAlloyParameters& eam, double r, double& phi, double& dphi, int itype , int jtype )
   {
     // ONIKA_HOST_DEVICE_FUNC
     using onika::cuda::min;
-  
-    int itype=0, jtype=0;
-    if( pair_inversed ) { itype = pair_info.m_type_b; jtype = pair_info.m_type_a; }
-    else                { itype = pair_info.m_type_a; jtype = pair_info.m_type_b; }
   
     double p = r * eam.rdr + 1.0;
     int m = static_cast<int> (p);
@@ -108,18 +104,14 @@ namespace exaStamp
 
   static inline void eam_alloy_phi(const EamAlloyParameters& eam, double r, double& phi, double& dphi)
   {
-    eam_alloy_phi_mm(eam,r,phi,dphi,EAMSpecyPairInfo{},false);
+    eam_alloy_phi_mm(eam,r,phi,dphi,0,0);
   }
 
   // ONIKA_HOST_DEVICE_FUNC
-  static inline void eam_alloy_rho_mm(const EamAlloyParameters& eam, double r, double& rho, double& drho, const EAMSpecyPairInfo& pair_info , bool pair_inversed = false)
+  static inline void eam_alloy_rho_mm(const EamAlloyParameters& eam, double r, double& rho, double& drho, int itype , int jtype)
   {
     using onika::cuda::min;
     // Would need the types of central and neighbor atoms in this function (see below)
-
-    int itype=0, jtype=0;
-    if( pair_inversed ) { itype = pair_info.m_type_b; jtype = pair_info.m_type_a; }
-    else                { itype = pair_info.m_type_a; jtype = pair_info.m_type_b; }
     
     double p = r * eam.rdr + 1.0;
     int m = static_cast<int> (p);
@@ -137,7 +129,7 @@ namespace exaStamp
 
   static inline void eam_alloy_rho(const EamAlloyParameters& eam, double r, double& rho, double& drho)
   {
-    eam_alloy_rho_mm(eam,r,rho,drho,EAMSpecyPairInfo{},false);
+    eam_alloy_rho_mm(eam,r,rho,drho,0,0);
   }
 
   // ONIKA_HOST_DEVICE_FUNC

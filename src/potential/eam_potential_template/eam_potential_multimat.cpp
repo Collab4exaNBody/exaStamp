@@ -38,10 +38,16 @@ namespace exaStamp
   class EamPotentialOperatorName : public OperatorNode
   {  
     using CellParticles = typename GridT::CellParticles;
+
+#   ifdef USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET
+    using EamScratch = EamMultimatPotentialScratch< USTAMP_POTENTIAL_PARMS >;
+    using StringVector = std::vector< std::string >;
+#   else
     using EamMultiMatParams = EamMultimatParameters<USTAMP_POTENTIAL_PARMS>;
     using EamParamVector = std::vector<EamMultiMatParams>;
     using EamPotParmRO = PRIV_NAMESPACE_NAME::EamMultiMatParamsReadOnly;
     using EamScratch = EamMultimatPotentialScratch< EamPotParmRO >;
+#   endif
     using EmbOp = PRIV_NAMESPACE_NAME::EmbOp;
     using ForceOp = PRIV_NAMESPACE_NAME::ForceOp;
 
@@ -56,7 +62,12 @@ namespace exaStamp
 
     // ========= I/O slots =======================
     ADD_SLOT( ParticleSpecies       , species          , INPUT , REQUIRED );
+#   ifdef USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET
+    ADD_SLOT( USTAMP_POTENTIAL_PARMS, parameters       , INPUT_OUTPUT , REQUIRED );
+    ADD_SLOT( StringVector          , types            , INPUT , StringVector{} , DocString{"Empty list means all types are used, otherwise list types handled by this potential"} );
+#   else
     ADD_SLOT( EamParamVector        , potentials       , INPUT_OUTPUT , REQUIRED );
+#   endif
     ADD_SLOT( double                , rcut             , INPUT );
     ADD_SLOT( double                , rcut_max         , INPUT_OUTPUT , 0.0 );
     ADD_SLOT( double                , ghost_dist_max   , INPUT_OUTPUT , 0.0 );   
@@ -87,6 +98,22 @@ namespace exaStamp
       
       size_t n_species = species->size();
       size_t n_type_pairs = unique_pair_count( n_species );
+      
+#     ifdef USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET
+      bool initialize_scratch = eam_scratch->m_pair_enabled.empty();
+      if( initialize_scratch )
+      {
+        eam_scratch->m_pair_enabled.assign( n_type_pairs , false );
+        for(size_t i=0;i<n_type_pairs;i++)
+        {
+          unsigned int a=0, b=0;
+          pair_id_to_type_pair(i,a,b);
+          const bool a_enabled = ( std::find( types->begin() , types->end() , species->at(a).name() ) != types->end() );
+          const bool b_enabled = ( std::find( types->begin() , types->end() , species->at(b).name() ) != types->end() );
+          eam_scratch->m_pair_enabled[i] = ( a_enabled && b_enabled );
+        }
+      }
+#     else
       bool compile_eam_parameters = (potentials->size() != n_type_pairs);
       if( ! compile_eam_parameters )
       {
@@ -117,7 +144,7 @@ namespace exaStamp
           size_t pair_id = unique_pair_id( ta , tb );
           ordered_parameters[pair_id] = p.m_parameters;
         }
-	
+        
         potentials->clear();
         potentials->resize( n_type_pairs );
 	
@@ -132,36 +159,20 @@ namespace exaStamp
           pot.m_parameters = p.second;
           pot.m_specy_pair.m_charge_a = species->at(ta).m_charge;
           pot.m_specy_pair.m_charge_b = species->at(tb).m_charge;
-          pot.m_specy_pair.m_type_a = ta;
-          pot.m_specy_pair.m_type_b = tb;
         }	
       }
+#     endif
 
       assert( potentials->size() == n_type_pairs );
-      eam_scratch->m_phi_rho_cutoff.resize( n_type_pairs );
+
+#     ifndef USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET
       eam_scratch->m_ro_potentials.resize( n_type_pairs );
       for(size_t i=0;i<n_type_pairs;i++)
       {
-        double phiCut = 0.;
-        double rhoCut = 0.;
-#       ifdef USTAMP_POTENTIAL_RCUT
-        if( eam_scratch->m_pair_enabled[i] )
-        {
-          double Rho = 0.;
-          double dRho = 0.;
-          double Phi = 0.;
-          double dPhi = 0.;
-          const auto & pot = potentials->at(i);
-          USTAMP_POTENTIAL_EAM_RHO_MM( pot.m_parameters, *rcut, Rho, dRho , pot.m_specy_pair );
-          USTAMP_POTENTIAL_EAM_PHI_MM( pot.m_parameters, *rcut, Phi, dPhi , pot.m_specy_pair );
-          phiCut = Phi;
-          rhoCut = Rho;
-        }
-#       endif
-        eam_scratch->m_phi_rho_cutoff[i] = { phiCut , rhoCut };
         const auto & pot = potentials->at(i);
         eam_scratch->m_ro_potentials[i] = { pot.m_parameters , pot.m_specy_pair };
       }
+#     endif
 
       // execute the 2 passes
       auto compute_eam_force = [&]( const auto& cp_xform )
@@ -185,7 +196,11 @@ namespace exaStamp
           auto emb_op_fields = make_field_tuple_from_field_set( FieldSet< field::_ep , field::_type >{} , emb_field );
           auto emb_nbh_fields = onika::make_flat_tuple( field::type ); // we want internal type field for each neighbor atom
           auto emb_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks, ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{}, emb_nbh_fields );
-          EmbOp emb_op { eam_scratch->m_ro_potentials.data(), eam_scratch->m_phi_rho_cutoff.data(), eam_scratch->m_pair_enabled.data() };
+#         ifdef USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET
+          EmbOp emb_op { *parameters                        , eam_scratch->m_pair_enabled.data() };
+#         else
+          EmbOp emb_op { eam_scratch->m_ro_potentials.data(), eam_scratch->m_pair_enabled.data() };
+#         endif
           compute_cell_particle_pairs( *grid, *rcut, ComputeGhostEmb, emb_optional, emb_buf, emb_op, emb_op_fields, parallel_execution_context() );
         }
 
@@ -199,7 +214,11 @@ namespace exaStamp
           auto force_op_fields = make_field_tuple_from_field_set( force_compute_fields_v , c_emb_field );
           auto force_nbh_fields = onika::make_flat_tuple( field::type , c_emb_field); // we want type and emb for each neighbor atom
           auto force_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks, ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{}, force_nbh_fields );
-          ForceOp force_op { eam_scratch->m_ro_potentials.data(), eam_scratch->m_phi_rho_cutoff.data(), eam_scratch->m_pair_enabled.data() };
+#         ifdef USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET
+          ForceOp force_op { *parameters                         , eam_scratch->m_pair_enabled.data() };
+#         else
+          ForceOp force_op { eam_scratch->m_ro_potentials.data() , eam_scratch->m_pair_enabled.data() };
+#         endif
           compute_cell_particle_pairs( *grid, *rcut, false, force_optional, force_buf, force_op, force_op_fields, parallel_execution_context() );
         }
       };

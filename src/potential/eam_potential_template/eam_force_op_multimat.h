@@ -29,7 +29,13 @@ namespace exaStamp
 # define EamPotentialPhiMMName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_phi_mm)
 # define USTAMP_POTENTIAL_EAM_PHI_MM EamPotentialPhiMMName
   template<class EAMPotentialParmsT>
-  inline void EamPotentialPhiMMName(const EAMPotentialParmsT & p, double r, double& phiValue, double& dphi, const EAMSpecyPairInfo& /*unused*/ , bool = false /*unused*/ )
+  inline void EamPotentialPhiMMName( const EAMPotentialParmsT & p, double r, double& phiValue, double& dphi
+#                                  ifdef USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET
+                                   , int /*unused*/ , int /*unused*/
+#                                  else
+                                   , const EAMSpecyPairInfo& /*unused*/ , bool = false /*unused*/
+#                                  endif
+                                   )
   {
     USTAMP_POTENTIAL_EAM_PHI( p, r, phiValue, dphi );
   }
@@ -39,7 +45,13 @@ namespace exaStamp
 # define EamPotentialRhoMMName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_rho_mm)
 # define USTAMP_POTENTIAL_EAM_RHO_MM EamPotentialRhoMMName
   template<class EAMPotentialParmsT>
-  inline void EamPotentialRhoMMName(const EAMPotentialParmsT & p, double r, double& rhoValue, double& drho, const EAMSpecyPairInfo& /*unused*/ , bool = false /*unused*/ )
+  inline void EamPotentialRhoMMName( const EAMPotentialParmsT & p, double r, double& rhoValue, double& drho
+#                                  ifdef USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET
+                                   , int /*unused*/ , int /*unused*/
+#                                  else
+                                   , const EAMSpecyPairInfo& /*unused*/ , bool = false /*unused*/
+#                                  endif
+                                   )
   {
     USTAMP_POTENTIAL_EAM_RHO( p, r, rhoValue, drho );
   }
@@ -53,9 +65,13 @@ namespace exaStamp
 
     struct EmbOp
     {
-      const EamMultiMatParamsReadOnly* p = nullptr;
-      const PhiRhoCutoff* phi_rho_cutoff = nullptr;
-      const uint8_t* m_pair_enabled = nullptr;
+#     ifdef USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET
+      const USTAMP_POTENTIAL_PARMS p = {};
+#     else
+      const EamMultiMatParamsReadOnly * __restrict__ p = nullptr;
+#     endif
+//      const PhiRhoCutoff* phi_rho_cutoff = nullptr;
+      const uint8_t * __restrict__ m_pair_enabled = nullptr;
 
       template<class ComputePairBufferT, class CellParticlesT>
       ONIKA_HOST_DEVICE_FUNC inline void operator () (
@@ -78,16 +94,20 @@ namespace exaStamp
 #       pragma omp simd reduction(+:rho)
         for(size_t i=0;i<n;i++)
         {
-          double r = sqrt( tab.d2[i] );
-          int type_b = tab.nbh_pt[i][field::type];
-          bool pair_inversed = type_a > type_b;
-          int pair_id = unique_pair_id( type_a , type_b );
+          const double r = sqrt( tab.d2[i] );
+          const int type_b = tab.nbh_pt[i][field::type];
+          [[maybe_unused]] const bool pair_inversed = type_a > type_b;
+          const int pair_id = unique_pair_id( type_a , type_b );
 	  
           double rholoc = 0.;
           double drholoc = 0.;
           if( m_pair_enabled[pair_id] )
           {
+#           ifdef USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET
+            USTAMP_POTENTIAL_EAM_RHO_MM( p, r, rholoc, drholoc, type_a, type_b );
+#           else
             USTAMP_POTENTIAL_EAM_RHO_MM( p[unique_pair_id( type_b, type_b )].m_parameters, r, rholoc, drholoc, p[pair_id].m_specy_pair, pair_inversed );
+#           endif
             //rholoc -= phi_rho_cutoff[unique_pair_id( type_a, type_a )].m_rho_cutoff;
             rho += rholoc;
           }
@@ -96,7 +116,11 @@ namespace exaStamp
         double emb = 0.;
         /*double*/ dEmb = 0.;
 	      double rhomax = 100.;
+#       ifdef USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET
+        USTAMP_POTENTIAL_EAM_EMB( p, rho, emb, dEmb );
+#       else
         USTAMP_POTENTIAL_EAM_EMB( p[unique_pair_id(type_a,type_a)].m_parameters, rho, emb, dEmb );
+#       endif
         //m_particle_emb[ m_cell_emb_offset[tab.cell] + tab.part ] = dEmb;	
 	      if (rho > rhomax) emb += dEmb * (rho-rhomax);
         ep += emb;
@@ -107,9 +131,13 @@ namespace exaStamp
 
     struct ForceOp
     {
-      const EamMultiMatParamsReadOnly* p;
-      const PhiRhoCutoff* phi_rho_cutoff = nullptr;
-      const uint8_t* m_pair_enabled = nullptr;
+#     ifdef USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET
+      const USTAMP_POTENTIAL_PARMS p = {};
+#     else
+      const EamMultiMatParamsReadOnly * __restrict__ p = nullptr;
+#     endif
+//      const PhiRhoCutoff* phi_rho_cutoff = nullptr;
+      const uint8_t * __restrict__ m_pair_enabled = nullptr;
 
       template<class ComputePairBufferT, class CellParticlesT>
       ONIKA_HOST_DEVICE_FUNC inline void operator () (
@@ -162,10 +190,10 @@ namespace exaStamp
 #       pragma omp simd reduction(+:fx,fy,fz,ep,vir)
         for(size_t i=0;i<n;i++)
         {
-          double r = tab.d2[i];
-          int type_b = tab.nbh_pt[i][field::type];
-          bool pair_inversed = ( type_a > type_b );
-          int pair_id = unique_pair_id( type_a , type_b );
+          const double r = tab.d2[i];
+          const int type_b = tab.nbh_pt[i][field::type];
+          [[maybe_unused]] const bool pair_inversed = ( type_a > type_b );
+          const int pair_id = unique_pair_id( type_a , type_b );
 
 	        // std::cout << "\t type_b        = " << type_b << std::endl;
 	        // std::cout << "\t pair_inversed = " << pair_inversed << std::endl;
@@ -180,6 +208,11 @@ namespace exaStamp
           double rhojp = 0.;	  
 	        if( m_pair_enabled[pair_id] )
 	        {
+#           ifdef USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET
+	          USTAMP_POTENTIAL_EAM_RHO_MM( p, r, Rho, rhoip , type_a, type_b );
+	          USTAMP_POTENTIAL_EAM_RHO_MM( p, r, Rho, rhojp , type_a, type_b );
+	          USTAMP_POTENTIAL_EAM_PHI_MM( p, r, phi, phip , type_a, type_b );
+#           else
 	          // rhoip = derivative of (density at neighbor atom j due to central atom i)
 	          USTAMP_POTENTIAL_EAM_RHO_MM( p[unique_pair_id( type_a, type_a )].m_parameters, r, Rho, rhoip , p[pair_id].m_specy_pair , pair_inversed );
 	          // rhojp = derivative of (density at central atom i due to neighbor atom j)
@@ -187,6 +220,7 @@ namespace exaStamp
 	          // phi = pair potential energy
 	          // phip = phi'
 	          USTAMP_POTENTIAL_EAM_PHI_MM( p[pair_id].m_parameters, r, phi, phip , p[pair_id].m_specy_pair , pair_inversed );
+#           endif
 	        }
 	        double fpj = tab.nbh_pt[i][field::dEmb]; 
 	        double psip = fpi * rhojp + fpj * rhoip + phip;	  
