@@ -27,6 +27,7 @@ namespace exaStamp
     int type2frho[MAX_ARRAY_SIZE]; // Max 7 materials
     int type2rhor[MAX_ARRAY_SIZE][MAX_ARRAY_SIZE];
     int type2z2r[MAX_ARRAY_SIZE][MAX_ARRAY_SIZE];
+    int n_types = 0;
     
     EamAlloyParameters() = default;
     EamAlloyParameters(const EamAlloyParameters&) = default;
@@ -35,6 +36,7 @@ namespace exaStamp
     {
       *this = p;
     
+      n_types = ntypes;
       for(size_t i=0;i<MAX_ARRAY_SIZE;i++)
       {
         type2frho[i] = -1;
@@ -128,6 +130,10 @@ namespace exaStamp
   
     itype = itype + 1;
     jtype = jtype + 1;
+
+    assert( eam.n_types < EamAlloyParameters::MAX_ARRAY_SIZE );
+    assert( itype >= 1 && itype <= eam.n_types );
+    assert( jtype >= 1 && jtype <= eam.n_types );
   
     double p = r * eam.rdr + 1.0;
     int m = static_cast<int> (p);
@@ -146,16 +152,19 @@ namespace exaStamp
 
     //    std::vector<double> coeff = rhor_spline[type2rhor[itype][jtype]][m];
     const int rhor_i_j_index = eam.type2rhor[itype][jtype];
+    assert( rhor_i_j_index >= 0 && rhor_i_j_index < eam.rhor_spline.size() );
     const auto& coeff_rhor_i_j = eam.rhor_spline[rhor_i_j_index][m];
     double rhoip = (coeff_rhor_i_j[0]*p + coeff_rhor_i_j[1])*p + coeff_rhor_i_j[2];
 
     //    std::vector<double> coeff = rhor_spline[type2rhor[jtype][itype]][m];
     const int rhor_j_i_index = eam.type2rhor[jtype][itype];
+    assert( rhor_j_i_index >= 0 && rhor_j_i_index < eam.rhor_spline.size() );
     const auto& coeff_rhor_j_i = eam.rhor_spline[rhor_j_i_index][m];
     const double rhojp = (coeff_rhor_j_i[0]*p + coeff_rhor_j_i[1])*p + coeff_rhor_j_i[2];
 
     //    std::vector<double> coeff = z2r_spline[type2z2r[itype][jtype]][m];
     const int z2r_i_j_index = eam.type2z2r[itype][jtype];
+    assert( z2r_i_j_index >= 0 && z2r_i_j_index < eam.z2r_spline.size() );
     const auto& coeff_z2r_i_j = eam.z2r_spline[z2r_i_j_index][m];    
     const double z2p = (coeff_z2r_i_j[0]*p + coeff_z2r_i_j[1])*p + coeff_z2r_i_j[2];
     const double z2 = ((coeff_z2r_i_j[3]*p + coeff_z2r_i_j[4])*p + coeff_z2r_i_j[5])*p + coeff_z2r_i_j[6];
@@ -182,6 +191,10 @@ namespace exaStamp
 
     itype = itype + 1;
     jtype = jtype + 1;
+
+    assert( eam.n_types < EamAlloyParameters::MAX_ARRAY_SIZE );
+    assert( itype >= 1 && itype <= eam.n_types );
+    assert( jtype >= 1 && jtype <= eam.n_types );
     
     double p = r * eam.rdr + 1.0;
     int m = static_cast<int> (p);
@@ -192,6 +205,7 @@ namespace exaStamp
     // In Lammps type2rhor[jtype][itype] allows to define which rhor_spline should be used depending on atom types
     //    coeff = eam.rhor_spline[type2rhor[jtype][itype]]][m];
     const int rhor_i_j_index = eam.type2rhor[jtype][itype];
+    assert( rhor_i_j_index >= 0 && rhor_i_j_index < eam.rhor_spline.size() );
     const auto& coeff = eam.rhor_spline[rhor_i_j_index][m];
     rho = ((coeff[3]*p + coeff[4])*p + coeff[5])*p + coeff[6];
     drho=0.;
@@ -210,6 +224,9 @@ namespace exaStamp
     // Would need the type of central atom in this function (see below)
 
     itype = itype + 1;
+
+    assert( eam.n_types < EamAlloyParameters::MAX_ARRAY_SIZE );
+    assert( itype >= 1 && itype <= eam.n_types );
     
     double p = rho * eam.rdrho + 1.0;
     int m = static_cast<int> (p);
@@ -218,8 +235,9 @@ namespace exaStamp
     p = min(p,1.0);
     
     // Again type2frho[type[i]] allows to choose the appropriate frho_spline function depending on central atom type
-    //    coeff = eam.frho_spline[type2frho[type[i]]][m];
+    //    coeff = eam.frho_spline[type2frho[type[i]]][m];    
     const int frho_i_j_index = eam.type2frho[itype];
+    assert( frho_i_j_index >= 0 && frho_i_j_index < eam.frho_spline.size() );
     const auto& coeff = eam.frho_spline[frho_i_j_index][m];
     // fp =derivative of embedding energy at each atom
     // phi = embedding energy at each atom
