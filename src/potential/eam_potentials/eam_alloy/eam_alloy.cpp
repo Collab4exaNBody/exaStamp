@@ -153,6 +153,7 @@ namespace YAML
       z2r[i].resize(nr);
       z2r[i].insert(z2r[i].begin(),phivals.begin() + start, phivals.begin() + end + 1);
     }
+    
     std::cout << "File EAM read" << std::endl;
     
     // Now that the file is read, we need to spline the functions and store them in the EAM parameter coefs
@@ -166,7 +167,7 @@ namespace YAML
     v.frho_spline.resize(nmats);
     for (int i = 0; i<nmats; i++) {
       v.frho_spline[i].resize(nrho);
-      for (int j = 0; j<nrho; j++) {
+      for (size_t j = 0; j<nrho; j++) {
         v.frho_spline[i][j].resize(nspl);
       }
       interpolate(nrho,drho,frho[i],v.frho_spline[i]);      
@@ -177,7 +178,7 @@ namespace YAML
     v.rhor_spline.resize(nmats);
     for (int i = 0; i<nmats; i++) {
       v.rhor_spline[i].resize(nr);
-      for (int j = 0; j<nr; j++) {
+      for (size_t j = 0; j<nr; j++) {
         v.rhor_spline[i][j].resize(nspl);
       }
       interpolate(nr,dr,rhor[i],v.rhor_spline[i]);
@@ -188,7 +189,7 @@ namespace YAML
     v.z2r_spline.resize(nphis);
     for (int i = 0; i<nphis; i++) {
       v.z2r_spline[i].resize(nr);
-      for (int j = 0; j<nr; j++) {
+      for (size_t j = 0; j<nr; j++) {
         v.z2r_spline[i][j].resize(nspl);
       }
       interpolate(nr,dr,z2r[i],v.z2r_spline[i]);

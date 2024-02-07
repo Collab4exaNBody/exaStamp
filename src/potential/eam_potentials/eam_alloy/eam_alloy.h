@@ -12,6 +12,7 @@ namespace exaStamp
 
   struct EamAlloyParameters
   {
+    static inline constexpr size_t MAX_ARRAY_SIZE = 8;
     std::vector< std::vector< std::vector<double> > > frho_spline;
     std::vector< std::vector< std::vector<double> > > rhor_spline;
     std::vector< std::vector< std::vector<double> > > z2r_spline;
@@ -22,11 +23,73 @@ namespace exaStamp
     int nmats = 0;
     int nr = 0;
     int nrho = 0;
+
+    int type2frho[MAX_ARRAY_SIZE]; // Max 7 materials
+    int type2rhor[MAX_ARRAY_SIZE][MAX_ARRAY_SIZE];
+    int type2z2r[MAX_ARRAY_SIZE][MAX_ARRAY_SIZE];
+    
+    EamAlloyParameters() = default;
+    EamAlloyParameters(const EamAlloyParameters&) = default;
+
+    inline EamAlloyParameters(const EamAlloyParameters& p, int ntypes , const uint8_t* pair_enabled)
+    {
+      *this = p;
+    
+      for(size_t i=0;i<MAX_ARRAY_SIZE;i++)
+      {
+        type2frho[i] = -1;
+        for(size_t j=0;j<MAX_ARRAY_SIZE;j++)
+        {
+          type2rhor[i][j] = -1;
+          type2z2r[i][j] = -1;
+        }
+      }
+    
+      std::vector<int> map( ntypes + 1 , -1 );
+      for(int i=1 ; i<=ntypes ; i++) map[i] = i-1;
+    
+      int nfrho = frho_spline.size();
+    
+      // type2frho
+      for (int i = 1; i <= ntypes; i++) {
+        if (map[i] >= 0)
+          type2frho[i] = map[i];
+        else
+          type2frho[i] = nfrho - 1;
+      }
+
+      // type2rhor
+      for (int i = 1; i <= ntypes; i++) {
+        for (int j = 1; j <= ntypes; j++) {
+          type2rhor[i][j] = map[i];
+        }
+      }
+    
+      // type2z2r
+      int irow, icol;
+      for (int i = 1; i <= ntypes; i++) {
+        for (int j = 1; j <= ntypes; j++) {
+          irow = map[i];
+          icol = map[j];
+          if (irow == -1 || icol == -1) {
+            type2z2r[i][j] = 0;
+            continue;
+          }
+          if (irow < icol) {
+            irow = map[j];
+            icol = map[i];
+          }
+          int n = 0;
+          for (int m = 0; m < irow; m++) n += m + 1;
+          n += icol;
+          type2z2r[i][j] = n;
+        }
+      }
+    }
   };
 
   namespace EamAlloyTools
-  {
-  
+  {  
     // ONIKA_HOST_DEVICE_FUNC
     static inline void interpolate(int n, double delta, const std::vector<double>& f, std::vector< std::vector<double> > & spline)
     {
@@ -54,6 +117,7 @@ namespace exaStamp
         spline[m][0] = 3.0*spline[m][3]/delta;
       }
     }
+
   }
 
   // ONIKA_HOST_DEVICE_FUNC
@@ -61,6 +125,9 @@ namespace exaStamp
   {
     // ONIKA_HOST_DEVICE_FUNC
     using onika::cuda::min;
+  
+    itype = itype + 1;
+    jtype = jtype + 1;
   
     double p = r * eam.rdr + 1.0;
     int m = static_cast<int> (p);
@@ -78,17 +145,17 @@ namespace exaStamp
     //   hence embed' = Fi(sum rho_ij) rhojp + Fj(sum rho_ji) rhoip
 
     //    std::vector<double> coeff = rhor_spline[type2rhor[itype][jtype]][m];
-    const int rhor_i_j_index = 0; // = type2rhor[itype][jtype]
+    const int rhor_i_j_index = eam.type2rhor[itype][jtype];
     const auto& coeff_rhor_i_j = eam.rhor_spline[rhor_i_j_index][m];
     double rhoip = (coeff_rhor_i_j[0]*p + coeff_rhor_i_j[1])*p + coeff_rhor_i_j[2];
 
     //    std::vector<double> coeff = rhor_spline[type2rhor[jtype][itype]][m];
-    const int rhor_j_i_index = 0; // = type2rhor[jtype][itype]
+    const int rhor_j_i_index = eam.type2rhor[jtype][itype];
     const auto& coeff_rhor_j_i = eam.rhor_spline[rhor_j_i_index][m];
     const double rhojp = (coeff_rhor_j_i[0]*p + coeff_rhor_j_i[1])*p + coeff_rhor_j_i[2];
 
     //    std::vector<double> coeff = z2r_spline[type2z2r[itype][jtype]][m];
-    const int z2r_i_j_index = 0; // = type2z2r[itype][jtype]
+    const int z2r_i_j_index = eam.type2z2r[itype][jtype];
     const auto& coeff_z2r_i_j = eam.z2r_spline[z2r_i_j_index][m];    
     const double z2p = (coeff_z2r_i_j[0]*p + coeff_z2r_i_j[1])*p + coeff_z2r_i_j[2];
     const double z2 = ((coeff_z2r_i_j[3]*p + coeff_z2r_i_j[4])*p + coeff_z2r_i_j[5])*p + coeff_z2r_i_j[6];
@@ -112,6 +179,9 @@ namespace exaStamp
   {
     using onika::cuda::min;
     // Would need the types of central and neighbor atoms in this function (see below)
+
+    itype = itype + 1;
+    jtype = jtype + 1;
     
     double p = r * eam.rdr + 1.0;
     int m = static_cast<int> (p);
@@ -121,7 +191,7 @@ namespace exaStamp
     
     // In Lammps type2rhor[jtype][itype] allows to define which rhor_spline should be used depending on atom types
     //    coeff = eam.rhor_spline[type2rhor[jtype][itype]]][m];
-    const int rhor_i_j_index = 0; // = type2rhor[jtype][itype];
+    const int rhor_i_j_index = eam.type2rhor[jtype][itype];
     const auto& coeff = eam.rhor_spline[rhor_i_j_index][m];
     rho = ((coeff[3]*p + coeff[4])*p + coeff[5])*p + coeff[6];
     drho=0.;
@@ -133,11 +203,13 @@ namespace exaStamp
   }
 
   // ONIKA_HOST_DEVICE_FUNC
-  static inline void eam_alloy_fEmbed(const EamAlloyParameters& eam, double rho, double& f, double& df)
+  static inline void eam_alloy_fEmbed_mm(const EamAlloyParameters& eam, double rho, double& f, double& df, int itype )
   {
     using onika::cuda::min;
     using onika::cuda::max;
     // Would need the type of central atom in this function (see below)
+
+    itype = itype + 1;
     
     double p = rho * eam.rdrho + 1.0;
     int m = static_cast<int> (p);
@@ -147,7 +219,7 @@ namespace exaStamp
     
     // Again type2frho[type[i]] allows to choose the appropriate frho_spline function depending on central atom type
     //    coeff = eam.frho_spline[type2frho[type[i]]][m];
-    const int frho_i_j_index = 0; // type2frho[type[i]]
+    const int frho_i_j_index = eam.type2frho[itype];
     const auto& coeff = eam.frho_spline[frho_i_j_index][m];
     // fp =derivative of embedding energy at each atom
     // phi = embedding energy at each atom
@@ -156,7 +228,19 @@ namespace exaStamp
     if (rho > eam.rhomax) f += df * (rho-eam.rhomax);
   }
 
+  static inline void eam_alloy_fEmbed(const EamAlloyParameters& eam, double rho, double& f, double& df)
+  {
+    eam_alloy_fEmbed_mm(eam,rho,f,df,0);
+  }  
 }
+
+#define USTAMP_POTENTIAL_EAM_EMB_MM_CONSTRUCTOR \
+inline EmbOp(const EamAlloyParameters& parms, size_t nt, const uint8_t * __restrict__ pair_enabled ) \
+: p(parms,nt,pair_enabled) , n_types(nt) , m_pair_enabled(pair_enabled) { }
+
+#define USTAMP_POTENTIAL_EAM_FORCE_MM_CONSTRUCTOR \
+inline ForceOp(const EamAlloyParameters& parms, size_t nt, const uint8_t * __restrict__ pair_enabled ) \
+: p(parms,nt,pair_enabled) , n_types(nt) , m_pair_enabled(pair_enabled) { }
 
 // Yaml conversion operators, allows to read potential parameters from config file
 namespace YAML

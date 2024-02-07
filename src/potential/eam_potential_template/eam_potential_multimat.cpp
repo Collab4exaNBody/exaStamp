@@ -197,9 +197,9 @@ namespace exaStamp
           auto emb_nbh_fields = onika::make_flat_tuple( field::type ); // we want internal type field for each neighbor atom
           auto emb_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks, ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{}, emb_nbh_fields );
 #         ifdef USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET
-          EmbOp emb_op { *parameters                        , eam_scratch->m_pair_enabled.data() };
+          EmbOp emb_op { *parameters                        , n_species, eam_scratch->m_pair_enabled.data() };
 #         else
-          EmbOp emb_op { eam_scratch->m_ro_potentials.data(), eam_scratch->m_pair_enabled.data() };
+          EmbOp emb_op { eam_scratch->m_ro_potentials.data(), n_species, eam_scratch->m_pair_enabled.data() };
 #         endif
           compute_cell_particle_pairs( *grid, *rcut, ComputeGhostEmb, emb_optional, emb_buf, emb_op, emb_op_fields, parallel_execution_context() );
         }
@@ -215,9 +215,9 @@ namespace exaStamp
           auto force_nbh_fields = onika::make_flat_tuple( field::type , c_emb_field); // we want type and emb for each neighbor atom
           auto force_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks, ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{}, force_nbh_fields );
 #         ifdef USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET
-          ForceOp force_op { *parameters                         , eam_scratch->m_pair_enabled.data() };
+          ForceOp force_op { *parameters                         , n_species, eam_scratch->m_pair_enabled.data() };
 #         else
-          ForceOp force_op { eam_scratch->m_ro_potentials.data() , eam_scratch->m_pair_enabled.data() };
+          ForceOp force_op { eam_scratch->m_ro_potentials.data() , n_species, eam_scratch->m_pair_enabled.data() };
 #         endif
           compute_cell_particle_pairs( *grid, *rcut, false, force_optional, force_buf, force_op, force_op_fields, parallel_execution_context() );
         }

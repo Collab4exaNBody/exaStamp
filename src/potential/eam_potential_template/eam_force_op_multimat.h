@@ -57,11 +57,25 @@ namespace exaStamp
   }
 # endif
 
+# ifndef USTAMP_POTENTIAL_EAM_EMB_MM
+# define EamPotentialEmbMMName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_emb_mm)
+# define USTAMP_POTENTIAL_EAM_EMB_MM EamPotentialEmbMMName
+  template<class EAMPotentialParmsT>
+  inline void EamPotentialEmbMMName( const EAMPotentialParmsT & p, double rho, double& f, double& df, int type )
+  {
+    USTAMP_POTENTIAL_EAM_EMB( p, rho, f, df );
+  }
+# endif
+
   namespace PRIV_NAMESPACE_NAME
   {
 
     using EamMultiMatParams = EamMultimatParameters< USTAMP_POTENTIAL_PARMS >;
     using EamMultiMatParamsReadOnly = EamMultimatParametersRO< onika::cuda::ro_shallow_copy_t<USTAMP_POTENTIAL_PARMS> >;
+
+#ifndef USTAMP_POTENTIAL_EAM_EMB_MM_CONSTRUCTOR
+#define USTAMP_POTENTIAL_EAM_EMB_MM_CONSTRUCTOR /**/
+#endif
 
     struct EmbOp
     {
@@ -71,7 +85,10 @@ namespace exaStamp
       const EamMultiMatParamsReadOnly * __restrict__ p = nullptr;
 #     endif
 //      const PhiRhoCutoff* phi_rho_cutoff = nullptr;
+      const size_t n_types = 0;
       const uint8_t * __restrict__ m_pair_enabled = nullptr;
+
+      USTAMP_POTENTIAL_EAM_EMB_MM_CONSTRUCTOR
 
       template<class ComputePairBufferT, class CellParticlesT>
       ONIKA_HOST_DEVICE_FUNC inline void operator () (
@@ -117,9 +134,9 @@ namespace exaStamp
         /*double*/ dEmb = 0.;
 	      double rhomax = 100.;
 #       ifdef USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET
-        USTAMP_POTENTIAL_EAM_EMB( p, rho, emb, dEmb );
+        USTAMP_POTENTIAL_EAM_EMB_MM( p, rho, emb, dEmb , type_a );
 #       else
-        USTAMP_POTENTIAL_EAM_EMB( p[unique_pair_id(type_a,type_a)].m_parameters, rho, emb, dEmb );
+        USTAMP_POTENTIAL_EAM_EMB_MM( p[unique_pair_id(type_a,type_a)].m_parameters, rho, emb, dEmb , type_a );
 #       endif
         //m_particle_emb[ m_cell_emb_offset[tab.cell] + tab.part ] = dEmb;	
 	      if (rho > rhomax) emb += dEmb * (rho-rhomax);
@@ -128,6 +145,9 @@ namespace exaStamp
 
     };
 
+#ifndef USTAMP_POTENTIAL_EAM_FORCE_MM_CONSTRUCTOR
+#define USTAMP_POTENTIAL_EAM_FORCE_MM_CONSTRUCTOR /**/
+#endif
 
     struct ForceOp
     {
@@ -136,8 +156,10 @@ namespace exaStamp
 #     else
       const EamMultiMatParamsReadOnly * __restrict__ p = nullptr;
 #     endif
-//      const PhiRhoCutoff* phi_rho_cutoff = nullptr;
+      const size_t n_types = 0;
       const uint8_t * __restrict__ m_pair_enabled = nullptr;
+      
+      USTAMP_POTENTIAL_EAM_FORCE_MM_CONSTRUCTOR
 
       template<class ComputePairBufferT, class CellParticlesT>
       ONIKA_HOST_DEVICE_FUNC inline void operator () (
