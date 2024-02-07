@@ -108,8 +108,8 @@ namespace exaStamp
         {
           unsigned int a=0, b=0;
           pair_id_to_type_pair(i,a,b);
-          const bool a_enabled = ( std::find( types->begin() , types->end() , species->at(a).name() ) != types->end() );
-          const bool b_enabled = ( std::find( types->begin() , types->end() , species->at(b).name() ) != types->end() );
+          const bool a_enabled = types->empty() || ( std::find( types->begin() , types->end() , species->at(a).name() ) != types->end() );
+          const bool b_enabled = types->empty() || ( std::find( types->begin() , types->end() , species->at(b).name() ) != types->end() );
           eam_scratch->m_pair_enabled[i] = ( a_enabled && b_enabled );
         }
       }
@@ -161,9 +161,8 @@ namespace exaStamp
           pot.m_specy_pair.m_charge_b = species->at(tb).m_charge;
         }	
       }
-#     endif
-
       assert( potentials->size() == n_type_pairs );
+#     endif
 
 #     ifndef USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET
       eam_scratch->m_ro_potentials.resize( n_type_pairs );
