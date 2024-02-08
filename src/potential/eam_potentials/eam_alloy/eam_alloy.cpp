@@ -36,18 +36,26 @@ namespace YAML
       }    
 
     // First line to be read contains the number of materials N followed by the N types (ex: "2 Al Cu" or "1 Ta")
-    std::getline(file,line);
-    char split_char = ' ';
-    std::istringstream split(line);
-    std::vector<std::string> tokens;
-    for (std::string each; std::getline(split, each, split_char); tokens.push_back(each));
-    int nelements = tokens.size()-1;
-
+    int nelements;
+    file >> nelements;
     std::vector<std::string> matnames;
     matnames.resize(nelements);
     for (int i=0;i<nelements;i++) {
-      matnames[i] = tokens[i+1];
+      file >> matnames[i];
     }
+    
+    // std::getline(file,line);
+    // char split_char = ' ';
+    // std::istringstream split(line);
+    // std::vector<std::string> tokens;
+    // for (std::string each; std::getline(split, each, split_char); tokens.push_back(each));
+    // int nelements = tokens.size()-1;
+
+    // std::vector<std::string> matnames;
+    // matnames.resize(nelements);
+    // for (int i=0;i<nelements;i++) {
+    //   matnames[i] = tokens[i+1];
+    // }
     std::cout << "Nmaterials = " << nelements << std::endl;
     for (int i=0;i<nelements;i++) {
       std::cout << "\tMaterial #" << i << " = " << matnames[i] << std::endl;
@@ -58,7 +66,9 @@ namespace YAML
     size_t nrho,nr;
     double drho, dr;
     double rcut;
-    std::istringstream(line) >> nrho >> drho >> nr >> dr >> rcut;
+
+    file >> nrho >> drho >> nr >> dr >> rcut;
+    //    std::istringstream(line) >> nrho >> drho >> nr >> dr >> rcut;
     std::cout << "\tnrho  = " << nrho << std::endl;
     std::cout << "\tdrho  = " << drho << std::endl;    
     std::cout << "\tnr    = " << nr << std::endl;
@@ -90,13 +100,14 @@ namespace YAML
     
     // Read f(rho) and rho(r) by block for each material
     for (int i = 0; i < nelements; i++) {
-      file >> std::ws;
+      //      file >> std::ws;
       std::getline(file,line);
       std::cout << "For Material # "<<i<<" :" <<line<<std::endl;
       int zmat;
       double massmat,azeromat;
       std::string structmat;
-      std::istringstream(line) >> zmat >> massmat >> azeromat >> structmat;
+      //      std::istringstream(line) >> zmat >> massmat >> azeromat >> structmat;
+      file >> zmat >> massmat >> azeromat >> structmat;
       std::cout << "\tzmat  = " << zmat << std::endl;
       std::cout << "\tmass  = " << massmat << std::endl;    
       std::cout << "\tazero = " << azeromat << std::endl;
@@ -164,7 +175,7 @@ namespace YAML
     }
     
     std::cout << "File EAM read" << std::endl;
-
+    //    std::abort();
     // LAMMPS : in pair_eam.cpp, section equivalent to PairEAM::array2spline()
     // Now that the file is read, we need to spline the functions and store them in the EAM parameter coefs
     // First, declare the spline arrays 
