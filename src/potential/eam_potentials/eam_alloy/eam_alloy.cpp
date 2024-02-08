@@ -79,17 +79,18 @@ namespace YAML
     std::cout << "nz2r  = " << nz2r  << std::endl;  
     
     // When multimaterial --> frho and rhor need to be vector<vector<double>> bc 1 function per type
-    std::vector<std::vector<double>> frho;
-    std::vector<std::vector<double>> rhor;
+    std::vector< std::vector<double> > frho;
+    std::vector< std::vector<double> > rhor;
     frho.resize(nelements);
     rhor.resize(nelements);
     for (int i = 0; i < nelements; i++) {
-      frho[i].resize(nrho+1);
-      rhor[i].resize(nr+1);
+      frho[i].assign( nrho+1 , 0.0 );
+      rhor[i].assign( nr+1 , 0.0 );
     }
     
     // Read f(rho) and rho(r) by block for each material
     for (int i = 0; i < nelements; i++) {
+      file >> std::ws;
       std::getline(file,line);
       std::cout << "For Material # "<<i<<" :" <<line<<std::endl;
       int zmat;
@@ -101,6 +102,8 @@ namespace YAML
       std::cout << "\tazero = " << azeromat << std::endl;
       std::cout << "\tstruc = " << structmat << std::endl;    
 
+      for(size_t cnt_frho=0 ; cnt_frho < nrho ; cnt_frho++) file >> frho[i][cnt_frho+1];
+/*
       size_t cnt_frho=0;
       while(cnt_frho != nrho) {
         std::getline(file,line);
@@ -113,7 +116,9 @@ namespace YAML
         }
         cnt_frho+=nvals;
       }
-      
+*/      
+      for(size_t cnt_rhor=0 ; cnt_rhor < nr ; cnt_rhor++) file >> rhor[i][cnt_rhor+1];
+/*
       size_t cnt_rhor=0;
       while(cnt_rhor != nr) {
         std::getline(file,line);
@@ -126,12 +131,14 @@ namespace YAML
         }
         cnt_rhor+=nvals;
       }
+*/    
     }
     
     // Read z2r(r) by block for each material
     // This is in fact directly r * phi(r) in eV * ang
     // If N materials : blocks are put this way :
     // 1-1; 1-2; 1-3; 1-4; 1-..; 2-2; 2-3; 2-4; 2-..; 3-3; 3-4; 3-..; 4-4; etc.
+/*
     std::vector<double> phivals;
     do
       {
@@ -139,14 +146,21 @@ namespace YAML
         std::istringstream split(line);
         for (std::string each; std::getline(split, each, split_char); phivals.push_back(std::stod(each)));
       } while( !file.eof() );
+*/
 
-    std::vector<std::vector<double>> z2r;
+    std::vector< std::vector<double> > z2r;
     z2r.resize(nz2r);    
     for (int i = 0; i<nz2r; i++) {
       int start = i * nr;
       int end = start + nr;
-      z2r[i].resize(nr+1);
-      z2r[i].insert(z2r[i].begin()+1,phivals.begin() + start, phivals.begin() + end + 1);
+      assert(i<z2r.size());
+      z2r[i].assign( nr+1 , 0.0 );
+      for(int j=0;j<nr;j++)
+      {
+        assert( (j+1) < z2r[i].size() );
+        file >> z2r[i][j+1];
+      }
+      //z2r[i].insert(z2r[i].begin()+1,phivals.begin() + start, phivals.begin() + end + 1);
     }
     
     std::cout << "File EAM read" << std::endl;
@@ -162,18 +176,18 @@ namespace YAML
     v.frho_spline.resize(nfrho);
     for (int i = 0; i<nfrho; i++) {
       v.frho_spline[i].resize(nrho+1);
-      for (size_t j = 0; j<nrho+1; j++) {
-        v.frho_spline[i][j].resize(nspl);
+      for (size_t j = 0; j<(nrho+1); j++) {
+        v.frho_spline[i][j].assign( nspl , 0.0 );
       }
-      interpolate(nrho,drho,frho[i],v.frho_spline[i]);      
+      interpolate(nrho,drho,frho[i],v.frho_spline[i]);
     }
     
     // Spline array for rho(r)    
     v.rhor_spline.resize(nrhor);
     for (int i = 0; i<nrhor; i++) {
       v.rhor_spline[i].resize(nr+1);
-      for (size_t j = 0; j<nr+1; j++) {
-        v.rhor_spline[i][j].resize(nspl);
+      for (size_t j = 0; j<(nr+1); j++) {
+        v.rhor_spline[i][j].assign( nspl , 0.0 );
       }
       interpolate(nr,dr,rhor[i],v.rhor_spline[i]);
     }
@@ -182,12 +196,12 @@ namespace YAML
     v.z2r_spline.resize(nz2r);
     for (int i = 0; i<nz2r; i++) {
       v.z2r_spline[i].resize(nr+1);
-      for (size_t j = 0; j<nr+1; j++) {
-        v.z2r_spline[i][j].resize(nspl);
+      for (size_t j = 0; j<(nr+1); j++) {
+        v.z2r_spline[i][j].assign( nspl , 0.0 );
       }
       interpolate(nr,dr,z2r[i],v.z2r_spline[i]);
     }
-    
+
     return true;
   }
     

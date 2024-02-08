@@ -132,7 +132,6 @@ namespace exaStamp
 
         double emb = 0.;
         /*double*/ dEmb = 0.;
-	      double rhomax = 100.;
 #       ifdef USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET
         USTAMP_POTENTIAL_EAM_EMB_MM( p, rho, emb, dEmb , type_a );
 #       else
