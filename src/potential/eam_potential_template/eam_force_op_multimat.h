@@ -121,7 +121,7 @@ namespace exaStamp
           if( m_pair_enabled[pair_id] )
           {
 #           ifdef USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET
-            USTAMP_POTENTIAL_EAM_RHO_MM( p, r, rholoc, drholoc, type_a, type_b );
+            USTAMP_POTENTIAL_EAM_RHO_MM( p, r, rholoc, drholoc, type_b, type_a );
 #           else
             USTAMP_POTENTIAL_EAM_RHO_MM( p[unique_pair_id( type_b, type_b )].m_parameters, r, rholoc, drholoc, p[pair_id].m_specy_pair, pair_inversed );
 #           endif
@@ -139,7 +139,7 @@ namespace exaStamp
         USTAMP_POTENTIAL_EAM_EMB_MM( p[unique_pair_id(type_a,type_a)].m_parameters, rho, emb, dEmb , type_a );
 #       endif
         //m_particle_emb[ m_cell_emb_offset[tab.cell] + tab.part ] = dEmb;	
-	      if (rho > rhomax) emb += dEmb * (rho-rhomax);
+        //	      if (rho > rhomax) emb += dEmb * (rho-rhomax);
         ep += emb;
       }
 
@@ -232,21 +232,18 @@ namespace exaStamp
 	        {
 #           ifdef USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET
 	          USTAMP_POTENTIAL_EAM_RHO_MM( p, r, Rho, rhoip , type_a, type_b );
-	          USTAMP_POTENTIAL_EAM_RHO_MM( p, r, Rho, rhojp , type_a, type_b );
-	          USTAMP_POTENTIAL_EAM_PHI_MM( p, r, phi, phip , type_a, type_b );
+	          USTAMP_POTENTIAL_EAM_RHO_MM( p, r, Rho, rhojp , type_b, type_a );
+	          USTAMP_POTENTIAL_EAM_PHI_MM( p, r, phi, phip  , type_a, type_b );
 #           else
-	          // rhoip = derivative of (density at neighbor atom j due to central atom i)
 	          USTAMP_POTENTIAL_EAM_RHO_MM( p[unique_pair_id( type_a, type_a )].m_parameters, r, Rho, rhoip , p[pair_id].m_specy_pair , pair_inversed );
-	          // rhojp = derivative of (density at central atom i due to neighbor atom j)
 	          USTAMP_POTENTIAL_EAM_RHO_MM( p[unique_pair_id( type_b, type_b )].m_parameters, r, Rho, rhojp , p[pair_id].m_specy_pair , pair_inversed );
-	          // phi = pair potential energy
-	          // phip = phi'
 	          USTAMP_POTENTIAL_EAM_PHI_MM( p[pair_id].m_parameters, r, phi, phip , p[pair_id].m_specy_pair , pair_inversed );
 #           endif
 	        }
-	        double fpj = tab.nbh_pt[i][field::dEmb]; 
-	        double psip = fpi * rhojp + fpj * rhoip + phip;	  
-	        double fpair = psip/r;
+          double recip = 1.0/r;
+	        double fpj = tab.nbh_pt[i][field::dEmb];
+	        double psip = fpi * rhojp + fpj * rhoip + phip;
+	        double fpair = psip*recip;
 	  
           const double drx = tab.drx[i];
           const double dry = tab.dry[i];
@@ -258,6 +255,7 @@ namespace exaStamp
           fx  += fe_x;
           fy  += fe_y;
           fz  += fe_z;
+
           ep  += .5 * phi;
           vir += tensor( Vec3d{fe_x,fe_y,fe_z}, Vec3d{drx,dry,drz} ) * -0.5;
         }

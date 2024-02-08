@@ -35,21 +35,22 @@ namespace YAML
         file.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
       }    
 
-    // First line to be read contains the number of materials N followed by the N types (ex: "2 Al Cu")
+    // First line to be read contains the number of materials N followed by the N types (ex: "2 Al Cu" or "1 Ta")
     std::getline(file,line);
     char split_char = ' ';
     std::istringstream split(line);
     std::vector<std::string> tokens;
     for (std::string each; std::getline(split, each, split_char); tokens.push_back(each));
-    int nmats = tokens.size()-1;
+    int nelements = tokens.size()-1;
+
     std::vector<std::string> matnames;
-    matnames.resize(nmats);
-    for (int i=0;i<nmats;i++) {
+    matnames.resize(nelements);
+    for (int i=0;i<nelements;i++) {
       matnames[i] = tokens[i+1];
     }
-    std::cout << "Nmats = " << nmats << std::endl;
-    for (int i=0;i<nmats;i++) {
-      std::cout << "\t Material #" << i << " = " << matnames[i] << std::endl;
+    std::cout << "Nmaterials = " << nelements << std::endl;
+    for (int i=0;i<nelements;i++) {
+      std::cout << "\tMaterial #" << i << " = " << matnames[i] << std::endl;
     }
     
     // Second line to be read contains information on the tabulation discretization for phi, rho and f(rho) functions
@@ -63,25 +64,34 @@ namespace YAML
     std::cout << "\tnr    = " << nr << std::endl;
     std::cout << "\tdr    = " << dr << std::endl;    
     std::cout << "\trcut  = " << rcut << std::endl;    
-    v.nmats = nmats;
+    v.nelements = nelements;
     v.nr = nr;
     v.nrho = nrho;
     v.rhomax = (nrho - 1) * drho;
     v.rc = rcut;
+    int nfrho = nelements;//+1;
+    int nrhor = nelements;
+    // If N materials there are N(N+1)/2 pair potentials to read
+    int nz2r=nelements*(nelements+1)/2;
+    
+    std::cout << "nfrho = " << nfrho << std::endl;
+    std::cout << "nrhor = " << nrhor << std::endl;
+    std::cout << "nz2r  = " << nz2r  << std::endl;  
+    
     // When multimaterial --> frho and rhor need to be vector<vector<double>> bc 1 function per type
     std::vector<std::vector<double>> frho;
     std::vector<std::vector<double>> rhor;
-    frho.resize(nmats);
-    rhor.resize(nmats);
-    for (int i = 0; i < nmats; i++) {
+    frho.resize(nelements);
+    rhor.resize(nelements);
+    for (int i = 0; i < nelements; i++) {
       frho[i].resize(nrho+1);
       rhor[i].resize(nr+1);
     }
     
-    // Read f(rho) and r * rho(r) by block for each material
-    for (int i = 0; i < nmats; i++) {
+    // Read f(rho) and rho(r) by block for each material
+    for (int i = 0; i < nelements; i++) {
       std::getline(file,line);
-      std::cout << "For material # "<<i<<" :" <<line<<std::endl;
+      std::cout << "For Material # "<<i<<" :" <<line<<std::endl;
       int zmat;
       double massmat,azeromat;
       std::string structmat;
@@ -99,12 +109,11 @@ namespace YAML
         for (std::string each; std::getline(split, each, split_char); tokens.push_back(each));
         int nvals=tokens.size();
         for (int j = 0; j<nvals; j++) {
-          frho[i][cnt_frho+j] = std::stod(tokens[j]);
+          frho[i][cnt_frho+j+1] = std::stod(tokens[j]);
         }
         cnt_frho+=nvals;
-        //        std::cout << "cnt_frho = " << cnt_frho << std::endl;;
       }
-
+      
       size_t cnt_rhor=0;
       while(cnt_rhor != nr) {
         std::getline(file,line);
@@ -113,30 +122,16 @@ namespace YAML
         for (std::string each; std::getline(split, each, split_char); tokens.push_back(each));
         int nvals=tokens.size();
         for (int j = 0; j<nvals; j++) {
-          rhor[i][cnt_rhor+j] = std::stod(tokens[j]);
+          rhor[i][cnt_rhor+j+1] = std::stod(tokens[j]);
         }
         cnt_rhor+=nvals;
-        //        std::cout << "cnt_rhor = " << cnt_rhor << std::endl;;
       }
-
-      // std::cout << "frho0 start = " << frho[0][0] << std::endl;
-      // std::cout << "frho0 end   = " << frho[0][nrho-1] << std::endl;
-
-      // std::cout << "rhor0 start = " << rhor[0][0] << std::endl;
-      // std::cout << "rhor0 end   = " << rhor[0][nr-1] << std::endl;      
-
-      // std::cout << "frho1 start = " << frho[1][0] << std::endl;
-      // std::cout << "frho1 end   = " << frho[1][nrho-1] << std::endl;
-
-      // std::cout << "rhor1 start = " << rhor[1][0] << std::endl;
-      // std::cout << "rhor1 end   = " << rhor[1][nr-1] << std::endl;
-      
     }
     
-    // Read phi(r) by block for each material
-    // If N materials first read the monotype interactions by block then read the cross terms 
-    // If N materials there are N(N+1)/2 pair potentials to read
-    int nphis=nmats*(nmats+1)/2;
+    // Read z2r(r) by block for each material
+    // This is in fact directly r * phi(r) in eV * ang
+    // If N materials : blocks are put this way :
+    // 1-1; 1-2; 1-3; 1-4; 1-..; 2-2; 2-3; 2-4; 2-..; 3-3; 3-4; 3-..; 4-4; etc.
     std::vector<double> phivals;
     do
       {
@@ -146,16 +141,17 @@ namespace YAML
       } while( !file.eof() );
 
     std::vector<std::vector<double>> z2r;
-    z2r.resize(nphis);    
-    for (int i = 0; i<nphis; i++) {
+    z2r.resize(nz2r);    
+    for (int i = 0; i<nz2r; i++) {
       int start = i * nr;
       int end = start + nr;
-      z2r[i].resize(nr);
-      z2r[i].insert(z2r[i].begin(),phivals.begin() + start, phivals.begin() + end + 1);
+      z2r[i].resize(nr+1);
+      z2r[i].insert(z2r[i].begin()+1,phivals.begin() + start, phivals.begin() + end + 1);
     }
     
     std::cout << "File EAM read" << std::endl;
-    
+
+    // LAMMPS : in pair_eam.cpp, section equivalent to PairEAM::array2spline()
     // Now that the file is read, we need to spline the functions and store them in the EAM parameter coefs
     // First, declare the spline arrays 
     v.rdr = 1.0/dr;
@@ -163,38 +159,35 @@ namespace YAML
     int nspl = 7;
 
     // Spline array for f(rho)
-    //    std::vector<std::vector<std::vector<double>>> frho_spline;
-    v.frho_spline.resize(nmats);
-    for (int i = 0; i<nmats; i++) {
-      v.frho_spline[i].resize(nrho);
-      for (size_t j = 0; j<nrho; j++) {
+    v.frho_spline.resize(nfrho);
+    for (int i = 0; i<nfrho; i++) {
+      v.frho_spline[i].resize(nrho+1);
+      for (size_t j = 0; j<nrho+1; j++) {
         v.frho_spline[i][j].resize(nspl);
       }
       interpolate(nrho,drho,frho[i],v.frho_spline[i]);      
     }
     
     // Spline array for rho(r)    
-    //    std::vector<std::vector<std::vector<double>>> rhor_spline;
-    v.rhor_spline.resize(nmats);
-    for (int i = 0; i<nmats; i++) {
-      v.rhor_spline[i].resize(nr);
-      for (size_t j = 0; j<nr; j++) {
+    v.rhor_spline.resize(nrhor);
+    for (int i = 0; i<nrhor; i++) {
+      v.rhor_spline[i].resize(nr+1);
+      for (size_t j = 0; j<nr+1; j++) {
         v.rhor_spline[i][j].resize(nspl);
       }
       interpolate(nr,dr,rhor[i],v.rhor_spline[i]);
     }
 
     // Spline array for phi(r)
-    // std::vector<std::vector<std::vector<double>>> z2r_spline;
-    v.z2r_spline.resize(nphis);
-    for (int i = 0; i<nphis; i++) {
-      v.z2r_spline[i].resize(nr);
-      for (size_t j = 0; j<nr; j++) {
+    v.z2r_spline.resize(nz2r);
+    for (int i = 0; i<nz2r; i++) {
+      v.z2r_spline[i].resize(nr+1);
+      for (size_t j = 0; j<nr+1; j++) {
         v.z2r_spline[i][j].resize(nspl);
       }
       interpolate(nr,dr,z2r[i],v.z2r_spline[i]);
     }
-
+    
     return true;
   }
     
