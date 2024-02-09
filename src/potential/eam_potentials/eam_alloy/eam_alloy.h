@@ -25,7 +25,7 @@ namespace exaStamp
   {
     static constexpr size_t N_SPLINE_POINTS = 7;
     static_assert( N_SPLINE_POINTS <= SplineCoeffs::N_SPLINE_POINTS_STORAGE );
-          
+         
     std::vector< std::vector< std::vector<double> > > frho_spline;
     std::vector< std::vector< std::vector<double> > > rhor_spline;
     std::vector< std::vector< std::vector<double> > > z2r_spline;
@@ -46,7 +46,7 @@ namespace exaStamp
     std::vector< std::vector<int> > type2rhor;
     std::vector< std::vector<int> > type2z2r;
     std::vector<int> type2frho;
-    
+
     inline void initialize_types_table(int nt, const uint8_t* pair_enabled)
     {
       assert( nt >= nelements );
@@ -124,14 +124,17 @@ namespace exaStamp
     const SplineCoeffs * const __restrict__ rhor_spline_data = nullptr;
     const SplineCoeffs * const __restrict__ z2r_spline_data = nullptr;
       
-    double rdr = 0.0;
-    double rdrho = 0.0;
-    double rc = 0.0;
-    double rhomax = 0.0;
-    int nelements = 0;
-    int nr = 0;
-    int nrho = 0;
-    int n_types = 0;
+    const double rdr = 0.0;
+    const double rdrho = 0.0;
+    const double rc = 0.0;
+    const double rhomax = 0.0;
+    const int nelements = 0;
+    const int nr = 0;
+    const int nrho = 0;
+    const int n_types = 0;
+
+    const double conversion_z2r = 0.0;
+    const double conversion_frho = 0.0;
 
     int8_t type2rhor[MAX_ARRAY_SIZE][MAX_ARRAY_SIZE];
     int8_t type2z2r[MAX_ARRAY_SIZE][MAX_ARRAY_SIZE];
@@ -152,7 +155,10 @@ namespace exaStamp
     , nr( p.nr )
     , nrho( p.nrho )
     , n_types( p.n_types )
+    , conversion_z2r( EXANB_QUANTITY( 1. * eV * ang ) )
+    , conversion_frho( EXANB_QUANTITY( 1.0 * eV ) )
     {
+    
       if( static_cast<size_t>(n_types) > MAX_ELEMENTS )
       {
         std::cerr << "Maximum number of elements is "<<MAX_ELEMENTS<<" , but n_types="<<n_types<<std::endl;
@@ -171,50 +177,9 @@ namespace exaStamp
     }
   };
 
-
-  namespace EamAlloyTools
-  {      
-    // ONIKA_HOST_DEVICE_FUNC
-    static inline void interpolate(int n, double delta, const std::vector<double>& f, std::vector< std::vector<double> > & spline)
-    {
-
-      for (int m = 1; m <= n; m++) spline[m][6] = f[m];
-
-      spline[1][5] = spline[2][6] - spline[1][6];
-      spline[2][5] = 0.5 * (spline[3][6]-spline[1][6]);
-      spline[n-1][5] = 0.5 * (spline[n][6]-spline[n-2][6]);
-      spline[n][5] = spline[n][6] - spline[n-1][6];
-
-      for (int m = 3; m <= n-2; m++)
-        spline[m][5] = ((spline[m-2][6]-spline[m+2][6]) +
-                        8.0*(spline[m+1][6]-spline[m-1][6])) / 12.0;
-
-      for (int m = 1; m <= n-1; m++) {
-        spline[m][4] = 3.0*(spline[m+1][6]-spline[m][6]) -
-          2.0*spline[m][5] - spline[m+1][5];
-        spline[m][3] = spline[m][5] + spline[m+1][5] -
-          2.0*(spline[m+1][6]-spline[m][6]);
-      }
-
-      spline[n][4] = 0.0;
-      spline[n][3] = 0.0;
-
-      for (int m = 1; m <= n; m++) {
-        spline[m][2] = spline[m][5]/delta;
-        spline[m][1] = 2.0*spline[m][4]/delta;
-        spline[m][0] = 3.0*spline[m][3]/delta;
-      }
-      
-    }
-
-  }
-
-  // ONIKA_HOST_DEVICE_FUNC
+  ONIKA_HOST_DEVICE_FUNC
   static inline void eam_alloy_phi_mm(const EamAlloyParametersRO& eam, double r, double& phi, double& dphi, int itype , int jtype )
-  {
-    static const double conversion_z2r = EXANB_QUANTITY( 1. * eV * ang ); //UnityConverterHelper::convert(1., "eV*ang");
-  
-    // ONIKA_HOST_DEVICE_FUNC
+  {  
     using onika::cuda::min;
   
     itype = itype + 1;
@@ -240,8 +205,8 @@ namespace exaStamp
     phi = z2*recip;
     dphi = z2p*recip - phi*recip;
 
-    phi *= conversion_z2r;
-    dphi *= conversion_z2r;    
+    phi *= eam.conversion_z2r;
+    dphi *= eam.conversion_z2r;    
   }
 
   static inline void eam_alloy_phi(const EamAlloyParametersRO& eam, double r, double& phi, double& dphi)
@@ -249,7 +214,7 @@ namespace exaStamp
     eam_alloy_phi_mm(eam,r,phi,dphi,0,0);
   }
 
-  // ONIKA_HOST_DEVICE_FUNC
+  ONIKA_HOST_DEVICE_FUNC
   static inline void eam_alloy_rho_mm(const EamAlloyParametersRO& eam, double r, double& rho, double& drho, int itype , int jtype)
   {
     using onika::cuda::min;
@@ -278,11 +243,9 @@ namespace exaStamp
     eam_alloy_rho_mm(eam,r,rho,drho,0,0);
   }
 
-  // ONIKA_HOST_DEVICE_FUNC
+  ONIKA_HOST_DEVICE_FUNC
   static inline void eam_alloy_fEmbed_mm(const EamAlloyParametersRO& eam, double rho, double& phi, double& fp, int itype )
   {
-    static const double conversion_frho = EXANB_QUANTITY( 1.0 * eV ); //UnityConverterHelper::convert(1., "eV");
-
     using onika::cuda::min;
     using onika::cuda::max;
 
@@ -301,8 +264,8 @@ namespace exaStamp
     fp = (coeff[0]*p + coeff[1])*p + coeff[2];
     phi = ((coeff[3]*p + coeff[4])*p + coeff[5])*p + coeff[6];
     if (rho > eam.rhomax) phi += fp * (rho-eam.rhomax);
-    phi *= conversion_frho;
-    fp *= conversion_frho;
+    phi *= eam.conversion_frho;
+    fp *= eam.conversion_frho;
   }
 
   static inline void eam_alloy_fEmbed(const EamAlloyParametersRO& eam, double rho, double& f, double& df)
