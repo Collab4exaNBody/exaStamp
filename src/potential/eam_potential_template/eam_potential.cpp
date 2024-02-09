@@ -22,9 +22,9 @@
 #include "potential.h"
 #include "eam_force_op_singlemat.h"
 
-// this allows for parallel compilation of templated operator for each available field set
-
-
+#ifndef USTAMP_POTENTIAL_EAM_MM_INIT_TYPES
+#define USTAMP_POTENTIAL_EAM_MM_INIT_TYPES(p,nt,pe) /**/
+#endif
 
 #define EamPotentialOperatorName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_force)
 #define EamPotentialComputeEmbNoGhostName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_emb)
@@ -61,7 +61,7 @@ namespace exaStamp
     using ComputeFields = std::conditional_t< has_virial_field , ComputeFieldsWithVirial , ComputeFieldsWithoutVirial >;
 
     // ========= I/O slots =======================
-    ADD_SLOT( USTAMP_POTENTIAL_PARMS, parameters        , INPUT );
+    ADD_SLOT( USTAMP_POTENTIAL_PARMS, parameters        , INPUT_OUTPUT );
     ADD_SLOT( double                , rcut              , INPUT );
     ADD_SLOT( double                , rcut_max          , INPUT_OUTPUT , 0.0 );
     ADD_SLOT( double                , ghost_dist_max    , INPUT_OUTPUT , 0.0 );   
@@ -87,6 +87,11 @@ namespace exaStamp
       if( n_cells == 0 )
       {
         return ;
+      }
+      
+      {
+        [[maybe_unused]] uint8_t pair_enabled[1] = { 1 };
+        USTAMP_POTENTIAL_EAM_MM_INIT_TYPES( *parameters , 1 , pair_enabled );
       }
       
       double phiCut = 0.;

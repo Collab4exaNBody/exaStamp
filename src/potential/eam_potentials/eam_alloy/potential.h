@@ -17,3 +17,4 @@
 // to phi and rho functions instead of EAMSpecyPairInfo
 #define USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET 1
 
+#define USTAMP_POTENTIAL_EAM_MM_INIT_TYPES(p,nt,pe) (p).initialize_types_table( nt , pe )
