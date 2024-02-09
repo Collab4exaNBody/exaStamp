@@ -31,10 +31,19 @@ dump_analysis: nop
 dump_data: nop
 
 global:
-  simulation_end_iteration: 100
-  simulation_log_frequency: 10
+  simulation_end_iteration: 20
+  simulation_log_frequency: 2
   rcut_inc: 1.0 ang
   dt: 1.0e-3 ps
   simulation_dump_frequency: -1
   simulation_dump_thermo_frequency: 1
   analysis_dump_frequency: -1
+
+simulation_epilog:
+  - check_values:
+      file: eam_aloy_AlCu.dat
+      pos_threshold: 1.e-10
+      acc_threshold: 1.e-10
+      vel_threshold: 1.e-10
+
+

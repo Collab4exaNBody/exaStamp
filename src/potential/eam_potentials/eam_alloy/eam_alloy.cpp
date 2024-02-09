@@ -15,14 +15,14 @@ namespace YAML
     std::string file_to_load;
     if( node.IsScalar() )
     {
-      file_to_load = node.as<std::string>();
+      file_to_load = exanb::data_file_path( node.as<std::string>() );
     }
     else
     {
       if( !node.IsMap() ) { return false; }
       if( node["file"] )
       {
-        file_to_load = node["file"].as<std::string>();
+        file_to_load = exanb::data_file_path( node["file"].as<std::string>() );
       }
     }
 
@@ -36,11 +36,11 @@ namespace YAML
       }    
 
     // First line to be read contains the number of materials N followed by the N types (ex: "2 Al Cu" or "1 Ta")
-    int nelements;
+    size_t nelements = 0;
     file >> nelements;
     std::vector<std::string> matnames;
     matnames.resize(nelements);
-    for (int i=0;i<nelements;i++) {
+    for (size_t i=0;i<nelements;i++) {
       file >> matnames[i];
     }
     
@@ -57,7 +57,7 @@ namespace YAML
     //   matnames[i] = tokens[i+1];
     // }
     std::cout << "Nmaterials = " << nelements << std::endl;
-    for (int i=0;i<nelements;i++) {
+    for (size_t i=0;i<nelements;i++) {
       std::cout << "\tMaterial #" << i << " = " << matnames[i] << std::endl;
     }
     
@@ -79,10 +79,10 @@ namespace YAML
     v.nrho = nrho;
     v.rhomax = (nrho - 1) * drho;
     v.rc = rcut;
-    int nfrho = nelements;//+1;
-    int nrhor = nelements;
+    size_t nfrho = nelements;//+1;
+    size_t nrhor = nelements;
     // If N materials there are N(N+1)/2 pair potentials to read
-    int nz2r=nelements*(nelements+1)/2;
+    size_t nz2r = nelements*(nelements+1)/2;
     
     std::cout << "nfrho = " << nfrho << std::endl;
     std::cout << "nrhor = " << nrhor << std::endl;
@@ -93,13 +93,13 @@ namespace YAML
     std::vector< std::vector<double> > rhor;
     frho.resize(nelements);
     rhor.resize(nelements);
-    for (int i = 0; i < nelements; i++) {
+    for (size_t i = 0; i < nelements; i++) {
       frho[i].assign( nrho+1 , 0.0 );
       rhor[i].assign( nr+1 , 0.0 );
     }
     
     // Read f(rho) and rho(r) by block for each material
-    for (int i = 0; i < nelements; i++) {
+    for (size_t i = 0; i < nelements; i++) {
       //      file >> std::ws;
       std::getline(file,line);
       std::cout << "For Material # "<<i<<" :" <<line<<std::endl;
@@ -161,12 +161,12 @@ namespace YAML
 
     std::vector< std::vector<double> > z2r;
     z2r.resize(nz2r);    
-    for (int i = 0; i<nz2r; i++) {
-      int start = i * nr;
-      int end = start + nr;
-      assert(i<z2r.size());
+    for (size_t i = 0; i<nz2r; i++) {
+      //int start = i * nr;
+      //int end = start + nr;
+      assert( i < z2r.size() );
       z2r[i].assign( nr+1 , 0.0 );
-      for(int j=0;j<nr;j++)
+      for(size_t j=0;j<nr;j++)
       {
         assert( (j+1) < z2r[i].size() );
         file >> z2r[i][j+1];
@@ -181,11 +181,11 @@ namespace YAML
     // First, declare the spline arrays 
     v.rdr = 1.0/dr;
     v.rdrho = 1.0/drho;
-    int nspl = 7;
+    static constexpr size_t nspl = 7;
 
     // Spline array for f(rho)
     v.frho_spline.resize(nfrho);
-    for (int i = 0; i<nfrho; i++) {
+    for (size_t i = 0; i<nfrho; i++) {
       v.frho_spline[i].resize(nrho+1);
       for (size_t j = 0; j<(nrho+1); j++) {
         v.frho_spline[i][j].assign( nspl , 0.0 );
@@ -195,7 +195,7 @@ namespace YAML
     
     // Spline array for rho(r)    
     v.rhor_spline.resize(nrhor);
-    for (int i = 0; i<nrhor; i++) {
+    for (size_t i = 0; i<nrhor; i++) {
       v.rhor_spline[i].resize(nr+1);
       for (size_t j = 0; j<(nr+1); j++) {
         v.rhor_spline[i][j].assign( nspl , 0.0 );
@@ -205,7 +205,7 @@ namespace YAML
 
     // Spline array for phi(r)
     v.z2r_spline.resize(nz2r);
-    for (int i = 0; i<nz2r; i++) {
+    for (size_t i = 0; i<nz2r; i++) {
       v.z2r_spline[i].resize(nr+1);
       for (size_t j = 0; j<(nr+1); j++) {
         v.z2r_spline[i][j].assign( nspl , 0.0 );

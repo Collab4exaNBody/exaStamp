@@ -15,11 +15,13 @@ namespace exaStamp
   struct EamAlloyParameters
   {
     static inline constexpr size_t MAX_ARRAY_SIZE = 8;
+    static inline constexpr size_t MAX_ELEMENTS = MAX_ARRAY_SIZE - 1;
+    double conversion_z2r = UnityConverterHelper::convert(1., "eV*ang");
+    double conversion_frho = UnityConverterHelper::convert(1., "eV");
+    
     std::vector< std::vector< std::vector<double> > > frho_spline;
     std::vector< std::vector< std::vector<double> > > rhor_spline;
     std::vector< std::vector< std::vector<double> > > z2r_spline;
-    double conversion_z2r = UnityConverterHelper::convert(1., "eV*ang");
-    double conversion_frho = UnityConverterHelper::convert(1., "eV");
       
     double rdr = 0.0;
     double rdrho = 0.0;
@@ -39,6 +41,12 @@ namespace exaStamp
 
     inline EamAlloyParameters(const EamAlloyParameters& p, int ntypes , const uint8_t* pair_enabled)
     {
+      if( static_cast<size_t>(ntypes) > MAX_ELEMENTS )
+      {
+        std::cerr << "Maximum number of elements is "<<MAX_ELEMENTS<<" , but ntypes="<<ntypes<<std::endl;
+        std::abort();
+      }
+    
       *this = p;
     
       n_types = ntypes;
@@ -143,7 +151,7 @@ namespace exaStamp
     itype = itype + 1;
     jtype = jtype + 1;
 
-    assert( eam.n_types < EamAlloyParameters::MAX_ARRAY_SIZE );
+    assert( static_cast<size_t>(eam.n_types) < EamAlloyParameters::MAX_ARRAY_SIZE );
     assert( itype >= 1 && itype <= eam.n_types );
     assert( jtype >= 1 && jtype <= eam.n_types );
   
@@ -154,7 +162,7 @@ namespace exaStamp
     p = min(p,1.0);
         
     const int z2r_i_j_index = eam.type2z2r[itype][jtype];
-    assert( z2r_i_j_index >= 0 && z2r_i_j_index < eam.z2r_spline.size() );
+    assert( z2r_i_j_index >= 0 && static_cast<size_t>(z2r_i_j_index) < eam.z2r_spline.size() );
     const auto& coeff = eam.z2r_spline[z2r_i_j_index][m];    
     const double z2p = (coeff[0]*p + coeff[1])*p + coeff[2];
     const double z2 = ((coeff[3]*p + coeff[4])*p + coeff[5])*p + coeff[6];
@@ -178,7 +186,7 @@ namespace exaStamp
     using onika::cuda::min;
     itype = itype + 1;
     jtype = jtype + 1;
-    assert( eam.n_types < EamAlloyParameters::MAX_ARRAY_SIZE );
+    assert( static_cast<size_t>(eam.n_types) < EamAlloyParameters::MAX_ARRAY_SIZE );
     assert( itype >= 1 && itype <= eam.n_types );
     assert( jtype >= 1 && jtype <= eam.n_types );
     
@@ -189,7 +197,7 @@ namespace exaStamp
     p = min(p,1.0);
 
     const int rhor_i_j_index = eam.type2rhor[itype][jtype];
-    assert( rhor_i_j_index >= 0 && rhor_i_j_index < eam.rhor_spline.size() );
+    assert( rhor_i_j_index >= 0 && static_cast<size_t>(rhor_i_j_index) < eam.rhor_spline.size() );
     const auto& coeff = eam.rhor_spline[rhor_i_j_index][m];
     rho = ((coeff[3]*p + coeff[4])*p + coeff[5])*p + coeff[6];
     drho = (coeff[0]*p + coeff[1])*p + coeff[2];    
@@ -207,7 +215,7 @@ namespace exaStamp
     using onika::cuda::max;
 
     itype = itype + 1;
-    assert( eam.n_types < EamAlloyParameters::MAX_ARRAY_SIZE );
+    assert( static_cast<size_t>(eam.n_types) < EamAlloyParameters::MAX_ARRAY_SIZE ); 
     assert( itype >= 1 && itype <= eam.n_types );
     
     double p = rho * eam.rdrho + 1.0;
@@ -217,7 +225,7 @@ namespace exaStamp
     p = min(p,1.0);
     
     const int frho_i_j_index = eam.type2frho[itype];
-    assert( frho_i_j_index >= 0 && frho_i_j_index < eam.frho_spline.size() );
+    assert( frho_i_j_index >= 0 && static_cast<size_t>(frho_i_j_index) < eam.frho_spline.size() );
     const auto& coeff = eam.frho_spline[frho_i_j_index][m];
     fp = (coeff[0]*p + coeff[1])*p + coeff[2];
     phi = ((coeff[3]*p + coeff[4])*p + coeff[5])*p + coeff[6];
