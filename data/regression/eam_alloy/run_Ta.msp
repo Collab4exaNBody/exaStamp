@@ -1,0 +1,40 @@
+eam_alloy_force_multimat:
+  rcut: 5.30 ang
+  parameters:
+    file: Ta1_Ravelo_2013.eam.alloy
+
+compute_force:
+  - eam_alloy_force_multimat
+
+species:
+  - Ta:
+      mass: 180.95 Da
+      z: 73
+      charge: 0 e-
+
+
+
+
+
+grid_flavor: grid_flavor_full
+
+input_data:
+  - read_xyz_file_with_xform:
+      file: Ta_disturbed.xyz      
+      pbc_adjust_xform: true
+  
+domain:
+  cell_size: 5.6 ang
+  periodic: [true,true,true]
+
+dump_analysis: nop
+dump_data: nop
+
+global:
+  simulation_end_iteration: 100
+  simulation_log_frequency: 10
+  rcut_inc: 1.0 ang
+  dt: 1.0e-3 ps
+  simulation_dump_frequency: -1
+  simulation_dump_thermo_frequency: 1
+  analysis_dump_frequency: -1
