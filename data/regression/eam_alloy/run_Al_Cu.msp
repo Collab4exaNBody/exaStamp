@@ -1,10 +1,9 @@
-eam_alloy_force_multimat:
+eam_alloy_force:
   rcut: 6.6825 ang
   parameters:
     file: AlCu.eam.alloy
 
-compute_force:
-  - eam_alloy_force_multimat
+compute_force: eam_alloy_force
 
 species:
   - Al:

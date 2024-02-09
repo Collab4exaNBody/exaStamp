@@ -21,10 +21,6 @@ namespace exaStamp
     struct EmbOp
     {
       const onika::cuda::ro_shallow_copy_t<USTAMP_POTENTIAL_PARMS> p;
-      const double rhoCut;
-      const double phiCut;
-      // const size_t* m_cell_emb_offset = nullptr;
-      // double* m_particle_emb = nullptr;
 
       template<class ComputePairBufferT, class CellParticlesT>
       ONIKA_HOST_DEVICE_FUNC inline void operator () (
@@ -48,7 +44,6 @@ namespace exaStamp
           double Rho = 0.;
           double dRho = 0.;
           USTAMP_POTENTIAL_EAM_RHO( p, r, Rho, dRho );
-          Rho -= rhoCut;      
           particle_rho += Rho;
         }
 
@@ -64,10 +59,6 @@ namespace exaStamp
     struct ForceOp
     {
       const onika::cuda::ro_shallow_copy_t<USTAMP_POTENTIAL_PARMS> p;
-      const double rhoCut;
-      const double phiCut;
-      //const size_t* m_cell_emb_offset = nullptr;
-      //const double* m_particle_emb = nullptr;
 
       template<class ComputePairBufferT, class CellParticlesT>
       ONIKA_HOST_DEVICE_FUNC inline void operator () (
@@ -116,8 +107,6 @@ namespace exaStamp
           double dPhi = 0.;
           USTAMP_POTENTIAL_EAM_RHO( p, r, Rho, dRho );          
           USTAMP_POTENTIAL_EAM_PHI( p, r, Phi, dPhi );          
-          Rho -= rhoCut;   
-          Phi -= phiCut;
           double de = ( dRho * ( dEmb + tab.nbh_pt[i][field::dEmb] ) + dPhi ) / r;
 
           const double drx = tab.drx[i];

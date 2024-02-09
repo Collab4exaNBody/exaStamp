@@ -20,11 +20,10 @@
 
 #include <exaStamp/potential/eam/eam_buffer.h>
 #include "potential.h"
-#include "eam_force_op_singlemat.h"
 
-#ifndef USTAMP_POTENTIAL_EAM_MM_INIT_TYPES
-#define USTAMP_POTENTIAL_EAM_MM_INIT_TYPES(p,nt,pe) /**/
-#endif
+#ifndef USTAMP_POTENTIAL_EAM_MM // only for monomaterial EAM potentials
+
+#include "eam_force_op_singlemat.h"
 
 #define EamPotentialOperatorName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_force)
 #define EamPotentialComputeEmbNoGhostName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_emb)
@@ -88,27 +87,7 @@ namespace exaStamp
       {
         return ;
       }
-      
-      {
-        [[maybe_unused]] uint8_t pair_enabled[1] = { 1 };
-        USTAMP_POTENTIAL_EAM_MM_INIT_TYPES( *parameters , 1 , pair_enabled );
-      }
-      
-      double phiCut = 0.;
-      double rhoCut = 0.;
-#     ifdef USTAMP_POTENTIAL_RCUT
-      {
-        double Rho = 0.;
-        double dRho = 0.;
-        double Phi = 0.;
-        double dPhi = 0.;
-        USTAMP_POTENTIAL_EAM_RHO( *parameters, *rcut, Rho, dRho );          
-        USTAMP_POTENTIAL_EAM_PHI( *parameters, *rcut, Phi, dPhi );
-        phiCut = Phi;
-        rhoCut = Rho;
-      }
-#     endif
-
+            
       auto compute_eam_force = [&]( const auto& cp_xform )
       {
         // common building blocks for both compute passes
@@ -127,7 +106,7 @@ namespace exaStamp
           // build compute buffer
           using EmbCPBuf = ComputePairBuffer2<>;
           ComputePairBufferFactory< EmbCPBuf > emb_buf;
-          EmbOp emb_op { *parameters, rhoCut, phiCut };
+          EmbOp emb_op { *parameters };
 
           // Emb term computation will access, for each central atom, potential energy (internal field) and emb_field (externally stored extra field)
           double * emb_ptr = eam_particle_emb->m_emb.data();
@@ -142,7 +121,7 @@ namespace exaStamp
         {
           using ForceCPBuf = SimpleNbhComputeBuffer< FieldSet<field::_dEmb> >; /* we want extra neighbor storage space to store these fields */
           ComputePairBufferFactory< ForceCPBuf > force_buf;  
-          ForceOp force_op { *parameters, rhoCut, phiCut };
+          ForceOp force_op { *parameters };
           const double * c_emb_ptr = eam_particle_emb->m_emb.data();
           auto c_emb_field = make_external_field_flat_array_accessor( *grid , c_emb_ptr , field::dEmb );
 
@@ -176,4 +155,6 @@ namespace exaStamp
   }
 
 }
+
+#endif // only mono material EAM potentials will compile this code
 

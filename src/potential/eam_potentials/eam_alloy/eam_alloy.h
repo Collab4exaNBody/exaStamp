@@ -178,7 +178,7 @@ namespace exaStamp
   };
 
   ONIKA_HOST_DEVICE_FUNC
-  static inline void eam_alloy_phi_mm(const EamAlloyParametersRO& eam, double r, double& phi, double& dphi, int itype , int jtype )
+  static inline void eam_alloy_phi(const EamAlloyParametersRO& eam, double r, double& phi, double& dphi, int itype=0 , int jtype=0 )
   {  
     using onika::cuda::min;
   
@@ -209,13 +209,8 @@ namespace exaStamp
     dphi *= eam.conversion_z2r;    
   }
 
-  static inline void eam_alloy_phi(const EamAlloyParametersRO& eam, double r, double& phi, double& dphi)
-  {
-    eam_alloy_phi_mm(eam,r,phi,dphi,0,0);
-  }
-
   ONIKA_HOST_DEVICE_FUNC
-  static inline void eam_alloy_rho_mm(const EamAlloyParametersRO& eam, double r, double& rho, double& drho, int itype , int jtype)
+  static inline void eam_alloy_rho(const EamAlloyParametersRO& eam, double r, double& rho, double& drho, int itype=0 , int jtype=0 )
   {
     using onika::cuda::min;
     itype = itype + 1;
@@ -238,13 +233,8 @@ namespace exaStamp
     drho = (coeff[0]*p + coeff[1])*p + coeff[2];    
   }
 
-  static inline void eam_alloy_rho(const EamAlloyParametersRO& eam, double r, double& rho, double& drho)
-  {
-    eam_alloy_rho_mm(eam,r,rho,drho,0,0);
-  }
-
   ONIKA_HOST_DEVICE_FUNC
-  static inline void eam_alloy_fEmbed_mm(const EamAlloyParametersRO& eam, double rho, double& phi, double& fp, int itype )
+  static inline void eam_alloy_fEmbed(const EamAlloyParametersRO& eam, double rho, double& phi, double& fp, int itype=0 )
   {
     using onika::cuda::min;
     using onika::cuda::max;
@@ -268,10 +258,6 @@ namespace exaStamp
     fp *= eam.conversion_frho;
   }
 
-  static inline void eam_alloy_fEmbed(const EamAlloyParametersRO& eam, double rho, double& f, double& df)
-  {
-    eam_alloy_fEmbed_mm(eam,rho,f,df,0);
-  }  
 }
 
 namespace onika

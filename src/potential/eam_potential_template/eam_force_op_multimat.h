@@ -14,9 +14,9 @@
 #define PRIV_NAMESPACE_NAME USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_details)
 #endif
 
-# define EamPotentialOperatorName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_force_multimat)
-# define EamPotentialEmbOnlyName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_emb_multimat)
-# define EamPotentialForceOnlyName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_force_reuse_emb_multimat)
+# define EamPotentialOperatorName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_force)
+# define EamPotentialEmbOnlyName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_emb)
+# define EamPotentialForceOnlyName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_force_reuse_emb)
 
 # define EamPotentialStr USTAMP_STR(EamPotentialOperatorName)
 # define EamPotentialEmbOnlyStr USTAMP_STR(EamPotentialEmbOnlyName)
@@ -26,48 +26,6 @@ namespace exaStamp
 {
   using namespace exanb;
 
-# ifndef USTAMP_POTENTIAL_EAM_PHI_MM
-# define EamPotentialPhiMMName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_phi_mm)
-# define USTAMP_POTENTIAL_EAM_PHI_MM EamPotentialPhiMMName
-  template<class EAMPotentialParmsT>
-  inline void EamPotentialPhiMMName( const EAMPotentialParmsT & p, double r, double& phiValue, double& dphi
-#                                  ifdef USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET
-                                   , int /*unused*/ , int /*unused*/
-#                                  else
-                                   , const EAMSpecyPairInfo& /*unused*/ , bool = false /*unused*/
-#                                  endif
-                                   )
-  {
-    USTAMP_POTENTIAL_EAM_PHI( p, r, phiValue, dphi );
-  }
-# endif
-
-# ifndef USTAMP_POTENTIAL_EAM_RHO_MM
-# define EamPotentialRhoMMName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_rho_mm)
-# define USTAMP_POTENTIAL_EAM_RHO_MM EamPotentialRhoMMName
-  template<class EAMPotentialParmsT>
-  inline void EamPotentialRhoMMName( const EAMPotentialParmsT & p, double r, double& rhoValue, double& drho
-#                                  ifdef USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET
-                                   , int /*unused*/ , int /*unused*/
-#                                  else
-                                   , const EAMSpecyPairInfo& /*unused*/ , bool = false /*unused*/
-#                                  endif
-                                   )
-  {
-    USTAMP_POTENTIAL_EAM_RHO( p, r, rhoValue, drho );
-  }
-# endif
-
-# ifndef USTAMP_POTENTIAL_EAM_EMB_MM
-# define EamPotentialEmbMMName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_emb_mm)
-# define USTAMP_POTENTIAL_EAM_EMB_MM EamPotentialEmbMMName
-  template<class EAMPotentialParmsT>
-  inline void EamPotentialEmbMMName( const EAMPotentialParmsT & p, double rho, double& f, double& df, int type )
-  {
-    USTAMP_POTENTIAL_EAM_EMB( p, rho, f, df );
-  }
-# endif
-
   namespace PRIV_NAMESPACE_NAME
   {
 
@@ -76,12 +34,7 @@ namespace exaStamp
 
     struct EmbOp
     {
-#     ifdef USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET
       const onika::cuda::ro_shallow_copy_t<USTAMP_POTENTIAL_PARMS> p = {};
-#     else
-      const EamMultiMatParamsReadOnly * __restrict__ p = nullptr;
-#     endif
-//      const PhiRhoCutoff* phi_rho_cutoff = nullptr;
       const uint8_t * __restrict__ m_pair_enabled = nullptr;
 
       template<class ComputePairBufferT, class CellParticlesT>
@@ -114,23 +67,14 @@ namespace exaStamp
           double drholoc = 0.;
           if( m_pair_enabled[pair_id] )
           {
-#           ifdef USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET
-            USTAMP_POTENTIAL_EAM_RHO_MM( p, r, rholoc, drholoc, type_b, type_a );
-#           else
-            USTAMP_POTENTIAL_EAM_RHO_MM( p[unique_pair_id( type_b, type_b )].m_parameters, r, rholoc, drholoc, p[pair_id].m_specy_pair, pair_inversed );
-#           endif
-            //rholoc -= phi_rho_cutoff[unique_pair_id( type_a, type_a )].m_rho_cutoff;
+            USTAMP_POTENTIAL_EAM_RHO( p, r, rholoc, drholoc, type_b, type_a );
             rho += rholoc;
           }
         }
 
         double emb = 0.;
         /*double*/ dEmb = 0.;
-#       ifdef USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET
-        USTAMP_POTENTIAL_EAM_EMB_MM( p, rho, emb, dEmb , type_a );
-#       else
-        USTAMP_POTENTIAL_EAM_EMB_MM( p[unique_pair_id(type_a,type_a)].m_parameters, rho, emb, dEmb , type_a );
-#       endif
+        USTAMP_POTENTIAL_EAM_EMB( p, rho, emb, dEmb , type_a );
         //m_particle_emb[ m_cell_emb_offset[tab.cell] + tab.part ] = dEmb;	
         //	      if (rho > rhomax) emb += dEmb * (rho-rhomax);
         ep += emb;
@@ -140,11 +84,7 @@ namespace exaStamp
 
     struct ForceOp
     {
-#     ifdef USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET
       const onika::cuda::ro_shallow_copy_t<USTAMP_POTENTIAL_PARMS> p = {};
-#     else
-      const EamMultiMatParamsReadOnly * __restrict__ p = nullptr;
-#     endif
       const uint8_t * __restrict__ m_pair_enabled = nullptr;
       
       template<class ComputePairBufferT, class CellParticlesT>
@@ -216,15 +156,9 @@ namespace exaStamp
           double rhojp = 0.;	  
 	        if( m_pair_enabled[pair_id] )
 	        {
-#           ifdef USTAMP_POTENTIAL_EAM_MM_UNIQUE_PARAMETER_SET
-	          USTAMP_POTENTIAL_EAM_RHO_MM( p, r, Rho, rhoip , type_a, type_b );
-	          USTAMP_POTENTIAL_EAM_RHO_MM( p, r, Rho, rhojp , type_b, type_a );
-	          USTAMP_POTENTIAL_EAM_PHI_MM( p, r, phi, phip  , type_a, type_b );
-#           else
-	          USTAMP_POTENTIAL_EAM_RHO_MM( p[unique_pair_id( type_a, type_a )].m_parameters, r, Rho, rhoip , p[pair_id].m_specy_pair , pair_inversed );
-	          USTAMP_POTENTIAL_EAM_RHO_MM( p[unique_pair_id( type_b, type_b )].m_parameters, r, Rho, rhojp , p[pair_id].m_specy_pair , pair_inversed );
-	          USTAMP_POTENTIAL_EAM_PHI_MM( p[pair_id].m_parameters, r, phi, phip , p[pair_id].m_specy_pair , pair_inversed );
-#           endif
+	          USTAMP_POTENTIAL_EAM_RHO( p, r, Rho, rhoip , type_a, type_b );
+	          USTAMP_POTENTIAL_EAM_RHO( p, r, Rho, rhojp , type_b, type_a );
+	          USTAMP_POTENTIAL_EAM_PHI( p, r, phi, phip  , type_a, type_b );
 	        }
           double recip = 1.0/r;
 	        double fpj = tab.nbh_pt[i][field::dEmb];

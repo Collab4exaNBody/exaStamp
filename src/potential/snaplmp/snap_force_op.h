@@ -130,7 +130,7 @@ namespace exaStamp
       ) const
     {
       static constexpr bool compute_virial = std::is_same_v< Mat3dT , Mat3d >;
-      static constexpr double scale[1][1] = { {1.0} };
+      //static constexpr double scale[1][1] = { {1.0} };
 
       size_t tid = omp_get_thread_num();
       assert( tid < n_thread_ctx );

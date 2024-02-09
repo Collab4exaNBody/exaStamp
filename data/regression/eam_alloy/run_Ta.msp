@@ -1,20 +1,15 @@
-eam_alloy_force_multimat:
+eam_alloy_force:
   rcut: 5.30 ang
   parameters:
     file: Ta1_Ravelo_2013.eam.alloy
 
-compute_force:
-  - eam_alloy_force_multimat
+compute_force: eam_alloy_force
 
 species:
   - Ta:
       mass: 180.95 Da
       z: 73
       charge: 0 e-
-
-
-
-
 
 grid_flavor: grid_flavor_full
 
