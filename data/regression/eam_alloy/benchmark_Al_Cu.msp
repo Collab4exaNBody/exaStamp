@@ -3,12 +3,18 @@ configuration:
   profiling:
     summary: true
 
-eam_alloy_force:
+eam_alloy_force: &eam_parm
   rcut: 6.6825 ang
-  parameters:
-    file: AlCu.eam.alloy
+  parameters: { file: AlCu.eam.alloy }
 
-compute_force: eam_alloy_force
+eam_alloy_emb: *eam_parm
+eam_alloy_force_reuse_emb: *eam_parm
+
+compute_force:
+#  - eam_alloy_force
+  - eam_alloy_emb
+  - ghost_update_emb
+  - eam_alloy_force_reuse_emb
 
 species:
   - Al:
@@ -32,19 +38,24 @@ domain:
   cell_size: 8. ang
   periodic: [true,true,true]
 
++first_iteration:
+  - grid_stats
+  - chunk_neighbors_stats
+  - memory_stats
+
 dump_analysis: nop
 dump_data: nop
 
 global:
-  simulation_end_iteration: 20
-  simulation_log_frequency: 2
+  simulation_end_iteration: 1000
+  simulation_log_frequency: 10
   rcut_inc: 1.0 ang
   dt: 1.0e-3 ps
   simulation_dump_frequency: -1
   simulation_dump_thermo_frequency: 1
   analysis_dump_frequency: -1
 
-simulation_epilog:
+xxx_simulation_epilog:
   - check_values:
       file: eam_aloy_AlCu.dat
       pos_threshold: 1.e-10

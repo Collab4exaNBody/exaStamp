@@ -192,5 +192,34 @@ namespace exaStamp
 
 }
 
+namespace exanb
+{
+  template<> struct ComputePairTraits<exaStamp::PRIV_NAMESPACE_NAME::EmbOp>
+  {
+    static inline constexpr bool RequiresBlockSynchronousCall = false;
+    static inline constexpr bool ComputeBufferCompatible = true;
+    static inline constexpr bool BufferLessCompatible = false;
+#   ifdef USTAMP_POTENTIAL_ENABLE_CUDA
+    static inline constexpr bool CudaCompatible = true;
+#   else
+    static inline constexpr bool CudaCompatible = false;
+#   endif
+  };
+
+  template<> struct ComputePairTraits<exaStamp::PRIV_NAMESPACE_NAME::ForceOp>
+  {
+    static inline constexpr bool RequiresBlockSynchronousCall = false;
+    static inline constexpr bool ComputeBufferCompatible = true;
+    static inline constexpr bool BufferLessCompatible = false;
+#   ifdef USTAMP_POTENTIAL_ENABLE_CUDA
+    static inline constexpr bool CudaCompatible = true;
+#   else
+    static inline constexpr bool CudaCompatible = false;
+#   endif
+  };
+
+}
+
+
 
 
