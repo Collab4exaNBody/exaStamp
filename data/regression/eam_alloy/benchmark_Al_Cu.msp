@@ -1,4 +1,3 @@
-
 configuration:
   profiling:
     summary: true
@@ -33,7 +32,11 @@ input_data:
   - read_xyz_file_with_xform:
       file: AlCu_disturbed.xyz      
       pbc_adjust_xform: true
-  
+  - replicate_domain
+
+replicate_domain:
+  repeat: [ 1 , 1 , 1 ]
+
 domain:
   cell_size: 8. ang
   periodic: [true,true,true]
@@ -47,7 +50,7 @@ dump_analysis: nop
 dump_data: nop
 
 global:
-  simulation_end_iteration: 1000
+  simulation_end_iteration: 20
   simulation_log_frequency: 10
   rcut_inc: 1.0 ang
   dt: 1.0e-3 ps
@@ -55,7 +58,7 @@ global:
   simulation_dump_thermo_frequency: 1
   analysis_dump_frequency: -1
 
-xxx_simulation_epilog:
+simulation_epilog:
   - check_values:
       file: eam_aloy_AlCu.dat
       pos_threshold: 1.e-10
