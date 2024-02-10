@@ -95,10 +95,12 @@ namespace YAML
     // for (int i=0;i<nelements;i++) {
     //   matnames[i] = tokens[i+1];
     // }
-    std::cout << "Nb of materials = " << nelements << std::endl;
+    std::cout << "====== EAM Dynamo reader =====" << std::endl;
+    std::cout << "Materials =";
     for (size_t i=0;i<nelements;i++) {
-      std::cout << "\tMaterial #" << i << " = " << matnames[i] << std::endl;
+      std::cout << (i==0?" ":",") << matnames[i];
     }
+    std::cout <<" ("<< nelements<<")" << std::endl;
     
     // Second line to be read contains information on the tabulation discretization for phi, rho and f(rho) functions
     std::getline(file,line);
@@ -108,11 +110,13 @@ namespace YAML
 
     file >> nrho >> drho >> nr >> dr >> rcut;
     //    std::istringstream(line) >> nrho >> drho >> nr >> dr >> rcut;
-    std::cout << "\tnrho  = " << nrho << std::endl;
-    std::cout << "\tdrho  = " << drho << std::endl;    
-    std::cout << "\tnr    = " << nr << std::endl;
-    std::cout << "\tdr    = " << dr << std::endl;    
-    std::cout << "\trcut  = " << rcut << std::endl;    
+    std::cout << "nrho  = " << nrho << std::endl;
+    std::cout << "nr    = " << nr << std::endl;
+#   ifndef NDEBUG
+    std::cout << "drho  = " << drho << std::endl;    
+    std::cout << "dr    = " << dr << std::endl;    
+    std::cout << "rcut  = " << rcut << std::endl;    
+#   endif
     v.nelements = nelements;
     v.nr = nr;
     v.nrho = nrho;
@@ -123,9 +127,11 @@ namespace YAML
     // If N materials there are N(N+1)/2 pair potentials to read
     size_t nz2r = nelements*(nelements+1)/2;
     
-    std::cout << "\tnfrho = " << nfrho << std::endl;
-    std::cout << "\tnrhor = " << nrhor << std::endl;
-    std::cout << "\tnz2r  = " << nz2r  << std::endl;  
+#   ifndef NDEBUG
+    std::cout << "nfrho = " << nfrho << std::endl;
+    std::cout << "nrhor = " << nrhor << std::endl;
+    std::cout << "nz2r  = " << nz2r  << std::endl;  
+#   endif
     
     // When multimaterial --> frho and rhor need to be vector<vector<double>> bc 1 function per type
     std::vector< std::vector<double> > frho;
@@ -139,22 +145,25 @@ namespace YAML
     
     // Read f(rho) and rho(r) by block for each material
     for (size_t i = 0; i < nelements; i++) {
-      //      file >> std::ws;
-      std::getline(file,line);
-      std::cout << "Material # "<<i<<" :" <<line<<std::endl;
       int zmat;
       double massmat,azeromat;
       std::string structmat;
+
+      // std::getline(file,line);
       //      std::istringstream(line) >> zmat >> massmat >> azeromat >> structmat;
+      file >> std::ws;
       file >> zmat >> massmat >> azeromat >> structmat;
+
+#     ifndef NDEBUG
+      std::cout << "Material # "<<i<<" :" <<line<<std::endl;
       std::cout << "\tzmat  = " << zmat << std::endl;
       std::cout << "\tmass  = " << massmat << std::endl;    
       std::cout << "\tazero = " << azeromat << std::endl;
       std::cout << "\tstruc = " << structmat << std::endl;    
+#     endif
 
       for(size_t cnt_frho=0 ; cnt_frho < nrho ; cnt_frho++) file >> frho[i][cnt_frho+1];
       for(size_t cnt_rhor=0 ; cnt_rhor < nr ; cnt_rhor++) file >> rhor[i][cnt_rhor+1];
-
     }
     
     // Read z2r(r) by block for each material
@@ -244,6 +253,8 @@ namespace YAML
         for(size_t k=0;k<nspl;k++) coeffs[k] = v.z2r_spline[i][j][k];
       }
     }
+
+    std::cout << "==============================" << std::endl;
 
     return true;
   }
