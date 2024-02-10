@@ -182,7 +182,7 @@ namespace YAML
       }
     }
     
-    std::cout << std::endl << std::endl;
+//    std::cout << std::endl << std::endl;
     
     //    std::abort();
     // LAMMPS : in pair_eam.cpp, section equivalent to PairEAM::array2spline()
