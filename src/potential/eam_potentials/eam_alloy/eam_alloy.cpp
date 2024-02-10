@@ -49,6 +49,7 @@ namespace YAML
   bool convert<exaStamp::EamAlloyParameters>::decode(const Node& _node, exaStamp::EamAlloyParameters& v)
   {
     using exaStamp::EamAlloyTools::interpolate;
+    using exanb::lout;
 
     Node node = _node;
     std::string file_to_load;
@@ -95,12 +96,12 @@ namespace YAML
     // for (int i=0;i<nelements;i++) {
     //   matnames[i] = tokens[i+1];
     // }
-    std::cout << "====== EAM Dynamo reader =====" << std::endl;
-    std::cout << "Materials =";
+    lout << "====== EAM Dynamo reader =====" << std::endl;
+    lout << "Materials =";
     for (size_t i=0;i<nelements;i++) {
-      std::cout << (i==0?" ":",") << matnames[i];
+      lout << (i==0?" ":",") << matnames[i];
     }
-    std::cout <<" ("<< nelements<<")" << std::endl;
+    lout <<" ("<< nelements<<")" << std::endl;
     
     // Second line to be read contains information on the tabulation discretization for phi, rho and f(rho) functions
     std::getline(file,line);
@@ -110,12 +111,12 @@ namespace YAML
 
     file >> nrho >> drho >> nr >> dr >> rcut;
     //    std::istringstream(line) >> nrho >> drho >> nr >> dr >> rcut;
-    std::cout << "nrho  = " << nrho << std::endl;
-    std::cout << "nr    = " << nr << std::endl;
+    lout << "nrho  = " << nrho << std::endl;
+    lout << "nr    = " << nr << std::endl;
 #   ifndef NDEBUG
-    std::cout << "drho  = " << drho << std::endl;    
-    std::cout << "dr    = " << dr << std::endl;    
-    std::cout << "rcut  = " << rcut << std::endl;    
+    lout << "drho  = " << drho << std::endl;    
+    lout << "dr    = " << dr << std::endl;    
+    lout << "rcut  = " << rcut << std::endl;    
 #   endif
     v.nelements = nelements;
     v.nr = nr;
@@ -128,9 +129,9 @@ namespace YAML
     size_t nz2r = nelements*(nelements+1)/2;
     
 #   ifndef NDEBUG
-    std::cout << "nfrho = " << nfrho << std::endl;
-    std::cout << "nrhor = " << nrhor << std::endl;
-    std::cout << "nz2r  = " << nz2r  << std::endl;  
+    lout << "nfrho = " << nfrho << std::endl;
+    lout << "nrhor = " << nrhor << std::endl;
+    lout << "nz2r  = " << nz2r  << std::endl;  
 #   endif
     
     // When multimaterial --> frho and rhor need to be vector<vector<double>> bc 1 function per type
@@ -155,11 +156,11 @@ namespace YAML
       file >> zmat >> massmat >> azeromat >> structmat;
 
 #     ifndef NDEBUG
-      std::cout << "Material # "<<i<<" :" <<line<<std::endl;
-      std::cout << "\tzmat  = " << zmat << std::endl;
-      std::cout << "\tmass  = " << massmat << std::endl;    
-      std::cout << "\tazero = " << azeromat << std::endl;
-      std::cout << "\tstruc = " << structmat << std::endl;    
+      lout << "Material # "<<i<<" :" <<line<<std::endl;
+      lout << "\tzmat  = " << zmat << std::endl;
+      lout << "\tmass  = " << massmat << std::endl;    
+      lout << "\tazero = " << azeromat << std::endl;
+      lout << "\tstruc = " << structmat << std::endl;    
 #     endif
 
       for(size_t cnt_frho=0 ; cnt_frho < nrho ; cnt_frho++) file >> frho[i][cnt_frho+1];
@@ -182,7 +183,7 @@ namespace YAML
       }
     }
     
-//    std::cout << std::endl << std::endl;
+//    lout << std::endl << std::endl;
     
     //    std::abort();
     // LAMMPS : in pair_eam.cpp, section equivalent to PairEAM::array2spline()
@@ -254,7 +255,7 @@ namespace YAML
       }
     }
 
-    std::cout << "==============================" << std::endl;
+    lout << "==============================" << std::endl << std::endl;
 
     return true;
   }

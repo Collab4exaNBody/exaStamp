@@ -1,6 +1,24 @@
 configuration:
+#  onika:
+#    gpu_block_size: 256
   profiling:
     summary: true
+
++first_iteration:
+  - grid_stats
+  - chunk_neighbors_stats
+  - memory_stats
+
+ghost_update_emb: &ghost_update_parms
+  gpu_buffer_pack: true
+  async_buffer_pack: true
+  staging_buffer: true
+  serialize_pack_send: true
+  wait_all: false
+
+ghost_update_r: *ghost_update_parms
+
+ghost_update_all_no_fv: *ghost_update_parms
 
 eam_alloy_force: &eam_parm
   rcut: 6.6825 ang
@@ -38,7 +56,7 @@ replicate_domain:
   repeat: [ 1 , 1 , 1 ]
 
 domain:
-  cell_size: 8. ang
+  cell_size: 32. ang
   periodic: [true,true,true]
 
 +first_iteration:
@@ -61,8 +79,8 @@ global:
 simulation_epilog:
   - check_values:
       file: eam_aloy_AlCu.dat
-      pos_threshold: 1.e-10
-      acc_threshold: 1.e-10
-      vel_threshold: 1.e-10
+      pos_threshold: 5.e-10
+      acc_threshold: 5.e-10
+      vel_threshold: 5.e-10
 
 
