@@ -72,14 +72,15 @@ grid_flavor: grid_flavor_rigidmol
 
 dump_analysis:
   - message: "--- Analysis ---"
-  - grid_particle_slicing:
-      thickness: 1.0 ang
-      direction: [ 1.0 , 1.0 , 1.0 ]
-      fields: [ ep , id ]
-      average: [ id ]
-      caption: { ep: "Potential Energy" , id: "Particle Id" }
-  - timestep_file: "plot_%06d.csv"
-  - write_plot1d: [ ep , id ]
+  - dump_data_vtk
+#  - grid_particle_slicing:
+#      thickness: 1.0 ang
+#      direction: [ 1.0 , 1.0 , 1.0 ]
+#      fields: [ ep , id ]
+#      average: [ id ]
+#      caption: { ep: "Potential Energy" , id: "Particle Id" }
+#  - timestep_file: "plot_%06d.csv"
+#  - write_plot1d: [ ep , id ]
 
 global:
   dt: 5.0e-4 ps
@@ -111,7 +112,7 @@ input_data:
           quadric:
             shape: sphere
             transform:
-              - scale: [ 100 ang , 100 ang , 100 ang ] 
+              - scale: [ 160 ang , 160 ang , 160 ang ] 
               - translate: [ 180 ang , 180 ang , 180 ang ]
 #
   - has_dump_file:
@@ -155,6 +156,11 @@ input_data:
             noise_cutoff: 0.0 ang
             repeats: [ 120 , 120 , 120 ]
             region: BOX or SPHERE
+            user_function:
+              wavefront:
+                plane: [ 1 , 0 , 0 , -186.18 ang ]
+                wave: [ 0 , 0.1 , 0 , 0 ]
+                amplitude: 30.0 ang
 #     *** Initialize temperature ***
         - random_orient
 #

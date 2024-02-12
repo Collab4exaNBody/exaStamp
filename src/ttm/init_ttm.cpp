@@ -5,14 +5,15 @@
 #include <exanb/core/domain.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/grid_cell_particles/grid_cell_values.h>
-#include <exaStamp/ttm/source_term.h>
 #include <exanb/core/quantity_yaml.h>
 #include <exanb/core/make_grid_variant_operator.h>
+#include <exanb/core/source_term.h>
 
 #include <memory>
 
 namespace exaStamp
 {
+  using namespace exanb;
 
   template<class GridT>
   class InitTTM : public OperatorNode

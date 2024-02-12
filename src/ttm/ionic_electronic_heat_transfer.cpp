@@ -14,13 +14,14 @@
 #include <exanb/core/unityConverterHelper.h>
 #include <onika/memory/allocator.h>
 #include <exanb/grid_cell_particles/grid_cell_values.h>
-#include <exaStamp/ttm/source_term.h>
+#include <exanb/core/source_term.h>
 
 #include <mpi.h>
 #include <iomanip>
 
 namespace exaStamp
 {
+  using namespace exanb;
 
   template<
     class GridT ,
