@@ -38,8 +38,8 @@ namespace exaStamp
     ADD_SLOT( double         , dt           , INPUT , REQUIRED );
     ADD_SLOT( double         , physical_time, INPUT , REQUIRED );
 
-    ADD_SLOT( std::shared_ptr<ScalarSourceTerm> , te_source  , INPUT , std::make_shared<ScalarSourceTerm>() );
-    ADD_SLOT( std::shared_ptr<ScalarSourceTerm> , ti_source  , INPUT , std::make_shared<ScalarSourceTerm>() );
+    ADD_SLOT( ScalarSourceTermInstance , te_source  , INPUT_OUTPUT , std::make_shared<ScalarSourceTerm>() );
+    ADD_SLOT( ScalarSourceTermInstance , ti_source  , INPUT_OUTPUT , std::make_shared<ScalarSourceTerm>() );
     ADD_SLOT( double         , g            , INPUT , 0.0 );
     ADD_SLOT( double         , Ke           , INPUT , 1.0 );
     ADD_SLOT( double         , splat_size   , INPUT , 1.0 );
@@ -127,6 +127,9 @@ namespace exaStamp
       std::vector<double> tmp_storage_ti_LapTe( n_cells * n_subcells * 2 , 0.0 );
       double* Ti = tmp_storage_ti_LapTe.data();
       double* cell_L_Te = tmp_storage_ti_LapTe.data() + n_cells * n_subcells;
+
+      const auto& te_source_func = * (*te_source);
+      const auto& ti_source_func = * (*ti_source);
 
       // 1. computes per cell Ti
 #     pragma omp parallel
@@ -352,8 +355,8 @@ namespace exaStamp
 
             // source terms
             const Vec3d center = xform * ( cell_origin + scr*subcell_size );
-            const double Si = (*ti_source)->S( center, *physical_time );
-            const double Se = (*te_source)->S( center, *physical_time );
+            const double Si = ti_source_func( center, *physical_time );
+            const double Se = te_source_func( center, *physical_time );
             
             // sum external contributions (source terms)
             sum_Se += Se;

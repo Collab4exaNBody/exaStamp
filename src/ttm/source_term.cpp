@@ -88,7 +88,7 @@ namespace exaStamp
     {
       std::string type = node.as< std::string >();
       if( type == "null" ) return std::make_shared<ScalarSourceTerm>();
-      else return nullptr
+      else return nullptr;
     }
 
     if( ! node.IsMap() ) { return nullptr; }
@@ -117,7 +117,7 @@ namespace exaStamp
     }    
     else
     {
-      lerr << "unrecognized source type '"<<stype<<"'"<<std::endl;
+      lerr << "unrecognized source type '"<<type<<"'"<<std::endl;
       std::abort();
     }
     return nullptr;
