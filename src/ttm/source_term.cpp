@@ -1,6 +1,8 @@
 #include <exaStamp/ttm/source_term.h>
 #include <exanb/core/log.h>
 #include <exanb/core/basic_types_operators.h>
+#include <exanb/core/quantity_yaml.h>
+#include <exanb/core/basic_types_yaml.h>
 
 #include <iostream>
 #include <cmath>
@@ -12,6 +14,8 @@ namespace exaStamp
   // -----------------------------------------------
   // ------- Source term factory -------------------
   // -----------------------------------------------
+
+
   /*
    * uses 2D gaussian function as described below :
    * https://en.wikipedia.org/wiki/Gaussian_function#Two-dimensional_Gaussian_function
@@ -30,7 +34,7 @@ namespace exaStamp
       , m_2_sigma_y_sqr( 2.0 * time_dev * time_dev )
       {}
 
-    virtual inline double S( Vec3d r, double t ) const
+    virtual inline double operator () ( Vec3d r, double t=0.0, int64_t id=-1 ) const override final
     {
       double x = norm(r-m_center) - m_x0;
       double y = t - m_y0;
@@ -46,39 +50,71 @@ namespace exaStamp
     double m_2_sigma_y_sqr;
   };
 
+  struct WaveFrontSourceTerm : public ScalarSourceTerm
+  {
+    inline WaveFrontSourceTerm(const Plane3d& ref_plane, const Plane3d& wave_plane, double amplitude)
+      : m_ref_plane(ref_plane)
+      , m_wave_plane(wave_plane)
+      , m_amplitude(amplitude)
+    {}
+    virtual inline double operator () ( Vec3d r, double t=0.0, int64_t id=-1 ) const override final
+    {
+      const double p = dot( r , m_ref_plane.N ) + m_ref_plane.D;
+      const double w = dot( r , m_wave_plane.N ) + m_wave_plane.D;
+      return p + std::sin( w ) * m_amplitude;
+    }
+  private:
+    Plane3d m_ref_plane = { 1.0 , 0.0 , 0.0 , 0.0 };
+    Plane3d m_wave_plane = { 0.0 , 1.0 , 0.0 , 0.0 };
+    double m_amplitude = 1.0;
+  };
+
+
   struct ConstantSourceTerm : public ScalarSourceTerm
   {
     inline ConstantSourceTerm(double s) : m_scalar(s) {}
-    virtual inline double S( Vec3d r, double t ) const { return m_scalar; }
+    virtual inline double operator () ( Vec3d r, double t=0.0, int64_t id=-1 ) const override final
+    {
+      return m_scalar;
+    }
   private:
     double m_scalar = 0.0;
   };
 
-  std::shared_ptr<ScalarSourceTerm> make_source_term( const std::string& stype, const std::vector<double>& p )
+
+  ScalarSourceTermInstance make_source_term( const YAML::Node& node )
   {
-//    ldbg << "source type = "<< stype << std::endl;
-    if( stype == "null" )
+    if( node.IsScalar() )
     {
-      return std::make_shared<ScalarSourceTerm>();
+      std::string type = node.as< std::string >();
+      if( type == "null" ) return std::make_shared<ScalarSourceTerm>();
+      else return nullptr
     }
-    else if( stype == "sphere" )
+
+    if( ! node.IsMap() ) { return nullptr; }
+    if( node.size() != 1 ) { return nullptr; }
+          
+    std::string type = node.begin()->first.as<std::string>();
+    YAML::Node params = node.begin()->second;
+    
+    if( type == "sphere" )
     {
-      if( p.size() != 8 )
-      {
-        lerr << "expected 8 parameters for sphere source type"<<std::endl;
-        std::abort();
-      }
-      return std::make_shared<SphericalTemporalSourceTerm>( Vec3d{p[0],p[1],p[2]} , p[3] , p[4] , p[5] , p[6] , p[7] );
+      return std::make_shared<SphericalTemporalSourceTerm>( params["center"].as<Vec3d>()
+                                                          , params["amplitude"].as<Quantity>().convert()
+                                                          , params["radius_mean"].as<Quantity>().convert()
+                                                          , params["radius_dev"].as<Quantity>().convert()
+                                                          , params["time_mean"].as<Quantity>().convert()
+                                                          , params["time_dev"].as<Quantity>().convert()
+                                                          );
     }
-    else if( stype == "constant" )
+    else if( type == "wavefront" )
     {
-      if( p.size() != 1 )
-      {
-        lerr << "expected 1 parameters for sphere source type"<<std::endl;
-        std::abort();
-      }
-      return std::make_shared<ConstantSourceTerm>( p[0] );
+      return std::make_shared<WaveFrontSourceTerm>( params["plane"].as<Plane3d>(), params["wave"].as<Plane3d>(), params["amplitude"].as<Quantity>().convert() );
     }
+    else if( type == "constant" )
+    {
+      return std::make_shared<ConstantSourceTerm>( params.as<Quantity>().convert() );
+    }    
     else
     {
       lerr << "unrecognized source type '"<<stype<<"'"<<std::endl;
