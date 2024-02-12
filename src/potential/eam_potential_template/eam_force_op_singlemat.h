@@ -37,10 +37,19 @@ namespace exaStamp
       {
         double particle_rho = 0.;
 
+#       ifndef XSTAMP_EAM_CHECK_PAIR_DISTANCE
 #       pragma omp simd reduction(+:particle_rho)
+#       endif
         for(size_t i=0;i<n;i++)
         {
           double r = sqrt( tab.d2[i] );
+#         ifdef XSTAMP_EAM_CHECK_PAIR_DISTANCE
+          if( r < XSTAMP_EAM_CHECK_PAIR_DISTANCE )
+          {
+            printf("EAM particle distance limit reached : r=%.6e , below limit %.6e\n",r,XSTAMP_EAM_CHECK_PAIR_DISTANCE);
+            ONIKA_CU_ABORT();
+          }
+#         endif
           double Rho = 0.;
           double dRho = 0.;
           USTAMP_POTENTIAL_EAM_RHO( p, r, Rho, dRho );
@@ -97,10 +106,19 @@ namespace exaStamp
                 vir.m21==0 && vir.m22==0 && vir.m23==0 &&
                 vir.m31==0 && vir.m32==0 && vir.m33==0 ); */
 
+#       ifndef XSTAMP_EAM_CHECK_PAIR_DISTANCE
 #       pragma omp simd reduction(+:fx,fy,fz,ep,vir)
+#       endif
         for(size_t i=0;i<n;i++)
         {
           double r = sqrt( tab.d2[i] );
+#         ifdef XSTAMP_EAM_CHECK_PAIR_DISTANCE
+          if( r < XSTAMP_EAM_CHECK_PAIR_DISTANCE )
+          {
+            printf("EAM particle distance limit reached : r=%.6e , below limit %.6e\n",r,XSTAMP_EAM_CHECK_PAIR_DISTANCE);
+            ONIKA_CU_ABORT();
+          }
+#         endif
           double Rho = 0.;
           double dRho = 0.;
           double Phi = 0.;
