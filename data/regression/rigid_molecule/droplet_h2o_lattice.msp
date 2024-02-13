@@ -162,7 +162,7 @@ input_data:
             noise: 0.0 ang
             noise_cutoff: 0.0 ang
             repeats: [ 120 , 120 , 120 ]
-            region: BOX or SPHERE
+            region: SPHERE
             user_function:
               wavefront:
                 plane: [ 1 , 0 , 0 , -186.18 ang ]
