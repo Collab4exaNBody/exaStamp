@@ -5,14 +5,15 @@
 #include <exanb/core/domain.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/grid_cell_particles/grid_cell_values.h>
-#include <exaStamp/ttm/source_term.h>
 #include <exanb/core/quantity_yaml.h>
 #include <exanb/core/make_grid_variant_operator.h>
+#include <exanb/core/source_term.h>
 
 #include <memory>
 
 namespace exaStamp
 {
+  using namespace exanb;
 
   template<class GridT>
   class InitTTM : public OperatorNode
@@ -21,14 +22,8 @@ namespace exaStamp
     ADD_SLOT( Domain         , domain       , INPUT , REQUIRED );
     ADD_SLOT( double         , physical_time, INPUT , REQUIRED );
 
-    ADD_SLOT( std::string , te_source_type  , INPUT, "null" );
-    ADD_SLOT( std::vector<Quantity> , te_source_params  , INPUT, std::vector<Quantity>() );
-
-    ADD_SLOT( std::string , ti_source_type  , INPUT, "null" );
-    ADD_SLOT( std::vector<Quantity> , ti_source_params  , INPUT, std::vector<Quantity>() );
-
-    ADD_SLOT( std::shared_ptr<ScalarSourceTerm> , te_source  , OUTPUT );
-    ADD_SLOT( std::shared_ptr<ScalarSourceTerm> , ti_source  , OUTPUT );
+    ADD_SLOT( ScalarSourceTermInstance , te_source  , INPUT_OUTPUT );
+    ADD_SLOT( ScalarSourceTermInstance , ti_source  , INPUT_OUTPUT );
     
     ADD_SLOT( long           , grid_subdiv      , INPUT , 3 );
     ADD_SLOT( GridCellValues , grid_cell_values , INPUT_OUTPUT );
@@ -38,15 +33,7 @@ namespace exaStamp
     // -----------------------------------------------
     // -----------------------------------------------
     inline void execute ()  override final
-    {
-      std::vector<double> tip;
-      for(const auto& x:*ti_source_params) tip.push_back( x.convert() );
-      std::vector<double> tep;
-      for(const auto& x:*te_source_params) tep.push_back( x.convert() );
-
-      *ti_source = make_source_term( *ti_source_type , tip );
-      *te_source = make_source_term( *te_source_type , tep );
-           
+    {           
       // retreive field data accessor. create data field if needed
       const int subdiv = *grid_subdiv;
       if( ! grid_cell_values->has_field("te") )
@@ -60,6 +47,8 @@ namespace exaStamp
       const Mat3d xform = domain->xform();
       const double subcell_size = domain->cell_size() / subdiv;
       const IJK dims = grid->dimension();
+      
+      const auto& te_source_func = * (*te_source);
       
 #     pragma omp parallel
       {
@@ -75,7 +64,7 @@ namespace exaStamp
 	          Vec3d scr = { ci+0.5, cj+0.5, ck+0.5 };
             const size_t j = cell_i*cell_te_data.m_stride +  grid_ijk_to_index( IJK{subdiv,subdiv,subdiv} , sc );
             const Vec3d center = xform * ( cell_origin + scr * subcell_size );
-            cell_te_data.m_data_ptr[j] = (*te_source)->S( center, *physical_time );
+            cell_te_data.m_data_ptr[j] = te_source_func ( center, *physical_time );
           }
         }
         GRID_OMP_FOR_END
