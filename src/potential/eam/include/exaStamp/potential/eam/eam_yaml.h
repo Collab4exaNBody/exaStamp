@@ -1,6 +1,6 @@
 #pragma once
 
-#include "eam_buffer.h"
+#include <exaStamp/potential/eam/eam_buffer.h>
 #include <yaml-cpp/yaml.h>
 
 namespace YAML

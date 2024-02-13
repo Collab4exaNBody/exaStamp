@@ -61,7 +61,7 @@ namespace exaStamp
     struct CopyParticleType
     {
       template<typename ComputeBufferT, typename FieldArraysT, class NbhDataT>
-      ONIKA_HOST_DEVICE_FUNC inline void operator () (ComputeBufferT& tab, const Vec3d& dr, double d2, const FieldArraysT * cells, size_t cell_b, size_t p_b, const NbhDataT& nbh_data) const noexcept
+      ONIKA_HOST_DEVICE_FUNC inline void operator () (ComputeBufferT& tab, const Vec3d& dr, double d2, FieldArraysT cells, size_t cell_b, size_t p_b, const NbhDataT& nbh_data) const noexcept
       {
         assert( ssize_t(tab.count) < ssize_t(tab.MaxNeighbors) );
         tab.ext.species[tab.count] = cells[cell_b][field::type][p_b];
@@ -173,13 +173,13 @@ namespace exaStamp
       {
         NullXForm cp_xform;
         auto optional = make_compute_pair_optional_args( nbh_it, ComputePairNullWeightIterator{} , cp_xform, cp_locks );
-        compute_cell_particle_pairs( *grid, m_rcut, *ghost, optional, force_buf, force_op , compute_force_field_set );
+        compute_cell_particle_pairs( *grid, m_rcut, *ghost, optional, force_buf, force_op , compute_force_field_set , parallel_execution_context() );
       }
       else
       {
         LinearXForm cp_xform { domain->xform() };
         auto optional = make_compute_pair_optional_args( nbh_it, ComputePairNullWeightIterator{} , cp_xform, cp_locks );
-        compute_cell_particle_pairs( *grid, m_rcut, *ghost, optional, force_buf, force_op , compute_force_field_set );
+        compute_cell_particle_pairs( *grid, m_rcut, *ghost, optional, force_buf, force_op , compute_force_field_set , parallel_execution_context() );
       }
     }
 
@@ -198,7 +198,7 @@ namespace exaStamp
       const double m_rcut;
       const bool m_symetric_forces = false;
 
-      template<class GridCellLocksT, class ParticleLockT>
+      template<class CellsAccessorT, class GridCellLocksT, class ParticleLockT>
       inline void operator ()
         (
         size_t n,
@@ -208,7 +208,7 @@ namespace exaStamp
         double& fy,
         double& fz,
         unsigned int type, // to recover particle type
-        CellParticles* cells,
+        CellsAccessorT cells,
         GridCellLocksT locks,
         ParticleLockT& lock_a
         ) const
@@ -217,7 +217,7 @@ namespace exaStamp
         this->operator () ( n,buf,en,fx,fy,fz,type, virial, cells , locks, lock_a);
       }
 
-      template<class Mat3dT,class GridCellLocksT, class ParticleLockT>
+      template<class CellsAccessorT, class Mat3dT,class GridCellLocksT, class ParticleLockT>
       inline void operator ()
         (
         size_t n,
@@ -228,7 +228,7 @@ namespace exaStamp
         double& fz,
         unsigned int type, // to recover particle type
         Mat3dT& virial ,
-        CellParticles* cells,
+        CellsAccessorT cells,
         GridCellLocksT locks,
         ParticleLockT& lock_a
         ) const
@@ -305,9 +305,9 @@ namespace exaStamp
           _fx += F.x;
           _fy += F.y;
           _fz += F.z;
-	  _en += e;
+	        _en += e;
 
-	  auto v_contrib = tensor( Vec3d{F.x,F.y,F.z}, Vec3d{buf.drx[i],buf.dry[i],buf.drz[i]} );
+      	  auto v_contrib = tensor( Vec3d{F.x,F.y,F.z}, Vec3d{buf.drx[i],buf.dry[i],buf.drz[i]} );
           _vir += v_contrib * -0.5;
 
           size_t cell_b=0, p_b=0;

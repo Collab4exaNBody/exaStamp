@@ -205,18 +205,15 @@ namespace exaStamp
       LinearXForm cp_xform{ domain->xform() };
       ComputePairNullWeightIterator cp_weight{};
 
-      auto exec_ctx = parallel_execution_context();
-      bool allow_cuda_exec = ( exec_ctx != nullptr );
-      if( allow_cuda_exec ) allow_cuda_exec = ( exec_ctx->m_cuda_ctx != nullptr );
-      if( allow_cuda_exec ) allow_cuda_exec = exec_ctx->m_cuda_ctx->has_devices();
+      bool allow_cuda_exec = ( global_cuda_ctx() != nullptr );
+      if( allow_cuda_exec ) allow_cuda_exec = global_cuda_ctx()->has_devices();
       if( allow_cuda_exec )
       {
         ldbg << "MEAM : GPU version" << std::endl;
         ComputePairOptionalLocks<false> cp_locks {}; // no locks needed for GPU version, it uses atomicAdd
         auto cp_optional = make_compute_pair_optional_args( nbh_it, cp_weight, cp_xform, cp_locks );
         auto cp_force_buf = make_compute_pair_buffer< ComputeBufferT >();
-        compute_cell_particle_pairs( *grid, compute_rcut, *ghost, cp_optional, cp_force_buf, compute_meam_scratch->cp_force
-                              , compute_field_set , DefaultPositionFields{} , parallel_execution_context() );
+        compute_cell_particle_pairs( *grid, compute_rcut, *ghost, cp_optional, cp_force_buf, compute_meam_scratch->cp_force, compute_field_set, parallel_execution_context() );
       }
       else
       {
@@ -230,7 +227,7 @@ namespace exaStamp
         ComputePairOptionalLocks<true> cp_locks { particle_locks->data() };
         auto optional = make_compute_pair_optional_args( nbh_it, cp_weight, cp_xform, cp_locks );
         auto cp_force_buf = make_compute_pair_buffer< ComputeBufferT >();
-        compute_cell_particle_pairs( *grid, compute_rcut, *ghost, optional, cp_force_buf, compute_meam_scratch->cp_force , compute_field_set );
+        compute_cell_particle_pairs( *grid, compute_rcut, *ghost, optional, cp_force_buf, compute_meam_scratch->cp_force, compute_field_set, parallel_execution_context() );
       }
     }
 

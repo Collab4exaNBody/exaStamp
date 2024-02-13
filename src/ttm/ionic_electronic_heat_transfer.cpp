@@ -167,9 +167,9 @@ namespace exaStamp
             localize_subcell( rco, cell_size, subcell_size, subdiv, center_cell_loc, center_subcell_loc );
             center_cell_loc += cell_loc;
 
-            double sum_w = 0.0;
-            int nb_contribs = 0;
-            int nb_neighbors = 0;
+            [[maybe_unused]] double sum_w = 0.0;
+            [[maybe_unused]] int nb_contribs = 0;
+            [[maybe_unused]] int nb_neighbors = 0;
 
             for(int ck=-1;ck<=1;ck++)
             for(int cj=-1;cj<=1;cj++)

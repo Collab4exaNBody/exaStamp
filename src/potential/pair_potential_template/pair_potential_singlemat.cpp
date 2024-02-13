@@ -448,7 +448,6 @@ namespace exaStamp
         , make_cp_buf_factory( has_weights )
         , compute_pair_scratch.cp_force
         , ComputeFields{}
-        , DefaultPositionFields{}
         , gpu_exec_ctx );
 
     }

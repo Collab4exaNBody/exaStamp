@@ -18,8 +18,8 @@ namespace exaStamp
   // functor that populate compute buffer's extended storage for particle charges
   struct CopyParticleType
   {
-    template<typename ComputeBufferT, typename FieldArraysT>
-    /* ONIKA_HOST_DEVICE_FUNC */ inline void operator () (ComputeBufferT& tab, const Vec3d& dr, double d2, const FieldArraysT * cells, size_t cell_b, size_t p_b, double weight) const noexcept
+    template<class ComputeBufferT, class FieldArraysT>
+    /* ONIKA_HOST_DEVICE_FUNC */ inline void operator () (ComputeBufferT& tab, const Vec3d& dr, double d2, FieldArraysT cells, size_t cell_b, size_t p_b, double weight) const noexcept
     {
       assert( ssize_t(tab.count) < ssize_t(tab.MaxNeighbors) );
       tab.ext.type[tab.count] = cells[cell_b][field::type][p_b];
@@ -56,6 +56,44 @@ namespace exaStamp
     //    static inline constexpr double conv_energy_factor = 1e-4 * exanb::legacy_constant::elementaryCharge / exanb::legacy_constant::atomicMass;
     double conv_energy_factor = UnityConverterHelper::convert(1., "eV");
 
+    template<class ComputeBufferT, class CellParticlesT>
+    inline void operator ()
+      (
+      size_t n,
+      ComputeBufferT& buf,
+      double& en,
+      double& fx,
+      double& fy,
+      double& fz,
+      int type,
+      CellParticlesT cells
+      ) const
+    {
+      FakeMat3d virial;
+      ComputePairOptionalLocks<false> locks;
+      FakeParticleLock lock_a;
+      this->operator () ( n,buf,en,fx,fy,fz,type,virial,cells,locks,lock_a);
+    }
+
+    template<class ComputeBufferT, class CellParticlesT>
+    inline void operator ()
+      (
+      size_t n,
+      ComputeBufferT& buf,
+      double& en,
+      double& fx,
+      double& fy,
+      double& fz,
+      int type,
+      Mat3d& virial,
+      CellParticlesT cells
+      ) const
+    {
+      ComputePairOptionalLocks<false> locks;
+      FakeParticleLock lock_a;
+      this->operator () ( n,buf,en,fx,fy,fz,type,virial,cells,locks,lock_a);
+    }
+
     template<class ComputeBufferT, class CellParticlesT, class GridCellLocksT, class ParticleLockT>
     inline void operator ()
       (
@@ -66,7 +104,7 @@ namespace exaStamp
       double& fy,
       double& fz,
       int type,
-      CellParticlesT* cells,
+      CellParticlesT cells,
       GridCellLocksT locks,
       ParticleLockT& lock_a
       ) const
@@ -86,7 +124,7 @@ namespace exaStamp
       double& fz,
       int type,
       Mat3dT& virial ,
-      CellParticlesT* cells,
+      CellParticlesT cells,
       GridCellLocksT locks,
       ParticleLockT& lock_a
       ) const

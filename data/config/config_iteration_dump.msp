@@ -82,14 +82,14 @@ dump_data_paraview:
 dump_data_grid_vtklegacy:
   - grid_flavor
   - resize_grid_cell_values
-  - grid_cell_particle_splatting
+  - atom_cell_projection
   - timestep_file: "grid_%09d.vtk"
   - write_grid_vtklegacy
 
 dump_data_grid_vtk:
   - grid_flavor
   - resize_grid_cell_values
-  - grid_cell_particle_splatting
+  - atom_cell_projection
   - timestep_file: "grid_%09d"
   - write_grid_vtk:
       use_point_data: false
@@ -100,7 +100,7 @@ dump_data: dump_data_atoms
 dump_data_CCL_analysis:
   - grid_flavor
   - resize_grid_cell_values
-  - grid_cell_particle_splatting
+  - atom_cell_projection
   - grid_connected_components
   - timestep_file: "grid_label_analysis_%09d.csv"
   - grid_label_analysis
@@ -126,7 +126,7 @@ dump_data_lmp:
 dump_data_slice_analysis:
   - grid_flavor
   - resize_grid_cell_values
-  - grid_cell_particle_splatting
+  - atom_cell_projection
   - timestep_file: "grid_slice_analysis_%09d.csv"
   - grid_slice_analysis
 

@@ -77,7 +77,7 @@ namespace exaStamp
       // mass field data accessor.
       const auto mass_accessor = grid_cell_values->field_data(*mass_field_name);
       const double  * __restrict__ mass_ptr = mass_accessor.m_data_ptr;
-      const size_t mass_stride = mass_accessor.m_stride;
+      // const size_t mass_stride = mass_accessor.m_stride;
 
       // filter function, identifies "plain" subcells
       auto filter_func_agregate = [mass_ptr, threshold_value=*density_threshold * subcell_vol] ( ssize_t subcell_id ) -> bool { return (mass_ptr[subcell_id] > threshold_value); } ;
@@ -147,7 +147,7 @@ namespace exaStamp
       // side size of a sub-cell
       const double subcell_size = cell_size / subdiv;
       // sub-cell's volume
-      const double subcell_vol  = subcell_size * subcell_size * subcell_size;
+      // const double subcell_vol  = subcell_size * subcell_size * subcell_size;
 
       // double threshold = *density_threshold * subcell_vol;
       
@@ -199,7 +199,7 @@ namespace exaStamp
 
       // mass field data accessor.
       const auto mass_accessor = grid_cell_values->field_data(*mass_field_name);
-      const double  * __restrict__ mass_ptr = mass_accessor.m_data_ptr;
+      // const double  * __restrict__ mass_ptr = mass_accessor.m_data_ptr;
       const size_t mass_stride = mass_accessor.m_stride;
 
       // -- Sanity check :
