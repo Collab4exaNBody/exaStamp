@@ -82,7 +82,7 @@ namespace SnapExt
                              , bool ghost, const OptionalArgsT& optional
                              , FieldSetT )
   {
-    static constexpr onika::IntConst<1> const_1{};
+    //static constexpr onika::IntConst<1> const_1{};
     static constexpr onika::IntConst<4> const_4{};
     static constexpr onika::IntConst<8> const_8{};
     
@@ -119,13 +119,13 @@ namespace SnapExt
 */
     switch( cs )
     {
-      case 1 : ONIKA_CU_LAUNCH_KERNEL( ctx.n_cu_blocks, BlockSize, 0, custr , cuda_snap_force_kernel, cells, ctx.d_kernel_counters, dims, gl, optional, cpbuf_factory, force_op, rcut2, const_1 , FieldSetT{} ); break;
+      //case 1 : ONIKA_CU_LAUNCH_KERNEL( ctx.n_cu_blocks, BlockSize, 0, custr , cuda_snap_force_kernel, cells, ctx.d_kernel_counters, dims, gl, optional, cpbuf_factory, force_op, rcut2, const_1 , FieldSetT{} ); break;
       case 4 : ONIKA_CU_LAUNCH_KERNEL( ctx.n_cu_blocks, BlockSize, 0, custr , cuda_snap_force_kernel, cells, ctx.d_kernel_counters, dims, gl, optional, cpbuf_factory, force_op, rcut2, const_4 , FieldSetT{} ); break;
       case 8 : ONIKA_CU_LAUNCH_KERNEL( ctx.n_cu_blocks, BlockSize, 0, custr , cuda_snap_force_kernel, cells, ctx.d_kernel_counters, dims, gl, optional, cpbuf_factory, force_op, rcut2, const_8 , FieldSetT{} ); break;
+      default: ONIKA_CU_LAUNCH_KERNEL( ctx.n_cu_blocks, BlockSize, 0, custr , cuda_snap_force_kernel, cells, ctx.d_kernel_counters, dims, gl, optional, cpbuf_factory, force_op, rcut2, cs      , FieldSetT{} ); break;
 /*
       case 4: cuda_snap_force_kernel<<< ctx.n_cu_blocks, BlockSize, 0, custr >>> ( cells, ctx.d_kernel_counters, dims, gl, optional, cpbuf_factory, force_op, rcut2, const_4 , FieldSetT{} ); break;
       case 8: cuda_snap_force_kernel<<< ctx.n_cu_blocks, BlockSize, 0, custr >>> ( cells, ctx.d_kernel_counters, dims, gl, optional, cpbuf_factory, force_op, rcut2, const_8 , FieldSetT{} ); break;
-      default:cuda_snap_force_kernel<<< ctx.n_cu_blocks, BlockSize, 0, custr >>> ( cells, ctx.d_kernel_counters, dims, gl, optional, cpbuf_factory, force_op, rcut2, cs      , FieldSetT{} ); break;
 */
     }
     
