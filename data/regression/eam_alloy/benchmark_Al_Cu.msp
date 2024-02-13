@@ -56,7 +56,7 @@ replicate_domain:
   repeat: [ 1 , 1 , 1 ]
 
 domain:
-  cell_size: 32. ang
+  cell_size: 16. ang
   periodic: [true,true,true]
 
 +first_iteration:
