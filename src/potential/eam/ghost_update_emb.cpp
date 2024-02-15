@@ -33,7 +33,7 @@ namespace exaStamp
     ADD_SLOT( bool                     , serialize_pack_send , INPUT , false );
     ADD_SLOT( bool                     , wait_all          , INPUT , false );
 
-    ADD_SLOT( EamParticleEmbField      , eam_particle_emb  , INPUT_OUTPUT );
+    ADD_SLOT( EamAdditionalFields      , eam_extra_fields  , INPUT_OUTPUT );
     ADD_SLOT( UpdateGhostsScratch      , ghost_comm_buffers, PRIVATE );
 
   public:
@@ -45,7 +45,7 @@ namespace exaStamp
       auto pesfunc = [self=this](unsigned int i) { return self->parallel_execution_stream(i); };
 
       // Emb term computation will access, for each central atom, potential energy (internal field) and emb_field (externally stored extra field)
-      double * emb_ptr = eam_particle_emb->m_emb.data();
+      double * emb_ptr = eam_extra_fields->m_emb.data();
       auto emb_field = make_external_field_flat_array_accessor( *grid , emb_ptr , field::dEmb );
       auto ghost_update_fields = onika::make_flat_tuple( emb_field );
 

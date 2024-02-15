@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include <exanb/compute/compute_cell_particle_pairs.h>
+#include <exanb/compute/compute_cell_particles.h>
 #include <exanb/compute/compute_pair_traits.h>
 #include <onika/cuda/cuda.h>
 #include <onika/cuda/ro_shallow_copy.h>
@@ -16,10 +17,12 @@
 
 # define EamPotentialOperatorName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_force)
 # define EamPotentialEmbOnlyName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_emb)
+# define EamPotentialRhoOnlyName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_rho2emb)
 # define EamPotentialForceOnlyName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_force_reuse_emb)
 
 # define EamPotentialStr USTAMP_STR(EamPotentialOperatorName)
 # define EamPotentialEmbOnlyStr USTAMP_STR(EamPotentialEmbOnlyName)
+# define EamPotentialRhoOnlyStr USTAMP_STR(EamPotentialRhoOnlyName)
 # define EamPotentialForceOnlyStr USTAMP_STR(EamPotentialForceOnlyName)
 
 namespace exaStamp
@@ -29,8 +32,113 @@ namespace exaStamp
   namespace PRIV_NAMESPACE_NAME
   {
 
+    /*
+    notes:
+      - emb/rho same array
+      - Warning about compute_rho&co functions sets or adds quantity to rho/drho (resp. phi/dphi, emd/dEmb)
+      - try buffer less version for force op
+    */
+
     using EamMultiMatParams = EamMultimatParameters< USTAMP_POTENTIAL_PARMS >;
     using EamMultiMatParamsReadOnly = EamMultimatParametersRO< onika::cuda::ro_shallow_copy_t<USTAMP_POTENTIAL_PARMS> >;
+
+    template<bool NewtonSym=false>
+    struct SymRhoOp
+    {
+      const onika::cuda::ro_shallow_copy_t<USTAMP_POTENTIAL_PARMS> p = {};
+      const uint8_t * __restrict__ m_pair_enabled = nullptr;
+      template<class CellParticlesT>
+      ONIKA_HOST_DEVICE_FUNC inline void operator () (Vec3d dr,double d2,double& rho, int type_a, CellParticlesT cells,size_t cell_b, size_t p_b, double /*scale*/ ) const
+      {
+        if( m_pair_enabled!=nullptr && !m_pair_enabled[unique_pair_id(type_a,type_a)] ) return;
+        const double r = sqrt( d2 );
+        const int type_b = cells[cell_b][field::type][p_b];  
+        if( m_pair_enabled==nullptr || m_pair_enabled[unique_pair_id(type_a,type_b)] )
+        {
+          double rholoc = 0.;
+          double drholoc = 0.;
+          USTAMP_POTENTIAL_EAM_RHO( p, r, rholoc, drholoc, type_b, type_a );
+          rho += rholoc
+          if constexpr ( NewtonSym )
+          {
+            rholoc = 0.;
+            drholoc = 0.;
+            USTAMP_POTENTIAL_EAM_RHO( p, r, rholoc, drholoc, type_a, type_b );
+            cells[cell_b][field::rho][p_b] += rholoc;
+          }
+        }
+      }
+    };
+
+    struct Rho2EmbOp
+    {      
+      const onika::cuda::ro_shallow_copy_t<USTAMP_POTENTIAL_PARMS> p = {};
+      const uint8_t * __restrict__ m_pair_enabled = nullptr;
+      ONIKA_HOST_DEVICE_FUNC inline void operator () ( double& ep, int type_a, double rho, double& dEmb ) const
+      {
+        if( m_pair_enabled==nullptr || m_pair_enabled[unique_pair_id(type_a,type_a)] )
+        {
+          double emb = 0.;
+          /*double*/ dEmb = 0.;
+          USTAMP_POTENTIAL_EAM_EMB( p, rho, emb, dEmb , type_a );
+          ep += emb;
+        }
+      }
+    };
+
+    template<bool NewtonSym=false>
+    struct SymForceOp
+    {
+      const onika::cuda::ro_shallow_copy_t<USTAMP_POTENTIAL_PARMS> p = {};
+      const uint8_t * __restrict__ m_pair_enabled = nullptr;
+
+      template<class CellParticlesT>
+      ONIKA_HOST_DEVICE_FUNC inline void operator () (Vec3d dr,double d2, double& _fx, double& _fy, double& _fz, int type_a, double& _ep/*, Mat3d& vir*/, CellParticlesT cells,size_t cell_b, size_t p_b, double /*scale*/) const
+      {
+        if( m_pair_enabled!=nullptr && !m_pair_enabled[unique_pair_id(type_a,type_a)] ) return;
+        const double r = sqrt( d2 );
+        const int type_b = cells[cell_b][field::type][p_b];  
+        if( m_pair_enabled==nullptr || m_pair_enabled[unique_pair_id(type_a,type_b)] )
+        {
+          double Rho = 0.;
+          double phi = 0.;
+          double phip = 0.;
+          double rhoip = 0.;
+          double rhojp = 0.;	  
+
+          USTAMP_POTENTIAL_EAM_RHO( p, r, Rho, rhoip , type_a, type_b ); Rho=0.0;
+          USTAMP_POTENTIAL_EAM_RHO( p, r, Rho, rhojp , type_b, type_a ); Rho=0.0;
+          USTAMP_POTENTIAL_EAM_PHI( p, r, phi, phip  , type_a, type_b );
+
+          const double recip = 1.0/r;
+	        const double fpj = cells[cell_b][field::dEmb][p_b]; //tab.nbh_pt[i][field::dEmb];
+	        const double psip = fpi * rhojp + fpj * rhoip + phip;
+	        const double fpair = psip*recip;
+          const double fe_x = dr.x * fpair;
+          const double fe_y = dr.y * fpair;
+          const double fe_z = dr.z * fpair;
+
+          fx  += fe_x;
+          fy  += fe_y;
+          fz  += fe_z;
+
+          ep  += .5 * phi;
+          //const Mat3d vir = tensor( Vec3d{fe_x,fe_y,fe_z}, Vec3d{dr.x,dr.y,dr.z} ) * -0.5;
+          //virial += vir;
+          if constexpr ( NewtonSym )
+          {
+            cells[cell_b][field::fx][p_b] -= fe_x;
+            cells[cell_b][field::fy][p_b] -= fe_y;
+            cells[cell_b][field::fz][p_b] -= fe_z;
+            cells[cell_b][field::ep][p_b] += .5 * phi;
+            //cells[cell_b][field::virial][p_b] += vir;
+          }
+        }
+      }
+      
+    };
+
+
 
     struct EmbOp
     {
@@ -51,7 +159,7 @@ namespace exaStamp
         CellParticlesT
         ) const
       {
-        if( ! m_pair_enabled[unique_pair_id(type_a,type_a)] ) return;
+        if( m_pair_enabled!=nullptr && !m_pair_enabled[unique_pair_id(type_a,type_a)] ) return;
 
         double rho = 0.;
 
@@ -65,7 +173,7 @@ namespace exaStamp
 	  
           double rholoc = 0.;
           double drholoc = 0.;
-          if( m_pair_enabled[pair_id] )
+          if( m_pair_enabled!=nullptr || m_pair_enabled[pair_id] )
           {
             USTAMP_POTENTIAL_EAM_RHO( p, r, rholoc, drholoc, type_b, type_a );
             rho += rholoc;
@@ -118,7 +226,7 @@ namespace exaStamp
         CellParticlesT
         ) const
       {
-        if( ! m_pair_enabled[unique_pair_id(type_a,type_a)] ) return;
+        if( m_pair_enabled!=nullptr && !m_pair_enabled[unique_pair_id(type_a,type_a)] ) return;
 
       	// derivative of Embedding function at atom i
         // const double fpi = m_particle_emb[ m_cell_emb_offset[tab.cell] + tab.part ];
@@ -140,8 +248,8 @@ namespace exaStamp
         {
           const double r = tab.d2[i];
           const int type_b = tab.nbh_pt[i][field::type];
-          [[maybe_unused]] const bool pair_inversed = ( type_a > type_b );
-          const int pair_id = unique_pair_id( type_a , type_b );
+          //[[maybe_unused]] const bool pair_inversed = ( type_a > type_b );
+          //const int pair_id = unique_pair_id(type_a,type_b);
 
 	        // std::cout << "\t type_b        = " << type_b << std::endl;
 	        // std::cout << "\t pair_inversed = " << pair_inversed << std::endl;
@@ -154,7 +262,7 @@ namespace exaStamp
           double phip = 0.;
           double rhoip = 0.;
           double rhojp = 0.;	  
-	        if( m_pair_enabled[pair_id] )
+	        if( m_pair_enabled==nullptr || m_pair_enabled[unique_pair_id(type_a,type_b)] )
 	        {
 	          USTAMP_POTENTIAL_EAM_RHO( p, r, Rho, rhoip , type_a, type_b );
 	          USTAMP_POTENTIAL_EAM_RHO( p, r, Rho, rhojp , type_b, type_a );
@@ -216,6 +324,36 @@ namespace exanb
 #   else
     static inline constexpr bool CudaCompatible = false;
 #   endif
+  };
+
+  template<bool NewtonSym> struct ComputePairTraits<exaStamp::PRIV_NAMESPACE_NAME::SymRhoOp<NewtonSym> >
+  {
+    static inline constexpr bool RequiresBlockSynchronousCall = false;
+    static inline constexpr bool ComputeBufferCompatible = false;
+    static inline constexpr bool BufferLessCompatible = true;
+#   ifdef USTAMP_POTENTIAL_ENABLE_CUDA
+    static inline constexpr bool CudaCompatible = true;
+#   else
+    static inline constexpr bool CudaCompatible = false;
+#   endif
+  };
+
+  template<bool NewtonSym> struct ComputePairTraits<exaStamp::PRIV_NAMESPACE_NAME::SymForceOp<NewtonSym> >
+  {
+    static inline constexpr bool RequiresBlockSynchronousCall = false;
+    static inline constexpr bool ComputeBufferCompatible = false;
+    static inline constexpr bool BufferLessCompatible = true;
+#   ifdef USTAMP_POTENTIAL_ENABLE_CUDA
+    static inline constexpr bool CudaCompatible = true;
+#   else
+    static inline constexpr bool CudaCompatible = false;
+#   endif
+  };
+
+  struct ComputeCellParticlesTraits< exaStamp::PRIV_NAMESPACE_NAME::Rho2EmbOp >
+  {
+    static inline constexpr bool RequiresBlockSynchronousCall = false;
+    static inline constexpr bool CudaCompatible = true;
   };
 
 }

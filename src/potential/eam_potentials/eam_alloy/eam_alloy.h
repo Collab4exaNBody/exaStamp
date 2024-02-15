@@ -198,6 +198,7 @@ namespace exaStamp
     const int z2r_i_j_index = eam.type2z2r[itype][jtype];
     //const auto& coeff = eam.z2r_spline[z2r_i_j_index][m];
     const auto * __restrict__ coeff = eam.z2r_spline_data[ z2r_i_j_index * (eam.nr+1) + m ].coeffs;
+    ONIKA_ASSUME_ALIGNED( coeff );
     const double z2p = (coeff[0]*p + coeff[1])*p + coeff[2];
     const double z2 = ((coeff[3]*p + coeff[4])*p + coeff[5])*p + coeff[6];
     const double recip = 1.0/r;
@@ -229,6 +230,7 @@ namespace exaStamp
     const int rhor_i_j_index = eam.type2rhor[itype][jtype];
     //const auto& coeff = eam.rhor_spline[rhor_i_j_index][m];
     const auto * __restrict__ coeff = eam.rhor_spline_data[ rhor_i_j_index * (eam.nr+1) + m ].coeffs;
+    ONIKA_ASSUME_ALIGNED( coeff );
     rho = ((coeff[3]*p + coeff[4])*p + coeff[5])*p + coeff[6];
     drho = (coeff[0]*p + coeff[1])*p + coeff[2];    
   }
@@ -251,6 +253,7 @@ namespace exaStamp
     
     const int frho_i_j_index = eam.type2frho[itype];
     const auto * __restrict__ coeff = eam.frho_spline_data[ frho_i_j_index * (eam.nrho+1) + m ].coeffs; //eam.frho_spline[frho_i_j_index][m];
+    ONIKA_ASSUME_ALIGNED( coeff );
     fp = (coeff[0]*p + coeff[1])*p + coeff[2];
     phi = ((coeff[3]*p + coeff[4])*p + coeff[5])*p + coeff[6];
     if (rho > eam.rhomax) phi += fp * (rho-eam.rhomax);

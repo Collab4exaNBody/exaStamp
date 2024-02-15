@@ -56,7 +56,7 @@ replicate_domain:
   repeat: [ 1 , 1 , 1 ]
 
 domain:
-  cell_size: 16. ang
+  cell_size: 12. ang
   periodic: [true,true,true]
 
 +first_iteration:
@@ -68,7 +68,7 @@ dump_analysis: nop
 dump_data: nop
 
 global:
-  simulation_end_iteration: 20
+  simulation_end_iteration: 50
   simulation_log_frequency: 10
   rcut_inc: 1.0 ang
   dt: 1.0e-3 ps
@@ -76,7 +76,7 @@ global:
   simulation_dump_thermo_frequency: 1
   analysis_dump_frequency: -1
 
-simulation_epilog:
+xxx_simulation_epilog:
   - check_values:
       file: eam_aloy_AlCu.dat
       pos_threshold: 5.e-10

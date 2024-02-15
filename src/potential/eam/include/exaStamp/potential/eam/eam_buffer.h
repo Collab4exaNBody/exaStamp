@@ -12,6 +12,7 @@
 #include <exanb/core/declare_field.h>
 
 XSTAMP_DECLARE_FIELD(double , dEmb ,"Embedding derivative");
+XSTAMP_DECLARE_FIELD(double , rho  ,"local density");
 
 namespace exaStamp
 {
@@ -25,8 +26,9 @@ namespace exaStamp
     double m_rho_cutoff;
   };
 
-  struct EamParticleEmbField
+  struct EamAdditionalFields
   {
+    onika::memory::CudaMMVector< double > m_rho;
     onika::memory::CudaMMVector< double > m_emb;
   };
 
