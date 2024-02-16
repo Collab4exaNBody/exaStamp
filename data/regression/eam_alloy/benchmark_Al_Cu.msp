@@ -20,18 +20,10 @@ ghost_update_r: *ghost_update_parms
 
 ghost_update_all_no_fv: *ghost_update_parms
 
-eam_alloy_force: &eam_parm
-  rcut: 6.6825 ang
-  parameters: { file: AlCu.eam.alloy }
-
-eam_alloy_emb: *eam_parm
-eam_alloy_force_reuse_emb: *eam_parm
-
 compute_force:
-#  - eam_alloy_force
-  - eam_alloy_emb
+  - eam_alloy_force: { rcut: 6.6825 ang , parameters: { file: AlCu.eam.alloy } , eam_compute_rho: true , eam_compute_rho2emb: true , eam_compute_rho_emb: false , eam_compute_ghost: false , eam_compute_force: false }
   - ghost_update_emb
-  - eam_alloy_force_reuse_emb
+  - eam_alloy_force: { rcut: 6.6825 ang , parameters: { file: AlCu.eam.alloy } , eam_compute_rho: false , eam_compute_rho2emb: false , eam_compute_rho_emb: false , eam_compute_ghost: false , eam_compute_force: true }
 
 species:
   - Al:

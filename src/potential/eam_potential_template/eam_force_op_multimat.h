@@ -16,14 +16,7 @@
 #endif
 
 # define EamPotentialOperatorName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_force)
-# define EamPotentialEmbOnlyName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_emb)
-# define EamPotentialRhoOnlyName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_rho2emb)
-# define EamPotentialForceOnlyName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_force_reuse_emb)
-
 # define EamPotentialStr USTAMP_STR(EamPotentialOperatorName)
-# define EamPotentialEmbOnlyStr USTAMP_STR(EamPotentialEmbOnlyName)
-# define EamPotentialRhoOnlyStr USTAMP_STR(EamPotentialRhoOnlyName)
-# define EamPotentialForceOnlyStr USTAMP_STR(EamPotentialForceOnlyName)
 
 namespace exaStamp
 {
@@ -48,7 +41,7 @@ namespace exaStamp
       const onika::cuda::ro_shallow_copy_t<USTAMP_POTENTIAL_PARMS> p = {};
       const uint8_t * __restrict__ m_pair_enabled = nullptr;
       template<class CellParticlesT>
-      ONIKA_HOST_DEVICE_FUNC inline void operator () (Vec3d dr,double d2,double& rho, int type_a, CellParticlesT cells,size_t cell_b, size_t p_b, double /*scale*/ ) const
+      ONIKA_HOST_DEVICE_FUNC inline void operator () (Vec3d dr,double d2, int type_a, double& rho,  CellParticlesT cells,size_t cell_b, size_t p_b, double /*scale*/ ) const
       {
         if( m_pair_enabled!=nullptr && !m_pair_enabled[unique_pair_id(type_a,type_a)] ) return;
         const double r = sqrt( d2 );
@@ -58,7 +51,7 @@ namespace exaStamp
           double rholoc = 0.;
           double drholoc = 0.;
           USTAMP_POTENTIAL_EAM_RHO( p, r, rholoc, drholoc, type_b, type_a );
-          rho += rholoc
+          rho += rholoc;
           if constexpr ( NewtonSym )
           {
             rholoc = 0.;
@@ -93,13 +86,23 @@ namespace exaStamp
       const uint8_t * __restrict__ m_pair_enabled = nullptr;
 
       template<class CellParticlesT>
-      ONIKA_HOST_DEVICE_FUNC inline void operator () (Vec3d dr,double d2, double& _fx, double& _fy, double& _fz, int type_a, double& _ep/*, Mat3d& vir*/, CellParticlesT cells,size_t cell_b, size_t p_b, double /*scale*/) const
+      ONIKA_HOST_DEVICE_FUNC inline void operator () (
+        Vec3d dr,double d2,
+        double& ep, double& fx, double& fy, double& fz, int type_a /*, Mat3d& vir*/,
+        double fpi, 
+        CellParticlesT cells,size_t cell_b, size_t p_b,
+        double /*scale*/) const
       {
         if( m_pair_enabled!=nullptr && !m_pair_enabled[unique_pair_id(type_a,type_a)] ) return;
-        const double r = sqrt( d2 );
-        const int type_b = cells[cell_b][field::type][p_b];  
+        
+        assert( p_b < cells[cell_b].size() );
+        const int type_b = cells[cell_b][field::type][p_b];
+        
         if( m_pair_enabled==nullptr || m_pair_enabled[unique_pair_id(type_a,type_b)] )
         {
+          const double r = sqrt( d2 );
+          assert( r > 0.0 );
+
           double Rho = 0.;
           double phi = 0.;
           double phip = 0.;
@@ -222,7 +225,7 @@ namespace exaStamp
         double& _fz,
         int type_a,
         Mat3dT& virial,
-        double fpi,
+        double fpi, /* aka dEmb for central atom*/
         CellParticlesT
         ) const
       {
@@ -350,7 +353,7 @@ namespace exanb
 #   endif
   };
 
-  struct ComputeCellParticlesTraits< exaStamp::PRIV_NAMESPACE_NAME::Rho2EmbOp >
+  template<> struct ComputeCellParticlesTraits< exaStamp::PRIV_NAMESPACE_NAME::Rho2EmbOp >
   {
     static inline constexpr bool RequiresBlockSynchronousCall = false;
     static inline constexpr bool CudaCompatible = true;

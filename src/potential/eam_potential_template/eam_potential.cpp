@@ -68,7 +68,7 @@ namespace exaStamp
     ADD_SLOT( GridT                 , grid              , INPUT_OUTPUT );
     ADD_SLOT( Domain                , domain            , INPUT , REQUIRED );
  
-    ADD_SLOT( EamParticleEmbField   , eam_particle_emb  , INPUT_OUTPUT );
+    ADD_SLOT( EamAdditionalFields   , eam_extra_fields , INPUT_OUTPUT );
 
   public:
 
@@ -99,9 +99,9 @@ namespace exaStamp
         if constexpr ( ComputeEmb )
         {
           // reset emb field to zero
-          eam_particle_emb->m_emb.clear();
-          eam_particle_emb->m_emb.resize( grid->number_of_particles() );
-          //eam_particle_emb->m_emb.assign( grid->number_of_particles() , 0.0 );
+          eam_extra_fields->m_emb.clear();
+          eam_extra_fields->m_emb.resize( grid->number_of_particles() );
+          //eam_extra_fields->m_emb.assign( grid->number_of_particles() , 0.0 );
 
           // build compute buffer
           using EmbCPBuf = ComputePairBuffer2<>;
@@ -109,7 +109,7 @@ namespace exaStamp
           EmbOp emb_op { *parameters };
 
           // Emb term computation will access, for each central atom, potential energy (internal field) and emb_field (externally stored extra field)
-          double * emb_ptr = eam_particle_emb->m_emb.data();
+          double * emb_ptr = eam_extra_fields->m_emb.data();
           auto emb_field = make_external_field_flat_array_accessor( *grid , emb_ptr , field::dEmb );
           auto emb_op_fields = make_field_tuple_from_field_set( FieldSet<field::_ep>{} , emb_field );
           auto emb_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks /* no additional fields required for neighbors */ );
@@ -122,7 +122,7 @@ namespace exaStamp
           using ForceCPBuf = SimpleNbhComputeBuffer< FieldSet<field::_dEmb> >; /* we want extra neighbor storage space to store these fields */
           ComputePairBufferFactory< ForceCPBuf > force_buf;  
           ForceOp force_op { *parameters };
-          const double * c_emb_ptr = eam_particle_emb->m_emb.data();
+          const double * c_emb_ptr = eam_extra_fields->m_emb.data();
           auto c_emb_field = make_external_field_flat_array_accessor( *grid , c_emb_ptr , field::dEmb );
 
           // force computation will access, for each central atom, fields defined in ComputeFields plus external constant field c_emb_field
