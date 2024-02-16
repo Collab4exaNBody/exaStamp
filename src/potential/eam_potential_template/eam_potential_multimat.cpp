@@ -102,6 +102,8 @@ namespace exaStamp
       size_t n_cells = grid->number_of_cells();
       if( n_cells == 0 ) { return ; } // short cut to avoid errors in pre-initialization step
 
+      ldbg << "EAM Multimat: rho="<<std::boolalpha<< *eam_compute_rho<<" , rho2emb="<< *eam_compute_rho2emb << " , rho_emb="<< *eam_compute_rho_emb << " , ghost="<< *eam_compute_ghost << " , force="<< *eam_compute_force << std::endl;
+
       size_t n_species = species->size();
       size_t n_type_pairs = unique_pair_count( n_species );
       
@@ -163,7 +165,6 @@ namespace exaStamp
         // 1st (legacy) pass parameters : compute per particle EMB term, using compute buffer
         if( *eam_compute_rho_emb )
         {
-          eam_extra_fields->m_rho.resize( grid->number_of_particles() );
           eam_extra_fields->m_emb.clear();
           eam_extra_fields->m_emb.resize( grid->number_of_particles() );
 

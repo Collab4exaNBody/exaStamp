@@ -28,7 +28,7 @@ namespace exaStamp
 
   struct EamAdditionalFields
   {
-    onika::memory::CudaMMVector< double > m_rho;
+    onika::memory::CudaMMVector< double > m_rho; // unique storage for
     onika::memory::CudaMMVector< double > m_emb;
   };
 
