@@ -2,7 +2,7 @@ configuration:
 #  onika:
 #    gpu_block_size: 256
   logging:
-    debug: false
+    debug: true
   debug:
     filter: [ ".*eam_alloy_force" ]
   profiling:
@@ -13,6 +13,11 @@ configuration:
   - chunk_neighbors_stats
   - memory_stats
 
+chunk_neighbors:
+  config:
+    chunk_size: 1
+#    half_symmetric: true
+
 ghost_update_emb: &ghost_update_parms
   gpu_buffer_pack: true
   async_buffer_pack: true
@@ -20,15 +25,33 @@ ghost_update_emb: &ghost_update_parms
   serialize_pack_send: true
   wait_all: false
 
+update_rho_from_ghost: *ghost_update_parms
+
 ghost_update_r: *ghost_update_parms
 
 ghost_update_all_no_fv: *ghost_update_parms
 
+eam_rho:
+  - eam_alloy_force: { rcut: 6.6825 ang , parameters: { file: AlCu.eam.alloy } , eam_rho: true , eam_rho2emb: false , eam_rho_emb: false , eam_ghost: false , eam_force: false , eam_symmetry: false }
+
+eam_rho_sym:
+  - eam_alloy_force: { rcut: 6.6825 ang , parameters: { file: AlCu.eam.alloy } , eam_rho: true , eam_rho2emb: false , eam_rho_emb: false , eam_ghost: false , eam_force: false , eam_symmetry: true }
+
+eam_rho_emb:
+  - eam_alloy_force: { rcut: 6.6825 ang , parameters: { file: AlCu.eam.alloy } , eam_rho: false , eam_rho2emb: false , eam_rho_emb: true , eam_ghost: false , eam_force: false , eam_symmetry: false }
+
+eam_rho2emb:
+  - eam_alloy_force: { rcut: 6.6825 ang , parameters: { file: AlCu.eam.alloy } , eam_rho: false , eam_rho2emb: true , eam_rho_emb: false , eam_ghost: false , eam_force: false , eam_symmetry: false }
+
+eam_force:
+  - eam_alloy_force: { rcut: 6.6825 ang , parameters: { file: AlCu.eam.alloy } , eam_rho: false , eam_rho2emb: false , eam_rho_emb: false , eam_ghost: false , eam_force: true , eam_symmetry: false }
+
 compute_force:
-#  - eam_alloy_force: { rcut: 6.6825 ang , parameters: { file: AlCu.eam.alloy } , eam_compute_rho: false , eam_compute_rho2emb: false , eam_compute_rho_emb: true , eam_compute_ghost: false , eam_compute_force: false }
-  - eam_alloy_force: { rcut: 6.6825 ang , parameters: { file: AlCu.eam.alloy } , eam_compute_rho: true , eam_compute_rho2emb: true , eam_compute_rho_emb: true , eam_compute_ghost: false , eam_compute_force: false }
+  - eam_rho
+#  - update_rho_from_ghost
+  - eam_rho2emb
   - ghost_update_emb
-  - eam_alloy_force: { rcut: 6.6825 ang , parameters: { file: AlCu.eam.alloy } , eam_compute_rho: false , eam_compute_rho2emb: false , eam_compute_rho_emb: false , eam_compute_ghost: false , eam_compute_force: true }
+  - eam_force
 
 species:
   - Al:

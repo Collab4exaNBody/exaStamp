@@ -67,15 +67,18 @@ namespace exaStamp
     ADD_SLOT( double                , rcut             , INPUT );
     ADD_SLOT( double                , rcut_max         , INPUT_OUTPUT , 0.0 );
     ADD_SLOT( double                , ghost_dist_max   , INPUT_OUTPUT , 0.0 );   
-    ADD_SLOT( exanb::GridChunkNeighbors    , chunk_neighbors  , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
+    ADD_SLOT( exanb::GridChunkNeighbors , chunk_neighbors  , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
     ADD_SLOT( GridT                 , grid             , INPUT_OUTPUT );
     ADD_SLOT( Domain                , domain           , INPUT , REQUIRED );
 
-    ADD_SLOT( bool                  , eam_compute_rho      , INPUT , false );
-    ADD_SLOT( bool                  , eam_compute_rho2emb  , INPUT , false );
-    ADD_SLOT( bool                  , eam_compute_rho_emb  , INPUT , true );
-    ADD_SLOT( bool                  , eam_compute_ghost    , INPUT , true );
-    ADD_SLOT( bool                  , eam_compute_force    , INPUT , true );
+    ADD_SLOT( bool                  , eam_rho      , INPUT , false );
+    ADD_SLOT( bool                  , eam_rho2emb  , INPUT , false );
+    ADD_SLOT( bool                  , eam_rho_emb  , INPUT , true );
+    ADD_SLOT( bool                  , eam_ghost    , INPUT , true );
+    ADD_SLOT( bool                  , eam_force    , INPUT , true );
+    ADD_SLOT( bool                  , eam_symmetry , INPUT , false );
+
+    ADD_SLOT( GridParticleLocks     , particle_locks      , INPUT_OUTPUT , OPTIONAL , DocString{"particle spin locks"} );
 
     ADD_SLOT( EamAdditionalFields   , eam_extra_fields , INPUT_OUTPUT );
     ADD_SLOT( EamScratch            , eam_scratch      , PRIVATE );
@@ -87,22 +90,30 @@ namespace exaStamp
     {
       //MeamPotential meam( *rcut, *parameters );
       *rcut_max = std::max( *rcut , *rcut_max );
-      if( *eam_compute_force && ( *eam_compute_rho2emb || *eam_compute_rho_emb ) )
+      if( *eam_force && ( *eam_rho2emb || *eam_rho_emb ) )
       {
-        if( *eam_compute_ghost )
+        if( *eam_ghost )
         {
           *ghost_dist_max = std::max( *ghost_dist_max , (*rcut) * 2.0 );
         }
         else
         {
-          lerr << "EAM : WARNING : Requested to compute embedding and force in a single pass but eam_compute_ghost set to false" << std::endl;
+          lerr << "EAM : WARNING : Requested to compute embedding and force in a single pass but eam_ghost set to false" << std::endl;
         }
       }
- 
+
       size_t n_cells = grid->number_of_cells();
       if( n_cells == 0 ) { return ; } // short cut to avoid errors in pre-initialization step
 
-      ldbg << "EAM Multimat: rho="<<std::boolalpha<< *eam_compute_rho<<" , rho2emb="<< *eam_compute_rho2emb << " , rho_emb="<< *eam_compute_rho_emb << " , ghost="<< *eam_compute_ghost << " , force="<< *eam_compute_force << std::endl;
+      const bool need_particle_locks = ( omp_get_max_threads() > 1 ) && ( *eam_symmetry );
+
+      ldbg << "EAM Multimat: rho="<<std::boolalpha<< *eam_rho
+           <<" , rho2emb="<< *eam_rho2emb 
+           <<" , rho_emb="<< *eam_rho_emb 
+           <<" , ghost="<< *eam_ghost 
+           <<" , force="<< *eam_force
+           <<" , sym="<< *eam_symmetry
+           <<" , need_locks="<< need_particle_locks << std::endl;
 
       size_t n_species = species->size();
       size_t n_type_pairs = unique_pair_count( n_species );
@@ -123,15 +134,14 @@ namespace exaStamp
       USTAMP_POTENTIAL_EAM_MM_INIT_TYPES( *parameters , n_species , eam_scratch->m_pair_enabled.data() );
 
       // execute the 2 passes
-      auto compute_eam_force = [&]( const auto& cp_xform )
+      auto compute_eam_force = [&]( const auto& cp_xform , const auto& cp_locks_sym )
       {
         // common bricks for both compute passes
         exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
         ComputePairNullWeightIterator cp_weight {};
-        ComputePairOptionalLocks<false> cp_locks;
 
         // 1st pass (new) computes rho then emb, without compute buffer
-        if( *eam_compute_rho )
+        if( *eam_rho )
         {
           eam_extra_fields->m_rho.clear();
           //eam_extra_fields->m_rho.resize( grid->number_of_particles() );
@@ -140,13 +150,21 @@ namespace exaStamp
           auto rho_field = make_external_field_flat_array_accessor( *grid , rho_ptr , field::rho );
 
           auto rho_op_fields = make_field_tuple_from_field_set( FieldSet< field::_type >{} , rho_field );
-          auto rho_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks, ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{} );
+          auto rho_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks_sym, ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{} );
           ComputePairBufferFactory< ComputePairBuffer2<> > rho_buf_factory = {};
-          SymRhoOp<false> rho_op { *parameters , eam_scratch->m_pair_enabled.data() };
-          compute_cell_particle_pairs( *grid, *rcut, *eam_compute_ghost, rho_optional, rho_buf_factory, rho_op, rho_op_fields, parallel_execution_context() );
+          if( *eam_symmetry )
+          {
+            SymRhoOp<true> rho_op { *parameters , eam_scratch->m_pair_enabled.data() };
+            compute_cell_particle_pairs( *grid, *rcut, *eam_ghost, rho_optional, rho_buf_factory, rho_op, rho_op_fields, parallel_execution_context() );
+          }
+          else
+          {
+            SymRhoOp<false> rho_op { *parameters , eam_scratch->m_pair_enabled.data() };
+            compute_cell_particle_pairs( *grid, *rcut, *eam_ghost, rho_optional, rho_buf_factory, rho_op, rho_op_fields, parallel_execution_context() );
+          }
         }
         
-        if( *eam_compute_rho2emb )
+        if( *eam_rho2emb )
         {
           eam_extra_fields->m_rho.resize( grid->number_of_particles() );
           const double * c_rho_ptr = eam_extra_fields->m_rho.data();
@@ -159,11 +177,13 @@ namespace exaStamp
 
           Rho2EmbOp rho2emb_op { *parameters , eam_scratch->m_pair_enabled.data() };
           auto rho2emb_op_fields = make_field_tuple_from_field_set( FieldSet< field::_ep , field::_type >{} , c_rho_field , emb_field );
-          compute_cell_particles( *grid , *eam_compute_ghost , rho2emb_op , rho2emb_op_fields , parallel_execution_context() );
+          compute_cell_particles( *grid , *eam_ghost , rho2emb_op , rho2emb_op_fields , parallel_execution_context() );
         }
 
+        exanb::ComputePairOptionalLocks<false> cp_locks = {};
+
         // 1st (legacy) pass parameters : compute per particle EMB term, using compute buffer
-        if( *eam_compute_rho_emb )
+        if( *eam_rho_emb )
         {
           eam_extra_fields->m_emb.clear();
           eam_extra_fields->m_emb.resize( grid->number_of_particles() );
@@ -176,11 +196,11 @@ namespace exaStamp
           auto emb_nbh_fields = onika::make_flat_tuple( field::type ); // we want internal type field for each neighbor atom
           auto emb_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks, ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{}, emb_nbh_fields );
           EmbOp emb_op { *parameters , eam_scratch->m_pair_enabled.data() };
-          compute_cell_particle_pairs( *grid, *rcut, *eam_compute_ghost, emb_optional, emb_buf, emb_op, emb_op_fields, parallel_execution_context() );
+          compute_cell_particle_pairs( *grid, *rcut, *eam_ghost, emb_optional, emb_buf, emb_op, emb_op_fields, parallel_execution_context() );
         }
 
         // 2nd pass parameters: compute final force using the emb term, only for non ghost particles (but reading EMB terms from neighbor particles)
-        if( *eam_compute_force )
+        if( *eam_force )
         {
           assert( eam_extra_fields->m_emb.size() == grid->number_of_particles() );
           const double * c_emb_ptr = eam_extra_fields->m_emb.data();
@@ -201,8 +221,22 @@ namespace exaStamp
         }
       };
 
-      if( domain->xform_is_identity() ) compute_eam_force( exanb::NullXForm{} );
-      else                              compute_eam_force( exanb::LinearXForm{ domain->xform() } );
+      if( need_particle_locks && ! particle_locks.has_value() )
+      {
+        fatal_error()<<"particle_locks is needed, but corresponding slot has no value" << std::endl;
+      }
+
+      if( need_particle_locks )
+      {
+        //if( domain->xform_is_identity() ) compute_eam_force( exanb::NullXForm{} , ComputePairOptionalLocks<true> { particle_locks->data() } );
+        /*else*/ compute_eam_force( exanb::LinearXForm{ domain->xform() } , exanb::ComputePairOptionalLocks<true> { particle_locks->data() } );
+      }
+      else
+      {
+        //if( domain->xform_is_identity() ) compute_eam_force( exanb::NullXForm{} , ComputePairOptionalLocks<true> { particle_locks->data() } );
+        /*else*/ compute_eam_force( exanb::LinearXForm{ domain->xform() } , exanb::ComputePairOptionalLocks<false> {} );
+      }
+
     }
 
   };

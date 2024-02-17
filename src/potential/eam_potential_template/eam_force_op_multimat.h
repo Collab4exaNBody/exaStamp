@@ -40,8 +40,10 @@ namespace exaStamp
     {
       const onika::cuda::ro_shallow_copy_t<USTAMP_POTENTIAL_PARMS> p = {};
       const uint8_t * __restrict__ m_pair_enabled = nullptr;
+      //exanb::ComputePairOptionalLocks<NewtonSym> & cp_locks;
+
       template<class CellParticlesT>
-      ONIKA_HOST_DEVICE_FUNC inline void operator () (Vec3d dr,double d2, int type_a, double& rho,  CellParticlesT cells,size_t cell_b, size_t p_b, double /*scale*/ ) const
+      ONIKA_HOST_DEVICE_FUNC inline void operator () ( Vec3d dr,double d2, int type_a, double& rho, CellParticlesT cells,size_t cell_b, size_t p_b, double /*scale*/ ) const
       {
         if( m_pair_enabled!=nullptr && !m_pair_enabled[unique_pair_id(type_a,type_a)] ) return;
         const double r = sqrt( d2 );
@@ -62,6 +64,7 @@ namespace exaStamp
         }
       }
     };
+
 
     struct Rho2EmbOp
     {      
