@@ -35,18 +35,21 @@ namespace exaStamp
     using EamMultiMatParams = EamMultimatParameters< USTAMP_POTENTIAL_PARMS >;
     using EamMultiMatParamsReadOnly = EamMultimatParametersRO< onika::cuda::ro_shallow_copy_t<USTAMP_POTENTIAL_PARMS> >;
 
-    template<bool NewtonSym=false>
+    template<class RhoFieldAccT, bool NewtonSym>
     struct SymRhoOp
     {
       const onika::cuda::ro_shallow_copy_t<USTAMP_POTENTIAL_PARMS> p = {};
       const uint8_t * __restrict__ m_pair_enabled = nullptr;
+      RhoFieldAccT m_rho_field = {};
       //exanb::ComputePairOptionalLocks<NewtonSym> & cp_locks;
-
+      
       template<class CellParticlesT>
       ONIKA_HOST_DEVICE_FUNC inline void operator () ( Vec3d dr,double d2, int type_a, double& rho, CellParticlesT cells,size_t cell_b, size_t p_b, double /*scale*/ ) const
       {
         if( m_pair_enabled!=nullptr && !m_pair_enabled[unique_pair_id(type_a,type_a)] ) return;
         const double r = sqrt( d2 );
+        assert( cell_b < m_nb_cells );
+        assert( p_b < ( m_cell_offsets[cell_b+1] - m_cell_offsets[cell_b] ) );
         const int type_b = cells[cell_b][field::type][p_b];  
         if( m_pair_enabled==nullptr || m_pair_enabled[unique_pair_id(type_a,type_b)] )
         {
@@ -59,7 +62,7 @@ namespace exaStamp
             rholoc = 0.;
             drholoc = 0.;
             USTAMP_POTENTIAL_EAM_RHO( p, r, rholoc, drholoc, type_a, type_b );
-            cells[cell_b][field::rho][p_b] += rholoc;
+            cells[cell_b][m_rho_field][p_b] += rholoc;
           }
         }
       }
@@ -82,11 +85,12 @@ namespace exaStamp
       }
     };
 
-    template<bool NewtonSym=false>
+    template<class EmbFieldAccT, bool NewtonSym>
     struct SymForceOp
     {
       const onika::cuda::ro_shallow_copy_t<USTAMP_POTENTIAL_PARMS> p = {};
       const uint8_t * __restrict__ m_pair_enabled = nullptr;
+      EmbFieldAccT m_dEmb_field = {};
 
       template<class CellParticlesT>
       ONIKA_HOST_DEVICE_FUNC inline void operator () (
@@ -117,7 +121,7 @@ namespace exaStamp
           USTAMP_POTENTIAL_EAM_PHI( p, r, phi, phip  , type_a, type_b );
 
           const double recip = 1.0/r;
-	        const double fpj = cells[cell_b][field::dEmb][p_b]; //tab.nbh_pt[i][field::dEmb];
+	        const double fpj = cells[cell_b][m_dEmb_field][p_b]; //tab.nbh_pt[i][field::dEmb];
 	        const double psip = fpi * rhojp + fpj * rhoip + phip;
 	        const double fpair = psip*recip;
           const double fe_x = dr.x * fpair;
@@ -332,7 +336,7 @@ namespace exanb
 #   endif
   };
 
-  template<bool NewtonSym> struct ComputePairTraits<exaStamp::PRIV_NAMESPACE_NAME::SymRhoOp<NewtonSym> >
+  template<class FieldAccT, bool NewtonSym> struct ComputePairTraits<exaStamp::PRIV_NAMESPACE_NAME::SymRhoOp<FieldAccT,NewtonSym> >
   {
     static inline constexpr bool RequiresBlockSynchronousCall = false;
     static inline constexpr bool ComputeBufferCompatible = false;
@@ -344,7 +348,7 @@ namespace exanb
 #   endif
   };
 
-  template<bool NewtonSym> struct ComputePairTraits<exaStamp::PRIV_NAMESPACE_NAME::SymForceOp<NewtonSym> >
+  template<class FieldAccT, bool NewtonSym> struct ComputePairTraits<exaStamp::PRIV_NAMESPACE_NAME::SymForceOp<FieldAccT,NewtonSym> >
   {
     static inline constexpr bool RequiresBlockSynchronousCall = false;
     static inline constexpr bool ComputeBufferCompatible = false;

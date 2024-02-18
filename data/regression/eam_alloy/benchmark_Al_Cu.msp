@@ -2,7 +2,7 @@ configuration:
 #  onika:
 #    gpu_block_size: 256
   logging:
-    debug: true
+    debug: false
   debug:
     filter: [ ".*eam_alloy_force" ]
   profiling:
@@ -46,12 +46,18 @@ eam_rho2emb:
 eam_force:
   - eam_alloy_force: { rcut: 6.6825 ang , parameters: { file: AlCu.eam.alloy } , eam_rho: false , eam_rho2emb: false , eam_rho_emb: false , eam_ghost: false , eam_force: true , eam_symmetry: false }
 
+eam_force_sym:
+  - eam_alloy_force: { rcut: 6.6825 ang , parameters: { file: AlCu.eam.alloy } , eam_rho: false , eam_rho2emb: false , eam_rho_emb: false , eam_ghost: false , eam_force: true , eam_symmetry: true }
+
 compute_force:
   - eam_rho
+#  - eam_rho_sym
 #  - update_rho_from_ghost
   - eam_rho2emb
   - ghost_update_emb
-  - eam_force
+#  - eam_force
+  - eam_force_sym
+  - update_force_energy_from_ghost
 
 species:
   - Al:

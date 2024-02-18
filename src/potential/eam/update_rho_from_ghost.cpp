@@ -40,11 +40,12 @@ namespace exaStamp
     inline void execute() override final
     {
       if( ! ghost_comm_scheme.has_value() ) return;
-    
+      if( grid->number_of_particles() == 0 ) return;
+
       auto pecfunc = [self=this]() { return self->parallel_execution_context(); };
       auto pesfunc = [self=this](unsigned int i) { return self->parallel_execution_stream(i); };
 
-      // Emb term computation will access, for each central atom, potential energy (internal field) and emb_field (externally stored extra field)
+      eam_extra_fields->m_rho.resize( grid->number_of_particles() );
       double * rho_ptr = eam_extra_fields->m_rho.data();
       auto rho_field = make_external_field_flat_array_accessor( *grid , rho_ptr , field::rho );
       auto update_fields = onika::make_flat_tuple( rho_field );

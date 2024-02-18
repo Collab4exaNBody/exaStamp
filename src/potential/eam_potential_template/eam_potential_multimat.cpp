@@ -47,8 +47,8 @@ namespace exaStamp
     using StringVector = std::vector< std::string >;
     using EmbOp = PRIV_NAMESPACE_NAME::EmbOp;
     using ForceOp = PRIV_NAMESPACE_NAME::ForceOp;
-    template<bool Sym> using SymRhoOp = PRIV_NAMESPACE_NAME::SymRhoOp<Sym>;
-    template<bool Sym> using SymForceOp = PRIV_NAMESPACE_NAME::SymForceOp<Sym>;
+    template<class FieldAccT,bool Sym> using SymRhoOp = PRIV_NAMESPACE_NAME::SymRhoOp<FieldAccT,Sym>;
+    template<class FieldAccT,bool Sym> using SymForceOp = PRIV_NAMESPACE_NAME::SymForceOp<FieldAccT,Sym>;
     using Rho2EmbOp = PRIV_NAMESPACE_NAME::Rho2EmbOp;
 
     // compile time constant indicating if grid has virial field
@@ -138,6 +138,7 @@ namespace exaStamp
       {
         // common bricks for both compute passes
         exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
+        exanb::GridChunkNeighborsLightWeightIt<true> nbh_it_sym{ *chunk_neighbors };
         ComputePairNullWeightIterator cp_weight {};
 
         // 1st pass (new) computes rho then emb, without compute buffer
@@ -150,16 +151,17 @@ namespace exaStamp
           auto rho_field = make_external_field_flat_array_accessor( *grid , rho_ptr , field::rho );
 
           auto rho_op_fields = make_field_tuple_from_field_set( FieldSet< field::_type >{} , rho_field );
-          auto rho_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks_sym, ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{} );
           ComputePairBufferFactory< ComputePairBuffer2<> > rho_buf_factory = {};
           if( *eam_symmetry )
           {
-            SymRhoOp<true> rho_op { *parameters , eam_scratch->m_pair_enabled.data() };
+            auto rho_optional = make_compute_pair_optional_args( nbh_it_sym, cp_weight , cp_xform , cp_locks_sym, ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{} );
+            SymRhoOp<decltype(rho_field),true> rho_op { *parameters , eam_scratch->m_pair_enabled.data() , rho_field };
             compute_cell_particle_pairs( *grid, *rcut, *eam_ghost, rho_optional, rho_buf_factory, rho_op, rho_op_fields, parallel_execution_context() );
           }
           else
           {
-            SymRhoOp<false> rho_op { *parameters , eam_scratch->m_pair_enabled.data() };
+            auto rho_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks_sym, ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{} );
+            SymRhoOp<decltype(rho_field),false> rho_op { *parameters , eam_scratch->m_pair_enabled.data() , rho_field };
             compute_cell_particle_pairs( *grid, *rcut, *eam_ghost, rho_optional, rho_buf_factory, rho_op, rho_op_fields, parallel_execution_context() );
           }
         }
@@ -207,17 +209,25 @@ namespace exaStamp
           auto c_emb_field = make_external_field_flat_array_accessor( *grid , c_emb_ptr , field::dEmb );
           auto force_op_fields = make_field_tuple_from_field_set( force_compute_fields_v , c_emb_field );
 
-          auto force_nbh_fields = onika::make_flat_tuple( field::type , c_emb_field); // we want type and emb for each neighbor atom
-          auto force_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks, ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{}, force_nbh_fields );
-          ForceOp force_op { *parameters , eam_scratch->m_pair_enabled.data() };
-          using ForceCPBuf = SimpleNbhComputeBuffer< FieldSet< field::_type , field::_dEmb > >;
-          ComputePairBufferFactory<ForceCPBuf> force_buf = {};
+          //auto force_nbh_fields = onika::make_flat_tuple( field::type , c_emb_field); // we want type and emb for each neighbor atom
+          //auto force_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks, ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{}, force_nbh_fields );
+          //ForceOp force_op { *parameters , eam_scratch->m_pair_enabled.data() };
+          //using ForceCPBuf = SimpleNbhComputeBuffer< FieldSet< field::_type , field::_dEmb > >;
+          //ComputePairBufferFactory<ForceCPBuf> force_buf = {};
 
-          //auto force_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks );
-          //ComputePairBufferFactory< ComputePairBuffer2<> > force_buf = {};
-          //SymForceOp<false> force_op { *parameters , eam_scratch->m_pair_enabled.data() };
-          
-          compute_cell_particle_pairs( *grid, *rcut, false, force_optional, force_buf, force_op, force_op_fields, parallel_execution_context() );
+          ComputePairBufferFactory< ComputePairBuffer2<> > force_buf = {};
+          if( *eam_symmetry )
+          {
+            auto force_optional = make_compute_pair_optional_args( nbh_it_sym, cp_weight , cp_xform , cp_locks_sym );
+            SymForceOp<decltype(c_emb_field),true> force_op { *parameters , eam_scratch->m_pair_enabled.data() , c_emb_field };
+            compute_cell_particle_pairs( *grid, *rcut, false, force_optional, force_buf, force_op, force_op_fields, parallel_execution_context() );
+          }
+          else
+          {
+            auto force_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks_sym );
+            SymForceOp<decltype(c_emb_field),false> force_op { *parameters , eam_scratch->m_pair_enabled.data() , c_emb_field };
+            compute_cell_particle_pairs( *grid, *rcut, false, force_optional, force_buf, force_op, force_op_fields, parallel_execution_context() );
+          }          
         }
       };
 
