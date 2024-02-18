@@ -128,11 +128,11 @@ namespace exaStamp
           const double fe_y = dr.y * fpair;
           const double fe_z = dr.z * fpair;
 
-          fx  += fe_x;
-          fy  += fe_y;
-          fz  += fe_z;
+          fx += fe_x;
+          fy += fe_y;
+          fz += fe_z;
 
-          ep  += .5 * phi;
+          ep += .5 * phi;
           //const Mat3d vir = tensor( Vec3d{fe_x,fe_y,fe_z}, Vec3d{dr.x,dr.y,dr.z} ) * -0.5;
           //virial += vir;
           if constexpr ( NewtonSym )

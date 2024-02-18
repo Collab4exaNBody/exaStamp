@@ -3,7 +3,7 @@ first_iteration:
   - zero_force_energy: { ghost: true }
   - compute_force
   - update_force_energy_from_ghost
-#    - update_from_ghost_check_id   # usefull to verify that update_from_ghost is correct
+#  - update_from_ghost_check_id   # usefull to verify that update_from_ghost is correct
   - force_to_accel
   - default_thermodynamic_state
   - default_print_thermodynamic_state: { lb_flag: false , move_flag: false , print_header: true }
