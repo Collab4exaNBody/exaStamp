@@ -301,24 +301,13 @@ namespace exanb
 {
   template<> struct ComputePairTraits<exaStamp::PRIV_NAMESPACE_NAME::RigidMolForceOp>
   {
-    static inline constexpr bool RequiresBlockSynchronousCall = false;
-    static inline constexpr bool ComputeBufferCompatible = true;
-    static inline constexpr bool BufferLessCompatible = false;
+    //static inline constexpr bool HasParticleContextStart = true;
 #   ifdef USTAMP_POTENTIAL_ENABLE_CUDA
     static inline constexpr bool CudaCompatible = true;
 #   else
     static inline constexpr bool CudaCompatible = false;
 #   endif
   };
-
-/*
-  template<> struct ComputePairParticleContextTraits<exaStamp::PRIV_NAMESPACE_NAME::RigidMolForceOp>
-  {
-    using ParticleContext = exaStamp::RigidMoleculePairContext;    
-    static inline constexpr bool HasParticleContextStart = true;
-    static inline constexpr bool HasParticleContextStop = false;    
-  };
-*/
 
 }
 
