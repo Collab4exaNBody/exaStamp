@@ -11,8 +11,7 @@
 #include <exanb/core/config.h>
 #include <exanb/core/declare_field.h>
 
-XSTAMP_DECLARE_FIELD(double , dEmb ,"Embedding derivative");
-XSTAMP_DECLARE_FIELD(double , rho  ,"local density");
+XSTAMP_DECLARE_FIELD(double , rho_dEmb  ,"density or embedding term");
 
 namespace exaStamp
 {
@@ -28,8 +27,8 @@ namespace exaStamp
 
   struct EamAdditionalFields
   {
-    onika::memory::CudaMMVector< double > m_rho; // unique storage for
-    onika::memory::CudaMMVector< double > m_emb;
+    onika::memory::CudaMMVector< double > m_rho_emb; // unique storage for rho and emb
+    //onika::memory::CudaMMVector< double > m_emb;
   };
 
   template<class EamMultimatPotentialParmT>

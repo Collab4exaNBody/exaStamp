@@ -45,9 +45,12 @@ namespace exaStamp
       auto pecfunc = [self=this]() { return self->parallel_execution_context(); };
       auto pesfunc = [self=this](unsigned int i) { return self->parallel_execution_stream(i); };
 
-      eam_extra_fields->m_rho.resize( grid->number_of_particles() );
-      double * rho_ptr = eam_extra_fields->m_rho.data();
-      auto rho_field = make_external_field_flat_array_accessor( *grid , rho_ptr , field::rho );
+      if( eam_extra_fields->m_rho_emb.size() != grid->number_of_particles() )
+      {
+        fatal_error() << "inconsistent size for EAM temporary storage buffer" << std::endl;
+      }
+      double * rho_ptr = eam_extra_fields->m_rho_emb.data();
+      auto rho_field = make_external_field_flat_array_accessor( *grid , rho_ptr , field::rho_dEmb );
       auto update_fields = onika::make_flat_tuple( rho_field );
 
       grid_update_from_ghosts( ldbg, *mpi, *ghost_comm_scheme, *grid, nullptr,

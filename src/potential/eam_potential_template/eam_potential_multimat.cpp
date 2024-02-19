@@ -163,11 +163,10 @@ namespace exaStamp
         // 1st pass (new) computes rho then emb, without compute buffer
         if( *eam_rho )
         {
-          eam_extra_fields->m_rho.clear();
-          //eam_extra_fields->m_rho.resize( grid->number_of_particles() );
-          eam_extra_fields->m_rho.assign( grid->number_of_particles() , 0.0 );
-          double * rho_ptr = eam_extra_fields->m_rho.data();
-          auto rho_field = make_external_field_flat_array_accessor( *grid , rho_ptr , field::rho );
+          eam_extra_fields->m_rho_emb.clear();
+          eam_extra_fields->m_rho_emb.assign( grid->number_of_particles() , 0.0 );
+          double * rho_ptr = eam_extra_fields->m_rho_emb.data();
+          auto rho_field = make_external_field_flat_array_accessor( *grid , rho_ptr , field::rho_dEmb );
 
           auto rho_op_fields = make_field_tuple_from_field_set( FieldSet< field::_type >{} , rho_field );
           auto rho_buf_factory = make_empty_pair_buffer<RhoOpExtStorage>();
@@ -187,26 +186,24 @@ namespace exaStamp
         
         if( *eam_rho2emb )
         {
-          eam_extra_fields->m_rho.resize( grid->number_of_particles() );
-          const double * c_rho_ptr = eam_extra_fields->m_rho.data();
-          auto c_rho_field = make_external_field_flat_array_accessor( *grid , c_rho_ptr , field::rho );
-
-          eam_extra_fields->m_emb.clear();
-          eam_extra_fields->m_emb.resize( grid->number_of_particles() );
-          double * emb_ptr = eam_extra_fields->m_emb.data();
-          auto emb_field = make_external_field_flat_array_accessor( *grid , emb_ptr , field::dEmb );
+          if( eam_extra_fields->m_rho_emb.size() != grid->number_of_particles() )
+          {
+            fatal_error() << "inconsistent size for EAM temporary storage buffer" << std::endl;
+          }
+          double * emb_ptr = eam_extra_fields->m_rho_emb.data();
+          auto emb_field = make_external_field_flat_array_accessor( *grid , emb_ptr , field::rho_dEmb );
 
           Rho2EmbOp rho2emb_op { *parameters , eam_scratch->m_pair_enabled.data() };
-          auto rho2emb_op_fields = make_field_tuple_from_field_set( cp_emb_fields , c_rho_field , emb_field );
+          auto rho2emb_op_fields = make_field_tuple_from_field_set( cp_emb_fields , emb_field );
           compute_cell_particles( *grid , *eam_ghost , rho2emb_op , rho2emb_op_fields , parallel_execution_context() );
         }
 
         // 2nd pass parameters: compute final force using the emb term, only for non ghost particles (but reading EMB terms from neighbor particles)
         if( *eam_force )
         {
-          assert( eam_extra_fields->m_emb.size() == grid->number_of_particles() );
-          const double * c_emb_ptr = eam_extra_fields->m_emb.data();
-          auto c_emb_field = make_external_field_flat_array_accessor( *grid , c_emb_ptr , field::dEmb );
+          assert( eam_extra_fields->m_rho_emb.size() == grid->number_of_particles() );
+          const double * c_emb_ptr = eam_extra_fields->m_rho_emb.data();
+          auto c_emb_field = make_external_field_flat_array_accessor( *grid , c_emb_ptr , field::rho_dEmb );
           auto force_op_fields = make_field_tuple_from_field_set( cp_force_fields , c_emb_field );
 
           //auto force_buf = make_empty_pair_buffer<ForceOpExtStorage>();

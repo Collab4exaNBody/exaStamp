@@ -4,6 +4,7 @@
 #include <yaml-cpp/yaml.h>
 #include <exanb/core/quantity_yaml.h>
 #include <exanb/core/physics_constants.h>
+#include <exanb/core/basic_types_operators.h>
 #include <onika/cuda/cuda.h>
 #include <onika/cuda/cuda_math.h>
 #include <onika/cuda/ro_shallow_copy.h>
@@ -178,40 +179,8 @@ namespace exaStamp
   };
 
   ONIKA_HOST_DEVICE_FUNC
-  static inline void eam_alloy_phi(const EamAlloyParametersRO& eam, double r, double& phi, double& dphi, int itype=0 , int jtype=0 )
-  {  
-    using onika::cuda::min;
-  
-    itype = itype + 1;
-    jtype = jtype + 1;
-
-    assert( static_cast<size_t>(eam.n_types) < EamAlloyParametersRO::MAX_ARRAY_SIZE );
-    assert( itype >= 1 && itype <= eam.n_types );
-    assert( jtype >= 1 && jtype <= eam.n_types );
-  
-    double p = r * eam.rdr + 1.0;
-    int m = static_cast<int> (p);
-    m = min(m,eam.nr-1);
-    p -= m;
-    p = min(p,1.0);
-        
-    const int z2r_i_j_index = eam.type2z2r[itype][jtype];
-    //const auto& coeff = eam.z2r_spline[z2r_i_j_index][m];
-    const auto * __restrict__ coeff = eam.z2r_spline_data[ z2r_i_j_index * (eam.nr+1) + m ].coeffs;
-    ONIKA_ASSUME_ALIGNED( coeff );
-    const double z2p = (coeff[0]*p + coeff[1])*p + coeff[2];
-    const double z2 = ((coeff[3]*p + coeff[4])*p + coeff[5])*p + coeff[6];
-    const double recip = 1.0/r;
-    
-    phi = z2*recip;
-    dphi = z2p*recip - phi*recip;
-
-    phi *= eam.conversion_z2r;
-    dphi *= eam.conversion_z2r;    
-  }
-
-  ONIKA_HOST_DEVICE_FUNC
-  static inline void eam_alloy_rho(const EamAlloyParametersRO& eam, double r, double& rho, double& drho, int itype=0 , int jtype=0 )
+  ONIKA_ALWAYS_INLINE
+  static double eam_alloy_rho_noderiv(const EamAlloyParametersRO& eam, double r, int itype=0 , int jtype=0 )
   {
     using onika::cuda::min;
     itype = itype + 1;
@@ -229,15 +198,13 @@ namespace exaStamp
 
     const int rhor_i_j_index = eam.type2rhor[itype][jtype];
     //const auto& coeff = eam.rhor_spline[rhor_i_j_index][m];
-    const auto * __restrict__ coeff = eam.rhor_spline_data[ rhor_i_j_index * (eam.nr+1) + m ].coeffs;
-    ONIKA_ASSUME_ALIGNED( coeff );
-    rho = ((coeff[3]*p + coeff[4])*p + coeff[5])*p + coeff[6];
-    drho = (coeff[0]*p + coeff[1])*p + coeff[2];    
+    const double * __restrict__ coeff = (const double*) __builtin_assume_aligned( eam.rhor_spline_data[ rhor_i_j_index * (eam.nr+1) + m ].coeffs , 64 );
+    return ((coeff[3]*p + coeff[4])*p + coeff[5])*p + coeff[6];
   }
 
   ONIKA_HOST_DEVICE_FUNC
   ONIKA_ALWAYS_INLINE
-  static Vec3d eam_alloy_mm_force(const EamAlloyParametersRO& eam, Vec3d dr, double r, double fpi, double fpj, int itype=0 , int jtype=0 )
+  static void eam_alloy_mm_force(const EamAlloyParametersRO& eam, Vec3d& dr_fe, double& phi, double r, double fpi, double fpj, int itype=0 , int jtype=0 )
   {
     // to ensure here-after use of builtin_assume_aligned is legit
     static_assert( SplineCoeffs::N_SPLINE_POINTS_STORAGE*sizeof(double) == 64 && alignof(SplineCoeffs) == 64 );
@@ -270,18 +237,19 @@ namespace exaStamp
     const double z2 = ((coeff[3]*p + coeff[4])*p + coeff[5])*p + coeff[6];
     const double recip = 1.0/r;
     
-    const double phi = z2*recip;
+    /*const double*/ phi = z2*recip;
     const double phip = ( z2p*recip - phi*recip ) * eam.conversion_z2r;
 
     const double psip = fpi * rhojp + fpj * rhoip + phip;
     const double fpair = psip*recip;
     
-    return { dr.x * fpair , dr.y * fpair , dr.z * fpair };
+    dr_fe *= fpair;
+    //return { dr.x * fpair , dr.y * fpair , dr.z * fpair };
   }
 
-
   ONIKA_HOST_DEVICE_FUNC
-  static inline void eam_alloy_fEmbed(const EamAlloyParametersRO& eam, double rho, double& phi, double& fp, int itype=0 )
+  ONIKA_ALWAYS_INLINE
+  static double eam_alloy_fEmbed_deriv(const EamAlloyParametersRO& eam, double rho, int itype=0 )
   {
     using onika::cuda::min;
     using onika::cuda::max;
@@ -297,8 +265,29 @@ namespace exaStamp
     p = min(p,1.0);
     
     const int frho_i_j_index = eam.type2frho[itype];
-    const auto * __restrict__ coeff = eam.frho_spline_data[ frho_i_j_index * (eam.nrho+1) + m ].coeffs; //eam.frho_spline[frho_i_j_index][m];
-    ONIKA_ASSUME_ALIGNED( coeff );
+    const double* __restrict__ coeff = (const double*) __builtin_assume_aligned( eam.frho_spline_data[ frho_i_j_index * (eam.nrho+1) + m ].coeffs , 64 );
+    return ( (coeff[0]*p + coeff[1])*p + coeff[2] ) * eam.conversion_frho;
+  }
+
+  ONIKA_HOST_DEVICE_FUNC
+  ONIKA_ALWAYS_INLINE
+  static void eam_alloy_fEmbed(const EamAlloyParametersRO& eam, double rho, double& phi, double& fp, int itype=0 )
+  {
+    using onika::cuda::min;
+    using onika::cuda::max;
+
+    itype = itype + 1;
+    assert( static_cast<size_t>(eam.n_types) < EamAlloyParametersRO::MAX_ARRAY_SIZE ); 
+    assert( itype >= 1 && itype <= eam.n_types );
+    
+    double p = rho * eam.rdrho + 1.0;
+    int m = static_cast<int> (p);
+    m = max(1,min(m,eam.nrho-1));
+    p -= m;
+    p = min(p,1.0);
+    
+    const int frho_i_j_index = eam.type2frho[itype];
+    const auto * __restrict__ coeff = (const double*) __builtin_assume_aligned( eam.frho_spline_data[ frho_i_j_index * (eam.nrho+1) + m ].coeffs , 64 ); 
     fp = (coeff[0]*p + coeff[1])*p + coeff[2];
     phi = ((coeff[3]*p + coeff[4])*p + coeff[5])*p + coeff[6];
     if (rho > eam.rhomax) phi += fp * (rho-eam.rhomax);

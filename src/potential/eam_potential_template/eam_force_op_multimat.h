@@ -26,19 +26,57 @@
 #define USTAMP_POTENTIAL_CUDA_COMPATIBLE false
 #endif
 
+#ifndef USTAMP_POTENTIAL_EAM_MM_FORCE
+#define USTAMP_POTENTIAL_EAM_MM_FORCE(p,dr_fe,phi,r,fpi,cells[cell_b][m_dEmb_field][p_b],type_a,type_b) \
+{ \
+  double Rho = 0.; \
+  double phip = 0.; \
+  double rhoip = 0.; \
+  double rhojp = 0.; \
+  USTAMP_POTENTIAL_EAM_RHO( p, r, Rho, rhoip , type_a, type_b ); Rho=0.; \
+  USTAMP_POTENTIAL_EAM_RHO( p, r, Rho, rhojp , type_b, type_a ); Rho=0.; \
+  USTAMP_POTENTIAL_EAM_PHI( p, r, phi, phip  , type_a, type_b ); \
+  const double recip = 1.0/r; \
+  const double fpj = cells[cell_b][m_dEmb_field][p_b]; \
+  const double psip = fpi * rhojp + fpj * rhoip + phip; \
+  const double fpair = psip*recip; \
+  dr_fe *= fpair; \
+}
+#endif
+
+#ifndef USTAMP_POTENTIAL_EAM_EMB_DERIV
+# define USTAMP_POTENTIAL_EAM_EMB_DERIV USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_emb_deriv)
+# ifdef USTAMP_POTENTIAL_ENABLE_CUDA
+  ONIKA_HOST_DEVICE_FUNC
+# endif
+  static inline double USTAMP_POTENTIAL_EAM_EMB_DERIV ( const USTAMP_POTENTIAL_PARMS &p , double rho , int type_a )
+  {
+    double emb = 0.;
+    double dEmb = 0.;
+    USTAMP_POTENTIAL_EAM_EMB( p, rho, emb, dEmb , type_a );
+    return dEmb;
+  }
+# endif
+
+#ifndef USTAMP_POTENTIAL_EAM_RHO_NODERIV
+# define USTAMP_POTENTIAL_EAM_RHO_NODERIV USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_rho_noderiv)
+# ifdef USTAMP_POTENTIAL_ENABLE_CUDA
+  ONIKA_HOST_DEVICE_FUNC
+# endif
+  static inline double USTAMP_POTENTIAL_EAM_RHO_NODERIV( const USTAMP_POTENTIAL_PARMS &p , double r, int type_a, int type_b )
+  {
+    double rho=0.0, drho=0.0;
+    USTAMP_POTENTIAL_EAM_RHO( p, r, rho, drho, type_a, type_b );
+    return rho;
+  }
+#endif
+
 namespace exaStamp
 {
   using namespace exanb;
 
   namespace PRIV_NAMESPACE_NAME
   {
-
-    /*
-    notes:
-      - emb/rho same array
-      - Warning about compute_rho&co functions sets or adds quantity to rho/drho (resp. phi/dphi, emd/dEmb)
-      - try buffer less version for force op
-    */
 
     using EamMultiMatParams = EamMultimatParameters< USTAMP_POTENTIAL_PARMS >;
     using EamMultiMatParamsReadOnly = EamMultimatParametersRO< onika::cuda::ro_shallow_copy_t<USTAMP_POTENTIAL_PARMS> >;
@@ -63,7 +101,7 @@ namespace exaStamp
       }
 
       template<class ComputeBufferT, class CellParticlesT>
-      ONIKA_HOST_DEVICE_FUNC inline void operator () (ComputeBufferT& ctx, CellParticlesT cells, size_t cell_a, size_t p_a, exanb::ComputePairParticleContextStop ) const
+      ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE void operator () (ComputeBufferT& ctx, CellParticlesT cells, size_t cell_a, size_t p_a, exanb::ComputePairParticleContextStop ) const
       {
         cp_locks[cell_a][p_a].lock();
         if constexpr ( CPAA ) { ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_a][m_rho_field][p_a] , ctx.ext.rho ); }
@@ -72,7 +110,7 @@ namespace exaStamp
       }
       
       template<class ComputeBufferT, class CellParticlesT>
-      ONIKA_HOST_DEVICE_FUNC inline void operator () (ComputeBufferT& ctx, Vec3d dr,double d2, int type_a, double& rho, CellParticlesT cells,size_t cell_b, size_t p_b, double /*scale*/ ) const
+      ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE void operator() (ComputeBufferT& ctx, Vec3d dr,double d2, int type_a, double& rho, CellParticlesT cells,size_t cell_b,size_t p_b,double) const
       {
         if( m_pair_enabled!=nullptr && !m_pair_enabled[unique_pair_id(type_a,type_a)] ) return;
         const double r = sqrt( d2 );
@@ -81,15 +119,10 @@ namespace exaStamp
         const int type_b = cells[cell_b][field::type][p_b];  
         if( m_pair_enabled==nullptr || m_pair_enabled[unique_pair_id(type_a,type_b)] )
         {
-          double rholoc = 0.;
-          double drholoc = 0.;
-          USTAMP_POTENTIAL_EAM_RHO( p, r, rholoc, drholoc, type_b, type_a );
-          ctx.ext.rho += rholoc;
+          ctx.ext.rho += USTAMP_POTENTIAL_EAM_RHO_NODERIV( p, r, type_b, type_a );
           if constexpr ( NewtonSym )
           {
-            rholoc = 0.;
-            drholoc = 0.;
-            USTAMP_POTENTIAL_EAM_RHO( p, r, rholoc, drholoc, type_a, type_b );
+            const double rholoc = USTAMP_POTENTIAL_EAM_RHO_NODERIV( p, r, type_a, type_b );
             cp_locks[cell_b][p_b].lock();
             if constexpr ( CPAA ) { ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][m_rho_field][p_b] , rholoc ); }
             else { cells[cell_b][m_rho_field][p_b] += rholoc; }
@@ -103,23 +136,23 @@ namespace exaStamp
     {      
       const onika::cuda::ro_shallow_copy_t<USTAMP_POTENTIAL_PARMS> p = {};
       const uint8_t * __restrict__ m_pair_enabled = nullptr;
-      ONIKA_HOST_DEVICE_FUNC inline void operator () ( double& ep, int type_a, double rho, double& dEmb ) const
+      ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE void operator () ( double& ep, int type_a, double& rho_dEmb ) const
       {
         if( m_pair_enabled==nullptr || m_pair_enabled[unique_pair_id(type_a,type_a)] )
         {
+          double rho = rho_dEmb;
           double emb = 0.;
-          /*double*/ dEmb = 0.;
+          double dEmb = 0.;
           USTAMP_POTENTIAL_EAM_EMB( p, rho, emb, dEmb , type_a );
+          rho_dEmb = dEmb;
           ep += emb;
         }
       }
-      ONIKA_HOST_DEVICE_FUNC inline void operator () ( int type_a, double rho, double& dEmb ) const
+      ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE void operator () ( int type_a, double& rho_dEmb ) const
       {
         if( m_pair_enabled==nullptr || m_pair_enabled[unique_pair_id(type_a,type_a)] )
         {
-          double emb = 0.;
-          /*double*/ dEmb = 0.;
-          USTAMP_POTENTIAL_EAM_EMB( p, rho, emb, dEmb , type_a );
+          rho_dEmb = USTAMP_POTENTIAL_EAM_EMB_DERIV( p , rho_dEmb , type_a );
         }
       }
     };
@@ -144,7 +177,7 @@ namespace exaStamp
       CPLocksT& cp_locks;
 
       template<class ComputeBufferT, class CellParticlesT>
-      ONIKA_HOST_DEVICE_FUNC inline void operator () (ComputeBufferT& ctx, CellParticlesT cells, size_t cell_a, size_t p_a, exanb::ComputePairParticleContextStart ) const
+      ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE void operator () (ComputeBufferT& ctx, CellParticlesT cells, size_t cell_a, size_t p_a, exanb::ComputePairParticleContextStart ) const
       {
         ctx.ext.f = Vec3d { 0. , 0. , 0. };
         if constexpr ( std::is_same_v<decltype(ctx.ext),ForceEnergyOpExtStorage> )
@@ -155,7 +188,7 @@ namespace exaStamp
       }
 
       template<class ComputeBufferT, class CellParticlesT>
-      ONIKA_HOST_DEVICE_FUNC inline void operator () (const ComputeBufferT& ctx, CellParticlesT cells, size_t cell_a, size_t p_a, exanb::ComputePairParticleContextStop ) const
+      ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE void operator () (const ComputeBufferT& ctx, CellParticlesT cells, size_t cell_a, size_t p_a, exanb::ComputePairParticleContextStop ) const
       {
         cp_locks[cell_a][p_a].lock();
         if constexpr ( CPAA )
@@ -184,58 +217,38 @@ namespace exaStamp
       }
 
       template<class ComputeBufferT, class CellParticlesT>
-      ONIKA_HOST_DEVICE_FUNC inline void operator () (
+      ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE void operator () (
         ComputeBufferT& ctx,
-        Vec3d dr,double d2,
+        Vec3d dr_fe,double d2,
         double& fx, double& fy, double& fz, int type_a,
         double fpi, 
         CellParticlesT cells,size_t cell_b, size_t p_b,
         double /*scale*/) const
       {
         if( m_pair_enabled!=nullptr && !m_pair_enabled[unique_pair_id(type_a,type_a)] ) return;
-        
         assert( p_b < cells[cell_b].size() );
         const int type_b = cells[cell_b][field::type][p_b];
-        
         if( m_pair_enabled==nullptr || m_pair_enabled[unique_pair_id(type_a,type_b)] )
         {
           const double r = sqrt( d2 );
           assert( r > 0.0 );
-
-#         ifdef USTAMP_POTENTIAL_EAM_MM_FORCE
-          const Vec3d fe = USTAMP_POTENTIAL_EAM_MM_FORCE(p,dr,r,fpi,cells[cell_b][m_dEmb_field][p_b],type_a,type_b);
-#         else
-          double Rho = 0.;
           double phi = 0.;
-          double phip = 0.;
-          double rhoip = 0.;
-          double rhojp = 0.;
-          USTAMP_POTENTIAL_EAM_RHO( p, r, Rho, rhoip , type_a, type_b ); Rho=0.;
-          USTAMP_POTENTIAL_EAM_RHO( p, r, Rho, rhojp , type_b, type_a ); Rho=0.;
-          USTAMP_POTENTIAL_EAM_PHI( p, r, phi, phip  , type_a, type_b ); phi=0.;
-          const double recip = 1.0/r;
-	        const double fpj = cells[cell_b][m_dEmb_field][p_b];
-	        const double psip = fpi * rhojp + fpj * rhoip + phip;
-	        const double fpair = psip*recip;
-	        const Vec3d fe = { dr.x * fpair , dr.y * fpair , dr.z * fpair };
-#         endif
-
-          ctx.ext.f += fe;
-          
+          USTAMP_POTENTIAL_EAM_MM_FORCE(p,dr_fe,phi,r,fpi,cells[cell_b][m_dEmb_field][p_b],type_a,type_b);
+          ctx.ext.f += dr_fe;
           if constexpr ( NewtonSym )
           {
             cp_locks[cell_b][p_b].lock();
             if constexpr ( CPAA )
             {            
-              ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][field::fx][p_b] , -fe.x );
-              ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][field::fy][p_b] , -fe.y );
-              ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][field::fz][p_b] , -fe.z );
+              ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][field::fx][p_b] , - dr_fe.x );
+              ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][field::fy][p_b] , - dr_fe.y );
+              ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][field::fz][p_b] , - dr_fe.z );
             }
             else
             {
-              cells[cell_b][field::fx][p_b] -= fe.x;
-              cells[cell_b][field::fy][p_b] -= fe.y;
-              cells[cell_b][field::fz][p_b] -= fe.z;
+              cells[cell_b][field::fx][p_b] -= dr_fe.x;
+              cells[cell_b][field::fy][p_b] -= dr_fe.y;
+              cells[cell_b][field::fz][p_b] -= dr_fe.z;
             }
             cp_locks[cell_b][p_b].unlock();
           }
@@ -243,9 +256,9 @@ namespace exaStamp
       }
 
       template<class ComputeBufferT, class CellParticlesT>
-      ONIKA_HOST_DEVICE_FUNC inline void operator () (
+      ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE void operator () (
         ComputeBufferT& ctx,
-        Vec3d dr,double d2,
+        Vec3d dr_fe,double d2,
         double& fx, double& fy, double& fz, double& ep, int type_a,
         double fpi, 
         CellParticlesT cells,size_t cell_b, size_t p_b,
@@ -260,46 +273,26 @@ namespace exaStamp
         {
           const double r = sqrt( d2 );
           assert( r > 0.0 );
-
-          double Rho = 0.;
           double phi = 0.;
-          double phip = 0.;
-          double rhoip = 0.;
-          double rhojp = 0.;	  
-
-          USTAMP_POTENTIAL_EAM_RHO( p, r, Rho, rhoip , type_a, type_b ); Rho=0.0;
-          USTAMP_POTENTIAL_EAM_RHO( p, r, Rho, rhojp , type_b, type_a ); Rho=0.0;
-          USTAMP_POTENTIAL_EAM_PHI( p, r, phi, phip  , type_a, type_b );
-
-          const double recip = 1.0/r;
-	        const double fpj = cells[cell_b][m_dEmb_field][p_b]; //tab.nbh_pt[i][field::dEmb];
-	        const double psip = fpi * rhojp + fpj * rhoip + phip;
-	        const double fpair = psip*recip;
-	        const Vec3d fe = { dr.x * fpair , dr.y * fpair , dr.z * fpair };
-
-          ctx.ext.f += fe;
-          ctx.ext.ep += .5 * phi;
-          //const Mat3d vir = tensor( Vec3d{fe_x,fe_y,fe_z}, Vec3d{dr.x,dr.y,dr.z} ) * -0.5;
-          //virial += vir;
-          
+          USTAMP_POTENTIAL_EAM_MM_FORCE(p,dr_fe,phi,r,fpi,cells[cell_b][m_dEmb_field][p_b],type_a,type_b);
+          ctx.ext.f += dr_fe;
+          ctx.ext.ep += .5 * phi;          
           if constexpr ( NewtonSym )
           {
             cp_locks[cell_b][p_b].lock();
             if constexpr ( CPAA )
             {            
-              ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][field::fx][p_b] , -fe.x );
-              ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][field::fy][p_b] , -fe.y );
-              ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][field::fz][p_b] , -fe.z );
+              ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][field::fx][p_b] , - dr_fe.x );
+              ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][field::fy][p_b] , - dr_fe.y );
+              ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][field::fz][p_b] , - dr_fe.z );
               ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][field::ep][p_b] , .5 * phi );
-              //cells[cell_b][field::virial][p_b] += vir;
             }
             else
             {
-              cells[cell_b][field::fx][p_b] -= fe.x;
-              cells[cell_b][field::fy][p_b] -= fe.y;
-              cells[cell_b][field::fz][p_b] -= fe.z;
+              cells[cell_b][field::fx][p_b] -= dr_fe.x;
+              cells[cell_b][field::fy][p_b] -= dr_fe.y;
+              cells[cell_b][field::fz][p_b] -= dr_fe.z;
               cells[cell_b][field::ep][p_b] += .5 * phi;
-              //cells[cell_b][field::virial][p_b] += vir;
             }
             cp_locks[cell_b][p_b].unlock();
           }
