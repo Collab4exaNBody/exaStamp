@@ -112,6 +112,8 @@ compute_loop:
     
 particles_regions: []
 
+init_parameters: nop
+
 ######## simulation program description #################
 simulation:
   name: sim
@@ -121,6 +123,7 @@ simulation:
     - make_empty_grid
     - grid_flavor
     - global
+    - init_parameters
     - generate_default_species
     - particle_regions
     - preinit_rcut_max
