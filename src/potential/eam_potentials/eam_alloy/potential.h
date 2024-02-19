@@ -11,4 +11,5 @@
 #define USTAMP_POTENTIAL_ENABLE_CUDA 1
 #define USTAMP_POTENTIAL_EAM_MM 1 // set if potential supports multimaterial and thus needs type numbers as additional arguements
 #define USTAMP_POTENTIAL_EAM_MM_INIT_TYPES(p,nt,pe) (p).initialize_types_table( nt , pe )
+#define USTAMP_POTENTIAL_EAM_MM_FORCE eam_alloy_mm_force
 
