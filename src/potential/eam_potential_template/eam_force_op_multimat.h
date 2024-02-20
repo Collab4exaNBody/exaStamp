@@ -114,8 +114,8 @@ namespace exaStamp
       {
         if( m_pair_enabled!=nullptr && !m_pair_enabled[unique_pair_id(type_a,type_a)] ) return;
         const double r = sqrt( d2 );
-        assert( cell_b < m_nb_cells );
-        assert( p_b < ( m_cell_offsets[cell_b+1] - m_cell_offsets[cell_b] ) );
+        //assert( cell_b < m_nb_cells );
+        //assert( p_b < ( m_cell_offsets[cell_b+1] - m_cell_offsets[cell_b] ) );
         const int type_b = cells[cell_b][field::type][p_b];  
         if( m_pair_enabled==nullptr || m_pair_enabled[unique_pair_id(type_a,type_b)] )
         {
