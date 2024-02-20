@@ -95,6 +95,8 @@ namespace exaStamp
       // Get max and min positions
       // Need to define the size of the box
       // NOTE : only one processor need to do that
+      bool uniform_scale = false;
+      Mat3d domain_xform = make_identity_matrix();
       if(rank==0)
       {
         //Open xyz file
@@ -118,16 +120,16 @@ namespace exaStamp
         Mat3d H = make_identity_matrix();	
         std::getline(file,line);
 
-	unsigned quote;
-	quote = line.find("\"");
-	quote += 1;
-	std::string secondPart = line.substr(quote);
-	quote = secondPart.find("\"");
-	std::string lineclean = secondPart.substr(0,quote);
+	      unsigned quote;
+	      quote = line.find("\"");
+	      quote += 1;
+	      std::string secondPart = line.substr(quote);
+	      quote = secondPart.find("\"");
+	      std::string lineclean = secondPart.substr(0,quote);
 
         std::stringstream(line) >> H.m11 >> H.m12 >> H.m13 >> H.m21 >> H.m22 >> H.m23 >> H.m31 >> H.m32 >> H.m33;
 
-	lout << "H = " << H << std::endl;
+        lout << "H = " << H << std::endl;
 
         Vec3d a = Vec3d{H.m11, H.m12, H.m13};
         Vec3d b = Vec3d{H.m21, H.m22, H.m23};
@@ -137,11 +139,11 @@ namespace exaStamp
         box_size_y = norm(b);
         box_size_z = norm(c);
 
-	lout << "a = " << box_size_x << std::endl;        
-	lout << "b = " << box_size_y << std::endl;        
-	lout << "c = " << box_size_z << std::endl;        
+        lout << "a = " << box_size_x << std::endl;        
+        lout << "b = " << box_size_y << std::endl;        
+        lout << "c = " << box_size_z << std::endl;        
 
-	Mat3d Ht = transpose(H);
+        Mat3d Ht = transpose(H);
 
         // read one line at a time
         while (std::getline(file,line))
@@ -152,31 +154,31 @@ namespace exaStamp
           //first value not necessary here
           std::stringstream(line) >> type >> x >> y >> z;
 
-	  Vec3d r{x, y, z};
+	        Vec3d r{x, y, z};
 
-	  r = inverse(Ht) * r;
+	        r = inverse(Ht) * r;
 
-	  if (r.x < 0.) r.x += 1.;
-	  if (r.y < 0.) r.y += 1.;
-	  if (r.z < 0.) r.z += 1.;
+	        if (r.x < 0.) r.x += 1.;
+	        if (r.y < 0.) r.y += 1.;
+	        if (r.z < 0.) r.z += 1.;
 
-	  if (r.x >= 1.) r.x -= 1.;
-	  if (r.y >= 1.) r.y -= 1.;
-	  if (r.z >= 1.) r.z -= 1.;
+	        if (r.x >= 1.) r.x -= 1.;
+	        if (r.y >= 1.) r.y -= 1.;
+	        if (r.z >= 1.) r.z -= 1.;
 
-          x = box_size_x * r.x;
-          y = box_size_y * r.y;
-          z = box_size_z * r.z;
+                x = box_size_x * r.x;
+                y = box_size_y * r.y;
+                z = box_size_z * r.z;
 
-	  if (is_noise) {
+	        if (is_noise) {
 
-	    auto& re = rand::random_engine();
-	    std::normal_distribution<double> f_rand(0.,sigma_noise);
-	    x += f_rand(re);
-	    y += f_rand(re);
-	    z += f_rand(re);
-			
-	  }
+	          auto& re = rand::random_engine();
+	          std::normal_distribution<double> f_rand(0.,sigma_noise);
+	          x += f_rand(re);
+	          y += f_rand(re);
+	          z += f_rand(re);
+			      
+	        }
 	  
           if( typeMap.find(type) == typeMap.end() )
           {
@@ -193,7 +195,7 @@ namespace exaStamp
           domain.set_xform( make_identity_matrix() );
         }
 
-	AABB file_bounds  = { { 0., 0., 0. } , {box_size_x,box_size_y,box_size_z} };
+        AABB file_bounds  = { { 0., 0., 0. } , {box_size_x,box_size_y,box_size_z} };
         compute_domain_bounds(domain,*bounds_mode,0.0, file_bounds ,file_bounds, true );
         
         if( !domain.xform_is_identity() )
@@ -208,9 +210,22 @@ namespace exaStamp
           }
         }
 
-	Mat3d D = diag_matrix(Vec3d{box_size_x, box_size_y, box_size_z});
-	Mat3d Hbis = Ht * inverse(D);
-        domain.set_xform( Hbis * domain.xform());
+        const Mat3d D = diag_matrix(Vec3d{box_size_x, box_size_y, box_size_z});
+        const Mat3d Hbis = Ht * inverse(D);
+        domain_xform = Hbis * domain.xform();
+        
+        uniform_scale = is_uniform_scale( domain_xform );
+        lout << "Uniform scale    = "<<std::boolalpha<<uniform_scale << std::endl;
+        if( uniform_scale )
+        {
+          domain.set_xform( make_identity_matrix() );
+          domain.set_cell_size( domain.cell_size() * domain_xform.m11 );
+          domain.set_bounds( { domain.origin() * domain_xform.m11 , domain.extent() * domain_xform.m11 } );
+        }
+        else
+        {
+          domain.set_xform( domain_xform );
+        }
         
         lout << "Particles        = "<<particle_data.size()<<std::endl;
         lout << "Domain XForm     = "<<domain.xform()<<std::endl;
@@ -234,8 +249,9 @@ namespace exaStamp
       {
         for( auto p : particle_data )
         {
-          Vec3d r{ p[field::rx] , p[field::ry] , p[field::rz] };
-          IJK loc = domain_periodic_location( domain , r ); //grid.locate_cell(r);
+          Vec3d r = { p[field::rx] , p[field::ry] , p[field::rz] };
+          if( uniform_scale ) r = r * domain_xform.m11;
+          IJK loc = domain_periodic_location( domain , r ); 
           assert( grid.contains(loc) );
           assert( min_distance2_between( r, grid.cell_bounds(loc) ) < grid.epsilon_cell_size2() );
           p[field::rx] = r.x;

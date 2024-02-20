@@ -226,16 +226,22 @@ namespace exaStamp
       {
         fatal_error()<<"particle_locks is needed, but corresponding slot has no value" << std::endl;
       }
+      
+      auto compute_eam_xform_locks = [&](const auto& cp_xform, const auto& cp_locks)
+      {
+        if( log_energy ) compute_eam_force( cp_xform, cp_locks, cp_emb_fields_energy_v , cp_force_fields_energy_v , make_empty_pair_buffer<ForceOpEnergyExt>() );
+        else             compute_eam_force( cp_xform, cp_locks, cp_emb_fields_v        , cp_force_fields_v        , make_empty_pair_buffer<ForceOpExt>() );
+      };
 
-      if( log_energy )
+/*      if( domain->xform_is_identity() )
       {
-        if( need_particle_locks ) compute_eam_force( exanb::LinearXForm{ domain->xform() } , exanb::ComputePairOptionalLocks<true >{ particle_locks->data() } , cp_emb_fields_energy_v , cp_force_fields_energy_v , make_empty_pair_buffer<ForceOpEnergyExt>() );
-        else                      compute_eam_force( exanb::LinearXForm{ domain->xform() } , exanb::ComputePairOptionalLocks<false>{}                         , cp_emb_fields_energy_v , cp_force_fields_energy_v , make_empty_pair_buffer<ForceOpEnergyExt>() );
+        if( need_particle_locks ) compute_eam_xform_locks( exanb::NullXForm{} , exanb::ComputePairOptionalLocks<true>{particle_locks->data()} );
+        else                      compute_eam_xform_locks( exanb::NullXForm{} , exanb::ComputePairOptionalLocks<false>{} );
       }
-      else
+      else*/
       {
-        if( need_particle_locks ) compute_eam_force( exanb::LinearXForm{ domain->xform() } , exanb::ComputePairOptionalLocks<true >{ particle_locks->data() } , cp_emb_fields_v , cp_force_fields_v , make_empty_pair_buffer<ForceOpExt>() );
-        else                      compute_eam_force( exanb::LinearXForm{ domain->xform() } , exanb::ComputePairOptionalLocks<false>{}                         , cp_emb_fields_v , cp_force_fields_v , make_empty_pair_buffer<ForceOpExt>() );
+        if( need_particle_locks ) compute_eam_xform_locks( exanb::LinearXForm{domain->xform()} , exanb::ComputePairOptionalLocks<true>{particle_locks->data()} );
+        else                      compute_eam_xform_locks( exanb::LinearXForm{domain->xform()} , exanb::ComputePairOptionalLocks<false>{} );
       }
 
     }
