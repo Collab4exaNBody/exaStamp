@@ -19,7 +19,7 @@ configuration:
 chunk_neighbors:
   config:
     build_particle_offset: true
-    chunk_size: 1
+    chunk_size: 4
 
 ghost_update_emb: &ghost_update_parms
   gpu_buffer_pack: true
@@ -70,8 +70,8 @@ compute_force_sym:
 compute_force_singlepass:
   - eam_alloy_force: { rcut: 6.6825 ang , parameters: { file: AlCu.eam.alloy } , eam_rho: true , eam_rho2emb: true , eam_ghost: true , eam_force: true , eam_symmetry: false }
 
-compute_force: compute_force_nosym
-#compute_force: compute_force_sym
+#compute_force: compute_force_nosym
+compute_force: compute_force_sym
 
 xxx_compute_force:
   - eam_rho
