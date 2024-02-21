@@ -1,0 +1,8 @@
+Warning: things removed or not generic after EAM optimizations
+
+- scale not passed in
+# - pair_enabled test removed
+- fast path for EAM Alloy not generalized to other EAM potentials
+- fast compute strategy not propagated to single mat EAM
+- lack Virial computation option
+

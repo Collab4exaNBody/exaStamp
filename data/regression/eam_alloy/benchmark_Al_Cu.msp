@@ -19,7 +19,8 @@ configuration:
 chunk_neighbors:
   config:
     build_particle_offset: true
-    chunk_size: 4
+    dual_particle_offset: true
+    chunk_size: 1
 
 ghost_update_emb: &ghost_update_parms
   gpu_buffer_pack: true

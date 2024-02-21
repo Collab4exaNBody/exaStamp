@@ -52,8 +52,8 @@ namespace exaStamp
 
     using EamScratch = EamMultimatPotentialScratch< USTAMP_POTENTIAL_PARMS >;
     using StringVector = std::vector< std::string >;
-    template<class FieldAccT,bool Sym,class CPLocksT, bool CPAA> using SymRhoOp = PRIV_NAMESPACE_NAME::SymRhoOp<FieldAccT,Sym,CPLocksT,CPAA>;
-    template<class FieldAccT,bool Sym,class CPLocksT, bool CPAA> using SymForceOp = PRIV_NAMESPACE_NAME::SymForceOp<FieldAccT,Sym,CPLocksT,CPAA>;
+    template<bool Sym,class CPLocksT, bool CPAA> using SymRhoOp = PRIV_NAMESPACE_NAME::SymRhoOp<Sym,CPLocksT,CPAA>;
+    template<bool Sym,class CPLocksT, bool CPAA> using SymForceOp = PRIV_NAMESPACE_NAME::SymForceOp<Sym,CPLocksT,CPAA>;
     using Rho2EmbOp = PRIV_NAMESPACE_NAME::Rho2EmbOp;
     using ForceOpExt = PRIV_NAMESPACE_NAME::ForceOpExtStorage;
     using ForceOpEnergyExt = PRIV_NAMESPACE_NAME::ForceEnergyOpExtStorage;
@@ -63,9 +63,7 @@ namespace exaStamp
     static inline constexpr bool has_virial_field = GridHasField<GridT,field::_virial>::value;
 
     // attributes processed during computation
-    static inline constexpr FieldSet< field::_fx ,field::_fy ,field::_fz, field::_type > cp_force_fields_v{};
-    static inline constexpr FieldSet< field::_fx ,field::_fy ,field::_fz, field::_ep, field::_type > cp_force_fields_energy_v{};
-    static inline constexpr FieldSet< field::_fx ,field::_fy ,field::_fz, field::_ep, field::_virial, field::_type > cp_force_fields_energy_virial_v{};
+    static inline constexpr FieldSet< field::_type > cp_force_fields_v{};
     static inline constexpr FieldSet< field::_type > cp_emb_fields_v{};
     static inline constexpr FieldSet< field::_ep , field::_type > cp_emb_fields_energy_v{};
 
@@ -152,34 +150,35 @@ namespace exaStamp
       USTAMP_POTENTIAL_EAM_MM_INIT_TYPES( *parameters , n_species , eam_scratch->m_pair_enabled.data() );
 
       // execute the 2 passes
-      auto compute_eam_force = [&]( const auto& cp_xform , const auto& cp_locks , auto cp_emb_fields , auto cp_force_fields , auto force_buf )
+      auto compute_eam_force = [&]( const auto& cp_xform , const auto& cp_locks , auto cp_emb_fields , auto force_buf )
       {
         using CPLocksT = std::remove_reference_t<decltype(cp_locks)>;
         // common bricks for both compute passes
         exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
         exanb::GridChunkNeighborsLightWeightIt<true> nbh_it_sym{ *chunk_neighbors };
         ComputePairNullWeightIterator cp_weight {};
+        const auto * __restrict__ c_particle_offset = grid->cell_particle_offset_data();
 
         // 1st pass (new) computes rho then emb, without compute buffer
         if( *eam_rho )
         {
           eam_extra_fields->m_rho_emb.clear();
           eam_extra_fields->m_rho_emb.assign( grid->number_of_particles() , 0.0 );
-          double * rho_ptr = eam_extra_fields->m_rho_emb.data();
-          auto rho_field = make_external_field_flat_array_accessor( *grid , rho_ptr , field::rho_dEmb );
 
-          auto rho_op_fields = make_field_tuple_from_field_set( FieldSet< field::_type >{} , rho_field );
+          double * __restrict__ rho_ptr = eam_extra_fields->m_rho_emb.data();
+
+          auto rho_op_fields = make_field_tuple_from_field_set( FieldSet< field::_type >{} );
           auto rho_buf_factory = make_empty_pair_buffer<RhoOpExtStorage>();
           if( *eam_symmetry )
           {
             auto rho_optional = make_compute_pair_optional_args( nbh_it_sym, cp_weight , cp_xform , cp_locks, ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{} );
-            SymRhoOp<decltype(rho_field),true,CPLocksT,false> rho_op { *parameters , eam_scratch->m_pair_enabled.data() , rho_field , cp_locks };
+            SymRhoOp<true,CPLocksT,false> rho_op { *parameters, eam_scratch->m_pair_enabled.data(), c_particle_offset, rho_ptr, cp_locks };
             compute_cell_particle_pairs( *grid, *rcut, *eam_ghost, rho_optional, rho_buf_factory, rho_op, rho_op_fields, parallel_execution_context() );
           }
           else
           {
             auto rho_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks, ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{} );
-            SymRhoOp<decltype(rho_field),false,CPLocksT,false> rho_op { *parameters , eam_scratch->m_pair_enabled.data() , rho_field , cp_locks };
+            SymRhoOp<false,CPLocksT,false> rho_op { *parameters, eam_scratch->m_pair_enabled.data(), c_particle_offset, rho_ptr, cp_locks };
             compute_cell_particle_pairs( *grid, *rcut, *eam_ghost, rho_optional, rho_buf_factory, rho_op, rho_op_fields, parallel_execution_context() );
           }
         }
@@ -202,22 +201,18 @@ namespace exaStamp
         if( *eam_force )
         {
           assert( eam_extra_fields->m_rho_emb.size() == grid->number_of_particles() );
-          const double * c_emb_ptr = eam_extra_fields->m_rho_emb.data();
-          auto c_emb_field = make_external_field_flat_array_accessor( *grid , c_emb_ptr , field::rho_dEmb );
-          auto force_op_fields = make_field_tuple_from_field_set( cp_force_fields , c_emb_field );
-
-          //auto force_buf = make_empty_pair_buffer<ForceOpExtStorage>();
+          const auto * __restrict__ c_emb_ptr = eam_extra_fields->m_rho_emb.data();
           if( *eam_symmetry )
           {
             auto force_optional = make_compute_pair_optional_args( nbh_it_sym, cp_weight , cp_xform , cp_locks );
-            SymForceOp<decltype(c_emb_field),true,CPLocksT,false> force_op { *parameters , eam_scratch->m_pair_enabled.data() , c_emb_field , cp_locks };
-            compute_cell_particle_pairs( *grid, *rcut, false, force_optional, force_buf, force_op, force_op_fields, parallel_execution_context() );
+            SymForceOp<true,CPLocksT,false> force_op { *parameters, eam_scratch->m_pair_enabled.data(), c_particle_offset, c_emb_ptr , cp_locks };
+            compute_cell_particle_pairs( *grid, *rcut, false, force_optional, force_buf, force_op, cp_force_fields_v, parallel_execution_context() );
           }
           else
           {
             auto force_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks );
-            SymForceOp<decltype(c_emb_field),false,CPLocksT,false> force_op { *parameters , eam_scratch->m_pair_enabled.data() , c_emb_field , cp_locks };
-            compute_cell_particle_pairs( *grid, *rcut, false, force_optional, force_buf, force_op, force_op_fields, parallel_execution_context() );
+            SymForceOp<false,CPLocksT,false> force_op { *parameters, eam_scratch->m_pair_enabled.data(), c_particle_offset, c_emb_ptr, cp_locks };
+            compute_cell_particle_pairs( *grid, *rcut, false, force_optional, force_buf, force_op, cp_force_fields_v, parallel_execution_context() );
           }          
         }
       };
@@ -229,16 +224,16 @@ namespace exaStamp
       
       auto compute_eam_xform_locks = [&](const auto& cp_xform, const auto& cp_locks)
       {
-        if( log_energy ) compute_eam_force( cp_xform, cp_locks, cp_emb_fields_energy_v , cp_force_fields_energy_v , make_empty_pair_buffer<ForceOpEnergyExt>() );
-        else             compute_eam_force( cp_xform, cp_locks, cp_emb_fields_v        , cp_force_fields_v        , make_empty_pair_buffer<ForceOpExt>() );
+        if( log_energy ) compute_eam_force( cp_xform, cp_locks, cp_emb_fields_energy_v , make_empty_pair_buffer<ForceOpEnergyExt>() );
+        else             compute_eam_force( cp_xform, cp_locks, cp_emb_fields_v        , make_empty_pair_buffer<ForceOpExt>() );
       };
 
-/*      if( domain->xform_is_identity() )
+      if( domain->xform_is_identity() )
       {
         if( need_particle_locks ) compute_eam_xform_locks( exanb::NullXForm{} , exanb::ComputePairOptionalLocks<true>{particle_locks->data()} );
         else                      compute_eam_xform_locks( exanb::NullXForm{} , exanb::ComputePairOptionalLocks<false>{} );
       }
-      else*/
+      else
       {
         if( need_particle_locks ) compute_eam_xform_locks( exanb::LinearXForm{domain->xform()} , exanb::ComputePairOptionalLocks<true>{particle_locks->data()} );
         else                      compute_eam_xform_locks( exanb::LinearXForm{domain->xform()} , exanb::ComputePairOptionalLocks<false>{} );
