@@ -3,6 +3,7 @@
 #include <onika/cuda/cuda.h>
 #include <exanb/core/grid.h>
 #include <onika/cuda/cuda_context.h>
+#include <onika/integral_constant.h>
 //#include <onika/cuda/profiling.h>
 
 #include "snapBs.h"
@@ -52,7 +53,7 @@ namespace SnapExt
           const IJK loc_a = { loc_a_no_gl.i+gl , loc_a_no_gl.j+gl , loc_a_no_gl.k+gl };
           const size_t cell_a = grid_ijk_to_index( dims, loc_a );
           compute_cell_particle_pairs_cell(cells,dims,loc_a,cell_a,rcut2 ,cpbuf_factory, optional, force_op,
-                                      cp_fields, CS, std::integral_constant<bool,false>{},
+                                      cp_fields, CS, onika::FalseType{},
                                       DefaultPositionFields{} , UseComputeBuffer , std::make_index_sequence<nb_fields>{} );
         }
       }
