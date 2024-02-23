@@ -22,6 +22,7 @@
 #include <exanb/particle_neighbors/chunk_neighbors.h>
 #include <exanb/compute/compute_cell_particle_pairs.h>
 #include <exanb/compute/compute_cell_particles.h>
+#include <onika/parallel/memset.h>
 
 #ifdef USTAMP_POTENTIAL_EAM_MM // operator compiled only if potential is multimaterial
 
@@ -162,9 +163,11 @@ namespace exaStamp
         if( *eam_rho )
         {
           eam_extra_fields->m_rho_emb.clear();
-          eam_extra_fields->m_rho_emb.assign( grid->number_of_particles() , 0.0 );
-
+          size_t n_particles = grid->number_of_particles();
+          eam_extra_fields->m_rho_emb.resize( n_particles );
           double * __restrict__ rho_ptr = eam_extra_fields->m_rho_emb.data();
+
+          onika::parallel::block_parallel_memset( eam_extra_fields->m_rho_emb.data() , n_particles , 0.0 , parallel_execution_context() );
 
           auto rho_op_fields = make_field_tuple_from_field_set( FieldSet< field::_type >{} );
           auto rho_buf_factory = make_empty_pair_buffer<RhoOpExtStorage>();
