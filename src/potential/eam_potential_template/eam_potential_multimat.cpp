@@ -52,8 +52,8 @@ namespace exaStamp
 
     using EamScratch = EamMultimatPotentialScratch< USTAMP_POTENTIAL_PARMS >;
     using StringVector = std::vector< std::string >;
-    template<bool Sym,class CPLocksT, bool CPAA> using SymRhoOp = PRIV_NAMESPACE_NAME::SymRhoOp<Sym,CPLocksT,CPAA>;
-    template<bool Sym,class CPLocksT, bool CPAA> using SymForceOp = PRIV_NAMESPACE_NAME::SymForceOp<Sym,CPLocksT,CPAA>;
+    template<bool Sym,class CPLocksT> using SymRhoOp = PRIV_NAMESPACE_NAME::SymRhoOp<Sym,CPLocksT>;
+    template<bool Sym,class CPLocksT> using SymForceOp = PRIV_NAMESPACE_NAME::SymForceOp<Sym,CPLocksT>;
     using Rho2EmbOp = PRIV_NAMESPACE_NAME::Rho2EmbOp;
     using ForceOpExt = PRIV_NAMESPACE_NAME::ForceOpExtStorage;
     using ForceOpEnergyExt = PRIV_NAMESPACE_NAME::ForceEnergyOpExtStorage;
@@ -117,7 +117,7 @@ namespace exaStamp
         ldbg << "trigger_thermo_state missing " << std::endl;
       }
 
-      const bool need_particle_locks = ( omp_get_max_threads() > 1 ) && ( *eam_symmetry );
+      const bool need_particle_locks = ( omp_get_max_threads() > 1 ) && ( *eam_symmetry ) ;
       const bool need_virial = has_virial_field && log_energy && *compute_virial;
 
       ldbg << "EAM Multimat: rho="<<std::boolalpha<< *eam_rho
@@ -129,7 +129,6 @@ namespace exaStamp
            <<" , eflag="<< log_energy
            <<" , virflag="<<need_virial
            <<" , need_locks="<< need_particle_locks << std::endl;
-
 
       size_t n_species = species->size();
       size_t n_type_pairs = unique_pair_count( n_species );
@@ -172,13 +171,13 @@ namespace exaStamp
           if( *eam_symmetry )
           {
             auto rho_optional = make_compute_pair_optional_args( nbh_it_sym, cp_weight , cp_xform , cp_locks, ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{} );
-            SymRhoOp<true,CPLocksT,false> rho_op { *parameters, eam_scratch->m_pair_enabled.data(), c_particle_offset, rho_ptr, cp_locks };
+            SymRhoOp<true,CPLocksT> rho_op { *parameters, eam_scratch->m_pair_enabled.data(), c_particle_offset, rho_ptr, cp_locks };
             compute_cell_particle_pairs( *grid, *rcut, *eam_ghost, rho_optional, rho_buf_factory, rho_op, rho_op_fields, parallel_execution_context() );
           }
           else
           {
             auto rho_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks, ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{} );
-            SymRhoOp<false,CPLocksT,false> rho_op { *parameters, eam_scratch->m_pair_enabled.data(), c_particle_offset, rho_ptr, cp_locks };
+            SymRhoOp<false,CPLocksT> rho_op { *parameters, eam_scratch->m_pair_enabled.data(), c_particle_offset, rho_ptr, cp_locks };
             compute_cell_particle_pairs( *grid, *rcut, *eam_ghost, rho_optional, rho_buf_factory, rho_op, rho_op_fields, parallel_execution_context() );
           }
         }
@@ -205,13 +204,13 @@ namespace exaStamp
           if( *eam_symmetry )
           {
             auto force_optional = make_compute_pair_optional_args( nbh_it_sym, cp_weight , cp_xform , cp_locks );
-            SymForceOp<true,CPLocksT,false> force_op { *parameters, eam_scratch->m_pair_enabled.data(), c_particle_offset, c_emb_ptr , cp_locks };
+            SymForceOp<true,CPLocksT> force_op { *parameters, eam_scratch->m_pair_enabled.data(), c_particle_offset, c_emb_ptr , cp_locks };
             compute_cell_particle_pairs( *grid, *rcut, false, force_optional, force_buf, force_op, cp_force_fields_v, parallel_execution_context() );
           }
           else
           {
             auto force_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks );
-            SymForceOp<false,CPLocksT,false> force_op { *parameters, eam_scratch->m_pair_enabled.data(), c_particle_offset, c_emb_ptr, cp_locks };
+            SymForceOp<false,CPLocksT> force_op { *parameters, eam_scratch->m_pair_enabled.data(), c_particle_offset, c_emb_ptr, cp_locks };
             compute_cell_particle_pairs( *grid, *rcut, false, force_optional, force_buf, force_op, cp_force_fields_v, parallel_execution_context() );
           }          
         }

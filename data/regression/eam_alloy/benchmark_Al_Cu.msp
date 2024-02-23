@@ -21,7 +21,7 @@ chunk_neighbors:
     build_particle_offset: true
     dual_particle_offset: false
     random_access: false
-    chunk_size: 4
+    chunk_size: 1
 
 ghost_update_emb: &ghost_update_parms
   gpu_buffer_pack: true

@@ -86,9 +86,9 @@ namespace exaStamp
       double rho = 0.0;
     };
 
-    template<bool NewtonSym, class CPLocksT, bool CPAA>
+    template<bool NewtonSym, class CPLocksT>
     struct SymRhoOp
-    {
+    {      
       const onika::cuda::ro_shallow_copy_t<USTAMP_POTENTIAL_PARMS> p = {};
       const uint8_t * __restrict__ m_pair_enabled = nullptr;
       const size_t * __restrict__ m_cell_particle_offset = nullptr;
@@ -104,10 +104,12 @@ namespace exaStamp
       template<class ComputeBufferT, class CellParticlesT>
       ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE void operator () (ComputeBufferT& ctx, CellParticlesT cells, size_t cell_a, size_t p_a, exanb::ComputePairParticleContextStop ) const
       {
-        cp_locks[cell_a][p_a].lock();
+        static constexpr bool CPAA = NewtonSym &&   onika::cuda::gpu_device_execution_t::value;
+        static constexpr bool LOCK = NewtonSym && ! onika::cuda::gpu_device_execution_t::value;
+        if constexpr ( LOCK ) cp_locks[cell_a][p_a].lock();
         if constexpr ( CPAA ) { ONIKA_CU_BLOCK_ATOMIC_ADD( m_rho_data[m_cell_particle_offset[cell_a]+p_a] , ctx.ext.rho ); }
         if constexpr (!CPAA ) { m_rho_data[m_cell_particle_offset[cell_a]+p_a] += ctx.ext.rho; }
-        cp_locks[cell_a][p_a].unlock();
+        if constexpr ( LOCK ) cp_locks[cell_a][p_a].unlock();
       }
       
       template<class ComputeBufferT, class CellParticlesT>
@@ -115,6 +117,8 @@ namespace exaStamp
         ComputeBufferT& ctx, Vec3d dr,double d2, int type_a,
         CellParticlesT cells,size_t cell_b,size_t p_b , double /*scale */ ) const
       {
+        static constexpr bool CPAA = NewtonSym &&   onika::cuda::gpu_device_execution_t::value;
+        static constexpr bool LOCK = NewtonSym && ! onika::cuda::gpu_device_execution_t::value;
         if( m_pair_enabled!=nullptr && !m_pair_enabled[unique_pair_id(type_a,type_a)] ) return;
         const double r = sqrt( d2 );
         //assert( cell_b < m_nb_cells );
@@ -126,10 +130,10 @@ namespace exaStamp
           if constexpr ( NewtonSym )
           {
             const double rholoc = USTAMP_POTENTIAL_EAM_RHO_NODERIV( p, r, type_a, type_b );
-            cp_locks[cell_b][p_b].lock();
+            if constexpr ( LOCK ) cp_locks[cell_b][p_b].lock();
             if constexpr ( CPAA ) { ONIKA_CU_BLOCK_ATOMIC_ADD( m_rho_data[m_cell_particle_offset[cell_b]+p_b] , rholoc ); }
             if constexpr (!CPAA ) { m_rho_data[m_cell_particle_offset[cell_b]+p_b] += rholoc; }
-            cp_locks[cell_b][p_b].unlock();
+            if constexpr ( LOCK ) cp_locks[cell_b][p_b].unlock();
           }
         }
       }
@@ -173,7 +177,7 @@ namespace exaStamp
       double ep = 0.0;
     };
 
-    template<bool NewtonSym, class CPLocksT, bool CPAA>
+    template<bool NewtonSym, class CPLocksT>
     struct SymForceOp
     {
       const onika::cuda::ro_shallow_copy_t<USTAMP_POTENTIAL_PARMS> p = {};
@@ -197,7 +201,9 @@ namespace exaStamp
       template<class ComputeBufferT, class CellParticlesT>
       ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE void operator () (const ComputeBufferT& ctx, CellParticlesT cells, size_t cell_a, size_t p_a, exanb::ComputePairParticleContextStop ) const
       {
-        cp_locks[cell_a][p_a].lock();
+        static constexpr bool CPAA = NewtonSym &&   onika::cuda::gpu_device_execution_t::value;
+        static constexpr bool LOCK = NewtonSym && ! onika::cuda::gpu_device_execution_t::value;
+        if constexpr ( LOCK ) cp_locks[cell_a][p_a].lock();
         if constexpr ( CPAA )
         {
           ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_a][field::fx][p_a] , ctx.ext.f.x );
@@ -220,7 +226,7 @@ namespace exaStamp
           }
           //cells[cell_a][field::virial][p_a] += ctx.vir;
         }
-        cp_locks[cell_a][p_a].unlock();
+        if constexpr ( LOCK ) cp_locks[cell_a][p_a].unlock();
       }
 
       template<class ComputeBufferT, class CellParticlesT>
@@ -230,6 +236,8 @@ namespace exaStamp
         CellParticlesT cells,size_t cell_b, size_t p_b
         , double /*scale*/) const
       {
+        static constexpr bool CPAA = NewtonSym &&   onika::cuda::gpu_device_execution_t::value;
+        static constexpr bool LOCK = NewtonSym && ! onika::cuda::gpu_device_execution_t::value;
         static constexpr bool eflag = std::is_same_v<decltype(ctx.ext),ForceEnergyOpExtStorage> ;
         if( m_pair_enabled!=nullptr && !m_pair_enabled[unique_pair_id(type_a,type_a)] ) return;
 
@@ -246,7 +254,7 @@ namespace exaStamp
           if constexpr ( eflag ) ctx.ext.ep += .5 * phi;          
           if constexpr ( NewtonSym )
           {
-            cp_locks[cell_b][p_b].lock();
+            if constexpr ( LOCK ) cp_locks[cell_b][p_b].lock();
             if constexpr ( CPAA )
             {            
               ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][field::fx][p_b] , - dr_fe.x );
@@ -261,7 +269,7 @@ namespace exaStamp
               cells[cell_b][field::fz][p_b] -= dr_fe.z;
               if constexpr ( eflag ) cells[cell_b][field::ep][p_b] += .5 * phi;
             }
-            cp_locks[cell_b][p_b].unlock();
+            if constexpr ( LOCK ) cp_locks[cell_b][p_b].unlock();
           }
         }
       }
@@ -275,7 +283,7 @@ namespace exaStamp
 namespace exanb
 {
 
-  template<bool NewtonSym, class CPLocksT, bool CPAA> struct ComputePairTraits<exaStamp::PRIV_NAMESPACE_NAME::SymRhoOp<NewtonSym,CPLocksT,CPAA> >
+  template<bool NewtonSym, class CPLocksT> struct ComputePairTraits<exaStamp::PRIV_NAMESPACE_NAME::SymRhoOp<NewtonSym,CPLocksT> >
   {
     static inline constexpr bool ComputeBufferCompatible = false;
     static inline constexpr bool BufferLessCompatible    = true;
@@ -286,7 +294,7 @@ namespace exanb
 //    static inline constexpr bool RequiresNbhOptionalData = false; // interaction weighting
   };
 
-  template<bool NewtonSym, class CPLocksT, bool CPAA> struct ComputePairTraits<exaStamp::PRIV_NAMESPACE_NAME::SymForceOp<NewtonSym,CPLocksT,CPAA> >
+  template<bool NewtonSym, class CPLocksT> struct ComputePairTraits<exaStamp::PRIV_NAMESPACE_NAME::SymForceOp<NewtonSym,CPLocksT> >
   {
     static inline constexpr bool ComputeBufferCompatible = false;
     static inline constexpr bool BufferLessCompatible    = true;
