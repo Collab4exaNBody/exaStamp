@@ -33,7 +33,6 @@ namespace exaStamp
     ADD_SLOT( bool                     , serialize_pack_send , INPUT , false );
     ADD_SLOT( bool                     , wait_all          , INPUT , false );
 
-    ADD_SLOT( EamAdditionalFields      , eam_extra_fields  , INPUT_OUTPUT );
     ADD_SLOT( UpdateGhostsScratch      , ghost_comm_buffers, PRIVATE );
 
   public:
@@ -45,15 +44,8 @@ namespace exaStamp
       auto pecfunc = [self=this]() { return self->parallel_execution_context(); };
       auto pesfunc = [self=this](unsigned int i) { return self->parallel_execution_stream(i); };
 
-      // Emb term computation will access, for each central atom, potential energy (internal field) and emb_field (externally stored extra field)
-      if( eam_extra_fields->m_rho_emb.size() != grid->number_of_particles() )
-      {
-        fatal_error() << "inconsistent size for EAM temporary storage buffer" << std::endl;
-      }
-//      eam_extra_fields->m_rho_emb.resize( grid->number_of_particles() );
-      double * emb_ptr = eam_extra_fields->m_rho_emb.data();
-      auto emb_field = make_external_field_flat_array_accessor( *grid , emb_ptr , field::rho_dEmb );
-      auto ghost_update_fields = onika::make_flat_tuple( emb_field );
+      auto rho_emb_field = grid->field_accessor( field::rho_dEmb );
+      auto ghost_update_fields = onika::make_flat_tuple( rho_emb_field );
 
       grid_update_ghosts( ldbg, *mpi, *ghost_comm_scheme, *grid, nullptr,
                           *ghost_comm_buffers, pecfunc, pesfunc, ghost_update_fields,

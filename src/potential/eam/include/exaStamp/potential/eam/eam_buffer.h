@@ -10,6 +10,7 @@
 #include <exanb/fields.h>
 #include <exanb/core/config.h>
 #include <exanb/core/declare_field.h>
+#include <exanb/core/thread.h>
 
 XSTAMP_DECLARE_FIELD(double , rho_dEmb  ,"density or embedding term");
 
@@ -37,6 +38,7 @@ namespace exaStamp
 //    onika::memory::CudaMMVector< PhiRhoCutoff > m_phi_rho_cutoff;
     onika::memory::CudaMMVector< uint8_t > m_pair_enabled;
     onika::memory::CudaMMVector< EamMultimatPotentialParmT > m_ro_potentials;
+    spin_mutex_array m_particle_locks;
   };
 
   struct EAMSpecyPairInfo

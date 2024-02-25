@@ -21,7 +21,12 @@ chunk_neighbors:
     build_particle_offset: true
     dual_particle_offset: false
     random_access: false
+#    half_symmetric: true
     chunk_size: 1
+
+chunk_neighbors_impl:
+  - chunk_neighbors
+  - chunk_neighbors_to_flat_neighbors
 
 ghost_update_emb: &ghost_update_parms
   gpu_buffer_pack: true
@@ -125,9 +130,9 @@ dump_analysis: nop
 dump_data: nop
 
 global:
-  simulation_end_iteration: 50
+  simulation_end_iteration: 40
   simulation_log_frequency: 10
-  rcut_inc: 1.0 ang
+  rcut_inc: 0.5 ang
   dt: 1.0e-3 ps
   simulation_dump_frequency: -1
   simulation_dump_thermo_frequency: -1

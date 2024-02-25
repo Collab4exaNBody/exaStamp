@@ -90,9 +90,7 @@ namespace exaStamp
 
     ADD_SLOT( GridParticleLocks     , particle_locks      , INPUT_OUTPUT , OPTIONAL , DocString{"particle spin locks"} );
 
-    ADD_SLOT( EamAdditionalFields   , eam_extra_fields , INPUT_OUTPUT );
     ADD_SLOT( EamScratch            , eam_scratch      , PRIVATE );
-
   public:
 
     // Operator execution
@@ -149,6 +147,12 @@ namespace exaStamp
       }
       USTAMP_POTENTIAL_EAM_MM_INIT_TYPES( *parameters , n_species , eam_scratch->m_pair_enabled.data() );
 
+      auto rho_emb_field = grid->field_accessor( field::rho_dEmb );
+      auto * rho_emb_ptr = rho_emb_field.m_func.m_data_array;
+
+      auto c_rho_emb_field = grid->field_const_accessor( field::rho_dEmb );
+      const auto * c_rho_emb_ptr = c_rho_emb_field.m_func.m_data_array;
+
       // execute the 2 passes
       auto compute_eam_force = [&]( const auto& cp_xform , const auto& cp_locks , auto cp_emb_fields , auto force_buf )
       {
@@ -162,58 +166,44 @@ namespace exaStamp
         // 1st pass (new) computes rho then emb, without compute buffer
         if( *eam_rho )
         {
-          eam_extra_fields->m_rho_emb.clear();
-          size_t n_particles = grid->number_of_particles();
-          eam_extra_fields->m_rho_emb.resize( n_particles );
-          double * __restrict__ rho_ptr = eam_extra_fields->m_rho_emb.data();
-
-          onika::parallel::block_parallel_memset( eam_extra_fields->m_rho_emb.data() , n_particles , 0.0 , parallel_execution_context() );
+          onika::parallel::parallel_memset( rho_emb_ptr , grid->number_of_particles() , 0.0 , parallel_execution_context() );
 
           auto rho_op_fields = make_field_tuple_from_field_set( FieldSet< field::_type >{} );
           auto rho_buf_factory = make_empty_pair_buffer<RhoOpExtStorage>();
           if( *eam_symmetry )
           {
             auto rho_optional = make_compute_pair_optional_args( nbh_it_sym, cp_weight , cp_xform , cp_locks, ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{} );
-            SymRhoOp<true,CPLocksT> rho_op { *parameters, eam_scratch->m_pair_enabled.data(), c_particle_offset, rho_ptr, cp_locks };
+            SymRhoOp<true,CPLocksT> rho_op { *parameters, eam_scratch->m_pair_enabled.data(), c_particle_offset, rho_emb_ptr, cp_locks };
             compute_cell_particle_pairs( *grid, *rcut, *eam_ghost, rho_optional, rho_buf_factory, rho_op, rho_op_fields, parallel_execution_context() );
           }
           else
           {
             auto rho_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks, ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{} );
-            SymRhoOp<false,CPLocksT> rho_op { *parameters, eam_scratch->m_pair_enabled.data(), c_particle_offset, rho_ptr, cp_locks };
+            SymRhoOp<false,CPLocksT> rho_op { *parameters, eam_scratch->m_pair_enabled.data(), c_particle_offset, rho_emb_ptr, cp_locks };
             compute_cell_particle_pairs( *grid, *rcut, *eam_ghost, rho_optional, rho_buf_factory, rho_op, rho_op_fields, parallel_execution_context() );
           }
         }
         
         if( *eam_rho2emb )
         {
-          if( eam_extra_fields->m_rho_emb.size() != grid->number_of_particles() )
-          {
-            fatal_error() << "inconsistent size for EAM temporary storage buffer" << std::endl;
-          }
-          double * emb_ptr = eam_extra_fields->m_rho_emb.data();
-          auto emb_field = make_external_field_flat_array_accessor( *grid , emb_ptr , field::rho_dEmb );
-
           Rho2EmbOp rho2emb_op { *parameters , eam_scratch->m_pair_enabled.data() };
-          auto rho2emb_op_fields = make_field_tuple_from_field_set( cp_emb_fields , emb_field );
+          auto rho2emb_op_fields = make_field_tuple_from_field_set( cp_emb_fields , rho_emb_field );
           compute_cell_particles( *grid , *eam_ghost , rho2emb_op , rho2emb_op_fields , parallel_execution_context() );
         }
 
         // 2nd pass parameters: compute final force using the emb term, only for non ghost particles (but reading EMB terms from neighbor particles)
         if( *eam_force )
         {
-          assert( eam_extra_fields->m_rho_emb.size() == grid->number_of_particles() );
-          const auto * __restrict__ c_emb_ptr = eam_extra_fields->m_rho_emb.data();
           if( *eam_symmetry )
           {
             auto force_optional = make_compute_pair_optional_args( nbh_it_sym, cp_weight , cp_xform , cp_locks );
-            SymForceOp<true,CPLocksT> force_op { *parameters, eam_scratch->m_pair_enabled.data(), c_particle_offset, c_emb_ptr , cp_locks };
+            SymForceOp<true,CPLocksT> force_op { *parameters, eam_scratch->m_pair_enabled.data(), c_particle_offset, c_rho_emb_ptr , cp_locks };
             compute_cell_particle_pairs( *grid, *rcut, false, force_optional, force_buf, force_op, cp_force_fields_v, parallel_execution_context() );
           }
           else
           {
             auto force_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks );
-            SymForceOp<false,CPLocksT> force_op { *parameters, eam_scratch->m_pair_enabled.data(), c_particle_offset, c_emb_ptr, cp_locks };
+            SymForceOp<false,CPLocksT> force_op { *parameters, eam_scratch->m_pair_enabled.data(), c_particle_offset, c_rho_emb_ptr, cp_locks };
             compute_cell_particle_pairs( *grid, *rcut, false, force_optional, force_buf, force_op, cp_force_fields_v, parallel_execution_context() );
           }          
         }
