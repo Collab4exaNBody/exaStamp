@@ -14,6 +14,8 @@
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/log.h>
 #include <exanb/core/cpp_utils.h>
+#include <exanb/compute/compute_pair_optional_args.h>
+#include <exanb/core/thread.h>
 
 #include <exaStamp/potential/eam/eam_buffer.h>
 #include <exaStamp/potential/eam/eam_yaml.h>
@@ -25,11 +27,7 @@
 
 #ifdef USTAMP_POTENTIAL_EAM_MM // operator compiled only if potential is multimaterial
 
-#include "eam_force_op_multimat.h"
-
-#ifndef USTAMP_POTENTIAL_EAM_MM_INIT_TYPES
-#define USTAMP_POTENTIAL_EAM_MM_INIT_TYPES(p,nt,pe) /**/
-#endif
+#include "eam_force_op_multimat_flat.h"
 
 namespace exaStamp
 {
@@ -43,7 +41,9 @@ namespace exaStamp
     using EamScratch = EamMultimatPotentialScratch< USTAMP_POTENTIAL_PARMS >;
     using StringVector = std::vector< std::string >;
 
-    template<bool NewtonSym, bool Ghost, class ParticleLocksT> using FlatSymRhoOp = PRIV_NAMESPACE_NAME::FlatSymRhoOp<NewtonSym,Ghost,ParticleLocksT>;
+    template<bool NewtonSym, class XFormT> using FlatSymRhoOp = PRIV_NAMESPACE_NAME::FlatSymRhoOp<NewtonSym,XFormT>;
+    template<bool EnergyFlag> using FlatRho2EmbOp = PRIV_NAMESPACE_NAME::FlatRho2EmbOp<EnergyFlag>;
+    template<bool NewtonSym, class XFormT> using FlatSymForceOp = PRIV_NAMESPACE_NAME::FlatSymForceOp<NewtonSym,XFormT>;
 
     // ========= I/O slots =======================
     ADD_SLOT( ParticleSpecies       , species          , INPUT , REQUIRED );
@@ -65,7 +65,7 @@ namespace exaStamp
     ADD_SLOT( bool                  , eam_force    , INPUT , true );
     ADD_SLOT( bool                  , eam_symmetry , INPUT , false );
 
-    ADD_SLOT( GridParticleLocks     , particle_locks       , INPUT_OUTPUT , OPTIONAL , DocString{"particle spin locks"} );
+    ADD_SLOT( spin_mutex_array      , flat_particle_locks       , INPUT_OUTPUT , OPTIONAL , DocString{"particle spin locks"} );
 
     ADD_SLOT( EamScratch            , eam_scratch          , PRIVATE );
     
@@ -81,7 +81,7 @@ namespace exaStamp
         *ghost_dist_max = std::max( *ghost_dist_max , (*rcut) * 2.0 );
       }
 
-      size_t n_particles = grid->number_of_particles();
+      const size_t n_particles = grid->number_of_particles();
       if( n_particles == 0 ) { return ; } // short cut to avoid errors in pre-initialization step
 
       bool log_energy = false;
@@ -107,11 +107,23 @@ namespace exaStamp
            <<" , eflag="<< log_energy
            <<" , virflag="<<need_virial
            <<" , need_locks="<< need_particle_locks << std::endl;
-
-      size_t n_species = species->size();
-      size_t n_type_pairs = unique_pair_count( n_species );
       
-      bool initialize_scratch = eam_scratch->m_pair_enabled.empty();
+      if( need_particle_locks )
+      {
+        if( ! flat_particle_locks.has_value() )
+        {
+          fatal_error()<<"flat_particle_locks is needed, but corresponding slot has no value" << std::endl;
+        }
+        if( flat_particle_locks->size() != grid->number_of_particles() )
+        {
+          fatal_error()<<"flat_particle_locks has wrong size : "<<flat_particle_locks->size()<<" <> "<< grid->number_of_particles() << std::endl;
+        }
+      }
+
+      const size_t n_species = species->size();
+      const size_t n_type_pairs = unique_pair_count( n_species );
+      const bool initialize_scratch = eam_scratch->m_pair_enabled.empty();
+      
       if( initialize_scratch )
       {
         eam_scratch->m_pair_enabled.assign( n_type_pairs , false );
@@ -127,28 +139,76 @@ namespace exaStamp
       USTAMP_POTENTIAL_EAM_MM_INIT_TYPES( *parameters , n_species , eam_scratch->m_pair_enabled.data() );
 
       auto rho_emb = grid->field_accessor( field::rho_dEmb );
-      //auto energy = grid->field_accessor( field::flat_ep );
-      //auto fx = grid->field_accessor( field::flat_fx );
-      //auto fy = grid->field_accessor( field::flat_fy );
-      //auto fz = grid->field_accessor( field::flat_fz );
+      auto energy = grid->field_accessor( field::flat_ep );
+      auto fx = grid->field_accessor( field::flat_fx );
+      auto fy = grid->field_accessor( field::flat_fy );
+      auto fz = grid->field_accessor( field::flat_fz );
       auto rx = grid->field_accessor( field::flat_rx );
       auto ry = grid->field_accessor( field::flat_ry );
       auto rz = grid->field_accessor( field::flat_rz );
       auto types = grid->field_accessor( field::flat_type );
 
-      if( *eam_rho )
+      const double rc = *rcut;
+      const double rc2 = rc*rc;
+
+      // execute the 2 passes
+      auto compute_eam_force = [&]( const auto& cp_xform , auto newtonSym )
       {
-        const size_t n_particles = grid->number_of_particles();
-        eam_scratch->m_particle_locks.resize( n_particles );
-        const double rc = *rcut;
-        const double rc2 = rc*rc;
-        FlatSymRhoOp< true , false , spin_mutex_array > func =
-          { *parameters, eam_scratch->m_pair_enabled.data(), rc2
-          , flat_nbh_list->m_neighbor_offset.data(), flat_nbh_list->m_neighbor_list.data(), flat_nbh_list->m_half_count.data(), grid->particle_ghost_flag_data()
-          , rho_emb.m_func.m_data_array, types.m_func.m_data_array, rx.m_func.m_data_array, ry.m_func.m_data_array, rz.m_func.m_data_array, eam_scratch->m_particle_locks };
-        parallel_for( n_particles , func , parallel_execution_context() );
-      }
+        using XFormT = std::remove_reference_t<decltype(cp_xform)>;
+        
+        if( *eam_rho )
+        {          
+          onika::parallel::parallel_memset( rho_emb.m_func.m_data_array , n_particles , 0.0 , parallel_execution_context() );
+
+          FlatSymRhoOp< newtonSym.value , XFormT > rho_op =
+            { *parameters, rc2
+            , flat_nbh_list->m_neighbor_offset.data(), flat_nbh_list->m_neighbor_list.data(), flat_nbh_list->m_half_count.data()
+            , (*eam_ghost) ? nullptr : grid->particle_ghost_flag_data() , eam_scratch->m_pair_enabled.data()
+            , rho_emb.m_func.m_data_array, types.m_func.m_data_array, rx.m_func.m_data_array, ry.m_func.m_data_array, rz.m_func.m_data_array
+            , cp_xform , flat_particle_locks->data() };
+
+          parallel_for( n_particles , rho_op , parallel_execution_context() );
+        }
+        
+        if( *eam_rho2emb )
+        {
+          if( log_energy )
+          {
+            FlatRho2EmbOp<true> rho2emb_op{ *parameters, (*eam_ghost) ? nullptr : grid->particle_ghost_flag_data(), eam_scratch->m_pair_enabled.data()
+                                          , types.m_func.m_data_array, rho_emb.m_func.m_data_array, energy.m_func.m_data_array };
+            parallel_for( n_particles , rho2emb_op , parallel_execution_context() );
+          }
+          else
+          {
+            FlatRho2EmbOp<false> rho2emb_op{ *parameters, (*eam_ghost) ? nullptr : grid->particle_ghost_flag_data(), eam_scratch->m_pair_enabled.data()
+                                          , types.m_func.m_data_array, rho_emb.m_func.m_data_array };
+            parallel_for( n_particles , rho2emb_op , parallel_execution_context() );
+          }
+        }
+
+        if( *eam_force )
+        {
+          FlatSymForceOp< newtonSym.value, XFormT > force_op =
+            { *parameters, rc2
+            , flat_nbh_list->m_neighbor_offset.data(), flat_nbh_list->m_neighbor_list.data(), flat_nbh_list->m_half_count.data()
+            , (*eam_ghost) ? nullptr : grid->particle_ghost_flag_data() , eam_scratch->m_pair_enabled.data()
+            , rho_emb.m_func.m_data_array, types.m_func.m_data_array
+            , rx.m_func.m_data_array, ry.m_func.m_data_array, rz.m_func.m_data_array
+            , fx.m_func.m_data_array, fy.m_func.m_data_array, fz.m_func.m_data_array
+            , energy.m_func.m_data_array, cp_xform, flat_particle_locks->data() };
+          parallel_for( n_particles , force_op , parallel_execution_context() );            
+        }
+
+      };
   
+      auto compute_eam_xform = [&]( const auto& cp_xform )
+      {
+        if( *eam_symmetry ) compute_eam_force( cp_xform , std::true_type{} );
+        else                compute_eam_force( cp_xform , std::false_type{} );
+      };
+
+      if( domain->xform_is_identity() ) compute_eam_xform( exanb::NullXForm{} );
+      else                              compute_eam_xform( exanb::LinearXForm{domain->xform()} );
     }
 
   };

@@ -63,9 +63,9 @@ preinit_rcut_max:
 
 first_iteration:
   - init_particles
-  - zero_force_energy
+  - zero_force_energy_impl
   - compute_force
-  - force_to_accel
+  - force_to_accel_impl
   - default_thermodynamic_state
   - default_print_thermodynamic_state: { lb_flag: false , move_flag: false , print_header: true }
   - default_dump_thermodynamic_state

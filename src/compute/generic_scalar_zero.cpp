@@ -21,18 +21,16 @@ under the License.
 
 #include <exanb/core/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/compute/generic_scalar_blender.h>
+#include <exanb/compute/generic_scalar_zero.h>
 
 namespace exanb
 {
-  template<class GridT> using BlendEnergyToFlatArray    = GenericScalarBlender< GridT, field::_ep , field::_flat_ep >;
-  template<class GridT> using BlendEnergyFromFlatArray  = GenericScalarBlender< GridT, field::_flat_ep , field::_ep >;
+  template<class GridT> using ZeroFlatForceEnergy    = GenericScalarZero< GridT, field::_flat_fx, field::_flat_fy, field::_flat_fz, field::_flat_ep >;
   
  // === register factories ===  
   CONSTRUCTOR_FUNCTION
   {
-   OperatorNodeFactory::instance()->register_factory( "blend_energy_to_flat_array", make_grid_variant_operator< BlendEnergyToFlatArray > );
-   OperatorNodeFactory::instance()->register_factory( "blend_energy_from_flat_array", make_grid_variant_operator< BlendEnergyFromFlatArray > );
+   OperatorNodeFactory::instance()->register_factory( "zero_flat_force_energy", make_grid_variant_operator< ZeroFlatForceEnergy > );
   }
 
 }

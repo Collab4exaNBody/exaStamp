@@ -74,6 +74,10 @@
   }
 #endif
 
+#ifndef USTAMP_POTENTIAL_EAM_MM_INIT_TYPES
+#define USTAMP_POTENTIAL_EAM_MM_INIT_TYPES(p,nt,pe) /**/
+#endif
+
 namespace exaStamp
 {
   using namespace exanb;
@@ -87,77 +91,8 @@ namespace exaStamp
     struct RhoOpExtStorage
     {
       double rho = 0.0;
-    };
-
-    template<bool NewtonSym, bool Ghost, class ParticleLocksT>
-    struct FlatSymRhoOp
-    {
-      using NeighborOffset = uint64_t;
-      using ParticleIndex = uint32_t;
-      using NeighborCount = uint16_t;
-    
-      const onika::cuda::ro_shallow_copy_t<USTAMP_POTENTIAL_PARMS> m_eam_parms = {};
-      const uint8_t * __restrict__ m_pair_enabled = nullptr;
-      double rcut2 = 0.0;
-
-      const NeighborOffset * __restrict__ m_neighbor_offset = nullptr;
-      const ParticleIndex * __restrict__ m_neighbor_list = nullptr;
-      const NeighborCount * __restrict__ m_half_count = nullptr;
-      const uint64_t * __restrict__ m_ghost_flag = nullptr;
-
-      double * __restrict__ m_rho = nullptr;
-      const uint8_t * __restrict__ m_types = nullptr;
-      const double * __restrict__ m_rx = nullptr;
-      const double * __restrict__ m_ry = nullptr;
-      const double * __restrict__ m_rz = nullptr;
-      
-      ParticleLocksT & m_locks;
-
-      ONIKA_HOST_DEVICE_FUNC inline void operator () (size_t i) const
-      {
-        static constexpr bool CPAA = NewtonSym &&   onika::cuda::gpu_device_execution_t::value;
-        static constexpr bool LOCK = NewtonSym && ! onika::cuda::gpu_device_execution_t::value;
-
-        if constexpr ( ! Ghost ) if( ( m_ghost_flag[i/64] & ( 1ull << (i%64) ) ) != 0 ) return;
-
-        const int type_a = m_types[i];
-        if( m_pair_enabled!=nullptr && !m_pair_enabled[unique_pair_id(type_a,type_a)] ) return;
-
-        const Vec3d ri = { m_rx[i] , m_ry[i] , m_rz[i] };
-        const auto j_start = m_neighbor_offset[i];
-        const unsigned int nj = NewtonSym ? m_half_count[i] : ( m_neighbor_offset[i+1] - j_start );
-        const auto * __restrict__ neighbors = m_neighbor_list + j_start;
-        
-        double rho = 0.0;
-        for(unsigned int jj=0;jj<nj;jj++)
-        {
-          const auto j = neighbors[jj];
-          const Vec3d rj = { m_rx[j] , m_ry[j] , m_rz[j] };
-          const Vec3d dr = rj - ri;
-          const double r2 = norm2( dr );
-          if( r2 < rcut2 )
-          {
-            const int type_b = m_types[j];  
-            if( m_pair_enabled==nullptr || m_pair_enabled[unique_pair_id(type_a,type_b)] )
-            {
-              const double r = sqrt( r2 );
-              rho += USTAMP_POTENTIAL_EAM_RHO_NODERIV( m_eam_parms, r, type_b, type_a );
-              if constexpr ( NewtonSym )
-              {
-                const double rho_j = USTAMP_POTENTIAL_EAM_RHO_NODERIV( m_eam_parms, r, type_a, type_b );
-                if constexpr ( LOCK ) m_locks[j].lock();
-                if constexpr ( CPAA ) { ONIKA_CU_BLOCK_ATOMIC_ADD( m_rho[j] , rho_j ); }
-                if constexpr (!CPAA ) { m_rho[j] += rho_j; }
-                if constexpr ( LOCK ) m_locks[j].unlock();
-              }
-            }
-          }
-        }
-        if constexpr ( LOCK ) m_locks[i].lock();
-        if constexpr ( CPAA ) { ONIKA_CU_BLOCK_ATOMIC_ADD( m_rho[i] , rho ); }
-        if constexpr (!CPAA ) { m_rho[i] += rho; }
-        if constexpr ( LOCK ) m_locks[i].unlock();
-      }
+      unsigned int cell_a = 0;
+      unsigned int p_a = 0;
     };
 
     template<bool NewtonSym, class CPLocksT>
@@ -170,9 +105,11 @@ namespace exaStamp
       CPLocksT & cp_locks;
       
       template<class ComputeBufferT, class CellParticlesT>
-      ONIKA_HOST_DEVICE_FUNC inline void operator () (ComputeBufferT& ctx, CellParticlesT cells, size_t , size_t , exanb::ComputePairParticleContextStart ) const
+      ONIKA_HOST_DEVICE_FUNC inline void operator () (ComputeBufferT& ctx, CellParticlesT cells, size_t cell_a , size_t p_a, exanb::ComputePairParticleContextStart ) const
       {
         ctx.ext.rho = 0.0;
+        ctx.ext.cell_a = cell_a;
+        ctx.ext.p_a = p_a;
       }
 
       template<class ComputeBufferT, class CellParticlesT>
@@ -194,13 +131,18 @@ namespace exaStamp
         static constexpr bool CPAA = NewtonSym &&   onika::cuda::gpu_device_execution_t::value;
         static constexpr bool LOCK = NewtonSym && ! onika::cuda::gpu_device_execution_t::value;
         if( m_pair_enabled!=nullptr && !m_pair_enabled[unique_pair_id(type_a,type_a)] ) return;
-        const double r = sqrt( d2 );
         //assert( cell_b < m_nb_cells );
         //assert( p_b < ( m_cell_offsets[cell_b+1] - m_cell_offsets[cell_b] ) );
         const int type_b = cells[cell_b][field::type][p_b];  
         if( m_pair_enabled==nullptr || m_pair_enabled[unique_pair_id(type_a,type_b)] )
         {
+          const double r = sqrt( d2 );
           ctx.ext.rho += USTAMP_POTENTIAL_EAM_RHO_NODERIV( p, r, type_b, type_a );
+
+          //size_t p_a_idx = m_cell_particle_offset[ctx.ext.cell_a] + ctx.ext.p_a;
+          //size_t p_b_idx = m_cell_particle_offset[cell_b] + p_b;
+          //printf("i=%05d , j=%05d , rij=%g,%g,%g\n",int(p_a_idx),int(p_b_idx),cells[cell_a][posfields.e0][p_a],cells[cell_a][posfields.e1][p_a],cells[cell_a][posfields.e2][p_a]);
+
           if constexpr ( NewtonSym )
           {
             const double rholoc = USTAMP_POTENTIAL_EAM_RHO_NODERIV( p, r, type_a, type_b );
@@ -385,18 +327,6 @@ namespace exanb
     static inline constexpr bool CudaCompatible = USTAMP_POTENTIAL_CUDA_COMPATIBLE;
   };
     
-}
-
-namespace onika
-{
-  namespace parallel
-  {  
-    template<bool NewtonSym, bool Ghost, class ParticleLocksT>
-    struct ParallelForFunctorTraits< exaStamp::PRIV_NAMESPACE_NAME::FlatSymRhoOp<NewtonSym,Ghost,ParticleLocksT> >
-    {      
-      static inline constexpr bool CudaCompatible = true;
-    };
-  }
 }
 
 

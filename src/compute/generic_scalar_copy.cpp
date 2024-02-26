@@ -21,18 +21,18 @@ under the License.
 
 #include <exanb/core/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/compute/generic_scalar_blender.h>
+#include <exanb/compute/generic_scalar_copy.h>
 
 namespace exanb
 {
-  template<class GridT> using BlendEnergyToFlatArray    = GenericScalarBlender< GridT, field::_ep , field::_flat_ep >;
-  template<class GridT> using BlendEnergyFromFlatArray  = GenericScalarBlender< GridT, field::_flat_ep , field::_ep >;
+  template<class GridT> using CopyTypeToFlatArray   = GenericScalarCopy< GridT, field::_type , field::_flat_type >;
+  template<class GridT> using CopyTypeFromFlatArray = GenericScalarCopy< GridT, field::_flat_type , field::_type >;
   
  // === register factories ===  
   CONSTRUCTOR_FUNCTION
   {
-   OperatorNodeFactory::instance()->register_factory( "blend_energy_to_flat_array", make_grid_variant_operator< BlendEnergyToFlatArray > );
-   OperatorNodeFactory::instance()->register_factory( "blend_energy_from_flat_array", make_grid_variant_operator< BlendEnergyFromFlatArray > );
+   OperatorNodeFactory::instance()->register_factory( "copy_type_to_flat_array", make_grid_variant_operator< CopyTypeToFlatArray > );
+   OperatorNodeFactory::instance()->register_factory( "copy_type_from_flat_array", make_grid_variant_operator< CopyTypeFromFlatArray > );
   }
 
 }

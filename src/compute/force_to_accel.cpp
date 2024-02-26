@@ -52,21 +52,9 @@ namespace exaStamp
   using namespace exanb;
   using namespace onika;
 
-  template<
-    class GridT ,
-    class = AssertGridHasFields< GridT, field::_fx, field::_fy, field::_fz >
-    >
+  template<class GridT, class _FX, class _FY, class _FZ, class _Type >
   class ForceToAcceleration : public OperatorNode
   {
-    // compile time constant indicating if grid has type field
-    using has_type_field_t = typename GridT::CellParticles::template HasField < field::_type > ;
-    static constexpr bool has_type_field = has_type_field_t::value;
-    using PointerTuple = onika::soatl::FieldPointerTuple< GridT::CellParticles::Alignment , GridT::CellParticles::ChunkSize , field::_ax , field::_ay , field::_az >;
-    using f2a_field_set_t = std::conditional_t< has_type_field ,
-                                                 FieldSet<field::_fx, field::_fy, field::_fz,field::_type> ,
-                                                 FieldSet<field::_fx, field::_fy, field::_fz> >;
-    static constexpr f2a_field_set_t f2a_field_set {};
-
     ADD_SLOT( GridT          , grid    , INPUT_OUTPUT);
     ADD_SLOT( ParticleSpecies, species , INPUT , REQUIRED );
 
@@ -77,7 +65,22 @@ namespace exaStamp
     inline void execute ()  override final
     {
       ForceToAccelFunctor func = { species->data() , species->at(0).m_mass };
-      compute_cell_particles( *grid , false , func , f2a_field_set , parallel_execution_context() );
+      auto fx = grid->field_accessor( onika::soatl::FieldId<_FX>{} );
+      auto fy = grid->field_accessor( onika::soatl::FieldId<_FY>{} );
+      auto fz = grid->field_accessor( onika::soatl::FieldId<_FZ>{} );
+
+      onika::soatl::FieldId<_Type> type_field = {};
+      if( grid->has_allocated_field( type_field ) )
+      {    
+        auto type = grid->field_accessor( type_field );
+        auto cp_fields = onika::make_flat_tuple( fx, fy, fz, type );
+        compute_cell_particles( *grid , false , func , cp_fields , parallel_execution_context() );
+      }
+      else
+      {
+        auto cp_fields = onika::make_flat_tuple( fx, fy, fz );
+        compute_cell_particles( *grid , false , func , cp_fields , parallel_execution_context() );
+      }
     }
 
     // -----------------------------------------------
@@ -91,12 +94,14 @@ Converts force field to acceleration field, dividing it by particle mass
 
   };
 
-  template<class GridT> using ForceToAccelerationTmpl = ForceToAcceleration<GridT>;
+  template<class GridT> using ForceToAccelerationTmpl = ForceToAcceleration<GridT, field::_fx, field::_fy, field::_fz, field::_type >;
+  template<class GridT> using ForceToAccelerationFlat = ForceToAcceleration<GridT, field::_flat_fx, field::_flat_fy, field::_flat_fz, field::_flat_type >;
 
   // === register factories ===
   CONSTRUCTOR_FUNCTION
   {
    OperatorNodeFactory::instance()->register_factory( "force_to_accel", make_grid_variant_operator< ForceToAccelerationTmpl > );
+   OperatorNodeFactory::instance()->register_factory( "force_to_accel_flat", make_grid_variant_operator< ForceToAccelerationFlat > );
   }
 
 }
