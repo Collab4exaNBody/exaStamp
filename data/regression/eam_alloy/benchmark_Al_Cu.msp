@@ -1,8 +1,8 @@
 
 includes:
 #  - config_update_symmetric_forces.msp
-#  - config_flat_symmetric_forces.msp
-  - config_flat_arrays.msp
+  - config_flat_symmetric_forces.msp
+#  - config_flat_arrays.msp
 
 configuration:
 #  onika:
@@ -33,6 +33,8 @@ update_force_energy_from_ghost: *ghost_update_parms
 ghost_update_r: *ghost_update_parms
 
 ghost_update_all_no_fv: *ghost_update_parms
+
+flat_force_energy_from_ghost: *ghost_update_parms
 
 
 eam_rho:
@@ -104,8 +106,8 @@ compute_force_singlepass:
 
 #compute_force: compute_force_nosym
 #compute_force: compute_force_sym
-#compute_force: compute_force_flat_sym
-compute_force: compute_force_flat_nosym
+compute_force: compute_force_flat_sym
+#compute_force: compute_force_flat_nosym
 
 species:
   - Al:
