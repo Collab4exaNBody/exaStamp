@@ -1,7 +1,8 @@
 
 includes:
 #  - config_update_symmetric_forces.msp
-  - config_flat_symmetric_forces.msp
+#  - config_flat_symmetric_forces.msp
+  - config_flat_arrays.msp
 
 configuration:
 #  onika:
@@ -49,11 +50,17 @@ eam_force:
 eam_force_sym:
   - eam_alloy_force: { rcut: 6.6825 ang , eam_rho: false , eam_rho2emb: false, eam_ghost: false , eam_force: true , eam_symmetry: true }
 
+eam_flat_rho:
+  - eam_alloy_flat_force: { rcut: 6.6825 ang , eam_rho: true , eam_rho2emb: false , eam_ghost: false , eam_force: false , eam_symmetry: false }
+
 eam_flat_rho_sym:
   - eam_alloy_flat_force: { rcut: 6.6825 ang , eam_rho: true , eam_rho2emb: false , eam_ghost: false , eam_force: false , eam_symmetry: true }
 
 eam_flat_rho2emb:
   - eam_alloy_flat_force: { rcut: 6.6825 ang , eam_rho: false , eam_rho2emb: true , eam_ghost: false , eam_force: false , eam_symmetry: false }
+
+eam_flat_force:
+  - eam_alloy_flat_force: { rcut: 6.6825 ang , eam_rho: false , eam_rho2emb: false , eam_ghost: false , eam_force: true , eam_symmetry: false }
 
 eam_flat_force_sym:
   - eam_alloy_flat_force: { rcut: 6.6825 ang , eam_rho: false , eam_rho2emb: false , eam_ghost: false , eam_force: true , eam_symmetry: true }
@@ -84,12 +91,21 @@ compute_force_flat_sym:
     - ghost_update_emb
     - eam_flat_force_sym
 
+compute_force_flat_nosym:
+  rebind: { parameters: eam_alloy_parameters }
+  body:
+    - eam_flat_rho
+    - eam_flat_rho2emb
+    - ghost_update_emb
+    - eam_flat_force
+
 compute_force_singlepass:
   - eam_alloy_force: { rcut: 6.6825 ang , parameters: { file: AlCu.eam.alloy } , eam_rho: true , eam_rho2emb: true , eam_ghost: true , eam_force: true , eam_symmetry: false }
 
 #compute_force: compute_force_nosym
 #compute_force: compute_force_sym
-compute_force: compute_force_flat_sym
+#compute_force: compute_force_flat_sym
+compute_force: compute_force_flat_nosym
 
 species:
   - Al:

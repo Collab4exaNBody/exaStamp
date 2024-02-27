@@ -13,7 +13,6 @@ compute_force_prolog:
   - zero_force_energy_flat: { ghost: true }
 
 compute_force_epilog:
-  - flat_force_energy_from_ghost
   - force_to_accel_flat
   - copy_energy_from_flat_array
 

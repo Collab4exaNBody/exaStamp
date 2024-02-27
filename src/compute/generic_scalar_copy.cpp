@@ -27,12 +27,14 @@ namespace exanb
 {
   template<class GridT> using CopyTypeToFlatArray   = GenericScalarCopy< GridT, field::_type , field::_flat_type >;
   template<class GridT> using CopyTypeFromFlatArray = GenericScalarCopy< GridT, field::_flat_type , field::_type >;
+  template<class GridT> using CopyEnergyFromFlatArray = GenericScalarCopy< GridT, field::_flat_ep , field::_ep >;
   
  // === register factories ===  
   CONSTRUCTOR_FUNCTION
   {
    OperatorNodeFactory::instance()->register_factory( "copy_type_to_flat_array", make_grid_variant_operator< CopyTypeToFlatArray > );
    OperatorNodeFactory::instance()->register_factory( "copy_type_from_flat_array", make_grid_variant_operator< CopyTypeFromFlatArray > );
+   OperatorNodeFactory::instance()->register_factory( "copy_energy_from_flat_array", make_grid_variant_operator< CopyTypeFromFlatArray > );
   }
 
 }
