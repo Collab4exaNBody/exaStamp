@@ -38,7 +38,7 @@ namespace exaStamp
   CONSTRUCTOR_FUNCTION
   {
     OperatorNodeFactory::instance()->register_factory( "update_force_energy_from_ghost", make_grid_variant_operator<UpdateForceEnergyFromGhosts> );
-    OperatorNodeFactory::instance()->register_factory( "update_flat_force_energy_from_ghost", make_grid_variant_operator<UpdateFlatForceEnergyFromGhosts> );
+    OperatorNodeFactory::instance()->register_factory( "flat_force_energy_from_ghost", make_grid_variant_operator<UpdateFlatForceEnergyFromGhosts> );
     OperatorNodeFactory::instance()->register_factory( "update_virial_force_energy_from_ghost", make_grid_variant_operator<UpdateVirialForceEnergyFromGhosts> );
     OperatorNodeFactory::instance()->register_factory( "update_from_ghost_check_id", make_grid_variant_operator<UpdateFromGhostsTestId> );
   }

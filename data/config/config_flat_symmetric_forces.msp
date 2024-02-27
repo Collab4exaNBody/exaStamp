@@ -14,8 +14,15 @@ compute_force_prolog:
   - zero_force_energy: { ghost: true }
 
 compute_force_epilog:
-  - blend_force_from_flat_array
+#  - blend_force_from_flat_array
+  - flat_force_energy_from_ghost
+  - force_to_accel_flat
   - blend_energy_from_flat_array
-  - update_force_energy_from_ghost
-  - force_to_accel
+
+verlet_first_half:
+  - push_flat_f_v_r: { dt_scale: 1.0 , xform_mode: INV_XFORM }
+  - push_flat_f_v: { dt_scale: 0.5  , xform_mode: IDENTITY }  
+
+verlet_second_half:
+  - push_flat_f_v: { dt_scale: 0.5 , xform_mode: IDENTITY }
 
