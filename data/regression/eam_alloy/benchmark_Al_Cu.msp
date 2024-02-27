@@ -1,7 +1,5 @@
 
-#includes:
-#  - config_update_symmetric_forces.msp
-#  - config_flat_arrays.msp
+includes: [ config_update_symmetric_forces.msp ]
 
 configuration:
 #  onika:
@@ -18,6 +16,18 @@ configuration:
   - chunk_neighbors_stats
   - memory_stats
 
+chunk_neighbors:
+  config:
+    build_particle_offset: true
+    dual_particle_offset: false
+    random_access: false
+#    half_symmetric: true
+    chunk_size: 1
+
+chunk_neighbors_impl:
+  - chunk_neighbors
+  - chunk_neighbors_to_flat_neighbors
+
 ghost_update_emb: &ghost_update_parms
   gpu_buffer_pack: true
   async_buffer_pack: true
@@ -33,6 +43,7 @@ ghost_update_r: *ghost_update_parms
 
 ghost_update_all_no_fv: *ghost_update_parms
 
+
 eam_rho:
   - eam_alloy_force: { rcut: 6.6825 ang , eam_rho: true , eam_rho2emb: false , eam_ghost: false , eam_force: false , eam_symmetry: false }
 
@@ -47,19 +58,6 @@ eam_force:
 
 eam_force_sym:
   - eam_alloy_force: { rcut: 6.6825 ang , eam_rho: false , eam_rho2emb: false, eam_ghost: false , eam_force: true , eam_symmetry: true }
-
-flat_eam_rho_sym:
-  - eam_alloy_flat_force: { rcut: 6.6825 ang , eam_rho: true , eam_rho2emb: false , eam_ghost: false , eam_force: false , eam_symmetry: true }
-
-flat_eam_rho2emb:
-  - eam_alloy_flat_force: { rcut: 6.6825 ang , eam_rho: false , eam_rho2emb: true , eam_ghost: false , eam_force: false , eam_symmetry: true }
-
-flat_eam_force_sym:
-  - eam_alloy_flat_force: { rcut: 6.6825 ang , eam_rho: false , eam_rho2emb: false , eam_ghost: false , eam_force: true , eam_symmetry: true }
-
-
-compute_force_singlepass:
-  - eam_alloy_force: { rcut: 6.6825 ang , parameters: { file: AlCu.eam.alloy } , eam_rho: true , eam_rho2emb: true , eam_ghost: true , eam_force: true , eam_symmetry: false }
 
 compute_force_nosym:
   rebind: { parameters: eam_alloy_parameters }
@@ -78,18 +76,17 @@ compute_force_sym:
     - ghost_update_emb
     - eam_force_sym
 
-compute_force_sym_flat:
-  rebind: { parameters: eam_alloy_parameters }
-  body:
-    - copy_position_to_flat_array
-    - copy_type_to_flat_array
-    - flat_eam_rho_sym
-    - update_rho_from_ghost
-    - flat_eam_rho2emb
-    - ghost_update_emb
-    - flat_eam_force_sym
+compute_force_singlepass:
+  - eam_alloy_force: { rcut: 6.6825 ang , parameters: { file: AlCu.eam.alloy } , eam_rho: true , eam_rho2emb: true , eam_ghost: true , eam_force: true , eam_symmetry: false }
 
-compute_force: compute_force_nosym
+#compute_force: compute_force_nosym
+compute_force: compute_force_sym
+
+xxx_compute_force:
+  - eam_rho
+  - eam_rho2emb
+  - ghost_update_emb
+  - eam_force_sym
 
 species:
   - Al:
@@ -133,9 +130,9 @@ dump_analysis: nop
 dump_data: nop
 
 global:
-  simulation_end_iteration: 50
+  simulation_end_iteration: 40
   simulation_log_frequency: 10
-  rcut_inc: 0.7 ang
+  rcut_inc: 0.5 ang
   dt: 1.0e-3 ps
   simulation_dump_frequency: -1
   simulation_dump_thermo_frequency: -1

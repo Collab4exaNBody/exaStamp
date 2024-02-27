@@ -108,11 +108,11 @@ namespace exaStamp
         if( grid->has_allocated_field(virial_field) )
         {
           auto virial = grid->field_accessor( virial_field );        
-          compute_cell_particles( *grid , *ghost , func, onika::make_flat_tuple(fx,fy,fz,virial) , parallel_execution_context() );
+          compute_cell_particles( *grid , *ghost , func, onika::make_flat_tuple(fx,fy,fz,ep,virial) , parallel_execution_context() );
         }
         else
         {
-          compute_cell_particles( *grid , *ghost , func, onika::make_flat_tuple(fx,fy,fz) , parallel_execution_context() );
+          compute_cell_particles( *grid , *ghost , func, onika::make_flat_tuple(fx,fy,fz,ep) , parallel_execution_context() );
         }
       }
     }
