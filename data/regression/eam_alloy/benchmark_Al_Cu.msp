@@ -59,6 +59,12 @@ eam_force:
 eam_force_sym:
   - eam_alloy_force: { rcut: 6.6825 ang , eam_rho: false , eam_rho2emb: false, eam_ghost: false , eam_force: true , eam_symmetry: true }
 
+eam_flat_rho_sym:
+  - eam_alloy_flat_force: { rcut: 6.6825 ang , eam_rho: true , eam_rho2emb: false , eam_ghost: false , eam_force: false , eam_symmetry: true }
+
+eam_flat_force_sym:
+  - eam_alloy_flat_force: { rcut: 6.6825 ang , eam_rho: false , eam_rho2emb: false , eam_ghost: false , eam_force: true , eam_symmetry: true }
+
 compute_force_nosym:
   rebind: { parameters: eam_alloy_parameters }
   body:
@@ -76,17 +82,26 @@ compute_force_sym:
     - ghost_update_emb
     - eam_force_sym
 
+compute_force_flat_sym:
+  rebind: { parameters: eam_alloy_parameters }
+  body:
+    - copy_type_to_flat_array
+    - copy_position_to_flat_array
+    - zero_force_energy_flat: { ghost: true }
+    - eam_flat_rho_sym
+    - update_rho_from_ghost
+    - eam_rho2emb
+    - ghost_update_emb
+    - eam_flat_force_sym
+    - blend_force_from_flat_array
+    - blend_energy_from_flat_array
+
 compute_force_singlepass:
   - eam_alloy_force: { rcut: 6.6825 ang , parameters: { file: AlCu.eam.alloy } , eam_rho: true , eam_rho2emb: true , eam_ghost: true , eam_force: true , eam_symmetry: false }
 
 #compute_force: compute_force_nosym
-compute_force: compute_force_sym
-
-xxx_compute_force:
-  - eam_rho
-  - eam_rho2emb
-  - ghost_update_emb
-  - eam_force_sym
+#compute_force: compute_force_sym
+compute_force: compute_force_flat_sym
 
 species:
   - Al:

@@ -91,8 +91,8 @@ namespace exaStamp
     struct RhoOpExtStorage
     {
       double rho = 0.0;
-      unsigned int cell_a = 0;
-      unsigned int p_a = 0;
+      //unsigned int cell_a = 0;
+      //unsigned int p_a = 0;
     };
 
     template<bool NewtonSym, class CPLocksT>
@@ -108,8 +108,8 @@ namespace exaStamp
       ONIKA_HOST_DEVICE_FUNC inline void operator () (ComputeBufferT& ctx, CellParticlesT cells, size_t cell_a , size_t p_a, exanb::ComputePairParticleContextStart ) const
       {
         ctx.ext.rho = 0.0;
-        ctx.ext.cell_a = cell_a;
-        ctx.ext.p_a = p_a;
+        //ctx.ext.cell_a = cell_a;
+        //ctx.ext.p_a = p_a;
       }
 
       template<class ComputeBufferT, class CellParticlesT>
