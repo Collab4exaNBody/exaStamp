@@ -1,0 +1,44 @@
+chunk_neighbors:
+  config:
+    build_particle_offset: true
+    chunk_size: 1
+
+chunk_neighbors_impl:
+  - chunk_neighbors
+  - chunk_neighbors_to_flat_neighbors
+
+first_iteration:
+  - init_particles
+  - copy_type_to_flat_array
+  - copy_position_to_flat_array
+  - zero_force_energy_flat: { ghost: true }
+  - zero_force_energy: { ghost: true }
+  - compute_force
+  - blend_force_from_flat_array
+  - blend_energy_from_flat_array
+  - update_force_energy_from_ghost
+  - force_to_accel
+  - default_thermodynamic_state
+  - default_print_thermodynamic_state: { lb_flag: false , move_flag: false , print_header: true }
+  - default_dump_thermodynamic_state
+  - next_time_step
+
+numerical_scheme:
+  name: scheme
+  body:
+    - push_f_v_r: { dt_scale: 1.0 , xform_mode: INV_XFORM }
+    - push_f_v: { dt_scale: 0.5 , xform_mode: IDENTITY }
+    - check_and_update_particles
+    - copy_type_to_flat_array
+    - copy_position_to_flat_array
+    - zero_force_energy_flat: { ghost: true }
+    - zero_force_energy: { ghost: true }
+    - compute_force
+    - blend_force_from_flat_array
+    - blend_energy_from_flat_array
+    - update_force_energy_from_ghost
+    - force_to_accel
+    - push_f_v: { dt_scale: 0.5 , xform_mode: IDENTITY }
+    - thermostat
+
+
