@@ -22,12 +22,12 @@ rebuild_amr:
 ################### Neighbor list update ############################
 chunk_neighbors:
   config:
-    free_scratch_memory: true
+    free_scratch_memory: false
     build_particle_offset: false
     subcell_compaction: true
     scratch_mem_per_cell: 1048576
     stream_prealloc_factor: 1.05 # standard value to avoid most of dynamic allocations
-    chunk_size: 8
+    chunk_size: 1
 
 chunk_neighbors_impl: chunk_neighbors
 
