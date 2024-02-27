@@ -1,28 +1,8 @@
-first_iteration:
-  - init_particles
-  - zero_force_energy: { ghost: true }
-  - compute_force
-  - update_force_energy_from_ghost
-#  - update_from_ghost_check_id   # usefull to verify that update_from_ghost is correct
-  - force_to_accel
-  - default_thermodynamic_state
-  - default_print_thermodynamic_state: { lb_flag: false , move_flag: false , print_header: true }
-  - default_dump_thermodynamic_state
-  - next_time_step
 
-numerical_scheme:
-  name: scheme
-  body:
-    - push_f_v_r: { dt_scale: 1.0 , xform_mode: INV_XFORM }
-    - push_f_v: { dt_scale: 0.5 , xform_mode: IDENTITY }
-    - check_and_update_particles
-    - zero_force_energy: { ghost: true }
-    - compute_force
-    - update_force_energy_from_ghost
-#    - update_from_ghost_check_id   # usefull to verify that update_from_ghost is correct
-#    - debug_total_force
-    - force_to_accel
-    - push_f_v: { dt_scale: 0.5 , xform_mode: IDENTITY }
-    - thermostat
+compute_force_prolog:
+  - zero_force_energy: { ghost: true }
+
+compute_force_epilog:
+  - update_force_energy_from_ghost
 
 
