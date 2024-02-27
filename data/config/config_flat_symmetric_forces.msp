@@ -17,4 +17,5 @@ compute_force_epilog:
   - blend_force_from_flat_array
   - blend_energy_from_flat_array
   - update_force_energy_from_ghost
+  - force_to_accel
 

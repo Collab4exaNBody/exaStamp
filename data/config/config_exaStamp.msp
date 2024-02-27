@@ -36,14 +36,10 @@ compute_loop_stop:
     - sim_continue
 
 # default force computation does nothing, these are placeholders used later on
-compute_force: nop
 compute_loop_prolog: nop
 compute_loop_epilog: nop
 init_prolog: nop
 init_epilog: nop
-compute_force_prolog: zero_force_energy
-compute_force_epilog: nop
-
 
 # executing potential sub nodes initializes rcut_max
 # won't actually compute anything since grid is empty at this time
@@ -70,10 +66,7 @@ preinit_rcut_max:
 
 first_iteration:
   - init_particles
-  - compute_force_prolog
-  - compute_force
-  - compute_force_epilog
-  - force_to_accel
+  - compute_all_forces_energy
   - default_thermodynamic_state
   - default_print_thermodynamic_state: { lb_flag: false , move_flag: false , print_header: true }
   - default_dump_thermodynamic_state

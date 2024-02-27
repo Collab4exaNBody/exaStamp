@@ -4,5 +4,5 @@ compute_force_prolog:
 
 compute_force_epilog:
   - update_force_energy_from_ghost
-
+  - force_to_accel
 
