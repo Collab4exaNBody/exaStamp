@@ -297,9 +297,6 @@ namespace exanb
   template<class CellParticles, class ComputeBufferT>
   struct ComputePairTraits< exaStamp::MeamForceComputeFunctor<CellParticles,ComputeBufferT> >
   {
-    static inline constexpr bool RequiresBlockSynchronousCall = false;
-    static inline constexpr bool ComputeBufferCompatible = true;
-    static inline constexpr bool BufferLessCompatible = false;
     static inline constexpr bool CudaCompatible = true;
   };
 

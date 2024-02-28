@@ -243,17 +243,9 @@ namespace exanb
   template<class CellParticles, class ComputeBufferT>
   struct ComputePairTraits< exaStamp::MeamLJForceComputeFunctor<CellParticles,ComputeBufferT> >
   {
-    static inline constexpr bool RequiresBlockSynchronousCall = true;
-    static inline constexpr bool ComputeBufferCompatible = true;
-    static inline constexpr bool BufferLessCompatible = false;
+    //static inline constexpr bool RequiresBlockSynchronousCall = true;
     static inline constexpr bool CudaCompatible = true;
-  };
-
-  template<class CellParticles, class ComputeBufferT>
-  struct ComputePairParticleContextTraits< exaStamp::MeamLJForceComputeFunctor<CellParticles,ComputeBufferT> >
-  {
-    static inline constexpr bool HasParticleContextStart = true;    
-    static inline constexpr bool HasParticleContextStop = false;    
+    static inline constexpr bool HasParticleContextStart = true;
   };
 
 }
