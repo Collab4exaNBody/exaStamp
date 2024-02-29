@@ -1,18 +1,23 @@
 
 includes:
-#  - config_update_symmetric_forces.msp
-  - config_flat_symmetric_forces.msp
+  - config_update_symmetric_forces.msp
+#  - config_flat_symmetric_forces.msp
 #  - config_flat_arrays.msp
 
 configuration:
-#  onika:
-#    gpu_block_size: 256
+  onika:
+    gpu_block_size: 256
   logging:
     debug: false
   debug:
     filter: [ ".*eam_alloy_force" ]
   profiling:
     summary: true
+
+chunk_neighbors:
+  config:
+    chunk_size: 4
+    build_particle_offset: false
 
 +first_iteration:
   - grid_stats
@@ -104,8 +109,8 @@ compute_force_singlepass:
   - eam_alloy_force: { rcut: 6.6825 ang , parameters: { file: AlCu.eam.alloy } , eam_rho: true , eam_rho2emb: true , eam_ghost: true , eam_force: true , eam_symmetry: false }
 
 #compute_force: compute_force_nosym
-#compute_force: compute_force_sym
-compute_force: compute_force_flat_sym
+compute_force: compute_force_sym
+#compute_force: compute_force_flat_sym
 #compute_force: compute_force_flat_nosym
 
 species:
@@ -138,7 +143,7 @@ replicate_domain:
   repeat: [ 1 , 1 , 1 ]
 
 domain:
-  cell_size: 12. ang
+  cell_size: 16. ang
   periodic: [true,true,true]
 
 +first_iteration:
