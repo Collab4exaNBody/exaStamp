@@ -1,0 +1,10 @@
+includes:
+  - benchmark_Al_Cu.msp
+
+chunk_neighbors:
+  config:
+    chunk_size: 1
+    build_particle_offset: true
+
+compute_force: compute_force_nosym
+
