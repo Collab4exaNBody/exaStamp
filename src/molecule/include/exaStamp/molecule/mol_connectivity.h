@@ -13,10 +13,14 @@ namespace exaStamp
 {
   using namespace exanb;
 
-  using ChemicalBonds     = std::vector< std::array<uint64_t,2> >;
-  using ChemicalAngles    = std::vector< std::array<uint64_t,3> >;
-  using ChemicalTorsions  = std::vector< std::array<uint64_t,4> >;
-  using ChemicalImpropers = std::vector< std::array<uint64_t,4> >;
+  using ChemicalBond      = std::array<uint64_t,2>;
+  using ChemicalBonds     = std::vector< ChemicalBond >;
+  using ChemicalAngle     = std::array<uint64_t,3>;
+  using ChemicalAngles    = std::vector< ChemicalAngle >;
+  using ChemicalTorsion   = std::array<uint64_t,4>;
+  using ChemicalTorsions  = std::vector< ChemicalTorsion >;
+  using ChemicalImproper  = std::array<uint64_t,4>;
+  using ChemicalImpropers = std::vector< ChemicalImproper >;
 
   using MoleculeConnectivity = exaStamp::AtomBondConnectivity;
   
