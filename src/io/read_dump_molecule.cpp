@@ -20,10 +20,7 @@ namespace exaStamp
 {
   using namespace exanb;
 
-  template<
-    class GridT,
-    class = AssertGridHasFields< GridT, field::_rx,field::_ry,field::_rz, field::_vx,field::_vy,field::_vz, field::_charge, field::_virial, field::_id, field::_idmol, field::_cmol, field::_type >
-    >
+  template<class GridT>
   class ReadDumpMolecule : public OperatorNode
   {
     ADD_SLOT( MPI_Comm    , mpi             , INPUT );
@@ -44,12 +41,10 @@ namespace exaStamp
     }
   };
 
-  template<class GridT> using ReadDumpMoleculeTmpl = ReadDumpMolecule<GridT>;
-
   // === register factories ===
   CONSTRUCTOR_FUNCTION
   {
-    OperatorNodeFactory::instance()->register_factory( "read_dump_molecule" , make_grid_variant_operator<ReadDumpMoleculeTmpl> );
+    OperatorNodeFactory::instance()->register_factory( "read_dump_molecule" , make_grid_variant_operator<ReadDumpMolecule> );
   }
 
 }
