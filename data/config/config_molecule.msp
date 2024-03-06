@@ -9,6 +9,10 @@
 # if user doesn't overload molecule_pair_weight, does nothing
 intramolecular_pair_weight: nop
 
+chunk_neighbors:
+  config:
+    chunk_size: 1
+
 # Native ExaNB dump format for rigid molecules
 dump_data_molecule:
   - timestep_file: "molecule_%09d.MpiIO"

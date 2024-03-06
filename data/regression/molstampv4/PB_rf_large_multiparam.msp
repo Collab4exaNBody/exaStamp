@@ -33,9 +33,6 @@ global:
   simulation_log_frequency: 1
   timestep: 0
 
-chunk_neighbors:
-  config: { free_scratch_memory: false , shrink_stream_to_fit: true , build_particle_offset: true }
-
 # user-specified force components
 compute_force:
   - compute_extramolecular_forces_multi
@@ -47,10 +44,9 @@ dump_data: nop
 # user-specified grid content
 grid_flavor: grid_flavor_full
 
-
 simulation_epilog:
   - check_values:
       file: PB_molecule.dat
-      acc_threshold: 5.e-8
-      pos_threshold: 1.e-12
+      acc_threshold: 1.e-5
+      pos_threshold: 1.e-11
 

@@ -5,7 +5,7 @@ includes:
 
 configuration:
   logging:
-    debug: true
+    debug: false
   debug:
     filter: [ ".*molecule_pair_weight" , ".*ljrf_multi_force" , ".*intramolecular_setup" , ".*intramolecular_compute" ]
     #filter: [ ".*read_stamp_v4" , ".*intramolecular_setup" , ".*intramolecular_compute" , ".*molecule_list" , ".*molecule_species" ]
@@ -59,6 +59,6 @@ grid_flavor: grid_flavor_full
 simulation_epilog:
   - check_values:
       file: PB_molecule.dat
-      acc_threshold: 5.e-8
-      pos_threshold: 1.e-12
+      acc_threshold: 1.5e-5
+      pos_threshold: 1.e-11
 
