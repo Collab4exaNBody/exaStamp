@@ -14,7 +14,7 @@ namespace exaStamp
 
   template<
     class GridT,
-    class = AssertGridHasFields< GridT, field::_id, field::_idmol, field::_cmol>
+    class = AssertGridHasFields< GridT, field::_id, field::_type >
     >
   class MolExtractConnectivity : public OperatorNode
   {
@@ -31,9 +31,7 @@ namespace exaStamp
   public:
     inline void execute () override final
     {
-      
       extract_connectivity( domain->grid_dimension(), *grid, *chemical_bonds, *chemical_angles, *chemical_torsions, *chemical_impropers, *id_map, *id_map_ghosts );
-
     }
   };
 
