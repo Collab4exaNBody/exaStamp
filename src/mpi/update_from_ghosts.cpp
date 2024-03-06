@@ -1,5 +1,8 @@
 // #pragma xstamp_cuda_enable // DO NOT REMOVE THIS LINE !!
 
+#include <exanb/field_sets.h>
+#include <exanb/fields.h>
+
 #include <exanb/core/operator.h>
 #include <exanb/core/operator_slot.h>
 #include <exanb/core/operator_factory.h>
@@ -8,7 +11,6 @@
 #include <exanb/core/grid.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/particle_id_codec.h>
-#include <exanb/field_sets.h>
 #include <exanb/core/check_particles_inside_cell.h>
 
 #include <exanb/mpi/data_types.h>
