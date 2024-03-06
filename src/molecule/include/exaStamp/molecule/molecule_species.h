@@ -115,6 +115,7 @@ namespace YAML
 {
   using exanb::fatal_error;
   using exaStamp::MoleculeSpecies;
+  using exaStamp::MoleculeSpeciesVector;
 
   template<> struct convert<MoleculeSpecies>
   {
@@ -126,6 +127,20 @@ namespace YAML
       {
         p.set_name( node["name"].as<std::string>() );
       }
+      return true;
+    }
+  };
+
+  template<> struct convert<MoleculeSpeciesVector>
+  {
+    static bool decode(const Node& node, MoleculeSpeciesVector& p)
+    {
+      p.m_molecules.clear();
+      p.m_bridge_molecules.clear();
+      if( ! node.IsSequence() ) return false;
+      const auto mspvec = node.as< std::vector<MoleculeSpecies> >();
+      p.m_molecules.reserve( mspvec.size() );
+      for(const auto& msp : mspvec) p.m_molecules.push_back( msp );
       return true;
     }
   };
