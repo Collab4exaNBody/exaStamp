@@ -44,13 +44,6 @@ namespace exaStamp
   template<typename GridT>
   class ExtraMolecularNeighbors : public OperatorNode
   {
-    using has_idmol_field_t = typename GridT::CellParticles::template HasField < field::_idmol > ;
-    static constexpr bool has_idmol_field = has_idmol_field_t::value;
-
-#ifdef XNB_CUDA_VERSION
-    ADD_SLOT( onika::cuda::CudaContext , cuda_ctx , INPUT , OPTIONAL );
-#endif
-
     ADD_SLOT( GridT               , grid            , INPUT );
     ADD_SLOT( AmrGrid             , amr             , INPUT );
     ADD_SLOT( AmrSubCellPairCache , amr_grid_pairs  , INPUT );
@@ -80,18 +73,12 @@ namespace exaStamp
         std::abort();
       }
 
-      bool gpu_enabled = false;
-#     ifdef XNB_CUDA_VERSION
-      if( cuda_ctx.has_value() )
-      {
-        gpu_enabled = cuda_ctx->has_devices() ;
-      }
-#     endif
+      const bool gpu_enabled = ( global_cuda_ctx() != nullptr ) ? global_cuda_ctx()->has_devices() : false;
       
       LinearXForm xform_filter = {domain->xform()};
       static constexpr std::false_type no_zorder = {};
       
-      if constexpr ( has_idmol_field )
+      if( grid->has_allocated_field(field::idmol) )
       {
         auto cells = grid->cells();
         ExtraMolecularNeighborFilter< decltype(cells) > nbh_filter = { cells };
