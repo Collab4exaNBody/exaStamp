@@ -1,13 +1,13 @@
 // #pragma xstamp_cuda_enable // DO NOT REMOVE THIS LINE
 
+#include <exaStamp/potential/eam/eam_buffer.h>
+
 #include <exanb/core/operator.h>
 #include <exanb/core/operator_slot.h>
 #include <exanb/core/operator_factory.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/make_grid_variant_operator.h>
-
 #include <exanb/mpi/grid_update_ghosts.h>
-#include <exaStamp/potential/eam/eam_buffer.h>
 
 namespace exaStamp
 {
