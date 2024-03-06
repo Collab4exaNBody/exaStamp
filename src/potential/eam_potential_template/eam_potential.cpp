@@ -2,6 +2,8 @@
 
 // #pragma xstamp_grid_variant // DO NOT REMOVE THIS LINE
 
+#include <exaStamp/potential/eam/eam_buffer.h>
+
 #include <exanb/core/grid.h>
 #include <exanb/core/basic_types.h>
 #include <exanb/core/basic_types_operators.h>
@@ -18,7 +20,6 @@
 #include <exanb/compute/compute_cell_particle_pairs.h>
 #include <exanb/core/xform.h>
 
-#include <exaStamp/potential/eam/eam_buffer.h>
 #include "potential.h"
 
 #ifndef USTAMP_POTENTIAL_EAM_MM // only for monomaterial EAM potentials
@@ -109,8 +110,7 @@ namespace exaStamp
           EmbOp emb_op { *parameters };
 
           // Emb term computation will access, for each central atom, potential energy (internal field) and emb_field (externally stored extra field)
-          double * emb_ptr = eam_extra_fields->m_rho_emb.data();
-          auto emb_field = make_external_field_flat_array_accessor( *grid , emb_ptr , field::rho_dEmb );
+          auto emb_field = grid->field_accessor( field::rho_dEmb );
           auto emb_op_fields = make_field_tuple_from_field_set( FieldSet<field::_ep>{} , emb_field );
           auto emb_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks /* no additional fields required for neighbors */ );
           compute_cell_particle_pairs( *grid, *rcut, ComputeGhostEmb, emb_optional, emb_buf, emb_op, emb_op_fields , parallel_execution_context() );      
@@ -123,7 +123,7 @@ namespace exaStamp
           ComputePairBufferFactory< ForceCPBuf > force_buf;  
           ForceOp force_op { *parameters };
           const double * c_emb_ptr = eam_extra_fields->m_rho_emb.data();
-          auto c_emb_field = make_external_field_flat_array_accessor( *grid , c_emb_ptr , field::rho_dEmb );
+          auto c_emb_field = grid->field_const_accessor( field::rho_dEmb );
 
           // force computation will access, for each central atom, fields defined in ComputeFields plus external constant field c_emb_field
           auto force_op_fields = make_field_tuple_from_field_set( ComputeFields{} , c_emb_field );
