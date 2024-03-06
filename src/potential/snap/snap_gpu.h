@@ -121,7 +121,6 @@ namespace SnapExt
 */
     std::cerr << "Deactivated GPU impelmentation, see file " << __FILE__ <<" at line " << __LINE__ << std::endl;
     std::abort();
-    /*
     // need to be fixed match new function API
     switch( cs )
     {
