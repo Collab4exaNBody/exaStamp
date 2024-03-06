@@ -19,14 +19,8 @@
 namespace exaStamp
 {
 
-  template<
-    class GridT,
-    class = AssertGridHasFields< GridT, field::_id, field::_cmol>
-    >
   class ReorganizeMoleculeImpropers : public OperatorNode
   {
-    //using ChemicalImpropers = std::vector< std::array<uint64_t,4> >;
-
     ADD_SLOT( ParticleSpecies          , species               , INPUT );
     ADD_SLOT( IdMap                    , id_map                , INPUT );
     ADD_SLOT( IdMapGhosts              , id_map_ghosts         , INPUT );
@@ -39,7 +33,6 @@ namespace exaStamp
       IdMap& id_map                = *(this->id_map);
       IdMapGhosts& id_map_ghosts   = *(this->id_map_ghosts);
       ChemicalImpropers& impropers = *chemical_impropers;
-
 
       size_t       cell[4];
       size_t       pos [4];
@@ -208,12 +201,10 @@ namespace exaStamp
     }
   };
 
-  template<class GridT> using ReorganizeMoleculeImpropersTmpl = ReorganizeMoleculeImpropers<GridT>;
-
   // === register factories ===
   CONSTRUCTOR_FUNCTION
   {
-    OperatorNodeFactory::instance()->register_factory( "reorganize_molecule_improper", make_grid_variant_operator< ReorganizeMoleculeImpropersTmpl > );
+    OperatorNodeFactory::instance()->register_factory( "reorganize_molecule_improper", make_simple_operator< ReorganizeMoleculeImpropers > );
   }
 
 }
