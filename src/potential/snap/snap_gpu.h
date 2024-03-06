@@ -119,7 +119,10 @@ namespace SnapExt
       std::cout << "max overlap detected = "<<mo<<"\n";
     }
 */
-
+    std::cerr << "Deactivated GPU impelmentation, see file " << __FILE__ <<" at line " << __LINE__ << std::endl;
+    std::abort();
+    /*
+    // need to be fixed match new function API
     switch( cs )
     {
       case 1 : ONIKA_CU_LAUNCH_KERNEL( ctx.n_cu_blocks, BlockSize, 0, custr , cuda_snap_force_kernel, cells, ctx.d_kernel_counters, dims, gl, optional, cpbuf_factory, force_op, rcut2, const_1 , FieldSetT{} ); break;
@@ -127,6 +130,9 @@ namespace SnapExt
       case 8 : ONIKA_CU_LAUNCH_KERNEL( ctx.n_cu_blocks, BlockSize, 0, custr , cuda_snap_force_kernel, cells, ctx.d_kernel_counters, dims, gl, optional, cpbuf_factory, force_op, rcut2, const_8 , FieldSetT{} ); break;
       //default: ONIKA_CU_LAUNCH_KERNEL( ctx.n_cu_blocks, BlockSize, 0, custr , cuda_snap_force_kernel, cells, ctx.d_kernel_counters, dims, gl, optional, cpbuf_factory, force_op, rcut2, cs      , FieldSetT{} ); break;
     }
+      default: ONIKA_CU_LAUNCH_KERNEL( ctx.n_cu_blocks, BlockSize, 0, custr , cuda_snap_force_kernel, cells, ctx.d_kernel_counters, dims, gl, optional, cpbuf_factory, force_op, rcut2, cs      , FieldSetT{} ); break;
+    }
+    */
 #endif
   }
 

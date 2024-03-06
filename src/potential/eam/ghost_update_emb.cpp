@@ -41,7 +41,7 @@ namespace exaStamp
       if( ! ghost_comm_scheme.has_value() ) return;
       if( grid->number_of_particles() == 0 ) return;
     
-      auto pecfunc = [self=this](const char* stag) { return self->parallel_execution_context(stag); };
+      auto pecfunc = [self=this](auto ... args) { return self->parallel_execution_context(args...); };
       auto pesfunc = [self=this](unsigned int i) { return self->parallel_execution_stream(i); };
 
       auto rho_emb_field = grid->field_accessor( field::rho_dEmb );
