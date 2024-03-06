@@ -26,7 +26,7 @@ namespace exaStamp
 
   template<
     class GridT,
-    class = AssertGridHasFields< GridT, field::_type, field::_id, field::_idmol>
+    class = AssertGridHasFields< GridT, field::_type, field::_id>
     >
   class MoleculePairWeightChunk : public OperatorNode
   {
@@ -59,7 +59,8 @@ namespace exaStamp
       const ChemicalTorsions&   torsions  =  *chemical_torsions;
 */
 
-      auto cells = grid->cells();
+      auto cells = grid->cells_accessor();
+      auto field_idmol = grid->field_accessor( field::idmol );
       size_t n_cells = grid->number_of_cells(); // nbh.size();
 
       CompactGridPairWeights& cgpw = *compact_nbh_weight;
@@ -131,7 +132,7 @@ namespace exaStamp
           IJK loc_a = block_loc + gl;
           size_t cell_a = grid_ijk_to_index( dims , loc_a );
 
-          const uint64_t* idmol_a = cells[cell_a][field::idmol];
+          const uint64_t* idmol_a = cells[cell_a].field_pointer_or_null(field_idmol);
           const uint64_t* id_a    = cells[cell_a][field::id];
           const uint8_t* type_a   = cells[cell_a][field::type];
 
@@ -139,10 +140,10 @@ namespace exaStamp
           const auto& sp = *species;
   
           apply_cell_particle_neighbors(*grid, *chunk_neighbors, cell_a, loc_a, std::false_type() /* not symetric */,
-            [cells,cell_a,no_intramolecular,&cgpw,idmol_a,id_a,type_a,&chemicalMap,&mol_weight,&sp ,&n_total_nbh, &n_positive_weights]
+            [cells,cell_a,no_intramolecular,field_idmol,&cgpw,idmol_a,id_a,type_a,&chemicalMap,&mol_weight,&sp ,&n_total_nbh, &n_positive_weights]
             ( unsigned int p_a, size_t cell_b, unsigned int p_b , size_t p_nbh_index )
             {
-              const uint64_t* idmol_b = cells[cell_b][field::idmol];
+              const uint64_t* idmol_b = cells[cell_b].field_pointer_or_null(field_idmol);
               const uint64_t* id_b    = cells[cell_b][field::id];
 #             ifndef NDEBUG
               const uint8_t* type_b   = cells[cell_b][field::type];

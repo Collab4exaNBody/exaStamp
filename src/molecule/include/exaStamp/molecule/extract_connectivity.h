@@ -308,7 +308,7 @@ namespace exaStamp
     assert( ! omp_in_parallel() );
 
     // size_t n_cells = grid.number_of_cells();
-    auto cells = grid.cells();
+    auto cells = grid.cells_accessor();
 
     IJK dims = grid.dimension();
     // int gl = grid.ghost_layers();
@@ -338,6 +338,8 @@ namespace exaStamp
 //    lout << "grid offset = "<<grid.offset()<<std::endl;
 //    lout << "max_nt = "<<max_nt<<std::endl;
 
+    auto field_cmol = grid.field_accessor( field::cmol );
+
 #   pragma omp parallel // num_threads(1)
     {
       int nt = omp_get_num_threads();
@@ -358,7 +360,7 @@ namespace exaStamp
         // bool cell_is_leader = is_leader_cell(cell_is_here,grid,cell_loc,domain_cells);
         size_t n_particles = cells[cell_i].size();
         const auto * __restrict__ ids = cells[cell_i][field::id];
-        const auto * __restrict__ cmols = cells[cell_i][field::cmol];
+        const auto * __restrict__ cmols = cells[cell_i].field_pointer_or_null(field_cmol);
         const auto * __restrict__ types = cells[cell_i][field::type];
         
         for(size_t p=0; p<n_particles; ++p)
@@ -381,8 +383,7 @@ namespace exaStamp
               bool n2_is_here = ( id_map.find(neigh[2]) != id_map.end() );
               if( cell_is_here || n0_is_here || n1_is_here || n2_is_here )
               {
-                impropers.push_back( {p_id, neigh[0], neigh[1], neigh[2]} );
-
+                impropers.push_back( ChemicalImproper{p_id, neigh[0], neigh[1], neigh[2]} );
               }
             }
 
@@ -394,8 +395,8 @@ namespace exaStamp
               bool id_a_is_here = ( id_map.find(id_a) != id_map.end() );
               if( cell_is_here )
               {
-                if( p_id < id_a )         bonds.push_back( {p_id,id_a} );
-                else if( ! id_a_is_here ) bonds.push_back( {id_a,p_id} );
+                if( p_id < id_a )         bonds.push_back( ChemicalBond{p_id,id_a} );
+                else if( ! id_a_is_here ) bonds.push_back( ChemicalBond{id_a,p_id} );
               }
               
               // second neighbor step
@@ -406,7 +407,7 @@ namespace exaStamp
               {
                 size_t cell_a=-1, pos_a=-1;
                 decode_cell_particle( enc_atom_a , cell_a, pos_a);
-                const auto& neigh_a = cells[cell_a][field::cmol][pos_a];
+                const auto& neigh_a = cells[cell_a][field_cmol][pos_a];
                 for(auto id_b:neigh_a) if(id_b!=p_id)
                 {
                   assert( id_b != id_a );
@@ -416,8 +417,8 @@ namespace exaStamp
                   bool angle_owner = (cell_is_here && !id_b_is_here) || (cell_is_here==id_b_is_here && p_id<id_b);
                   if( angle_must_be_added && angle_owner )
                   {
-                    if( p_id < id_b ) angles.push_back( { p_id , id_a , id_b } );
-                    else angles.push_back( { id_b , id_a , p_id } );
+                    if( p_id < id_b ) angles.push_back( ChemicalAngle{ p_id , id_a , id_b } );
+                    else              angles.push_back( ChemicalAngle{ id_b , id_a , p_id } );
                   }
                   
                   // third neighbor step
@@ -427,7 +428,7 @@ namespace exaStamp
                   {
                     size_t cell_b=-1, pos_b=-1;
                     decode_cell_particle( enc_atom_b, cell_b, pos_b);
-                    const auto& neigh_b = cells[cell_b][field::cmol][pos_b];
+                    const auto& neigh_b = cells[cell_b][field_cmol][pos_b];
                     for(auto id_c:neigh_b) if(id_c!=id_a && id_c!=p_id)
                     {
                       assert( id_c != id_b );
@@ -437,8 +438,8 @@ namespace exaStamp
                       bool torsion_owner = (cell_is_here && !id_c_is_here) || (cell_is_here==id_c_is_here && p_id<id_c);
                       if( add_torsion && torsion_owner )
                       {
-                        if( p_id < id_c ) torsions.push_back( { p_id , id_a , id_b , id_c } );
-                        else              torsions.push_back( { id_c , id_b , id_a , p_id } );
+                        if( p_id < id_c ) torsions.push_back( ChemicalTorsion{ p_id , id_a , id_b , id_c } );
+                        else              torsions.push_back( ChemicalTorsion{ id_c , id_b , id_a , p_id } );
 
                       }
                     }// for(auto id_c:neigh_b)
