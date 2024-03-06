@@ -1,18 +1,20 @@
 
 #pragma once
 
+#include <exanb/fields.h>
+
+// EAM package specific fields
+XSTAMP_DECLARE_FIELD(double          ,rho_dEmb          ,"density or embedding term");
+
+
 #include <onika/memory/allocator.h>
 #include <onika/cuda/cuda.h>
 #include <vector>
 #include <utility>
 #include <exanb/compute/compute_pair_buffer.h>
 
-#include <exanb/fields.h>
 #include <exanb/core/config.h>
-#include <exanb/core/declare_field.h>
 #include <exanb/core/thread.h>
-
-XSTAMP_DECLARE_FIELD(double , rho_dEmb  ,"density or embedding term");
 
 namespace exaStamp
 {
