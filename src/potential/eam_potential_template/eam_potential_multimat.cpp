@@ -148,10 +148,10 @@ namespace exaStamp
       USTAMP_POTENTIAL_EAM_MM_INIT_TYPES( *parameters , n_species , eam_scratch->m_pair_enabled.data() );
 
       auto rho_emb_field = grid->field_accessor( field::rho_dEmb );
-      auto * rho_emb_ptr = rho_emb_field.m_func.m_data_array;
+      auto * rho_emb_ptr = rho_emb_field.m_flat_array_ptr;
 
       auto c_rho_emb_field = grid->field_const_accessor( field::rho_dEmb );
-      const auto * c_rho_emb_ptr = c_rho_emb_field.m_func.m_data_array;
+      const auto * c_rho_emb_ptr = c_rho_emb_field.m_flat_array_ptr;
 
       // execute the 2 passes
       auto compute_eam_force = [&]( const auto& cp_xform , const auto& cp_locks , auto cp_emb_fields , auto force_buf )

@@ -158,13 +158,13 @@ namespace exaStamp
         
         if( *eam_rho )
         {          
-          onika::parallel::parallel_memset( rho_emb.m_func.m_data_array , n_particles , 0.0 , parallel_execution_context() );
+          onika::parallel::parallel_memset( rho_emb.m_flat_array_ptr , n_particles , 0.0 , parallel_execution_context() );
 
           FlatSymRhoOp< newtonSym.value , XFormT > rho_op =
             { *parameters, rc2
             , flat_nbh_list->m_neighbor_offset.data(), flat_nbh_list->m_neighbor_list.data(), flat_nbh_list->m_half_count.data()
             , (*eam_ghost) ? nullptr : grid->particle_ghost_flag_data() , eam_scratch->m_pair_enabled.data()
-            , rho_emb.m_func.m_data_array, types.m_func.m_data_array, rx.m_func.m_data_array, ry.m_func.m_data_array, rz.m_func.m_data_array
+            , rho_emb.m_flat_array_ptr, types.m_flat_array_ptr, rx.m_flat_array_ptr, ry.m_flat_array_ptr, rz.m_flat_array_ptr
             , cp_xform , flat_particle_locks->data() };
 
           parallel_for( n_particles , rho_op , parallel_execution_context() );
@@ -175,13 +175,13 @@ namespace exaStamp
           if( log_energy )
           {
             FlatRho2EmbOp<true> rho2emb_op{ *parameters, (*eam_ghost) ? nullptr : grid->particle_ghost_flag_data(), eam_scratch->m_pair_enabled.data()
-                                          , types.m_func.m_data_array, rho_emb.m_func.m_data_array, energy.m_func.m_data_array };
+                                          , types.m_flat_array_ptr, rho_emb.m_flat_array_ptr, energy.m_flat_array_ptr };
             parallel_for( n_particles , rho2emb_op , parallel_execution_context() );
           }
           else
           {
             FlatRho2EmbOp<false> rho2emb_op{ *parameters, (*eam_ghost) ? nullptr : grid->particle_ghost_flag_data(), eam_scratch->m_pair_enabled.data()
-                                          , types.m_func.m_data_array, rho_emb.m_func.m_data_array };
+                                          , types.m_flat_array_ptr, rho_emb.m_flat_array_ptr };
             parallel_for( n_particles , rho2emb_op , parallel_execution_context() );
           }
         }
@@ -192,10 +192,10 @@ namespace exaStamp
             { *parameters, rc2
             , flat_nbh_list->m_neighbor_offset.data(), flat_nbh_list->m_neighbor_list.data(), flat_nbh_list->m_half_count.data()
             , (*eam_ghost) ? nullptr : grid->particle_ghost_flag_data() , eam_scratch->m_pair_enabled.data()
-            , rho_emb.m_func.m_data_array, types.m_func.m_data_array
-            , rx.m_func.m_data_array, ry.m_func.m_data_array, rz.m_func.m_data_array
-            , fx.m_func.m_data_array, fy.m_func.m_data_array, fz.m_func.m_data_array
-            , energy.m_func.m_data_array, cp_xform, flat_particle_locks->data() };
+            , rho_emb.m_flat_array_ptr, types.m_flat_array_ptr
+            , rx.m_flat_array_ptr, ry.m_flat_array_ptr, rz.m_flat_array_ptr
+            , fx.m_flat_array_ptr, fy.m_flat_array_ptr, fz.m_flat_array_ptr
+            , energy.m_flat_array_ptr, cp_xform, flat_particle_locks->data() };
           parallel_for( n_particles , force_op , parallel_execution_context() );            
         }
 
