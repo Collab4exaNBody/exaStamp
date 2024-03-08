@@ -1,6 +1,6 @@
-#pragma xstamp_cuda_enable
+// #pragma xstamp_cuda_enable // DO NOT REMOVE THIS LINE
 
-#pragma xstamp_grid_variant
+// #pragma xstamp_grid_variant // DO NOT REMOVE THIS LINE
 
 #include <exanb/core/operator.h>
 #include <exanb/core/operator_slot.h>

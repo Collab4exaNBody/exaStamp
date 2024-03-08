@@ -11,6 +11,8 @@
 #include <exaStamp/potential/pair_potentials/exp6/exp6.h>
 #include <exaStamp/potential/reaction_field/reaction_field.h>
 
+#include <onika/cuda/cuda.h>
+
 namespace exaStamp
 {
   using namespace exanb;

@@ -1,7 +1,9 @@
 #pragma once
 
-#include <utility>
+//#include <utility>
 #include <exaStamp/molecule/molecule_compute_param.h>
+
+#include <onika/cuda/cuda.h>
 
 namespace exaStamp
 {
@@ -10,17 +12,26 @@ namespace exaStamp
    */
   template <typename T>
   typename std::enable_if<std::is_unsigned<T>::value, int>::type
+  ONIKA_HOST_DEVICE_FUNC
   inline constexpr signum(T x) noexcept {
     return T(0) < x;
   }
 
   template <typename T>
   typename std::enable_if<std::is_signed<T>::value, int>::type
+  ONIKA_HOST_DEVICE_FUNC  
   inline constexpr signum(T x) noexcept {
     return (T(0) < x) - (x < T(0));
   }
 
-  inline std::pair<double,double> intramolecular_quar( const MoleculeGenericFuncParam& p , double t)
+  struct ScalarForceEnergy
+  { // names are first and second for bacward compatibility with std::pair used until now
+    double first; //force; 
+    double second; //energy;
+  };
+
+  ONIKA_HOST_DEVICE_FUNC
+  inline ScalarForceEnergy intramolecular_quar( const MoleculeGenericFuncParam& p , double t)
   {
     const auto k2 = p[0];
     const auto k3 = p[1];
@@ -37,7 +48,8 @@ namespace exaStamp
            };  
   }
 
-  inline std::pair<double,double> intramolecular_cos( const MoleculeGenericFuncParam& p , double _phi )
+  ONIKA_HOST_DEVICE_FUNC
+  inline ScalarForceEnergy intramolecular_cos( const MoleculeGenericFuncParam& p , double _phi )
   {
     const auto k1 = p[0];
     const auto k2 = p[1];
@@ -71,7 +83,7 @@ namespace exaStamp
   class IntraMolecularPotentialFunctional
   {
   public:
-    virtual inline std::pair<double,double> force_energy(double) const
+    virtual inline ScalarForceEnergy force_energy(double) const
     {
       return { 0., 0. };
     }
@@ -87,7 +99,7 @@ namespace exaStamp
   {
   public:
     inline IntraMolecularHarmFunctional(double _k, double _t0) : k(_k), t0(_t0) {}
-    inline std::pair<double,double> force_energy(double t) const override final
+    inline ScalarForceEnergy force_energy(double t) const override final
     {
       return intramolecular_quar( {k/2,0.,0.,t0} , t );
 /*      return {       k *     (t - t0)
@@ -107,7 +119,7 @@ namespace exaStamp
   {
   public:
     inline IntraMolecularHarmX2Functional(double _k, double _t0) : k(_k), t0(_t0) {}
-    inline std::pair<double,double> force_energy(double t) const override final
+    inline ScalarForceEnergy force_energy(double t) const override final
     {
       return intramolecular_quar( {k,0.,0.,t0} , t );
 /*      return { 2.0 * k *     (t - t0)
@@ -127,7 +139,7 @@ namespace exaStamp
   {
   public:
     inline IntraMolecularQuarFunctional(double _k2, double _k3, double _k4, double _t0) : k2(_k2), k3(_k3), k4(_k4), t0(_t0) {}
-    inline std::pair<double,double> force_energy(double t) const override final
+    inline ScalarForceEnergy force_energy(double t) const override final
     {
       return intramolecular_quar( {k2,k3,k4,t0} , t );
 /*      double tmp = t-t0;
@@ -156,7 +168,7 @@ namespace exaStamp
   {
   public:
     inline IntraMolecularCompassFunctional(double _k1, double _k2, double _k3) : k1(_k1), k2(_k2), k3(_k3) {}
-    inline std::pair<double,double> force_energy(double phi) const override final
+    inline ScalarForceEnergy force_energy(double phi) const override final
     {
       return intramolecular_cos( {k1,k2,k3,0.} , phi );
 /*      return {
@@ -184,7 +196,7 @@ namespace exaStamp
   {
   public:
     inline IntraMolecularHalfCompassFunctional(double _k1, double _k2, double _k3) : k1(_k1), k2(_k2), k3(_k3) {}
-    inline std::pair<double,double> force_energy(double phi) const override final
+    inline ScalarForceEnergy force_energy(double phi) const override final
     {
       return intramolecular_cos( {k1/2,k2/2,k3/2,0.0} , phi );
 /*      return {
@@ -212,7 +224,7 @@ namespace exaStamp
   {
   public:
     inline IntraMolecularOPLSFunctional(double _k1, double _k2, double _k3) : k1(_k1), k2(_k2), k3(_k3) {}
-    inline std::pair<double,double> force_energy(double phi) const override final
+    inline ScalarForceEnergy force_energy(double phi) const override final
     {
       return intramolecular_cos( {k1/2,k2/2,k3/2,512} , phi );
 /*      return {
@@ -240,7 +252,7 @@ namespace exaStamp
   {
   public:
     inline IntraMolecularCosTwoFunctional(double _k, double _phi0) : k(_k), phi0(_phi0) {}
-    inline std::pair<double,double> force_energy(double phi) const override final
+    inline ScalarForceEnergy force_energy(double phi) const override final
     {
       double tmp = phi - phi0;
       return {       k * sin(2*tmp)

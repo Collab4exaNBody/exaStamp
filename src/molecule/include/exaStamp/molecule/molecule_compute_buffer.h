@@ -14,6 +14,7 @@ namespace exaStamp
     double fy[MAX_MOLECULE_ATOMS];
     double fz[MAX_MOLECULE_ATOMS];
     double ep[MAX_MOLECULE_ATOMS];
+    Mat3d virial[0];
   };
 
   struct MoleculeVirialComputeBuffer

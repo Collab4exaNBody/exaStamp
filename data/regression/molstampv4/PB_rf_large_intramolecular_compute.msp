@@ -7,7 +7,8 @@ configuration:
   logging:
     debug: false
   debug:
-    filter: [ ".*molecule_pair_weight" , ".*ljrf_multi_force" , ".*intramolecular_setup" , ".*intramolecular_compute" ]
+    filter: [ ".*intramolecular_setup" , ".*intramolecular_compute" ]
+    #filter: [ ".*molecule_pair_weight" , ".*ljrf_multi_force" , ".*intramolecular_setup" , ".*intramolecular_compute" ]
     #filter: [ ".*read_stamp_v4" , ".*intramolecular_setup" , ".*intramolecular_compute" , ".*molecule_list" , ".*molecule_species" ]
   profiling:
     summary: true
@@ -38,11 +39,10 @@ global:
   simulation_log_frequency: 1
   timestep: 0
 
-xxx_chunk_neighbors:
+chunk_neighbors:
   config:
-    free_scratch_memory: false
-    shrink_stream_to_fit: true
     build_particle_offset: true
+    chunk_size: 1
 
 # user-specified force components
 compute_force:

@@ -3,9 +3,11 @@
 #include <string>
 #include <cstdint>
 
-#include <onika/memory/allocator.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exanb/core/log.h>
+
+#include <onika/memory/allocator.h>
+#include <onika/cuda/ro_shallow_copy.h>
 
 #include <yaml-cpp/yaml.h>
 
@@ -84,6 +86,23 @@ namespace exaStamp
     onika::memory::CudaMMVector<MoleculeSpecies> m_molecules;
     onika::memory::CudaMMVector<MoleculeSpecies> m_bridge_molecules;  
   };
+
+  struct MoleculeSpeciesVectorRO
+  {
+    const MoleculeSpecies * __restrict__ m_molecules = nullptr;
+    const MoleculeSpecies * __restrict__ m_bridge_molecules = nullptr;  
+
+    MoleculeSpeciesVectorRO() = default;
+    MoleculeSpeciesVectorRO(const MoleculeSpeciesVectorRO&) = default;
+    MoleculeSpeciesVectorRO(MoleculeSpeciesVectorRO&&) = default;
+    MoleculeSpeciesVectorRO& operator = (const MoleculeSpeciesVectorRO&) = default;
+    MoleculeSpeciesVectorRO& operator = (MoleculeSpeciesVectorRO&&) = default;
+
+    inline MoleculeSpeciesVectorRO( const MoleculeSpeciesVector& ml )
+      : m_molecules( ml.m_molecules.data() )
+      , m_bridge_molecules( ml.m_bridge_molecules.data() )
+      {}
+  };
   
   //using MoleculeSpeciesVector = std::vector<MoleculeSpecies>; // onika::memory::CudaMMVector<MoleculeSpecies>;
   
@@ -109,6 +128,8 @@ namespace exaStamp
 
 }
 
+// specialize ReadOnlyShallowCopyType so MoleculeSpeciesVectorRO is the read only type for MoleculeSpeciesVector
+namespace onika { namespace cuda { template<> struct ReadOnlyShallowCopyType< exaStamp::MoleculeSpeciesVector > { using type = exaStamp::MoleculeSpeciesVectorRO; }; } }
 
 
 namespace YAML

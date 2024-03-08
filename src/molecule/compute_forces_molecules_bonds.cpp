@@ -1,6 +1,6 @@
 #include <yaml-cpp/yaml.h>
 #include <memory>
-#include <utility>// std::pair
+//#include <utility>// std::pair
 #include <iomanip>
 
 #include <exanb/core/operator.h>
@@ -166,7 +166,7 @@ namespace exaStamp
           assert(norm_r>0);
 
           // compute the pair dEp/dr , E
-          std::pair<double,double> fe = it->second->force_energy( norm_r );
+          const auto fe = it->second->force_energy( norm_r );
 
           // Compute energy
           double e = fe.second;

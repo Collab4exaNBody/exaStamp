@@ -1,11 +1,13 @@
 #pragma once
 
 #include <exanb/core/basic_types.h>
+#include <onika/cuda/cuda.h>
 
 namespace exaStamp
 {
 
-  static inline Vec3d periodic_r_delta(const Vec3d& r1, const Vec3d& r2, const Vec3d& size_box, double half_min_size_box)
+  ONIKA_HOST_DEVICE_FUNC
+  inline Vec3d periodic_r_delta(const Vec3d& r1, const Vec3d& r2, const Vec3d& size_box, double half_min_size_box)
   {
     Vec3d rij = r2 - r1;
 
