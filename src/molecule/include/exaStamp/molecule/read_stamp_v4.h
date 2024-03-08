@@ -8,7 +8,7 @@
 #include <exanb/core/unityConverterHelper.h>
 
 #include <exanb/io/mpi_file_io.h>
-#include <exaStamp/io/stampv4_io.h>
+#include <exaStamp/molecule/stampv4_io.h>
 #include <exanb/mpi/all_value_equal.h>
 #include <onika/oarray.h>
 

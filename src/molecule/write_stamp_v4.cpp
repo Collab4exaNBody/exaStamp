@@ -12,7 +12,7 @@
 #include <exanb/core/unityConverterHelper.h>
 
 #include <exanb/io/mpi_file_io.h>
-#include <exaStamp/io/stampv4_io.h>
+#include <exaStamp/molecule/stampv4_io.h>
 
 #include <exaStamp/molecule/molecule_species.h>
 

@@ -13,7 +13,7 @@
 
 #include <exanb/core/quantity.h>
 
-#include <exaStamp/io/read_stamp_v4.h>
+#include <exaStamp/molecule/read_stamp_v4.h>
 
 #include <mpi.h>
 #include <fstream>

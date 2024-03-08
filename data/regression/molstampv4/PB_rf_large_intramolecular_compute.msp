@@ -4,6 +4,8 @@ includes:
   - PB.cfg
 
 configuration:
+  onika:
+    gpu_block_size: 256
   logging:
     debug: false
   debug:
@@ -23,8 +25,6 @@ input_data:
       bounds_mode: FILE
       enable_xform_scale: true
       build_molecule_species: true
-  - grid_stats
-  - print_domain
 
 # user-defined domain data
 domain:
@@ -38,11 +38,6 @@ global:
   simulation_end_iteration: 10
   simulation_log_frequency: 1
   timestep: 0
-
-chunk_neighbors:
-  config:
-    build_particle_offset: true
-    chunk_size: 1
 
 # user-specified force components
 compute_force:

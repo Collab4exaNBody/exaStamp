@@ -19,6 +19,21 @@ rebuild_amr:
 ####################################################
 
 
+############ default ghost update parameters #######
+ghost_update_r: &ghost_update_parms
+  gpu_buffer_pack: true
+  async_buffer_pack: true
+  staging_buffer: true
+  serialize_pack_send: true
+  wait_all: false
+
+update_force_energy_from_ghost: *ghost_update_parms
+
+ghost_update_all_no_fv: *ghost_update_parms
+####################################################
+
+
+
 ################### Neighbor list update ############################
 chunk_neighbors:
   config:

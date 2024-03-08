@@ -11,12 +11,16 @@ molecule_pair_weight:
 
 extramolecular_neighbors:
   config:
+    build_particle_offset: true
     chunk_size: 1
 
 chunk_neighbors_impl: extramolecular_neighbors
 
 +first_iteration:
+  - print_domain
+  - grid_stats
   - chunk_neighbors_stats
+  - memory_stats
 
 # if user doesn't overload molecule_pair_weight, does nothing
 intramolecular_pair_weight: nop
