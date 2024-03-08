@@ -3,6 +3,6 @@
 # =================================
 
 
-set(exaStampMolecule_LINK_LIBRARIES exanbCompute exaStampCompute exanbParticleNeighbors exaStampParticleSpecies lennard_jones exp6 exaStampReactionFieldParticleCharge exaStampPotential)
+set(exaStampMolecule_LINK_LIBRARIES exanbCompute exaStampCompute exanbParticleNeighbors exaStampParticleSpecies lennard_jones exp6 exaStampReactionFieldParticleCharge exaStampPotential exanbIO exaStampIO)
 xstamp_add_plugin(exaStampMolecule ${CMAKE_CURRENT_SOURCE_DIR})
 
