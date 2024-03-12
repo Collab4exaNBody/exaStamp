@@ -112,16 +112,16 @@ dump_data_xyz:
       rebind: { mesg: filename }
       body:
         - message: { endl: true }
-  - write_xyz_file
+  - write_xyz
 
 dump_data_lmp:
   - timestep_file: "exaStamp_%09d.lmp"
-  - message: { mesg: "Write xyz " , endl: false }
+  - message: { mesg: "Write lmp " , endl: false }
   - print_dump_file:
       rebind: { mesg: filename }
       body:
         - message: { endl: true }
-  - write_lmp_file
+  - write_lmp
 
 dump_data_slice_analysis:
   - grid_flavor
