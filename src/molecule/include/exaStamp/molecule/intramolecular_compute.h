@@ -40,28 +40,8 @@ namespace exaStamp
     ONIKA_HOST_DEVICE_FUNC
     inline void operator () ( size_t m ) const
     {
-      ComputeBufferT buf;
-
       const unsigned int mtype = m_molecule_list.type(m);
-      const unsigned int natoms = m_molecules.m_molecules[mtype].m_nb_atoms;
-
-      // 1. initialize atom buffer
-      for(unsigned int a=0;a<natoms;a++)
-      {
-        size_t c=0 , p=0;
-        decode_cell_particle( m_molecule_list.atom_data(m,a) , c, p );
-        buf.rx[a] = m_cells[c][m_rx][p];
-        buf.ry[a] = m_cells[c][m_ry][p];
-        buf.rz[a] = m_cells[c][m_rz][p];
-        buf.fx[a] = 0.0;
-        buf.fy[a] = 0.0;
-        buf.fz[a] = 0.0;
-        buf.ep[a] = 0.0;
-        if constexpr ( has_virial_field )
-        {
-          buf.virial[a] = Mat3d{};
-        }
-      }
+//      const unsigned int natoms = m_molecules.m_molecules[mtype].m_nb_atoms;
 
       // 2. compute bonds intramolecular forces
       //    A--B
@@ -77,8 +57,14 @@ namespace exaStamp
         const unsigned int b = ( x >> 8 ) & 0xFF;
         const unsigned int pidx = x & 0xFF;
 
-        const Vec3d ra = { buf.rx[a] , buf.ry[a] , buf.rz[a] };
-        const Vec3d rb = { buf.rx[b] , buf.ry[b] , buf.rz[b] };
+        size_t ca=0 , pa=0;
+        decode_cell_particle( m_molecule_list.atom_data(m,a) , ca, pa );
+        const Vec3d ra = { m_cells[ca][m_rx][pa], m_cells[ca][m_ry][pa], m_cells[ca][m_rz][pa] };
+
+        size_t cb=0 , pb=0;
+        decode_cell_particle( m_molecule_list.atom_data(m,b) , cb, pb );
+        const Vec3d rb = { m_cells[cb][m_rx][pb], m_cells[cb][m_ry][pb], m_cells[cb][m_rz][pb] };
+        
         const Vec3d r = m_xform * periodic_r_delta( ra , rb , m_size_box , m_half_min_size_box );
         
         const double norm_r = norm(r);
@@ -95,21 +81,21 @@ namespace exaStamp
         //const double dEp_dr = fe.first;
         const Vec3d F = ( r * dEp_dr ) / norm_r;
 
-        buf.fx[a] += F.x;
-        buf.fy[a] += F.y;
-        buf.fz[a] += F.z;
-        buf.ep[a] += e * 0.5;
+        m_cells[ca][m_fx][pa] += F.x;
+        m_cells[ca][m_fy][pa] += F.y;
+        m_cells[ca][m_fz][pa] += F.z;
+        m_cells[ca][m_ep][pa] += e * 0.5;
 
-        buf.fx[b] -= F.x;
-        buf.fy[b] -= F.y;
-        buf.fz[b] -= F.z;
-        buf.ep[b] += e * 0.5;
+        m_cells[cb][m_fx][pb] -= F.x;
+        m_cells[cb][m_fy][pb] -= F.y;
+        m_cells[cb][m_fz][pb] -= F.z;
+        m_cells[cb][m_ep][pb] += e * 0.5;
 
         if constexpr ( has_virial_field )
         {
           const auto vir = tensor(F,r) * 0.5;
-          buf.virial[a] += vir;
-          buf.virial[b] += vir;
+          m_cells[ca][m_virial][pa] += vir;
+          m_cells[cb][m_virial][pb] += vir;
         }
       }
       
@@ -132,9 +118,17 @@ namespace exaStamp
         const unsigned int c = ( x >> 8 ) & 0xFF;
         const unsigned int pidx = x & 0xFF;
 
-        const Vec3d ra = { buf.rx[a] , buf.ry[a] , buf.rz[a] };
-        const Vec3d rb = { buf.rx[b] , buf.ry[b] , buf.rz[b] };
-        const Vec3d rc = { buf.rx[c] , buf.ry[c] , buf.rz[c] };
+        size_t ca=0 , pa=0;
+        decode_cell_particle( m_molecule_list.atom_data(m,a) , ca, pa );
+        const Vec3d ra = { m_cells[ca][m_rx][pa], m_cells[ca][m_ry][pa], m_cells[ca][m_rz][pa] };
+
+        size_t cb=0 , pb=0;
+        decode_cell_particle( m_molecule_list.atom_data(m,b) , cb, pb );
+        const Vec3d rb = { m_cells[cb][m_rx][pb], m_cells[cb][m_ry][pb], m_cells[cb][m_rz][pb] };
+
+        size_t cc=0 , pc=0;
+        decode_cell_particle( m_molecule_list.atom_data(m,c) , cc, pc );
+        const Vec3d rc = { m_cells[cc][m_rx][pc], m_cells[cc][m_ry][pc], m_cells[cc][m_rz][pc] };
         
         // first harm
         const Vec3d r1 = m_xform * periodic_r_delta( rb , ra , m_size_box , m_half_min_size_box );
@@ -175,29 +169,29 @@ namespace exaStamp
         const Vec3d F2 = pb_r2 * (-dep_on_dtheta);
         const Vec3d Fo = - ( F1 + F2 );
 
-        buf.fx[a] += F1.x;
-        buf.fy[a] += F1.y;
-        buf.fz[a] += F1.z;
-        buf.ep[a] += e / 3.;
+        m_cells[ca][m_fx][pa] += F1.x;
+        m_cells[ca][m_fy][pa] += F1.y;
+        m_cells[ca][m_fz][pa] += F1.z;
+        m_cells[ca][m_ep][pa] += e / 3.;
 
-        buf.fx[b] += Fo.x;
-        buf.fy[b] += Fo.y;
-        buf.fz[b] += Fo.z;
-        buf.ep[b] += e / 3.;
+        m_cells[cb][m_fx][pb] += Fo.x;
+        m_cells[cb][m_fy][pb] += Fo.y;
+        m_cells[cb][m_fz][pb] += Fo.z;
+        m_cells[cb][m_ep][pb] += e / 3.;
 
-        buf.fx[c] += F2.x;
-        buf.fy[c] += F2.y;
-        buf.fz[c] += F2.z;
-        buf.ep[c] += e / 3.;
+        m_cells[cc][m_fx][pc] += F2.x;
+        m_cells[cc][m_fy][pc] += F2.y;
+        m_cells[cc][m_fz][pc] += F2.z;
+        m_cells[cc][m_ep][pc] += e / 3.;
 
         if constexpr ( has_virial_field )
         {
           const Mat3d virial1 = tensor (F1,r1) * 0.5;
           const Mat3d virial2 = tensor (F2,r2) * 0.5;
           const Mat3d virialo = virial1 + virial2;
-          buf.virial[a] += virial1;
-          buf.virial[b] += virialo;
-          buf.virial[c] += virial2;
+          m_cells[ca][m_virial][pa] += virial1;
+          m_cells[cb][m_virial][pb] += virialo;
+          m_cells[cc][m_virial][pc] += virial2;
         }
       }
 
@@ -222,10 +216,21 @@ namespace exaStamp
         const unsigned int d = ( x >> 8 ) & 0xFF;
         const unsigned int pidx = x & 0xFF;
 
-        const Vec3d r0 = { buf.rx[a] , buf.ry[a] , buf.rz[a] };
-        const Vec3d r1 = { buf.rx[b] , buf.ry[b] , buf.rz[b] };
-        const Vec3d r2 = { buf.rx[c] , buf.ry[c] , buf.rz[c] };
-        const Vec3d r3 = { buf.rx[d] , buf.ry[d] , buf.rz[d] };
+        size_t ca=0 , pa=0;
+        decode_cell_particle( m_molecule_list.atom_data(m,a) , ca, pa );
+        const Vec3d r0 = { m_cells[ca][m_rx][pa], m_cells[ca][m_ry][pa], m_cells[ca][m_rz][pa] };
+
+        size_t cb=0 , pb=0;
+        decode_cell_particle( m_molecule_list.atom_data(m,b) , cb, pb );
+        const Vec3d r1 = { m_cells[cb][m_rx][pb], m_cells[cb][m_ry][pb], m_cells[cb][m_rz][pb] };
+
+        size_t cc=0 , pc=0;
+        decode_cell_particle( m_molecule_list.atom_data(m,c) , cc, pc );
+        const Vec3d r2 = { m_cells[cc][m_rx][pc], m_cells[cc][m_ry][pc], m_cells[cc][m_rz][pc] };
+
+        size_t cd=0 , pd=0;
+        decode_cell_particle( m_molecule_list.atom_data(m,d) , cd, pd );
+        const Vec3d r3 = { m_cells[cd][m_rx][pd], m_cells[cd][m_ry][pd], m_cells[cd][m_rz][pd] };
         
         const Vec3d r10 = m_xform * periodic_r_delta( r1 , r0 , m_size_box , m_half_min_size_box );
         const Vec3d r12 = m_xform * periodic_r_delta( r1 , r2 , m_size_box , m_half_min_size_box );
@@ -274,25 +279,25 @@ namespace exaStamp
         //e /= 4.;
         const Vec3d Fo = - (Fa+Fc+Fd);
 
-        buf.fx[a] += Fa.x;
-        buf.fy[a] += Fa.y;
-        buf.fz[a] += Fa.z;
-        buf.ep[a] += e;
+        m_cells[ca][m_fx][pa] += Fa.x;
+        m_cells[ca][m_fy][pa] += Fa.y;
+        m_cells[ca][m_fz][pa] += Fa.z;
+        m_cells[ca][m_ep][pa] += e;
 
-        buf.fx[b] += Fo.x;
-        buf.fy[b] += Fo.y;
-        buf.fz[b] += Fo.z;
-        buf.ep[b] += e;
+        m_cells[cb][m_fx][pb] += Fo.x;
+        m_cells[cb][m_fy][pb] += Fo.y;
+        m_cells[cb][m_fz][pb] += Fo.z;
+        m_cells[cb][m_ep][pb] += e;
 
-        buf.fx[c] += Fc.x;
-        buf.fy[c] += Fc.y;
-        buf.fz[c] += Fc.z;
-        buf.ep[c] += e;
+        m_cells[cc][m_fx][pc] += Fc.x;
+        m_cells[cc][m_fy][pc] += Fc.y;
+        m_cells[cc][m_fz][pc] += Fc.z;
+        m_cells[cc][m_ep][pc] += e;
         
-        buf.fx[d] += Fd.x;
-        buf.fy[d] += Fd.y;
-        buf.fz[d] += Fd.z;
-        buf.ep[d] += e;
+        m_cells[cd][m_fx][pd] += Fd.x;
+        m_cells[cd][m_fy][pd] += Fd.y;
+        m_cells[cd][m_fz][pd] += Fd.z;
+        m_cells[cd][m_ep][pd] += e;
 
         if constexpr ( has_virial_field )
         {
@@ -303,10 +308,10 @@ namespace exaStamp
           const Mat3d virac = vira + virc;
           const Mat3d vircd = virc + vird;
 
-          buf.virial[a] += vira;
-          buf.virial[b] += virac;
-          buf.virial[c] += vircd;
-          buf.virial[d] += vird;
+          m_cells[ca][m_virial][pa] += vira;
+          m_cells[cb][m_virial][pb] += virac;
+          m_cells[cc][m_virial][pc] += vircd;
+          m_cells[cd][m_virial][pd] += vird;
         }
       }
  
@@ -330,10 +335,21 @@ namespace exaStamp
         const unsigned int d = ( x >> 8 ) & 0xFF;
         const unsigned int pidx = x & 0xFF;
 
-        const Vec3d r0 = { buf.rx[a] , buf.ry[a] , buf.rz[a] };
-        const Vec3d r1 = { buf.rx[b] , buf.ry[b] , buf.rz[b] };
-        const Vec3d r2 = { buf.rx[c] , buf.ry[c] , buf.rz[c] };
-        const Vec3d r3 = { buf.rx[d] , buf.ry[d] , buf.rz[d] };
+        size_t ca=0 , pa=0;
+        decode_cell_particle( m_molecule_list.atom_data(m,a) , ca, pa );
+        const Vec3d r0 = { m_cells[ca][m_rx][pa], m_cells[ca][m_ry][pa], m_cells[ca][m_rz][pa] };
+
+        size_t cb=0 , pb=0;
+        decode_cell_particle( m_molecule_list.atom_data(m,b) , cb, pb );
+        const Vec3d r1 = { m_cells[cb][m_rx][pb], m_cells[cb][m_ry][pb], m_cells[cb][m_rz][pb] };
+
+        size_t cc=0 , pc=0;
+        decode_cell_particle( m_molecule_list.atom_data(m,c) , cc, pc );
+        const Vec3d r2 = { m_cells[cc][m_rx][pc], m_cells[cc][m_ry][pc], m_cells[cc][m_rz][pc] };
+
+        size_t cd=0 , pd=0;
+        decode_cell_particle( m_molecule_list.atom_data(m,d) , cd, pd );
+        const Vec3d r3 = { m_cells[cd][m_rx][pd], m_cells[cd][m_ry][pd], m_cells[cd][m_rz][pd] };
 
         const Vec3d r10 = m_xform * periodic_r_delta( r1 , r0 , m_size_box , m_half_min_size_box );
         const Vec3d r12 = m_xform * periodic_r_delta( r1 , r2 , m_size_box , m_half_min_size_box );
@@ -381,25 +397,25 @@ namespace exaStamp
 
         const Vec3d Fo = - (Fa+Fc+Fd);
 
-        buf.fx[a] += Fa.x;
-        buf.fy[a] += Fa.y;
-        buf.fz[a] += Fa.z;
-        buf.ep[a] += e;
+        m_cells[ca][m_fx][pa] += Fa.x;
+        m_cells[ca][m_fy][pa] += Fa.y;
+        m_cells[ca][m_fz][pa] += Fa.z;
+        m_cells[ca][m_ep][pa] += e;
 
-        buf.fx[b] += Fo.x;
-        buf.fy[b] += Fo.y;
-        buf.fz[b] += Fo.z;
-        buf.ep[b] += e;
+        m_cells[cb][m_fx][pb] += Fo.x;
+        m_cells[cb][m_fy][pb] += Fo.y;
+        m_cells[cb][m_fz][pb] += Fo.z;
+        m_cells[cb][m_ep][pb] += e;
 
-        buf.fx[c] += Fc.x;
-        buf.fy[c] += Fc.y;
-        buf.fz[c] += Fc.z;
-        buf.ep[c] += e;
+        m_cells[cc][m_fx][pc] += Fc.x;
+        m_cells[cc][m_fy][pc] += Fc.y;
+        m_cells[cc][m_fz][pc] += Fc.z;
+        m_cells[cc][m_ep][pc] += e;
         
-        buf.fx[d] += Fd.x;
-        buf.fy[d] += Fd.y;
-        buf.fz[d] += Fd.z;
-        buf.ep[d] += e;
+        m_cells[cd][m_fx][pd] += Fd.x;
+        m_cells[cd][m_fy][pd] += Fd.y;
+        m_cells[cd][m_fz][pd] += Fd.z;
+        m_cells[cd][m_ep][pd] += e;
 
         if constexpr ( has_virial_field )
         {
@@ -408,10 +424,10 @@ namespace exaStamp
           const Mat3d vird = tensor (Fd,r23) * 0.5;
           const Mat3d virac = vira + virc;
           const Mat3d vircd = virc + vird;
-          buf.virial[a] += vira;
-          buf.virial[b] += virac;
-          buf.virial[c] += vircd;
-          buf.virial[d] += vird;
+          m_cells[ca][m_virial][pa] += vira;
+          m_cells[cb][m_virial][pb] += virac;
+          m_cells[cc][m_virial][pc] += vircd;
+          m_cells[cd][m_virial][pd] += vird;
         }
       }
 
@@ -428,8 +444,14 @@ namespace exaStamp
 
         const double weight = wi * 0.5;
 
-        const Vec3d ra = { buf.rx[a] , buf.ry[a] , buf.rz[a] };
-        const Vec3d rb = { buf.rx[b] , buf.ry[b] , buf.rz[b] };
+        size_t ca=0 , pa=0;
+        decode_cell_particle( m_molecule_list.atom_data(m,a) , ca, pa );
+        const Vec3d ra = { m_cells[ca][m_rx][pa], m_cells[ca][m_ry][pa], m_cells[ca][m_rz][pa] };
+
+        size_t cb=0 , pb=0;
+        decode_cell_particle( m_molecule_list.atom_data(m,b) , cb, pb );
+        const Vec3d rb = { m_cells[cb][m_rx][pb], m_cells[cb][m_ry][pb], m_cells[cb][m_rz][pb] };
+
         const Vec3d r = m_xform * periodic_r_delta( ra , rb , m_size_box , m_half_min_size_box );
         
         const double d2 = norm2(r);
@@ -458,36 +480,21 @@ namespace exaStamp
         // force = dE * dr->
         const Vec3d F = de * r;
 
-        buf.fx[a] += F.x;
-        buf.fy[a] += F.y;
-        buf.fz[a] += F.z;
-        buf.ep[a] += 0.5 * e;
+        m_cells[ca][m_fx][pa] += F.x;
+        m_cells[ca][m_fy][pa] += F.y;
+        m_cells[ca][m_fz][pa] += F.z;
+        m_cells[ca][m_ep][pa] += 0.5 * e;
 
-        buf.fx[b] -= F.x;
-        buf.fy[b] -= F.y;
-        buf.fz[b] -= F.z;
-        buf.ep[b] += 0.5 * e;
+        m_cells[cb][m_fx][pb] -= F.x;
+        m_cells[cb][m_fy][pb] -= F.y;
+        m_cells[cb][m_fz][pb] -= F.z;
+        m_cells[cb][m_ep][pb] += 0.5 * e;
 
         if constexpr ( has_virial_field )
         {
           const Mat3d vir = tensor( F, r ) * -0.5;
-          buf.virial[a] += vir;
-          buf.virial[b] += vir;
-        }
-      }
-    
-      // 7. store results back to particles
-      for(unsigned int a=0;a<natoms;a++)
-      {
-        size_t c=0 , p=0;
-        decode_cell_particle( m_molecule_list.atom_data(m,a) , c, p );
-        m_cells[c][field::fx][p] += buf.fx[a];
-        m_cells[c][field::fy][p] += buf.fy[a];
-        m_cells[c][field::fz][p] += buf.fz[a];
-        m_cells[c][field::ep][p] += buf.ep[a];
-        if constexpr ( has_virial_field )
-        {
-          m_cells[c][field::virial][p] += buf.virial[a];
+          m_cells[ca][m_virial][pa] += vir;
+          m_cells[cb][m_virial][pb] += vir;
         }
       }
 

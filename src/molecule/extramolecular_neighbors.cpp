@@ -29,19 +29,20 @@ namespace exaStamp
 {
   using namespace exanb;
 
-  template<class CellsT>
+  template<class CellsT, class FieldIdAccT>
   struct ExtraMolecularNeighborFilter
   {
-    CellsT m_cells;
+    CellsT m_cells = {};
+    FieldIdAccT m_field_id = {};
     inline bool operator () (double d2, double rcut2,size_t cell_a,size_t p_a,size_t cell_b,size_t p_b) const
     {
-      uint64_t idmol_a = molecule_instance_from_id( m_cells[cell_a][field::idmol][p_a] );
-      uint64_t idmol_b = molecule_instance_from_id( m_cells[cell_b][field::idmol][p_b] );
-      return ( idmol_a != idmol_b ) && ( d2 < rcut2 );
+      uint64_t idmol_a = molecule_instance_from_id( m_cells[cell_a][m_field_id][p_a] );
+      uint64_t idmol_b = molecule_instance_from_id( m_cells[cell_b][m_field_id][p_b] );
+      return ( idmol_a != idmol_b ) && ( d2 > 0.0 ) && ( d2 < rcut2 );
     }
   };
 
-  template<typename GridT>
+  template<typename GridT >
   class ExtraMolecularNeighbors : public OperatorNode
   {
     ADD_SLOT( GridT               , grid            , INPUT );
@@ -80,12 +81,23 @@ namespace exaStamp
       
       if( grid->has_allocated_field(field::idmol) )
       {
-        auto cells = grid->cells();
-        ExtraMolecularNeighborFilter< decltype(cells) > nbh_filter = { cells };
+        ldbg << "build extramolecular neighbors using idmol field" << std::endl;
+        auto cells = grid->cells_accessor();
+        auto field_idmol = grid->field_const_accessor( field::idmol );
+        ExtraMolecularNeighborFilter< decltype(cells) , decltype(field_idmol) > nbh_filter = { cells , field_idmol };
+        chunk_neighbors_execute(ldbg,*chunk_neighbors,*grid,*amr,*amr_grid_pairs,*config,*chunk_neighbors_scratch,cs,cs_log2,*nbh_dist_lab, xform_filter, gpu_enabled, no_zorder, nbh_filter );
+      }
+      else if( grid->has_allocated_field(field::id) )
+      {
+        ldbg << "build extramolecular neighbors using id field" << std::endl;
+        auto cells = grid->cells_accessor();
+        auto field_id = grid->field_const_accessor( field::id );
+        ExtraMolecularNeighborFilter< decltype(cells) , decltype(field_id) > nbh_filter = { cells , field_id };
         chunk_neighbors_execute(ldbg,*chunk_neighbors,*grid,*amr,*amr_grid_pairs,*config,*chunk_neighbors_scratch,cs,cs_log2,*nbh_dist_lab, xform_filter, gpu_enabled, no_zorder, nbh_filter );
       }
       else
       {
+        ldbg << "build extramolecular neighbors without id field => complete neighbors are built" << std::endl;
         chunk_neighbors_execute(ldbg,*chunk_neighbors,*grid,*amr,*amr_grid_pairs,*config,*chunk_neighbors_scratch,cs,cs_log2,*nbh_dist_lab, xform_filter, gpu_enabled, no_zorder );
       }
     }

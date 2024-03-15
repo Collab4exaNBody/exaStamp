@@ -721,9 +721,16 @@ namespace exaStamp
           //molecular ID : note, ids are INT in stamp, not UINT.
           molnum = static_cast<uint64_t>( molecules[i].numeroMolecule);
           moltype = static_cast<unsigned int>( molecules[i].typeMolecule);
-          assert( at_mol_place[i] >= 0 );
-          molplace = at_mol_place[i];
-          mol_id = make_molecule_id( molnum, molplace, moltype );
+          if( options.m_build_molecule_species )
+          {
+            assert( at_mol_place[i] >= 0 );
+            molplace = at_mol_place[i];
+            mol_id = make_molecule_id( molnum, molplace, moltype );
+          }
+          else
+          {
+            mol_id = molnum + ( uint64_t(moltype) << 48 );
+          }
 
           //atom connectivity : note, ids are INT in stamp, not UINT.
           cmol = std::array<uint64_t,4>{static_cast<uint64_t>(molecules[i].Connectivite[0]),

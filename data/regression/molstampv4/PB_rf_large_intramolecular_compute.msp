@@ -7,11 +7,9 @@ configuration:
   onika:
     gpu_block_size: 256
   logging:
-    debug: false
+    debug: true
   debug:
-    filter: [ ".*intramolecular_setup" , ".*intramolecular_compute" ]
-    #filter: [ ".*molecule_pair_weight" , ".*ljrf_multi_force" , ".*intramolecular_setup" , ".*intramolecular_compute" ]
-    #filter: [ ".*read_stamp_v4" , ".*intramolecular_setup" , ".*intramolecular_compute" , ".*molecule_list" , ".*molecule_species" ]
+    filter: [ ".*read_stamp_v4" , ".*intramolecular_setup" , ".*intramolecular_compute" , ".*molecule_list" , ".*molecule_species" ]
   profiling:
     summary: true
 
@@ -25,6 +23,11 @@ input_data:
       bounds_mode: FILE
       enable_xform_scale: true
       build_molecule_species: true
+#  - id_map
+#  - intramolecular_setup: { rebuild_molecules: true }
+
+intramolecular_setup:
+  rebuild_molecules: false
 
 # user-defined domain data
 domain:
@@ -53,7 +56,7 @@ grid_flavor: grid_flavor_full
 
 simulation_epilog:
   - check_values:
-      file: PB_molecule.dat
+      file: PB_molecule2.dat
       acc_threshold: 1.5e-5
       pos_threshold: 1.e-11
 

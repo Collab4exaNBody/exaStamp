@@ -46,18 +46,23 @@ namespace exaStamp
         assert( tid < omp_get_num_threads() );
         auto & id_map = mol_id_maps[tid];
         
-#       pragma omp for schedule(dynamic)        
+#       pragma omp for schedule(guided)        
         for(size_t cell_i=0;cell_i<n_cells;cell_i++)
         {
+          bool is_ghost = grid->is_ghost_cell( cell_i );
           const size_t n_particles = cells[cell_i].size();
           for(size_t i=0;i<n_particles;i++)
           {
             const auto idmol = cells[cell_i][field::idmol][i];
-            uint64_t mid = molecule_instance_from_id( idmol );
-            uint64_t mtype = molecule_type_from_id( idmol );
-            if( id_map.find(mid) == id_map.end() )
+            if( idmol != std::numeric_limits<uint64_t>::max() )
             {
-              id_map.insert( { mid , mtype } );
+              uint64_t mid = molecule_instance_from_id( idmol );
+              uint64_t mtype = molecule_type_from_id( idmol );
+              assert( mtype < molecules->m_molecules.size() );
+              if( id_map.find(mid) == id_map.end() )
+              {
+                id_map.insert( { mid , mtype } );
+              }
             }
           }
         }
@@ -71,6 +76,10 @@ namespace exaStamp
         mol_id_maps[i].clear();
       }
       ldbg << "local proc has " << id_map.size() << " unique molecules" << std::endl;
+      for(const auto& mol : id_map)
+      {
+        assert( mol.second >= 0 && mol.second < molecules->m_molecules.size() );
+      }
 
       // now compute molecule offsets
       std::vector< std::pair<uint64_t,uint64_t> > sorted_molids( id_map.begin() , id_map.end() );

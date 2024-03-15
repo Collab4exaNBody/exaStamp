@@ -28,16 +28,14 @@ namespace exaStamp
     class = AssertGridHasFields< GridT, field::_fx, field::_fy, field::_fz, field::_ep >
     >
   class IntramolecularForceCompute : public OperatorNode
-  {
-    using has_virial_field_t = typename GridT::CellParticles::template HasField < field::_virial > ;
-    static constexpr bool has_virial_field = has_virial_field_t::value;
-    using ComputeBufferT = std::conditional_t< has_virial_field , MoleculeVirialComputeBuffer, MoleculeComputeBuffer >;
-  
+  {  
     ADD_SLOT( GridT                    , grid                        , INPUT_OUTPUT);
     ADD_SLOT( Domain                   , domain                      , INPUT , REQUIRED );
     ADD_SLOT( MoleculeSpeciesVector    , molecules                   , INPUT , MoleculeSpeciesVector{}    , DocString{"Molecule descriptions"} );
     ADD_SLOT( MoleculeLists            , molecule_list               , INPUT , MoleculeLists{}            , DocString{"List of atoms for each molecule"} );
     ADD_SLOT( MoleculeSetComputeParams , molecule_compute_parameters , INPUT , MoleculeSetComputeParams{} , DocString{"Intramolecular functionals' parameters"} );
+    ADD_SLOT( bool                     , compute_virial              , INPUT , false                      , DocString{"Computes per atom virial"} );
+    
 
   public:
     inline void execute ()  override final
@@ -60,32 +58,40 @@ namespace exaStamp
 
       ldbg << "ghost particles = "<< nghosts <<std::endl;
       ldbg << "number of molecules = " << nmol << std::endl;
-      ldbg << "virial = " << std::boolalpha << has_virial_field << std::endl;
-      ldbg << "molecule buffer size = " << sizeof(ComputeBufferT) << std::endl;
+      ldbg << "virial = " << std::boolalpha << *compute_virial << std::endl;
       
-      auto fields = onika::make_flat_tuple(
-        grid->field_const_accessor(field::rx) ,
-        grid->field_const_accessor(field::ry) , 
-        grid->field_const_accessor(field::rz) ,
-        grid->field_accessor(field::fx) , 
-        grid->field_accessor(field::fy) , 
-        grid->field_accessor(field::fz) , 
-        grid->field_accessor(field::ep) );
-
-      auto intramol_op = make_intramolecular_functor( *molecule_list, *molecules, *molecule_compute_parameters , xform, size_box, half_min_size_box, grid->cells_accessor() , fields );
+      auto compute_opt_virial = [&]( auto fields )
+      {
+        auto intramol_op = make_intramolecular_functor( *molecule_list, *molecules, *molecule_compute_parameters , xform, size_box, half_min_size_box, grid->cells_accessor() , fields );      
+        ldbg << "molecule buffer size = " << sizeof( typename decltype(intramol_op)::ComputeBufferT ) << std::endl;
+        parallel_for( nmol , intramol_op , parallel_execution_context() );
+      };
       
-      parallel_for( nmol , intramol_op , parallel_execution_context() );
-/*
-#     pragma omp parallel
-      {              
-#       pragma omp for schedule(dynamic)        
-        for(size_t m=0;m<nmol;m++)
-        {
-          func( m );
-        } // end of loop on molecules       
-      } // end of parallel section
-*/
-
+      if( *compute_virial )
+      {
+        auto fields = onika::make_flat_tuple(
+          grid->field_const_accessor(field::rx) ,
+          grid->field_const_accessor(field::ry) , 
+          grid->field_const_accessor(field::rz) ,
+          grid->field_accessor(field::fx) , 
+          grid->field_accessor(field::fy) , 
+          grid->field_accessor(field::fz) , 
+          grid->field_accessor(field::ep) );
+        compute_opt_virial( fields );
+      }
+      else
+      {
+        auto fields = onika::make_flat_tuple(
+          grid->field_const_accessor(field::rx) ,
+          grid->field_const_accessor(field::ry) , 
+          grid->field_const_accessor(field::rz) ,
+          grid->field_accessor(field::fx) , 
+          grid->field_accessor(field::fy) , 
+          grid->field_accessor(field::fz) , 
+          grid->field_accessor(field::ep) ,
+          grid->field_accessor(field::virial) );
+        compute_opt_virial( fields );
+      }
     }
 
   };
