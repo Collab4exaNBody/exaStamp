@@ -49,11 +49,12 @@ namespace exaStamp
 #       pragma omp for schedule(guided)        
         for(size_t cell_i=0;cell_i<n_cells;cell_i++)
         {
-          bool is_ghost = grid->is_ghost_cell( cell_i );
+          const bool is_ghost = grid->is_ghost_cell( cell_i );
           const size_t n_particles = cells[cell_i].size();
           for(size_t i=0;i<n_particles;i++)
           {
             const auto idmol = cells[cell_i][field::idmol][i];
+            assert( is_ghost || idmol!=std::numeric_limits<uint64_t>::max() );
             if( idmol != std::numeric_limits<uint64_t>::max() )
             {
               uint64_t mid = molecule_instance_from_id( idmol );

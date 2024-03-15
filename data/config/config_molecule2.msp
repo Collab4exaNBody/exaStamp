@@ -1,11 +1,11 @@
 # specific operations needed for molecules when particles move from cell to cell (and processor to processor)
 +parallel_update_particles:
   - intramolecular_pair_weight
-#  - check_idmol
   - molecule_list
 
 init_epilog:
   - id_map
+  - molecule_species_from_cmol
   - intramolecular_setup
 
 molecule_pair_weight:

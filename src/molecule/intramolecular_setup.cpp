@@ -98,9 +98,7 @@ namespace exaStamp
     ADD_SLOT( ParticleSpecies       , species           , INPUT , REQUIRED );
     ADD_SLOT( ParticleTypeMap       , particle_type_map , INPUT , REQUIRED );
     
-    ADD_SLOT( IdMap                 , id_map            , INPUT , OPTIONAL );
     ADD_SLOT( MoleculeSpeciesVector , molecules         , INPUT_OUTPUT , REQUIRED , DocString{"Molecule descriptions"} );
-    ADD_SLOT( bool                  , rebuild_molecules , INPUT , true , DocString{"Rebuild molecule description from molecular connectivity"} );    
 
     ADD_SLOT( BondsPotentialParameters     , potentials_for_bonds     , INPUT, OPTIONAL );
     ADD_SLOT( BendsPotentialParameters     , potentials_for_angles    , INPUT, OPTIONAL );
@@ -118,127 +116,6 @@ namespace exaStamp
     inline void execute ()  override final
     {
       static constexpr MoleculeGenericFuncParam null_param = {0.0,0.0,0.0,0.0};
-
-
-      /* rebuild molecule species from connectivity here */
-      if( *rebuild_molecules )
-      {
-        if( ! grid->has_allocated_field(field::cmol) )
-        {
-          fatal_error() << "Impossible to rebuild molecular information without atom connectivity" << std::endl;
-        }
-
-        ldbg << "rebuild molecule species from cmol and idmol" << std::endl;
-        if( ! id_map.has_value() )
-        {
-          fatal_error() << "id_map is needed to rebuild molecule species" << std::endl;
-        }
-        
-        
-        const size_t n_cells = grid->number_of_cells();
-        auto cells = grid->cells_accessor();
-        auto field_cmol = grid->field_const_accessor( field::cmol );
-        auto field_id = grid->field_accessor( field::idmol );
-        auto field_type = grid->field_const_accessor( field::type );  
-
-        for(size_t cell_i=0;cell_i<n_cells;cell_i++)
-        {
-          size_t n_particles = cells[cell_i].size();
-          for(size_t p_i=0;p_i<n_particles;p_i++)
-          {
-            cells[cell_i][field_id][p_i] = std::numeric_limits<uint64_t>::max();
-          }
-        }
-        
-        MoleculeParser<decltype(cells),decltype(field_cmol),decltype(field_type)> molecule_parser = { cells, field_cmol, field_type, *id_map };
-
-        std::set< MoleculeAtoms > molecule_graphs;
-        std::vector< std::pair<int,int> > atom_mol_place;
-        atom_mol_place.assign( grid->number_of_particles() , {-1,-1} );
-                
-        std::vector<AtomNode> molecule_atoms;
-        MoleculeAtoms moldesc;
-        size_t mol_count = 0;
-        for(size_t cell_i=0;cell_i<n_cells;cell_i++)
-        {
-          if( ! grid->is_ghost_cell(cell_i) )
-          {
-            size_t n_particles = cells[cell_i].size();
-            for(size_t p_i=0;p_i<n_particles;p_i++)
-            {
-              molecule_atoms.clear();
-              molecule_parser.explore_molecule( molecule_atoms , cells[cell_i][field_id][p_i] );
-              if( ! molecule_atoms.empty() )
-              {
-                std::sort( molecule_atoms.begin() , molecule_atoms.end() );
-                auto c0 = molecule_atoms[0].id[0];
-                for(auto & an : molecule_atoms)
-                {
-                  for(int i=0;i<5;i++) if(an.id[i]!=-1) an.id[i]-=c0;
-                }
-                moldesc = MoleculeAtoms{ std::move(molecule_atoms) , -1 };
-                auto it = molecule_graphs.find(moldesc);
-                int moltype = molecule_graphs.size();
-                if( it == molecule_graphs.end() )
-                {
-                  moldesc.moltype = moltype;
-                  molecule_graphs.insert( moldesc );
-                }
-                else
-                {
-                  moltype = it->moltype;
-                  moldesc.moltype = moltype;
-                }
-                for(size_t ma=0;ma<moldesc.atoms.size();ma++)
-                {
-                  size_t cell_j=0, p_j=0;
-                  decode_cell_particle( moldesc.atoms[ma].cell_particle , cell_j, p_j );
-                  assert( moltype < molecule_graphs.size() );
-                  cells[cell_j][field_id][p_j] = make_molecule_id( mol_count , ma , moltype );
-                }
-              }
-              ++ mol_count;
-            }
-          }
-        }
-        
-        ldbg << "found "<< molecule_graphs.size() << " molecules"<<std::endl;
-        for(const auto & moldesc : molecule_graphs)
-        {
-          ldbg<<"\t";
-          for(auto an:moldesc.atoms)
-          {
-            ldbg <<" "<<species->at(an.type).name()<<":";
-            for(int i=0;i<5;i++) if(an.id[i]!=-1) ldbg << ( (i==0)?"":"," ) <<an.id[i];
-          }
-          ldbg << std::endl;
-        }
-        
-        molecules->m_bridge_molecules.clear();
-        molecules->m_molecules.resize( molecule_graphs.size() );
-        int m = 0;
-        for(const auto & moldesc : molecule_graphs)
-        {
-          int n_atoms = moldesc.atoms.size();
-          molecules->m_molecules[m].m_nb_atoms = n_atoms;
-          for(int a=0;a<n_atoms;a++)
-          {
-            molecules->m_molecules[m].m_atom_type[a] = moldesc.atoms[a].type;
-            for(int k=0;k<4;k++) molecules->m_molecules[m].m_atom_connectivity[a][k] = moldesc.atoms[a].id[k+1];
-          }
-          if( molecules->m_molecules[m].name().empty() )
-          {
-            std::ostringstream oss;
-            oss << "mol_"<<m;
-            molecules->m_molecules[m].set_name( oss.str() );
-          }
-          molecules->m_molecules[m].update_connectivity();
-          molecules->m_molecules[m].print( ldbg , *species );
-          ++ m;
-        }
-        
-        //fatal_error() << "not fully implemented" << std::endl;
-      }
 
       const unsigned int nmol = molecules->m_molecules.size();    
       molecule_compute_parameters->m_molecules.assign( nmol , MoleculeComputeParams{} );

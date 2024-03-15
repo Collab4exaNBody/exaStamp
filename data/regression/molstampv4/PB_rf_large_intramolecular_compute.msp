@@ -22,12 +22,7 @@ input_data:
       file: molstampv4_PB_large.mpio
       bounds_mode: FILE
       enable_xform_scale: true
-      build_molecule_species: true
-#  - id_map
-#  - intramolecular_setup: { rebuild_molecules: true }
-
-intramolecular_setup:
-  rebuild_molecules: false
+      build_molecule_species: false
 
 # user-defined domain data
 domain:
