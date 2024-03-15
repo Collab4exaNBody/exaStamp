@@ -35,12 +35,10 @@ namespace exaStamp
     ADD_SLOT(double                 , dt            , OUTPUT                                       , DocString{"Time step"} );
     ADD_SLOT(double                 , physical_time , OUTPUT                                       , DocString{"Physical time"} );
     ADD_SLOT(ParticleSpecies        , species       , INPUT                                        , DocString{"Particle species data block"} );
-    ADD_SLOT(MoleculeSpeciesVector  , molecules     , INPUT_OUTPUT                                 , DocString{"Molecule descriptions"} );
     ADD_SLOT(bool                   , enable_xform_scale, INPUT, false                             , DocString{"enable scaling of reduced domain to obtain identity xform when possible"} );
     ADD_SLOT(bool                   , pbc_adjust_xform , INPUT , false                             , DocString{"Adjust xform to preserve sizes in directions with periodic boundary conditions"} );
     ADD_SLOT(long                   , version       , INPUT , -1                                   , DocString{"force file version (ignore version number in file) ex: 41 for 4.1, 42 for 4.2"} );
     ADD_SLOT(bool                   , molrig42      , INPUT , true                                 , DocString{"force short (without orientation) 4.2 rigid molecule structures"} );
-    ADD_SLOT(bool                   , build_molecule_species , INPUT , false                       , DocString{"detect molecule species from connectivity and fill molecules slot"} );
 
     // -----------------------------------------------
     // ----------- Operator documentation ------------
@@ -56,9 +54,8 @@ namespace exaStamp
     {
       std::string file_name = data_file_path( *file );
       read_stamp_v4( ldbg, *mpi,file_name,*enlarge_bounds,*bounds_mode,*grid,*domain
-                   , *timestep,*dt,*physical_time,*species,*molecules
-                   , *enable_xform_scale , *pbc_adjust_xform , *version , *molrig42
-                   , *build_molecule_species );
+                   , *timestep,*dt,*physical_time,*species
+                   , *enable_xform_scale , *pbc_adjust_xform , *version , *molrig42 );
     }
 
     inline void yaml_initialize(const YAML::Node& node) override final

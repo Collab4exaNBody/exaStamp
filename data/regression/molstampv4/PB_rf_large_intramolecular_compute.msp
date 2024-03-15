@@ -7,7 +7,7 @@ configuration:
   onika:
     gpu_block_size: 256
   logging:
-    debug: true
+    debug: false
   debug:
     filter: [ ".*read_stamp_v4" , ".*intramolecular_setup" , ".*intramolecular_compute" , ".*molecule_list" , ".*molecule_species" ]
   profiling:
@@ -22,7 +22,6 @@ input_data:
       file: molstampv4_PB_large.mpio
       bounds_mode: FILE
       enable_xform_scale: true
-      build_molecule_species: false
 
 # user-defined domain data
 domain:

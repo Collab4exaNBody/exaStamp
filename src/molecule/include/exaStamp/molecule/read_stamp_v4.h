@@ -69,8 +69,6 @@ namespace exaStamp
   {
     static inline constexpr unsigned int Version = _Version::value;
     static inline constexpr bool UseIOMolRigid42 = _UseIOMolRigid42::value;
-    
-    bool m_build_molecule_species = false;
   };
 
   template<class LDBG, class GridT, class StampV4OptionsT = StampV4Options<> >
@@ -87,7 +85,6 @@ namespace exaStamp
                        double& dt,
                        double& phystime,
                        ParticleSpecies& species,
-                       MoleculeSpeciesVector& molvec,
                        bool enable_xform_scale,
                        bool pbc_adjust_xform,
                        StampV4OptionsT options = {}
@@ -102,8 +99,6 @@ namespace exaStamp
     using IOEntete = stampv4::IOEntete<IndexT>;
     using IOAtomes = stampv4::IOAtomes<IndexT>;
     using IOMolRig = std::conditional_t< options.UseIOMolRigid42 , stampv4::IOMolRigV4_2 , stampv4::IOMolRigV4_1 >;
-
-    auto & molspecies = molvec.m_molecules;
 
     // MPI Initialization
     int rank=0, np=1;
@@ -510,142 +505,6 @@ namespace exaStamp
     // --------- comptage des types de molecule -------
     std::vector<int> at_mol_place( count , 0 );
     
-    if( options.m_build_molecule_species && entete->bloc_molecules )
-    {
-      std::vector<int64_t> indices(count);
-      at_mol_place.assign( count , -1 );
-      for (size_t i = 0;i<count; i++) indices[i]=i;
-
-      std::stable_sort( indices.begin(), indices.end() ,
-        [&molecules,&atomes](int64_t a, int64_t b)->bool
-        {
-          return molecules[a].numeroMolecule < molecules[b].numeroMolecule
-              || ( molecules[a].numeroMolecule == molecules[b].numeroMolecule && atomes[a].numeroAtome < atomes[b].numeroAtome );
-        } );
-      
-      std::set< std::set< onika::oarray_t<int64_t,6> > > conn_types;
-      std::map< std::set< onika::oarray_t<int64_t,6> > , uint64_t > molecule_type_map;
-      std::vector< onika::oarray_t<int64_t,4> > curmol_conn_types;
-      std::vector<int64_t> curmol_at_ids;
-      std::vector<int> curmol_at_types;
-      std::vector<int> curmol_at_indices;
-
-      int64_t lastMolecule = -1;
-      int64_t molnum = -1;
-      uint64_t molecule_type_id = 0;
-      uint64_t molecule_instance_id = 0;
-      
-      for (size_t idx=0;idx<=count;idx++)
-      {
-        int64_t i = -1;
-        molnum = -1;
-        if( idx < count )
-        {
-          i = indices[idx];
-          molnum = molecules[i].numeroMolecule;
-        }
-
-        if( molnum != lastMolecule )
-        {
-          if( lastMolecule != -1 && ! curmol_conn_types.empty() )
-          {
-            uint64_t moltype = 0;
-            int64_t min_id = std::numeric_limits<int64_t>::max();
-            int64_t max_id = -1;
-            for(auto id:curmol_at_ids)
-            {
-              min_id = std::min( min_id , id );
-              max_id = std::max( max_id , id );
-            }
-            size_t natoms = max_id-min_id+1;
-            if( natoms != curmol_at_ids.size() )
-            {
-              lerr<<"curmol_at_ids = [";
-              for(const auto& id:curmol_at_ids) lerr<<" "<<id;
-              lerr<<" ] , min_id="<<min_id<<" , max_id="<<max_id<<" , natoms="<<natoms <<std::endl;
-              fatal_error() << "atom ids not contiguous" << std::endl;
-            }
-            
-            std::set< onika::oarray_t<int64_t,6> > molgraph;
-            for(unsigned int ag=0;ag<natoms;ag++)
-            {
-              auto ct = curmol_conn_types[ag];
-              for(auto& x:ct) if(x!=-1) x -= min_id;
-              onika::oarray_t<int64_t,6> gr = { curmol_at_ids[ag]-min_id , curmol_at_types[ag] , ct[0] , ct[1] , ct[2] , ct[3] };
-              molgraph.insert( gr );
-            }
-            if( conn_types.find(molgraph) == conn_types.end() )
-            {
-              //lout << "insert molgraph from molid "<< lastMolecule << " with type id "<<molecule_type_id <<std::endl;
-              conn_types.insert( molgraph );
-              moltype = molecule_type_id++;
-              molecule_type_map[ molgraph ] = moltype;
-            }
-            else
-            {
-              moltype = molecule_type_map[ molgraph ];
-            }
-            for(auto molatidx:curmol_at_indices)
-            {
-              molecules[molatidx].typeMolecule = moltype;
-              molecules[molatidx].numeroMolecule = molecule_instance_id;
-              at_mol_place[molatidx] = atomes[molatidx].numeroAtome - min_id;
-            }
-            ++ molecule_instance_id;
-          }
-          curmol_conn_types.clear();
-          curmol_at_ids.clear();
-          curmol_at_types.clear();
-          curmol_at_indices.clear();
-          lastMolecule = molnum;
-        }
-        
-        if( i != -1 )
-        {
-          //atom connectivity : note, ids are INT in stamp, not UINT.
-          auto cmol = onika::oarray_t<int64_t,4> {
-                molecules[i].Connectivite[0] ,
-                molecules[i].Connectivite[1] ,
-                molecules[i].Connectivite[2] ,
-                molecules[i].Connectivite[3] };
-          curmol_conn_types.push_back( cmol );
-          curmol_at_ids.push_back( atomes[i].numeroAtome );
-          curmol_at_types.push_back( type_name_to_index(atomes[i].typeAtome) );
-          curmol_at_indices.push_back( i );
-        }
-      }
-
-      //lout << "different molecule graphs = "<<conn_types.size()<<std::endl;
-      molspecies.resize( conn_types.size() );
-      //int ngraphs = 0;
-      for(const auto& molgraph:conn_types)
-      {
-        int ngraphs = molecule_type_map[ molgraph ];
-        molspecies[ngraphs].m_nb_atoms = molgraph.size();
-        int a = 0;
-        for(const auto& cmol:molgraph)
-        {
-          molspecies[ngraphs].m_atom_type[a] = cmol[1];
-          for(int k=0;k<4;k++) molspecies[ngraphs].m_atom_connectivity[a][k] = cmol[k+2];
-          ++a;
-        }
-        
-        if( molspecies[ngraphs].name().empty() )
-        {
-          std::ostringstream oss;
-          oss << "mol_"<<ngraphs;
-          molspecies[ngraphs].set_name( oss.str() );
-        }
-        molspecies[ngraphs].update_connectivity();
-        molspecies[ngraphs].print( ldbg , species );
-        //++ ngraphs;
-      }
-
-    }
-
-    //MPI_Allreduce(MPI_IN_PLACE,&moltype_min,1,MPI_INT,MPI_MIN,comm);
-    //MPI_Allreduce(MPI_IN_PLACE,&moltype_max,1,MPI_INT,MPI_MAX,comm);
-
     // ------------------------------------------------
     // --------- transmission des donnees -------------
     using MoleculeTupleIO = onika::soatl::FieldTuple<field::_rx, field::_ry, field::_rz, 
@@ -713,7 +572,7 @@ namespace exaStamp
         uint64_t mol_id = 0;
         uint64_t molnum = 0;
         unsigned int moltype = 0;
-        unsigned int molplace = 0;
+        //unsigned int molplace = 0;
         std::array<uint64_t,4> cmol = { 0, 0, 0, 0 };
 
         if( entete->bloc_molecules )
@@ -721,16 +580,7 @@ namespace exaStamp
           //molecular ID : note, ids are INT in stamp, not UINT.
           molnum = static_cast<uint64_t>( molecules[i].numeroMolecule);
           moltype = static_cast<unsigned int>( molecules[i].typeMolecule);
-          if( options.m_build_molecule_species )
-          {
-            assert( at_mol_place[i] >= 0 );
-            molplace = at_mol_place[i];
-            mol_id = make_molecule_id( molnum, molplace, moltype );
-          }
-          else
-          {
-            mol_id = molnum + ( uint64_t(moltype) << 48 );
-          }
+          mol_id = molnum + ( uint64_t(moltype) << 48 );
 
           //atom connectivity : note, ids are INT in stamp, not UINT.
           cmol = std::array<uint64_t,4>{static_cast<uint64_t>(molecules[i].Connectivite[0]),
@@ -794,14 +644,11 @@ namespace exaStamp
                        int64_t& iteration_number,
                        double& dt,
                        double& phystime,
-                       ParticleSpecies& species,
-                       MoleculeSpeciesVector& molspecies,                       
+                       ParticleSpecies& species,                     
                        bool enable_xform_scale,
                        bool pbc_adjust_xform,
                        int force_version ,
-                       bool use_molrigid_42 ,
-                       bool build_molecule_species
-                       )
+                       bool use_molrigid_42 )
   {
     using stampv4::IOVersion;
 
@@ -844,11 +691,11 @@ namespace exaStamp
       using Version = std::integral_constant<unsigned int,41>;
       if( use_molrigid_42 )
       {
-        read_stamp_v4(file,ldbg,comm,file_name,enlarge_bounds,bounds_mode,grid,domain,iteration_number,dt,phystime,species,molspecies,enable_xform_scale, pbc_adjust_xform, StampV4Options<Version,std::true_type>{build_molecule_species} );
+        read_stamp_v4(file,ldbg,comm,file_name,enlarge_bounds,bounds_mode,grid,domain,iteration_number,dt,phystime,species,enable_xform_scale, pbc_adjust_xform, StampV4Options<Version,std::true_type>{} );
       }
       else
       {
-        read_stamp_v4(file,ldbg,comm,file_name,enlarge_bounds,bounds_mode,grid,domain,iteration_number,dt,phystime,species,molspecies,enable_xform_scale, pbc_adjust_xform, StampV4Options<Version,std::false_type>{build_molecule_species} );
+        read_stamp_v4(file,ldbg,comm,file_name,enlarge_bounds,bounds_mode,grid,domain,iteration_number,dt,phystime,species,enable_xform_scale, pbc_adjust_xform, StampV4Options<Version,std::false_type>{} );
       }
     }
     else if( ( version.version == 2 && force_version==-1 ) || force_version == 42 )
@@ -856,11 +703,11 @@ namespace exaStamp
       using Version = std::integral_constant<unsigned int,42>;
       if( use_molrigid_42 )
       {
-        read_stamp_v4(file,ldbg,comm,file_name,enlarge_bounds,bounds_mode,grid,domain,iteration_number,dt,phystime,species,molspecies,enable_xform_scale, pbc_adjust_xform, StampV4Options<Version,std::true_type>{build_molecule_species} );
+        read_stamp_v4(file,ldbg,comm,file_name,enlarge_bounds,bounds_mode,grid,domain,iteration_number,dt,phystime,species,enable_xform_scale, pbc_adjust_xform, StampV4Options<Version,std::true_type>{} );
       }
       else
       {
-        read_stamp_v4(file,ldbg,comm,file_name,enlarge_bounds,bounds_mode,grid,domain,iteration_number,dt,phystime,species,molspecies,enable_xform_scale, pbc_adjust_xform, StampV4Options<Version,std::false_type>{build_molecule_species} );
+        read_stamp_v4(file,ldbg,comm,file_name,enlarge_bounds,bounds_mode,grid,domain,iteration_number,dt,phystime,species,enable_xform_scale, pbc_adjust_xform, StampV4Options<Version,std::false_type>{} );
       }
     }
     else
