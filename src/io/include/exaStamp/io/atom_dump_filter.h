@@ -269,9 +269,10 @@ namespace exaStamp
     }
 
     static inline constexpr size_t optional_cell_data_size(size_t) { return 0; }
-    static inline constexpr  const uint8_t* optional_cell_data_ptr(size_t) { return nullptr; }
+    static inline constexpr void write_optional_cell_data(uint8_t*, size_t) { }
+    static inline constexpr void append_cell_particle( size_t, size_t ) {};
     static inline constexpr void read_optional_data_from_stream( const uint8_t* , size_t ) {}
-    static inline constexpr  void append_cell_particle( size_t, size_t ) {};
+    static inline constexpr const uint8_t* optional_cell_data_ptr(size_t) { return nullptr; }
   };
 
   template< class GridT , class DumpFieldSet , class LDBG >
