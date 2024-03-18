@@ -159,7 +159,8 @@ dump_analysis: nop
 dump_data:
   - timestep_file: "atoms_%09d.xyz"
   - write_xyz:
-      fields: [ mv2 , processor_id , vx , vy , vz ]
+      fields: [ velocity , force , mv2 , processor_id ]
+      units: { velocity: "m/s" , force: "Kg/m/s" }
 
 global:
   simulation_end_iteration: 40
