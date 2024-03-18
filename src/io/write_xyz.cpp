@@ -19,6 +19,7 @@ under the License.
 
 #include <exanb/core/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
+#include <exanb/core/units.h>
 #include <exanb/io/write_xyz.h>
 #include <exanb/compute/field_combiners.h>
 #include <exaStamp/compute/field_combiners.h>
@@ -31,6 +32,7 @@ namespace exaStamp
   class WriteXYZ : public OperatorNode
   {    
     using StringList = std::vector<std::string>;
+    using StringMap = std::map<std::string,std::string>;
     using has_field_type_t = typename GridT:: template HasField < field::_type >;
     static constexpr bool has_field_type = has_field_type_t::value;
     using KineticEnergyCombiner = std::conditional_t< has_field_type , MultimatKineticEnergyCombiner , MonomatKineticEnergyCombiner >;
@@ -44,7 +46,9 @@ namespace exaStamp
     ADD_SLOT( bool            , ghost    , INPUT , false );
     ADD_SLOT( std::string     , filename , INPUT , "output"); // default value for backward compatibility
     ADD_SLOT( StringList      , fields   , INPUT , StringList({".*"}) , DocString{"List of regular expressions to select fields to project"} );
+    ADD_SLOT( StringMap       , units    , INPUT , StringMap( { {"position","ang"} , {"velocity","m/s"} , {"force","m/s/g"} } ) , DocString{"Units to be used for specific fields."} );
     ADD_SLOT( ParticleSpecies , species  , INPUT , REQUIRED );
+    ADD_SLOT( double          , physical_time  , INPUT , 0.0 );
       
     template<class... fid>
     inline void execute_on_field_set( FieldSet<fid...> ) 
@@ -73,7 +77,26 @@ namespace exaStamp
         }
       };
       
-      write_xyz_details::write_xyz_grid_fields( ldbg, *mpi, *grid, *domain, *fields, *filename, particle_type_func, *ghost, vnorm2, processor_id, mv2, mass, momentum, onika::soatl::FieldId<fid>{} ... );
+      std::unordered_map<std::string,double> conv_scale;
+      for(const auto& umap : *units)
+      {
+        const auto s = "1.0 " + umap.second;
+        bool conv_ok = false;
+        auto q = exanb::units::quantity_from_string( s , conv_ok );
+        if( ! conv_ok ) { fatal_error() << "Failed to parse unit string '"<<s<<"'"<<std::endl; }
+        conv_scale[umap.first] = q.convert();
+      }
+      write_xyz_details::DefaultFieldFormatter field_formatter = { *units , conv_scale };
+      
+      PositionVec3Combiner position = {};
+      VelocityVec3Combiner velocity = {};
+      ForceVec3Combiner    force    = {};
+      
+      StringList flist = { "position" };
+      for(const auto& f : *fields) { if( f != "position" ) flist.push_back(f); }
+      
+      write_xyz_details::write_xyz_grid_fields( ldbg, *mpi, *grid, *domain, flist, *filename, particle_type_func, field_formatter, *ghost, *physical_time
+                                              , position, velocity, force, processor_id, vnorm2, mv2, mass, momentum, onika::soatl::FieldId<fid>{} ... );
     }
 
     public:
