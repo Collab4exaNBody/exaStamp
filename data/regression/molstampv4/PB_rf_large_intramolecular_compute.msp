@@ -7,9 +7,10 @@ configuration:
   onika:
     gpu_block_size: 256
   logging:
-    debug: false
+    parallel: false
+    debug: true
   debug:
-    filter: [ ".*read_stamp_v4" , ".*intramolecular_setup" , ".*intramolecular_compute" , ".*molecule_list" , ".*molecule_species" ]
+    filter: [ ".*read_stamp_v4" , ".*intramolecular_setup" , ".*intramolecular_compute" , ".*molecule_list" , ".*molecule_species" , ".*molecule_species_from_cmol"]
   profiling:
     summary: true
 
@@ -22,10 +23,14 @@ input_data:
       file: molstampv4_PB_large.mpio
       bounds_mode: FILE
       enable_xform_scale: true
+  - id_map
+  - molecule_species_from_cmol
+  - intramolecular_setup
+  - nbh_dist
 
 # user-defined domain data
 domain:
-  grid_dims: [ 6 , 6 , 6 ]
+  grid_dims: [ 4 , 4 , 4 ]
   periodic: [true,true,true]
 
 # user-specified global values
@@ -33,6 +38,7 @@ global:
   dt: 0.1 fs
   rcut_inc: 0.3 ang   # additional distance so that we don't have to rebuild neighbor list each time step
   simulation_end_iteration: 10
+  simulation_dump_frequency: 2
   simulation_log_frequency: 1
   timestep: 0
 
@@ -42,7 +48,7 @@ compute_force:
   - intramolecular_compute
 
 # user-specified dump data
-dump_data: nop
+#dump_data: nop
 
 # user-specified grid content
 #grid_flavor: grid_flavor_multimat

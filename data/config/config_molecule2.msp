@@ -3,11 +3,6 @@
   - intramolecular_pair_weight
   - molecule_list
 
-init_epilog:
-  - id_map
-  - molecule_species_from_cmol
-  - intramolecular_setup
-
 molecule_pair_weight:
   ignore_intramolecular: true
 

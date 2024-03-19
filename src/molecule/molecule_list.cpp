@@ -36,6 +36,8 @@ namespace exaStamp
 
       auto field_idmol = grid->field_const_accessor( field::idmol );
       auto cells = grid->cells_accessor();
+      
+      ldbg<<"MoleculeList : ghost layers = "<<grid->ghost_layers()<<" , max distance = "<<grid->max_neighbor_distance()<<std::endl;
  
 #     pragma omp parallel
       {      
@@ -92,6 +94,7 @@ namespace exaStamp
         });
         
       const size_t nmol = sorted_molids.size();
+      ldbg << "molecule instance count = " << nmol << ", molecule species = "<<molecules->m_molecules.size() <<std::endl;
       size_t mol_data_size = 0;
       molecule_list->m_offset.resize( nmol );
       for(size_t i=0;i<nmol;i++)
@@ -161,22 +164,64 @@ namespace exaStamp
         
       }
 
-#     ifndef NDEBUG
-      // check if everything is ok
+      // filter out ghost only molecules
+      size_t next_offset = 0;
       for(size_t m=0;m<nmol;m++)
       {
         int mtype = molecule_list->m_data[ molecule_list->m_offset[m] ];
         int natoms = molecules->m_molecules.at(mtype).m_nb_atoms;
+        int ghost_count = 0;
+        int null_count = 0;
         for(int a=0;a<natoms;a++)
         {
-          if( molecule_list->m_data[ molecule_list->m_offset[m] + 1 + a] == -1 )
+          auto encoded_atom = molecule_list->m_data[ molecule_list->m_offset[m] + 1 + a];
+          if( encoded_atom != -1 )
           {
-            ldbg << "Molecule #"<<m<<" (type="<<mtype<<") misses atom #"<<a<<std::endl;
+            size_t cell_i=0, p_i=0;
+            decode_cell_particle( encoded_atom, cell_i , p_i );
+            if( grid->is_ghost_cell(cell_i) ) ++ ghost_count;
           }
+          else { ++ null_count; }
+        }
+        if( ( ghost_count + null_count ) == natoms )
+        {
+          ldbg << "Remove molecule #"<<m<<" with "<<ghost_count<<" ghosts and "<<null_count<<" otb atoms / "<<natoms<<std::endl;
+          molecule_list->m_offset[m] = std::numeric_limits<uint64_t>::max();
+        }
+        else
+        {
+          for(int a=0;a<natoms;a++)
+          {          
+            if( molecule_list->m_data[ molecule_list->m_offset[m] + 1 + a] == -1 )
+            {
+              fatal_error() << "Molecule #"<<m<<" (type="<<mtype<<") misses atom #"<<a<<" / "<<natoms<<" : ghost="<<ghost_count<<" , null="<<null_count <<std::endl;
+            }
+          }
+          const size_t old_offset = molecule_list->m_offset[m];
+          if( old_offset != next_offset )
+          {
+            assert( next_offset < old_offset );
+            for(int i=0;i<(1+natoms);i++) molecule_list->m_data[next_offset+i] = molecule_list->m_data[old_offset+i];
+          }
+          molecule_list->m_offset[m] = next_offset;
+          next_offset += 1 + natoms;
         }
       }
-#     endif
 
+      size_t molcount = 0;
+      for(size_t m=0;m<nmol;m++)
+      {
+        if( molecule_list->m_offset[m] != std::numeric_limits<uint64_t>::max() )
+        {
+          molecule_list->m_offset[molcount++] = molecule_list->m_offset[m];
+        }
+      }
+      ldbg << "removed "<< (molecule_list->m_offset.size()-molcount) <<" ghost molecules , shrunk data from "<<molecule_list->m_data.size()<<" to "<<next_offset <<std::endl;
+      assert( molcount <= molecule_list->m_offset.size() );
+      molecule_list->m_offset.resize(molcount);
+      assert( next_offset <= molecule_list->m_data.size() );
+      molecule_list->m_data.resize(next_offset);
+      ldbg<<"new molecule count = "<<molcount<<std::endl;
     }
 
   };

@@ -118,6 +118,16 @@ namespace exaStamp
       static constexpr MoleculeGenericFuncParam null_param = {0.0,0.0,0.0,0.0};
 
       const unsigned int nmol = molecules->m_molecules.size();    
+      for(unsigned int m=0;m<nmol;m++)
+      {
+        if( ! molecules->m_molecules[m].has_connectivity() )
+        {
+          ldbg << "Update connectivity for molecule #"<<m<< std::endl;
+          molecules->m_molecules[m].update_connectivity();
+          molecules->m_molecules[m].print( ldbg , *species );
+        }
+      }
+
       molecule_compute_parameters->m_molecules.assign( nmol , MoleculeComputeParams{} );
       
       const auto & tmap = *particle_type_map;

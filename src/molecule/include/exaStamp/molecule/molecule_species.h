@@ -46,6 +46,7 @@ namespace exaStamp
     }
     inline std::string name() const { return m_name; }
     
+    inline bool has_connectivity() const { return m_nb_atoms==0 || m_nb_bonds>0 || m_nb_bends>0 || m_nb_torsions>0 || m_nb_impropers>0; }
     void update_connectivity();
     
     template<class StreamT> inline void print(StreamT& out, const ParticleSpecies& species)
@@ -125,6 +126,49 @@ namespace exaStamp
   {
     return ( mol_instance << 16 ) | ( (mol_place&0xFF) << 8 ) | ( mol_type&0xFF ) ;
   }
+
+  // helper class to read and write molecule species to dump files
+  struct MoleculeOptionalHeaderIO
+  {
+    double& m_bond_max_dist;
+    double& m_bond_max_stretch;
+    MoleculeSpeciesVector* m_molecules = nullptr;
+    template<class WriteFuncT> inline size_t write_optional_header( WriteFuncT write_func )
+    {
+      size_t n_bytes = 0;
+      size_t n_molecules = 0;
+      if( m_molecules != nullptr ) n_molecules = m_molecules->m_molecules.size();
+      n_bytes += write_func( m_bond_max_dist );
+      n_bytes += write_func( m_bond_max_stretch );
+      n_bytes += write_func( n_molecules );
+      for(size_t i=0;i<n_molecules;i++)
+      {
+        n_bytes += write_func( m_molecules->m_molecules.at(i) );
+      }
+      return n_bytes;
+    }
+    template<class ReadFuncT> inline size_t read_optional_header( ReadFuncT read_func )
+    {
+      size_t n_bytes = 0;
+      size_t n_molecules = 0;
+      m_bond_max_dist = m_bond_max_stretch = 0.0;
+      n_bytes += read_func( m_bond_max_dist );
+      n_bytes += read_func( m_bond_max_stretch );
+      n_bytes += read_func( n_molecules );
+      ldbg<<"Molecule dump header : n_molecules="<<n_molecules<<std::endl;
+      if( n_molecules>0 && m_molecules==nullptr )
+      {
+        fatal_error() << "Missing molecules container to read molecule species" << std::endl;
+      }
+      if( m_molecules!=nullptr ) m_molecules->m_molecules.resize( n_molecules );
+      for(size_t i=0;i<n_molecules;i++)
+      {
+        n_bytes += read_func( m_molecules->m_molecules.at(i) );
+      }
+      ldbg<<"Molecule dump header : bytes read ="<<n_bytes<<std::endl;
+      return n_bytes;
+    }
+  };
 
 }
 

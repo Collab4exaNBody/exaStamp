@@ -7,14 +7,16 @@
 #include <exanb/core/particle_id_codec.h>
 #include <exanb/core/log.h>
 #include <exanb/core/particle_type_id.h>
+#include <exanb/core/domain.h>
+#include <exanb/core/particle_id_codec.h>
 
 #include <exaStamp/particle_species/particle_specie.h>
 
 #include <exaStamp/molecule/mol_connectivity.h>
 #include <exaStamp/molecule/molecule_species.h>
-
 #include <exaStamp/molecule/id_map.h>
-#include <exanb/core/particle_id_codec.h>
+#include <exaStamp/molecule/periodic_r_delta.h>
+
 
 #include <onika/oarray_stream.h>
 #include <unordered_set>
@@ -74,12 +76,15 @@ namespace exaStamp
   class MoleculeSpeciesFromCMol : public OperatorNode
   {    
     ADD_SLOT( GridT    , grid   , INPUT_OUTPUT);
+    ADD_SLOT( Domain                   , domain                      , INPUT , REQUIRED );
 
     ADD_SLOT( ParticleSpecies       , species           , INPUT , REQUIRED );
     ADD_SLOT( ParticleTypeMap       , particle_type_map , INPUT , REQUIRED );
     
     ADD_SLOT( IdMap                 , id_map            , INPUT , OPTIONAL );
     ADD_SLOT( MoleculeSpeciesVector , molecules         , INPUT_OUTPUT , REQUIRED , DocString{"Molecule descriptions"} );
+    ADD_SLOT(double , bond_max_dist     , INPUT_OUTPUT , 0.0 , DocString{"molecule bond max distance, in physical space"} );
+//    ADD_SLOT(double , bond_max_stretch  , INPUT_OUTPUT , 0.0 , DocString{"fraction of bond_max_dist."} );
 
   public:
     inline bool is_sink() const override final { return true; }
@@ -124,8 +129,16 @@ namespace exaStamp
               
       std::vector<AtomNode> molecule_atoms;
       std::vector<AtomNode> moldesc;
+
+      std::vector<Vec3d> atom_pos;
+      const Vec3d size_box { std::abs(domain->extent().x - domain->origin().x)
+                           , std::abs(domain->extent().y - domain->origin().y)
+                           , std::abs(domain->extent().z - domain->origin().z) };
+      const double half_min_size_box = std::min( std::min(size_box.x,size_box.y) , size_box.z) / 2.0; 
+      const auto xform = domain->xform();
       
       size_t mol_count = 0;
+      double max_d2 = 0.0;
       for(size_t cell_i=0;cell_i<n_cells;cell_i++)
       {
         if( ! grid->is_ghost_cell(cell_i) )
@@ -135,6 +148,16 @@ namespace exaStamp
           {
             molecule_atoms.clear();
             molecule_parser.explore_molecule( molecule_atoms , cells[cell_i][field_id][p_i] );
+
+            bool has_ghost_atoms = false;
+            for(const auto& an:molecule_atoms)
+            {
+              size_t cell_j=0, p_j=0;
+              decode_cell_particle( an.cell_particle , cell_j, p_j );
+              if( grid->is_ghost_cell(cell_j) ) has_ghost_atoms=true;
+            }
+            if( has_ghost_atoms ) molecule_atoms.clear();
+            
             if( ! molecule_atoms.empty() )
             {
               std::sort( molecule_atoms.begin() , molecule_atoms.end() );
@@ -148,6 +171,12 @@ namespace exaStamp
               auto it = molecule_graphs.find( molecule_atoms );
               if( it == molecule_graphs.end() )
               {
+                ldbg << "Found new molecule ("<<moltype<<") : "<<std::endl;
+                for(const auto& an:molecule_atoms) { ldbg <<"\t"; for(int i=0;i<5;i++) if(an.id[i]!=-1) ldbg<<" "<<an.id[i]; };
+                ldbg << std::endl;
+                ldbg << "Original ids : "<<std::endl;
+                for(const auto& an:moldesc) { ldbg <<"\t"; for(int i=0;i<5;i++) if(an.id[i]!=-1) ldbg<<" "<<an.id[i]; };
+                ldbg << std::endl;
                 molecule_graphs.insert( { molecule_atoms , moltype } );
               }
               else
@@ -155,19 +184,31 @@ namespace exaStamp
                 moltype = it->second;
               }
 
-              for(size_t ma=0;ma<moldesc.size();ma++)
+              atom_pos.clear();
+              const size_t mol_atoms = moldesc.size();
+              for(size_t ma=0;ma<mol_atoms;ma++)
               {
                 size_t cell_j=0, p_j=0;
                 decode_cell_particle( moldesc[ma].cell_particle , cell_j, p_j );
-                assert( moltype < molecule_graphs.size() );
+                assert( size_t(moltype) < molecule_graphs.size() );
                 assert( cells[cell_j][field_idmol][p_j] == null_idmol );
                 cells[cell_j][field_idmol][p_j] = make_molecule_id( mol_count , ma , moltype );
+                atom_pos.push_back( Vec3d{ cells[cell_j][field::rx][p_j] , cells[cell_j][field::ry][p_j] , cells[cell_j][field::rz][p_j] } );
+              }
+              for(size_t i=0;i<mol_atoms;i++) for(size_t j=i+1;j<mol_atoms;j++) 
+              {
+                const Vec3d r = xform * periodic_r_delta( atom_pos[i] , atom_pos[j] , size_box , half_min_size_box );
+                max_d2 = std::max( max_d2 , norm2(r) );
               }
             }
             ++ mol_count;
           }
         }
       }
+      
+      ldbg << "Max molecule diameter = "<< sqrt(max_d2) << std::endl;
+      *bond_max_dist = std::max( *bond_max_dist , sqrt(max_d2) );
+      ldbg << "bond_max_dist = "<< (*bond_max_dist) << std::endl;
 
       for(size_t cell_i=0;cell_i<n_cells;cell_i++)
       {

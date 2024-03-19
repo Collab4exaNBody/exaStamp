@@ -16,7 +16,13 @@ namespace exaStamp
 {
   using namespace exanb;
 
-  template< class GridT , class DumpFieldSet , class LDBG >
+  struct NullOptionalHeaderIO
+  {
+    template<class WriteFuncT> inline size_t write_optional_header( WriteFuncT ) { return 0; }
+    template<class ReadFuncT> inline size_t read_optional_header( ReadFuncT ) { return 0; }
+  };
+
+  template< class GridT , class DumpFieldSet , class LDBG, class OptionalHeaderIO=NullOptionalHeaderIO >
   struct AtomDumpFilter
   {
     using GridFieldSet = typename GridT::Fields;
@@ -32,6 +38,9 @@ namespace exaStamp
 
     ParticleSpecies& particle_species;
     LDBG& ldbg;
+
+    // read/writes optional header data (i.e. useful for molecule species)
+    OptionalHeaderIO optional_header_io = {};
 
     // optional cell size scaling
     double scale_cell_size = 1.0;
@@ -212,6 +221,7 @@ namespace exaStamp
       size_t n_species = particle_species.size();
       n += write_func( n_species );
       for(const auto& sp : particle_species) { n += write_func( sp ); }
+      n += optional_header_io.write_optional_header( write_func );
       return n;
     }
 
@@ -236,6 +246,7 @@ namespace exaStamp
           }
         }
       }
+      n += optional_header_io.read_optional_header( read_func );
       return n;
     }
 
