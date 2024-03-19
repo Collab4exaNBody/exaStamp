@@ -16,10 +16,7 @@ namespace exaStamp
 {
   using namespace exanb;
 
-  template<
-    class GridT,
-    class = AssertGridHasFields< GridT, field::_idmol>
-    >
+  template<class GridT>
   class MoleculeList : public OperatorNode
   {
     ADD_SLOT( GridT    , grid   , INPUT_OUTPUT);
@@ -29,8 +26,6 @@ namespace exaStamp
   public:
     inline void execute ()  override final
     {
-      auto cells = grid->cells();
-
       std::vector< std::unordered_map<uint64_t,uint64_t> > mol_id_maps;
       const int max_nt = omp_get_max_threads();
       mol_id_maps.resize( max_nt );
@@ -38,7 +33,10 @@ namespace exaStamp
       //set an id of molecules
       //we follow the connectivity list
       const size_t n_cells = grid->number_of_cells();
-      
+
+      auto field_idmol = grid->field_const_accessor( field::idmol );
+      auto cells = grid->cells_accessor();
+ 
 #     pragma omp parallel
       {      
         const int tid = omp_get_thread_num();
@@ -49,11 +47,11 @@ namespace exaStamp
 #       pragma omp for schedule(guided)        
         for(size_t cell_i=0;cell_i<n_cells;cell_i++)
         {
-          const bool is_ghost = grid->is_ghost_cell( cell_i );
+          [[maybe_unused]] const bool is_ghost = grid->is_ghost_cell( cell_i );
           const size_t n_particles = cells[cell_i].size();
           for(size_t i=0;i<n_particles;i++)
           {
-            const auto idmol = cells[cell_i][field::idmol][i];
+            const auto idmol = cells[cell_i][field_idmol][i];
             assert( is_ghost || idmol!=std::numeric_limits<uint64_t>::max() );
             if( idmol != std::numeric_limits<uint64_t>::max() )
             {
@@ -77,10 +75,12 @@ namespace exaStamp
         mol_id_maps[i].clear();
       }
       ldbg << "local proc has " << id_map.size() << " unique molecules" << std::endl;
+#     ifndef NDEBUG
       for(const auto& mol : id_map)
       {
         assert( mol.second >= 0 && mol.second < molecules->m_molecules.size() );
       }
+#     endif
 
       // now compute molecule offsets
       std::vector< std::pair<uint64_t,uint64_t> > sorted_molids( id_map.begin() , id_map.end() );
@@ -129,7 +129,7 @@ namespace exaStamp
           const size_t n_particles = cells[cell_i].size();
           for(size_t p_i=0;p_i<n_particles;p_i++)
           {
-            const auto idmol = cells[cell_i][field::idmol][p_i];
+            const auto idmol = cells[cell_i][field_idmol][p_i];
             const uint64_t mid = molecule_instance_from_id( idmol );
             assert( id_map.find(mid) != id_map.end() );
             const uint64_t mplace = molecule_place_from_id( idmol );
@@ -148,7 +148,7 @@ namespace exaStamp
           const size_t n_particles = cells[cell_i].size();
           for(size_t p_i=0;p_i<n_particles;p_i++)
           {
-            const auto idmol = cells[cell_i][field::idmol][p_i];
+            const auto idmol = cells[cell_i][field_idmol][p_i];
             const uint64_t mid = molecule_instance_from_id( idmol );
             assert( id_map.find(mid) != id_map.end() );
             const uint64_t mplace = molecule_place_from_id( idmol );

@@ -58,10 +58,12 @@ profile_ghost_comm_scheme: nop
 #profile_ghost_comm_scheme: print_ghost_comm_stats # exchange volume stats
 #profile_ghost_comm_scheme: print_ghost_comm_scheme # full print
 
+ghost_update_all_impl: ghost_update_all_no_fv
+
 ghost_full_update:
   - ghost_comm_scheme
   - profile_ghost_comm_scheme
-  - ghost_update_all_no_fv
+  - ghost_update_all_impl
   
 
 ################### parallel particle migration ############################

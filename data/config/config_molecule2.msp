@@ -18,6 +18,11 @@ extramolecular_neighbors:
 
 chunk_neighbors_impl: extramolecular_neighbors
 
+#ghost_update_all_impl:
+#  - ghost_update_all_no_fv
+##  - ghost_update_idmol
+##  - check_idmol
+
 +first_iteration:
   - print_domain
   - grid_stats

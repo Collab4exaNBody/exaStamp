@@ -16,10 +16,7 @@ namespace exaStamp
 {
   using namespace exanb;
 
-  template<
-    class GridT,
-    class = AssertGridHasFields< GridT, field::_idmol>
-    >
+  template< class GridT >
   class CheckMoleculeIdMol : public OperatorNode
   {
     ADD_SLOT( GridT    , grid   , INPUT_OUTPUT);
@@ -28,7 +25,13 @@ namespace exaStamp
   public:
     inline void execute ()  override final
     {
-      auto cells = grid->cells();
+      if( ! grid->has_allocated_field(field::idmol) )
+      {
+        fatal_error() << "check_idmol can only work if particle field 'idmol' is present" << std::endl;
+      }
+    
+      auto cells = grid->cells_accessor();
+      auto field_idmol = grid->field_const_accessor( field::idmol );
       const size_t n_cells = grid->number_of_cells();
       
 #     pragma omp parallel
@@ -40,7 +43,7 @@ namespace exaStamp
           const size_t n_particles = cells[cell_i].size();
           for(size_t i=0;i<n_particles;i++)
           {
-            const auto idmol = cells[cell_i][field::idmol][i];
+            const auto idmol = cells[cell_i][field_idmol][i];
             if( idmol == std::numeric_limits<uint64_t>::max() )
             {
               fatal_error() << "Unitialized idmol @ Cell#"<<cell_i<<" / P#"<<i<<" , ghost="<<std::boolalpha<<is_ghost <<std::endl;

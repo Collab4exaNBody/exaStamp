@@ -6,6 +6,7 @@
 #include <exanb/core/basic_types_stream.h>
 #include <exanb/core/log.h>
 #include <exanb/core/unityConverterHelper.h>
+#include <exanb/core/particle_id_codec.h>
 
 #include <exanb/io/mpi_file_io.h>
 #include <exaStamp/molecule/stampv4_io.h>
@@ -504,7 +505,8 @@ namespace exaStamp
     // ------------------------------------------------
     // --------- comptage des types de molecule -------
     std::vector<int> at_mol_place( count , 0 );
-    
+
+
     // ------------------------------------------------
     // --------- transmission des donnees -------------
     using MoleculeTupleIO = onika::soatl::FieldTuple<field::_rx, field::_ry, field::_rz, 
@@ -512,100 +514,122 @@ namespace exaStamp
                                               field::_id, field::_type, 
                                               field::_orient , field::_angmom,
                                               field::_idmol, field::_cmol>;
-
     using MoleculeTuple = decltype( grid.cells()[0][0] );
+    using RigidMoleculeOpt = onika::soatl::FieldTuple< field::_orient , field::_angmom >;
+    using MoleculeConOpt = onika::soatl::FieldTuple< field::_idmol, field::_cmol >;
+    static constexpr bool has_mol_con_fields = GridT::template HasField<field::_idmol> ::value && GridT::template HasField<field::_cmol> ::value;
+    static constexpr bool has_rigid_mol_fields = GridT::template HasField<field::_orient> ::value && GridT::template HasField<field::_angmom> ::value;
+    
+    std::vector<RigidMoleculeOpt> rigid_mol_opt;
+    std::vector<MoleculeConOpt> mol_con_opt;
+    std::vector<uint64_t> particle_optional_place;
+
     static const double vel_conv = UnityConverterHelper::convert(1.0, "m/s");
     Vec3d SumVelocity = {0.,0.,0.};
     //Gestion des blocs de donnees, mise en commun dans la grid
     for (size_t i = 0;i<count; i++)
+    {
+      //atom absolute ID
+      int64_t at_id  = atomes[i].numeroAtome;
+      if( at_id < 0 )
       {
-        //atom absolute ID
-        int64_t at_id  = atomes[i].numeroAtome;
-        if( at_id < 0 )
-        {
-          fatal_error() << "read_stamp_v4 : Warning: bad id ("<<at_id<<") found" << std::endl;
-        }
-
-        //atom type ID
-        int at_type_i = type_name_to_index(atomes[i].typeAtome);
-        if( at_type_i == -1 )
-        {
-          lerr << "\t\tatom id="<< std::setw( 6) << atomes[i].numeroAtome<<" index="<<i
-             << " type="<< std::setw( 6) << atomes[i].typeAtome << "("<< at_type_i <<")"
-             << " pos=("<< std::setw(14) << std::setprecision(6) << atomes[i].Position[0] << "," 
-                        << std::setw(14) << std::setprecision(6) << atomes[i].Position[1] << "," 
-                        << std::setw(14) << std::setprecision(6) << atomes[i].Position[2] <<")"
-             << " vel=("<< std::setw(14) << std::setprecision(6) << atomes[i].Vitesse[0] << ","
-                        << std::setw(14) << std::setprecision(6) << atomes[i].Vitesse[1] << ","
-                        << std::setw(14) << std::setprecision(6) << atomes[i].Vitesse[2] << ")"
-            << std::endl ;
-          std::abort();
-        }
-        uint8_t at_type = at_type_i;
-
-        //atom position
-        Vec3d r = { atomes[i].Position[0] , atomes[i].Position[1] , atomes[i].Position[2] };
-        r = r * position_scaling + position_offset;
-        r = position_inv_xform * r; // account for domain aspect ratio adjustments
-
-        //check if atom is inside the grid
-        Vec3d ro = r;
-        IJK loc = domain_periodic_location( domain, r ) - grid.offset();
-        if( ! grid.contains(loc) )
-        {
-          lerr<<"Domain = "<<domain<<std::endl;
-          lerr<<"Domain size = "<<domain.bounds_size()<<std::endl;
-          lerr<<"particle #"<<at_id<<", ro="<<ro<<", r="<<r<<"<< in cell "<<loc<<" not in grid : offset="<<grid.offset()<<std::endl<<std::flush;
-          std::abort();
-        }
-
-        if( ! is_inside(grid.cell_bounds(loc),r) )
-        {
-          lerr<<"particle #"<<at_id<<", ro="<<ro<<", r="<<r<<"<< in cell "<<loc<<" not inside cell bounds ="<<grid.cell_bounds(loc)<<std::endl<<std::flush;
-          std::abort();
-        }
-
-        //atom velocity
-        Vec3d v = {atomes[i].Vitesse[0] * vel_conv, atomes[i].Vitesse[1] * vel_conv, atomes[i].Vitesse[2] * vel_conv};
-        SumVelocity += v;
-
-        uint64_t mol_id = 0;
-        uint64_t molnum = 0;
-        unsigned int moltype = 0;
-        //unsigned int molplace = 0;
-        std::array<uint64_t,4> cmol = { 0, 0, 0, 0 };
-
-        if( entete->bloc_molecules )
-        {
-          //molecular ID : note, ids are INT in stamp, not UINT.
-          molnum = static_cast<uint64_t>( molecules[i].numeroMolecule);
-          moltype = static_cast<unsigned int>( molecules[i].typeMolecule);
-          mol_id = molnum + ( uint64_t(moltype) << 48 );
-
-          //atom connectivity : note, ids are INT in stamp, not UINT.
-          cmol = std::array<uint64_t,4>{static_cast<uint64_t>(molecules[i].Connectivite[0]),
-                                        static_cast<uint64_t>(molecules[i].Connectivite[1]),
-                                        static_cast<uint64_t>(molecules[i].Connectivite[2]),
-                                        static_cast<uint64_t>(molecules[i].Connectivite[3])};
-        }
-
-        Quaternion orient = { 0., 0., 0., 0. };
-        Vec3d angmom = { 0., 0., 0. };
-        if( entete->bloc_molrig )
-        {
-          orient = Quaternion { rigidmols[i].quaternion[0] , rigidmols[i].quaternion[1] , rigidmols[i].quaternion[2] , rigidmols[i].quaternion[3] };
-          angmom = Vec3d { rigidmols[i].momentangulaire[0] , rigidmols[i].momentangulaire[1] , rigidmols[i].momentangulaire[2] };
-        }
-        
-        MoleculeTuple t = MoleculeTupleIO(r.x, r.y, r.z, v.x, v.y, v.z, at_id, at_type, orient, angmom, mol_id, cmol);
-        grid.cell(loc).push_back( t );
+        fatal_error() << "read_stamp_v4 : Warning: bad id ("<<at_id<<") found" << std::endl;
       }
+
+      //atom type ID
+      int at_type_i = type_name_to_index(atomes[i].typeAtome);
+      if( at_type_i == -1 )
+      {
+        lerr << "\t\tatom id="<< std::setw( 6) << atomes[i].numeroAtome<<" index="<<i
+           << " type="<< std::setw( 6) << atomes[i].typeAtome << "("<< at_type_i <<")"
+           << " pos=("<< std::setw(14) << std::setprecision(6) << atomes[i].Position[0] << "," 
+                      << std::setw(14) << std::setprecision(6) << atomes[i].Position[1] << "," 
+                      << std::setw(14) << std::setprecision(6) << atomes[i].Position[2] <<")"
+           << " vel=("<< std::setw(14) << std::setprecision(6) << atomes[i].Vitesse[0] << ","
+                      << std::setw(14) << std::setprecision(6) << atomes[i].Vitesse[1] << ","
+                      << std::setw(14) << std::setprecision(6) << atomes[i].Vitesse[2] << ")"
+          << std::endl ;
+        std::abort();
+      }
+      uint8_t at_type = at_type_i;
+
+      //atom position
+      Vec3d r = { atomes[i].Position[0] , atomes[i].Position[1] , atomes[i].Position[2] };
+      r = r * position_scaling + position_offset;
+      r = position_inv_xform * r; // account for domain aspect ratio adjustments
+
+      //check if atom is inside the grid
+      Vec3d ro = r;
+      IJK loc = domain_periodic_location( domain, r ) - grid.offset();
+      if( ! grid.contains(loc) )
+      {
+        lerr<<"Domain = "<<domain<<std::endl;
+        lerr<<"Domain size = "<<domain.bounds_size()<<std::endl;
+        lerr<<"particle #"<<at_id<<", ro="<<ro<<", r="<<r<<"<< in cell "<<loc<<" not in grid : offset="<<grid.offset()<<std::endl<<std::flush;
+        std::abort();
+      }
+
+      if( ! is_inside(grid.cell_bounds(loc),r) )
+      {
+        lerr<<"particle #"<<at_id<<", ro="<<ro<<", r="<<r<<"<< in cell "<<loc<<" not inside cell bounds ="<<grid.cell_bounds(loc)<<std::endl<<std::flush;
+        std::abort();
+      }
+
+      //atom velocity
+      Vec3d v = {atomes[i].Vitesse[0] * vel_conv, atomes[i].Vitesse[1] * vel_conv, atomes[i].Vitesse[2] * vel_conv};
+      SumVelocity += v;
+
+      uint64_t mol_id = 0;
+      uint64_t molnum = 0;
+      unsigned int moltype = 0;
+      //unsigned int molplace = 0;
+      std::array<uint64_t,4> cmol = { 0, 0, 0, 0 };
+
+      if( entete->bloc_molecules )
+      {
+        //molecular ID : note, ids are INT in stamp, not UINT.
+        molnum = static_cast<uint64_t>( molecules[i].numeroMolecule);
+        moltype = static_cast<unsigned int>( molecules[i].typeMolecule);
+        mol_id = molnum + ( uint64_t(moltype) << 48 );
+
+        //atom connectivity : note, ids are INT in stamp, not UINT.
+        cmol = std::array<uint64_t,4>{static_cast<uint64_t>(molecules[i].Connectivite[0]),
+                                      static_cast<uint64_t>(molecules[i].Connectivite[1]),
+                                      static_cast<uint64_t>(molecules[i].Connectivite[2]),
+                                      static_cast<uint64_t>(molecules[i].Connectivite[3])};
+      }
+
+      Quaternion orient = { 0., 0., 0., 0. };
+      Vec3d angmom = { 0., 0., 0. };
+      if( entete->bloc_molrig )
+      {
+        orient = Quaternion { rigidmols[i].quaternion[0] , rigidmols[i].quaternion[1] , rigidmols[i].quaternion[2] , rigidmols[i].quaternion[3] };
+        angmom = Vec3d { rigidmols[i].momentangulaire[0] , rigidmols[i].momentangulaire[1] , rigidmols[i].momentangulaire[2] };
+      }
+      
+      MoleculeTupleIO full_tp = MoleculeTupleIO(r.x, r.y, r.z, v.x, v.y, v.z, at_id, at_type, orient, angmom, mol_id, cmol);
+      const MoleculeTuple t = full_tp;
+      const size_t cell_idx = grid.cell_index(loc);
+      const size_t p_idx = grid.cell(cell_idx).size();
+      grid.cell(cell_idx).push_back( t );
+
+      //particle_optional_data.push_back( tp );
+      if( ( entete->bloc_molecules && !has_mol_con_fields ) || ( entete->bloc_molrig && !has_rigid_mol_fields ) )
+      {
+        particle_optional_place.push_back( encode_cell_particle( cell_idx , p_idx ) );
+      }
+      if( entete->bloc_molecules && !has_mol_con_fields )
+      {
+        mol_con_opt.push_back(full_tp);
+      }
+      if( entete->bloc_molrig && !has_rigid_mol_fields )
+      {
+        rigid_mol_opt.push_back(full_tp);
+      }
+    }
 
     SumVelocity /= count;
     lout << "Average velocity  = "<<SumVelocity<<std::endl;
-    //MPI_Barrier(comm);
-    //double time_ms = (std::chrono::high_resolution_clock::now()-T0).count()/1000000.0;
-    //lprof<<"copy particles to grid : "<<time_ms<<" ms"<<std::endl;
   
     // --------- transmission des donnees -------------
     // ------------------------------------------------
@@ -615,16 +639,63 @@ namespace exaStamp
     //==========================================================================================
 
     file.close();
-
-    //T0 = std::chrono::high_resolution_clock::now();
     grid.rebuild_particle_offsets();
-    //time_ms = (std::chrono::high_resolution_clock::now()-T0).count()/1000000.0;
-    //lprof<<"rebuilt particles offset : "<<time_ms<<" ms"<<std::endl;
-
-    // if( n_otb_particles > 0 )
-    // {
-    //   lerr << "Warning: " << n_otb_particles << " particles outside local bounds have been ignored" << std::endl;
-    // }
+    
+    // fill in optional fields if needed
+    if constexpr ( ! has_mol_con_fields )
+    {
+      if( entete->bloc_molecules )
+      {
+        lout << "Allocating optional fields idmol and cmol" << std::endl;
+        if( particle_optional_place.size() != mol_con_opt.size() ) fatal_error() << "Internal error : Inconsistent optional data" << std::endl;        
+        auto field_idmol = grid.field_accessor( field::idmol );
+        auto field_cmol = grid.field_accessor( field::cmol );
+        auto cells = grid.cells_accessor();
+        const size_t nb_particles = grid.number_of_particles();
+        if( nb_particles != particle_optional_place.size() ) fatal_error() << "Internal error : optional data size does not match number of particles" << std::endl;        
+        for(size_t i=0;i<nb_particles;i++)
+        {
+          field_idmol.m_flat_array_ptr[i] = std::numeric_limits<uint64_t>::max();
+          field_cmol.m_flat_array_ptr[i][0] = std::numeric_limits<uint64_t>::max();
+          field_cmol.m_flat_array_ptr[i][1] = std::numeric_limits<uint64_t>::max();
+          field_cmol.m_flat_array_ptr[i][2] = std::numeric_limits<uint64_t>::max();
+          field_cmol.m_flat_array_ptr[i][3] = std::numeric_limits<uint64_t>::max();
+        }
+        for(size_t i=0;i<nb_particles;i++)
+        {
+          size_t cell_idx=0, p_idx=0;
+          decode_cell_particle( particle_optional_place[i], cell_idx , p_idx );
+          cells[cell_idx][field_idmol][p_idx] = mol_con_opt[i][field::idmol];
+          cells[cell_idx][field_cmol][p_idx] = mol_con_opt[i][field::cmol];
+        }
+      }
+    }
+    
+    if constexpr ( ! has_rigid_mol_fields )
+    {
+      if( entete->bloc_molrig )
+      {
+        lout << "Allocating optional fields orient and angmom" << std::endl;
+        if( particle_optional_place.size() != rigid_mol_opt.size() ) fatal_error() << "Internal error : Inconsistent optional data" << std::endl;        
+        auto field_orient = grid.field_accessor( field::orient );
+        auto field_angmom = grid.field_accessor( field::angmom );
+        auto cells = grid.cells_accessor();
+        const size_t nb_particles = grid.number_of_particles();
+        if( nb_particles != particle_optional_place.size() ) fatal_error() << "Internal error : optional data size does not match number of particles" << std::endl;        
+        for(size_t i=0;i<nb_particles;i++)
+        {
+          field_orient.m_flat_array_ptr[i] = Quaternion{0.,0.,0.,0.};
+          field_angmom.m_flat_array_ptr[i] = Vec3d{0.,0.,0.};
+        }
+        for(size_t i=0;i<nb_particles;i++)
+        {
+          size_t cell_idx=0, p_idx=0;
+          decode_cell_particle( particle_optional_place[i], cell_idx , p_idx );
+          cells[cell_idx][field_orient][p_idx] = rigid_mol_opt[i][field::orient];
+          cells[cell_idx][field_angmom][p_idx] = rigid_mol_opt[i][field::angmom];
+        }
+      }
+    }
 
     ldbg << "*****\n** StampV4 dump file <"<< file_name <<"> read\n*****\n" << std::endl ;
     lout << "==========================================" << std::endl << std::endl;
