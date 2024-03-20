@@ -76,7 +76,7 @@ namespace exaStamp
           return "XX";
         }
       };
-      
+
       std::unordered_map<std::string,double> conv_scale;
       for(const auto& umap : *units)
       {

@@ -73,7 +73,7 @@ grid_flavor: grid_flavor_rigidmol
 
 dump_analysis:
   - message: "--- Analysis ---"
-  - dump_data_vtk
+#  - dump_data_vtk
 #  - grid_particle_slicing:
 #      thickness: 1.0 ang
 #      direction: [ 1.0 , 1.0 , 1.0 ]
