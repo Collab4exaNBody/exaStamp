@@ -72,8 +72,8 @@ namespace exaStamp
           return "XX";
         }
       };
-      
-      write_xyz_details::write_xyz_grid_fields( ldbg, *mpi, *grid, *domain, *fields, *filename, particle_type_func, *ghost, vnorm2, processor_id, mv2, mass, momentum, onika::soatl::FieldId<fid>{} ... );
+      exanb::write_xyz_details::DefaultFieldFormatter formatter = {}; 
+      write_xyz_details::write_xyz_grid_fields( ldbg, *mpi, *grid, *domain, *fields, *filename, particle_type_func, formatter, *ghost, 0.0, vnorm2, processor_id, mv2, mass, momentum, onika::soatl::FieldId<fid>{} ... );
     }
 
     public:
