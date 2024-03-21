@@ -49,12 +49,12 @@ namespace exaStamp
               fatal_error() << "Unitialized idmol @ Cell#"<<cell_i<<" / P#"<<i<<" , ghost="<<std::boolalpha<<is_ghost <<std::endl;
             }
             int mtype = molecule_type_from_id( idmol );
-            if( mtype<0 || mtype >= molecules->m_molecules.size() )
+            if( mtype<0 || size_t(mtype) >= molecules->m_molecules.size() )
             {
               fatal_error() << "Bad molecule type "<<mtype<<" , number of molecule species = "<<molecules->m_molecules.size()<<" , ghost="<<std::boolalpha<<is_ghost<<std::endl;
             }
             int place = molecule_place_from_id( idmol );
-            if( place<0 || place >= molecules->m_molecules[mtype].m_nb_atoms )
+            if( place<0 || size_t(place) >= size_t(molecules->m_molecules[mtype].m_nb_atoms) )
             {
               fatal_error() << "Bad atom place "<<place<<", molecule atoms = "<<molecules->m_molecules[mtype].m_nb_atoms<<" , ghost="<<std::boolalpha<<is_ghost<<std::endl;
             }

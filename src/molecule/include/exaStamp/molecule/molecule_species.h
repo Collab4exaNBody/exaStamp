@@ -135,9 +135,17 @@ namespace exaStamp
     MoleculeSpeciesVector* m_molecules = nullptr;
     template<class WriteFuncT> inline size_t write_optional_header( WriteFuncT write_func )
     {
+      static const uint64_t header_version = 100;
+      const int vermaj = header_version/100;
+      const int vermin = header_version%100;
       size_t n_bytes = 0;
       size_t n_molecules = 0;
       if( m_molecules != nullptr ) n_molecules = m_molecules->m_molecules.size();
+      lout << "molecule ext. v"<<vermaj<<'.'<<vermin <<std::endl;
+      lout << "mol. max dist = "<<m_bond_max_dist<<std::endl;
+      lout << "mol. stretch  = "<<m_bond_max_stretch<<std::endl;
+      lout << "mol. species  = "<<n_molecules<<std::endl;
+      n_bytes += write_func( header_version );
       n_bytes += write_func( m_bond_max_dist );
       n_bytes += write_func( m_bond_max_stretch );
       n_bytes += write_func( n_molecules );
@@ -149,13 +157,21 @@ namespace exaStamp
     }
     template<class ReadFuncT> inline size_t read_optional_header( ReadFuncT read_func )
     {
+      uint64_t header_version = 100;
       size_t n_bytes = 0;
       size_t n_molecules = 0;
       m_bond_max_dist = m_bond_max_stretch = 0.0;
+      n_bytes += read_func( header_version );
+      const int vermaj = header_version/100;
+      const int vermin = header_version%100;
+      if( header_version > 100 ) { fatal_error() << "Molecule header version "<<vermaj<<'.'<<vermin<<" not supported by this software version"<<std::endl; }
       n_bytes += read_func( m_bond_max_dist );
       n_bytes += read_func( m_bond_max_stretch );
       n_bytes += read_func( n_molecules );
-      ldbg<<"Molecule dump header : n_molecules="<<n_molecules<<std::endl;
+      lout << "molecule ext. v"<<vermaj<<'.'<<vermin <<std::endl;
+      lout << "mol. max dist = "<<m_bond_max_dist<<std::endl;
+      lout << "mol. stretch  = "<<m_bond_max_stretch<<std::endl;
+      lout << "mol. species  = "<<n_molecules<<std::endl;
       if( n_molecules>0 && m_molecules==nullptr )
       {
         fatal_error() << "Missing molecules container to read molecule species" << std::endl;

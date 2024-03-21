@@ -8,7 +8,7 @@ configuration:
     gpu_block_size: 256
   logging:
     parallel: false
-    debug: true
+    debug: false
   debug:
     filter: [ ".*read_stamp_v4" , ".*intramolecular_setup" , ".*intramolecular_compute" , ".*molecule_list" , ".*molecule_species" , ".*molecule_species_from_cmol"]
   profiling:
@@ -16,22 +16,15 @@ configuration:
 
 # user-defined atomic/molecular structure
 input_data:
-  - molecule_species:
-      molecules:
-        - { name: "MOL_NoBond" }
-  - read_stamp_v4:
-      file: molstampv4_PB_large.mpio
-      bounds_mode: FILE
-      enable_xform_scale: true
-  - id_map
-  - molecule_species_from_cmol
+  - read_dump_molecule:
+      filename: molstampv4_PB_large.dump
+
+init_epilog:
   - intramolecular_setup
-  - nbh_dist
-  - dump_data: { bond_max_stretch: 1.15 } # uncomment to regenerate dump version
 
 # user-defined domain data
 domain:
-  grid_dims: [ 4 , 4 , 4 ]
+  grid_dims: [ 6 , 6 , 6 ]
   periodic: [true,true,true]
 
 # user-specified global values
