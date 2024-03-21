@@ -92,8 +92,12 @@ namespace exaStamp
       VelocityVec3Combiner velocity = {};
       ForceVec3Combiner    force    = {};
       
+      // position is required, and must be the first field
       StringList flist = { "position" };
       for(const auto& f : *fields) { if( f != "position" ) flist.push_back(f); }
+      
+      // property name for position must be 'Position'
+      field_formatter.m_field_name_map["position"] = "Position";
       
       write_xyz_details::write_xyz_grid_fields( ldbg, *mpi, *grid, *domain, flist, *filename, particle_type_func, field_formatter, *ghost, *physical_time
                                               , position, velocity, force, processor_id, vnorm2, mv2, mass, momentum, onika::soatl::FieldId<fid>{} ... );
