@@ -9,7 +9,7 @@ molecule_pair_weight:
 extramolecular_neighbors:
   config:
     build_particle_offset: true
-    chunk_size: 1
+    chunk_size: 1                # this is mandatory to allow removal of pair weighting
 
 chunk_neighbors_impl: extramolecular_neighbors
 
@@ -26,6 +26,10 @@ chunk_neighbors_impl: extramolecular_neighbors
 
 # if user doesn't overload molecule_pair_weight, does nothing
 intramolecular_pair_weight: nop
+
+# don't need intra molecular weighting with intramolecular_compute, as long as chunk_size is set to 1 in extramolecular_neighbors
+global:
+  enable_pair_weights: false
 
 # Native ExaNB dump format for rigid molecules
 dump_data_molecule:

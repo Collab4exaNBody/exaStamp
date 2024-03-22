@@ -75,15 +75,16 @@ namespace exaStamp
   template< class GridT >
   class MoleculeSpeciesFromCMol : public OperatorNode
   {    
-    ADD_SLOT( GridT    , grid   , INPUT_OUTPUT);
+    ADD_SLOT( GridT    , grid  , INPUT_OUTPUT);
     ADD_SLOT( Domain                   , domain                      , INPUT , REQUIRED );
 
-    ADD_SLOT( ParticleSpecies       , species           , INPUT , REQUIRED );
-    ADD_SLOT( ParticleTypeMap       , particle_type_map , INPUT , REQUIRED );
+    ADD_SLOT( ParticleSpecies  , species           , INPUT , REQUIRED );
+    ADD_SLOT( ParticleTypeMap  , particle_type_map , INPUT , REQUIRED );
+    ADD_SLOT( bool             , move_idmol_to_id  , INPUT , false , DocString{"if set to true, writes idmol to id field and then discards idmol (if it is an optional field)"} );
     
     ADD_SLOT( IdMap                 , id_map            , INPUT , OPTIONAL );
     ADD_SLOT( MoleculeSpeciesVector , molecules         , INPUT_OUTPUT , REQUIRED , DocString{"Molecule descriptions"} );
-    ADD_SLOT(double , bond_max_dist     , INPUT_OUTPUT , 0.0 , DocString{"molecule bond max distance, in physical space"} );
+    ADD_SLOT( double                , bond_max_dist     , INPUT_OUTPUT , 0.0 , DocString{"molecule bond max distance, in physical space"} );
 //    ADD_SLOT(double , bond_max_stretch  , INPUT_OUTPUT , 0.0 , DocString{"fraction of bond_max_dist."} );
 
   public:
@@ -256,7 +257,20 @@ namespace exaStamp
         molecules->m_molecules[m].print( ldbg , *species );
         ++ m;
       }
-      
+
+      if( *move_idmol_to_id )
+      {
+        for(size_t cell_i=0;cell_i<n_cells;cell_i++)
+        {
+          size_t n_particles = cells[cell_i].size();
+          for(size_t p_i=0;p_i<n_particles;p_i++)
+          {
+            cells[cell_i][field_id][p_i] = cells[cell_i][field_idmol][p_i];
+          }
+        }
+        grid->remove_flat_array("idmol");
+      }
+
     }
 
   };

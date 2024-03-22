@@ -390,6 +390,8 @@ namespace exaStamp
       const bool chunk_neighbors_has_value = chunk_neighbors.has_value();
       const bool nbh_weight_has_value = compact_nbh_weight.has_value();      
 
+      ldbg << "enable_pair_weights="<< (*enable_pair_weights) <<" , compact_nbh_weight.has_value() = "<<compact_nbh_weight.has_value()<<std::endl;
+
       USTAMP_POTENTIAL_PARAMS def_pot_params = {};
 #     if defined(USTAMP_POTENTIAL_RIGIDMOL) || defined(USTAMP_POTENTIAL_MULTI_PARAM)      
       if( common_parameters.has_value() )

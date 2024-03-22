@@ -58,22 +58,13 @@ namespace exaStamp
   public:
     inline void execute () override final
     {
-      unsigned int cs = config->chunk_size;
-      unsigned int cs_log2 = 0;
-      while( cs > 1 )
+      if( config->chunk_size != 1 )
       {
-        assert( (cs&1)==0 );
-        cs = cs >> 1;
-        ++ cs_log2;
+        fatal_error() << "chunk_size must be 1, otherrwise extramolecular_neighbors is pointless" << std::endl;
       }
-      cs = 1<<cs_log2;
-      //ldbg << "cs="<<cs<<", log2(cs)="<<cs_log2<<std::endl;
-      if( cs != static_cast<size_t>(config->chunk_size) )
-      {
-        lerr<<"chunk_size is not a power of two"<<std::endl;
-        std::abort();
-      }
-
+      
+      const unsigned int cs = 1;
+      const unsigned int cs_log2 = 0;
       const bool gpu_enabled = ( global_cuda_ctx() != nullptr ) ? global_cuda_ctx()->has_devices() : false;
       
       LinearXForm xform_filter = {domain->xform()};
