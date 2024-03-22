@@ -1,7 +1,7 @@
 # no-seq
 includes:
-  - config_molecule2.msp
   - PB.cfg
+  - config_molecule2.msp
 
 configuration:
   onika:
@@ -16,9 +16,7 @@ configuration:
 
 # user-defined atomic/molecular structure
 input_data:
-  - molecule_species:
-      molecules:
-        - { name: "MOL_NoBond" }
+  - molecule_species
   - read_stamp_v4:
       file: molstampv4_PB_large.mpio
       bounds_mode: FILE
