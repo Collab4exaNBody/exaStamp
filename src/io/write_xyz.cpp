@@ -97,7 +97,14 @@ namespace exaStamp
       for(const auto& f : *fields) { if( f != "position" ) flist.push_back(f); }
       
       // property name for position must be 'Position'
-      field_formatter.m_field_name_map["position"] = "Position";
+      field_formatter.m_field_name_map["position"] = "pos";
+      field_formatter.m_field_name_map["velocity"] = "velo";
+      field_formatter.m_field_name_map["virial"] = "stress";
+      field_formatter.m_field_name_map["orient"] = "orientation";
+      field_formatter.m_field_name_map["angmom"] = "angular_momentum";
+      field_formatter.m_field_name_map["couple"] = "torque";
+      field_formatter.m_field_name_map["idmol"] = "molecule";
+
       
       write_xyz_details::write_xyz_grid_fields( ldbg, *mpi, *grid, *domain, flist, *filename, particle_type_func, field_formatter, *ghost, *physical_time
                                               , position, velocity, force, processor_id, vnorm2, mv2, mass, momentum, onika::soatl::FieldId<fid>{} ... );
