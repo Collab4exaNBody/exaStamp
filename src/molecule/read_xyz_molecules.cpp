@@ -1,0 +1,275 @@
+
+
+#include <exanb/core/domain.h>
+#include <exanb/core/grid.h>
+#include <exanb/fields.h>
+#include <exanb/core/basic_types_stream.h>
+#include <exanb/core/log.h>
+#include <exanb/core/unityConverterHelper.h>
+
+#include <exanb/io/mpi_file_io.h>
+#include <exaStamp/molecule/stampv4_io.h>
+#include <exanb/mpi/all_value_equal.h>
+#include <onika/oarray.h>
+
+#include <exanb/core/basic_types_yaml.h>
+#include <exanb/core/operator.h>
+#include <exanb/core/operator_slot.h>
+#include <exanb/core/operator_factory.h>
+#include <exanb/core/make_grid_variant_operator.h>
+
+//#include "exanb/vector_utils.h"
+#include <exanb/core/file_utils.h>
+#include <exaStamp/particle_species/particle_specie.h>
+#include <exaStamp/molecule/molecule_species.h>
+
+#include <exanb/core/check_particles_inside_cell.h>
+#include <exanb/core/parallel_random.h>
+#include <exanb/core/math_utils.h>
+
+#include <iostream>
+#include <sstream>
+#include <iomanip>
+#include <cstdlib>
+#include <cmath>
+#include <chrono>
+#include <string>
+#include <limits>
+#include <memory>
+#include <map>
+
+#include <ctime>
+#include <mpi.h>
+#include <string>
+#include <numeric>
+
+namespace exaStamp
+{
+  using namespace exanb;
+
+  // Read XYZ files.
+  // This files must be ASCII files
+  // first line : number of particles
+  // second line : xform of simulation domain
+  // next lines : typeFF X Y Z molid moltype connectivity[5]
+  // example : Cno2 5.3 9.23 -3.5 1 0 6 2 7 -1 -1
+  // Note : the typeFF have to match a specie name
+
+  template<typename GridT>
+  class ReadXYZMolecules : public OperatorNode
+  {
+    ADD_SLOT( MPI_Comm        , mpi          , INPUT , MPI_COMM_WORLD  );
+    ADD_SLOT( std::string     , filename     , INPUT , REQUIRED );
+    ADD_SLOT( Domain          , domain       , INPUT_OUTPUT );
+    ADD_SLOT( GridT           , grid         , INPUT_OUTPUT );
+    ADD_SLOT( ParticleSpecies , species      , INPUT ); // optional. if no species given, type ids are allocated automatically
+    ADD_SLOT( MoleculeSpeciesVector , molecules , INPUT_OUTPUT, MoleculeSpeciesVector{} , DocString{"Molecule descriptions"} );
+
+  public:
+    inline void execute () override final
+    {
+      //-------------------------------------------------------------------------------------------
+      std::string file_name = data_file_path( *filename );
+      std::string basename;
+      std::string::size_type p = file_name.rfind("/");
+      if( p != std::string::npos ) basename = file_name.substr(p+1);
+      else basename = file_name;      
+      lout << "======== " << basename << " ========" << std::endl;
+      //-------------------------------------------------------------------------------------------
+
+      using MoleculeTupleIO = onika::soatl::FieldTuple<field::_rx, field::_ry, field::_rz, field::_vx, field::_vy, field::_vz, field::_id, field::_type, field::_idmol, field::_cmol>;
+      //using MoleculeTuple = decltype( grid.cells()[0][0] );      
+      assert( grid->number_of_particles() == 0 );
+
+      // MPI Initialization
+      int rank=0, np=1;
+      MPI_Comm_rank(*mpi, &rank);
+      MPI_Comm_size(*mpi, &np);
+      
+      // converts type name to type index
+      auto type_name_to_index = [&]( const std::string& typeAtome ) -> int 
+      {
+        int nSpecies = species->size();
+        int at_type = 0;
+        for(at_type = 0; at_type < nSpecies ; ++at_type)
+        {
+          if( species->at(at_type).name() == typeAtome ) return at_type;
+        }
+        lerr << "Atom of type " << typeAtome << " is unknown, the "<<nSpecies<<" available types are :" << std::endl;
+        for(at_type = 0; at_type < nSpecies ; ++at_type) lerr << "\t" << species->at(at_type).name()<<std::endl << std::flush;
+        std::abort();
+        return -1;
+      };
+
+      // 1. Reads header, setup domain, and broadcast domain information to others MPI procs
+      uint64_t count = 0;      
+      if(rank==0)
+      {
+        //Open xyz file
+        std::ifstream file;
+        file.open(file_name, std::ifstream::in);
+        if(!file.is_open())
+        {
+          lerr << "Error in reading xyz : file "<< file_name << " not found !" << std::endl;
+          std::abort();
+        }
+
+        // Read number of atoms
+        file >> count;
+        lout << "count = "<<count<<std::endl;
+
+        Mat3d H = make_identity_matrix();  
+        
+        file >> H.m11 >> H.m12 >> H.m13 >> H.m21 >> H.m22 >> H.m23 >> H.m31 >> H.m32 >> H.m33;
+
+        lout << "H = " << H << std::endl;
+        double smin=1.0, smax=1.0;
+        matrix_scale_min_max(H,smin,smax);
+        lout << "scale = "<<smin<<" / "<<smax<<std::endl;
+
+        const Vec3d a = Vec3d{H.m11, H.m12, H.m13};
+        const Vec3d b = Vec3d{H.m21, H.m22, H.m23};
+        const Vec3d c = Vec3d{H.m31, H.m32, H.m33};
+        const double Lx = norm(a);
+        const double Ly = norm(b);
+        const double Lz = norm(c);
+        lout << "a = " << a << " , norm = " << Lx << std::endl;        
+        lout << "b = " << b << " , norm = " << Ly << std::endl;        
+        lout << "c = " << c << " , norm = " << Lz << std::endl;        
+        lout << "angle a.b = " << (180/M_PI) * acos( dot(a,b) / ( Lx*Ly ) ) << std::endl;        
+        lout << "angle a.c = " << (180/M_PI) * acos( dot(a,c) / ( Lx*Lz ) ) << std::endl;        
+        lout << "angle b.c = " << (180/M_PI) * acos( dot(b,c) / ( Ly*Lz ) ) << std::endl;        
+
+        const double cell_size = domain->cell_size() > 0.0 ? domain->cell_size() : 8.0 ;
+        domain->set_cell_size( cell_size );
+        const IJK grid_dims = { static_cast<ssize_t>(ceil(Lx/cell_size)) , static_cast<ssize_t>(ceil(Ly/cell_size)) , static_cast<ssize_t>(ceil(Ly/cell_size)) };
+        domain->set_grid_dimension( grid_dims );
+        domain->set_bounds( { { 0., 0., 0. } , { grid_dims.i*cell_size , grid_dims.j*cell_size , grid_dims.k*cell_size } } );
+        const Mat3d dom_H = { domain->extent().x , 0.0 , 0.0
+                            , 0.0 , domain->extent().y , 0.0
+                            , 0.0 , 0.0 , domain->extent().z };
+                            
+        domain->set_xform( H * inverse( dom_H ) );
+        lout << "domain = " << *domain << std::endl;
+
+        const Mat3d dom_box = domain->xform() * dom_H;
+
+        const Vec3d dom_a = { dom_box.m11, dom_box.m12, dom_box.m13 };
+        const Vec3d dom_b = { dom_box.m21, dom_box.m22, dom_box.m23 };
+        const Vec3d dom_c = { dom_box.m31, dom_box.m32, dom_box.m33 };
+        const double dom_Lx = norm(dom_a);
+        const double dom_Ly = norm(dom_b);
+        const double dom_Lz = norm(dom_c);
+        lout << "dom_a = " << dom_a << " , norm = " << dom_Lx << std::endl;        
+        lout << "dom_b = " << dom_b << " , norm = " << dom_Ly << std::endl;        
+        lout << "dom_c = " << dom_c << " , norm = " << dom_Lz << std::endl;        
+        lout << "dom angle a.b = " << (180/M_PI) * acos( dot(dom_a,dom_b) / ( dom_Lx*dom_Ly ) ) << std::endl;        
+        lout << "dom angle a.c = " << (180/M_PI) * acos( dot(dom_a,dom_c) / ( dom_Lx*dom_Lz ) ) << std::endl;        
+        lout << "dom angle b.c = " << (180/M_PI) * acos( dot(dom_b,dom_c) / ( dom_Ly*dom_Lz ) ) << std::endl;        
+                            
+        const Mat3d inv_xform = domain->inv_xform();
+        lout << "file to grid inv_xform = " << inv_xform << std::endl;        
+        
+        grid->set_offset( IJK{0,0,0} );
+        grid->set_origin( domain->bounds().bmin );
+        grid->set_cell_size( domain->cell_size() );
+        grid->set_dimension( domain->grid_dimension() );
+
+        // read one line at a time
+        std::map< std::string , int > molecule_name_map;
+        std::string typeMol;
+        std::string typeAtom;
+        //std::vector<MoleculeTupleIO> atom_data;
+        //atom_data.reserve( count );
+        
+        for(uint64_t cnt=0;cnt<count;cnt++)
+        {
+          const uint64_t at_id = cnt+1;
+          int64_t moleculeid = -1;
+          double x=0.0, y=0.0, z=0.0;
+          int64_t c0=-1 , c1=-1 , c2=-1 , c3=-1;
+          file >> typeMol >> typeAtom >> moleculeid >> x >> y >> z >> c0 >> c1 >> c2 >> c3;
+
+          // convert position to grid's base
+          Vec3d r{x, y, z};    
+          r = inv_xform * Vec3d{ x, y, z };
+          IJK loc = domain_periodic_location( *domain, r );
+          if( ! grid->contains(loc) )
+          {
+            fatal_error() <<"particle #"<<at_id<<", ro="<<r<<", r="<<r<<"<< in cell "<<loc<<" not in grid : offset="<<grid->offset()<< " dims="<<grid->dimension() << std::endl;
+          }
+          if( ! is_inside(grid->cell_bounds(loc),r) )
+          {
+            fatal_error()<<"particle #"<<at_id<<", ro="<<r<<", r="<<r<<"<< in cell "<<loc<<" not inside cell bounds ="<<grid->cell_bounds(loc)<<std::endl;
+          }
+
+          auto it = molecule_name_map.find( typeMol );
+          int itypeMol = -1;
+          if( it != molecule_name_map.end() )
+          {
+            itypeMol = it->second;
+          }
+          else
+          {
+            itypeMol = molecule_name_map.size();
+            molecule_name_map.insert( { typeMol , itypeMol } );
+          }
+          const int itypeAtom = type_name_to_index(typeAtom);
+
+          const Vec3d v = { 0., 0., 0. }; // not read from file by now
+          MoleculeTupleIO tp( r.x, r.y, r.z , v.x, v.y, v.z, at_id, itypeAtom, 0, std::array<uint64_t,4>{uint64_t(c0),uint64_t(c1),uint64_t(c2),uint64_t(c3)} );
+          //atom_data.push_back( tp );
+          grid->cell(loc).push_back( tp );      
+        }
+        file.close();
+        
+        molecules->m_molecules.clear();
+        for(const auto& p : molecule_name_map)
+        {
+          MoleculeSpecies mol = {};
+          mol.set_name( p.first );
+          molecules->m_molecules.push_back( mol );
+        }
+      }
+
+      // broadcast molecule specuies names
+      int nmol = molecules->m_molecules.size();
+      MPI_Bcast(&nmol, 1, MPI_INT, 0, *mpi);
+      molecules->m_bridge_molecules.clear();
+      molecules->m_molecules.resize( nmol );
+      MPI_Bcast( molecules->m_molecules.data() , sizeof(MoleculeSpecies)*nmol , MPI_CHARACTER , 0 , *mpi );
+
+      // Broadcast domain parameters computed on MPI rank 0
+      MPI_Bcast( domain.get_pointer() , sizeof(Domain), MPI_CHARACTER, 0, *mpi);
+      assert( check_domain(*domain) );
+
+      grid->set_offset( IJK{0,0,0} );
+      grid->set_origin( domain->bounds().bmin );
+      grid->set_cell_size( domain->cell_size() );
+      grid->set_dimension( domain->grid_dimension() );
+      grid->rebuild_particle_offsets();
+
+      lout << "Particles        = "<<count<<std::endl;
+      lout << "Molecules types  = "<<nmol<<std::endl;
+      lout << "Domain XForm     = "<<domain->xform()<<std::endl;
+      lout << "Domain bounds    = "<<domain->bounds()<<std::endl;
+      lout << "Domain size      = "<<bounds_size(domain->bounds()) <<std::endl;
+      lout << "Real size        = "<<bounds_size(domain->bounds()) * Vec3d{domain->xform().m11,domain->xform().m22,domain->xform().m33} <<std::endl;
+      lout << "Cell size        = "<<domain->cell_size()<<std::endl;
+      lout << "Grid dimensions  = "<<domain->grid_dimension()<<" ("<<grid_cell_count(domain->grid_dimension())<<" cells)"<< std::endl;
+
+#     ifndef NDEBUG
+      bool particles_inside_cell = check_particles_inside_cell(*grid);
+      assert( particles_inside_cell );
+#     endif
+    }
+
+  };
+
+  // === register factories ===
+  CONSTRUCTOR_FUNCTION
+  {
+    OperatorNodeFactory::instance()->register_factory("read_xyz_molecules", make_grid_variant_operator< ReadXYZMolecules >);
+  }
+
+}
