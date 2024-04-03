@@ -160,7 +160,7 @@ Velocities
 	          if( types != nullptr ) atom_type = types[p];
             int atom_id = 0;
             atom_id = ids[p];
-            auto data_line = format_string(data_line_format, atom_d+1 , atom_type+1 , r.x,r.y,r.z );
+            auto data_line = format_string(data_line_format, atom_id+1 , atom_type+1 , r.x,r.y,r.z );
 	          assert( data_line.length() <= data_line_size );
 	          assert( !data_line.empty() );
 	          assert( data_line.back() == ' ' );
