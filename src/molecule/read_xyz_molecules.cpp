@@ -26,6 +26,7 @@
 #include <exanb/core/check_particles_inside_cell.h>
 #include <exanb/core/parallel_random.h>
 #include <exanb/core/math_utils.h>
+#include <exanb/core/basic_types_operators.h>
 
 #include <iostream>
 #include <sstream>
@@ -106,26 +107,22 @@ namespace exaStamp
       if(rank==0)
       {
         //Open xyz file
-        std::ifstream file;
-        file.open(file_name, std::ifstream::in);
-        if(!file.is_open())
+        std::ifstream file(file_name);
+        if( ! file )
         {
-          lerr << "Error in reading xyz : file "<< file_name << " not found !" << std::endl;
-          std::abort();
+          fatal_error() << "Error in reading xyz : file "<< file_name << " not found !" << std::endl;
         }
 
         // Read number of atoms
         file >> count;
-        lout << "count = "<<count<<std::endl;
+        ldbg << "count = "<<count<<std::endl;
 
-        Mat3d H = make_identity_matrix();  
-        
+        Mat3d H = make_identity_matrix();         
         file >> H.m11 >> H.m12 >> H.m13 >> H.m21 >> H.m22 >> H.m23 >> H.m31 >> H.m32 >> H.m33;
-
-        lout << "H = " << H << std::endl;
+        ldbg << "H = " << H << std::endl;
         double smin=1.0, smax=1.0;
         matrix_scale_min_max(H,smin,smax);
-        lout << "scale = "<<smin<<" / "<<smax<<std::endl;
+        ldbg << "scale = "<<smin<<" / "<<smax<<std::endl;
 
         const Vec3d a = Vec3d{H.m11, H.m12, H.m13};
         const Vec3d b = Vec3d{H.m21, H.m22, H.m23};
@@ -133,75 +130,48 @@ namespace exaStamp
         const double Lx = norm(a);
         const double Ly = norm(b);
         const double Lz = norm(c);
-        lout << "a = " << a << " , norm = " << Lx << std::endl;        
-        lout << "b = " << b << " , norm = " << Ly << std::endl;        
-        lout << "c = " << c << " , norm = " << Lz << std::endl;        
-        lout << "angle a.b = " << (180/M_PI) * acos( dot(a,b) / ( Lx*Ly ) ) << std::endl;        
-        lout << "angle a.c = " << (180/M_PI) * acos( dot(a,c) / ( Lx*Lz ) ) << std::endl;        
-        lout << "angle b.c = " << (180/M_PI) * acos( dot(b,c) / ( Ly*Lz ) ) << std::endl;        
-
-        const double cell_size = domain->cell_size() > 0.0 ? domain->cell_size() : 8.0 ;
-        domain->set_cell_size( cell_size );
-        const IJK grid_dims = { static_cast<ssize_t>(ceil(Lx/cell_size)) , static_cast<ssize_t>(ceil(Ly/cell_size)) , static_cast<ssize_t>(ceil(Ly/cell_size)) };
-        domain->set_grid_dimension( grid_dims );
-        domain->set_bounds( { { 0., 0., 0. } , { grid_dims.i*cell_size , grid_dims.j*cell_size , grid_dims.k*cell_size } } );
-        const Mat3d dom_H = { domain->extent().x , 0.0 , 0.0
-                            , 0.0 , domain->extent().y , 0.0
-                            , 0.0 , 0.0 , domain->extent().z };
-                            
-        domain->set_xform( H * inverse( dom_H ) );
-        lout << "domain = " << *domain << std::endl;
-
-        const Mat3d dom_box = domain->xform() * dom_H;
-
-        const Vec3d dom_a = { dom_box.m11, dom_box.m12, dom_box.m13 };
-        const Vec3d dom_b = { dom_box.m21, dom_box.m22, dom_box.m23 };
-        const Vec3d dom_c = { dom_box.m31, dom_box.m32, dom_box.m33 };
-        const double dom_Lx = norm(dom_a);
-        const double dom_Ly = norm(dom_b);
-        const double dom_Lz = norm(dom_c);
-        lout << "dom_a = " << dom_a << " , norm = " << dom_Lx << std::endl;        
-        lout << "dom_b = " << dom_b << " , norm = " << dom_Ly << std::endl;        
-        lout << "dom_c = " << dom_c << " , norm = " << dom_Lz << std::endl;        
-        lout << "dom angle a.b = " << (180/M_PI) * acos( dot(dom_a,dom_b) / ( dom_Lx*dom_Ly ) ) << std::endl;        
-        lout << "dom angle a.c = " << (180/M_PI) * acos( dot(dom_a,dom_c) / ( dom_Lx*dom_Lz ) ) << std::endl;        
-        lout << "dom angle b.c = " << (180/M_PI) * acos( dot(dom_b,dom_c) / ( dom_Ly*dom_Lz ) ) << std::endl;        
-                            
-        const Mat3d inv_xform = domain->inv_xform();
-        lout << "file to grid inv_xform = " << inv_xform << std::endl;        
-        
-        grid->set_offset( IJK{0,0,0} );
-        grid->set_origin( domain->bounds().bmin );
-        grid->set_cell_size( domain->cell_size() );
-        grid->set_dimension( domain->grid_dimension() );
+        ldbg << "a = " << a << " norm=" << Lx << std::endl;        
+        ldbg << "b = " << b << " norm=" << Ly << std::endl;        
+        ldbg << "c = " << c << " norm=" << Lz << std::endl;        
+        ldbg << "angle a.b = " << (180/M_PI) * acos( dot(a,b) / ( Lx*Ly ) ) << std::endl;        
+        ldbg << "angle a.c = " << (180/M_PI) * acos( dot(a,c) / ( Lx*Lz ) ) << std::endl;        
+        ldbg << "angle b.c = " << (180/M_PI) * acos( dot(b,c) / ( Ly*Lz ) ) << std::endl;        
+                 
+        const Mat3d inv_H = inverse(H);
+        ldbg << "H^-1 = " << inv_H << std::endl;
 
         // read one line at a time
         std::map< std::string , int > molecule_name_map;
         std::string typeMol;
         std::string typeAtom;
-        //std::vector<MoleculeTupleIO> atom_data;
-        //atom_data.reserve( count );
+        std::vector<MoleculeTupleIO> atom_data;
+        atom_data.reserve( count );
+
+        AABB phys_bbox = { {0.0,0.0,0.0} , {0.0,0.0,0.0} };
         
         for(uint64_t cnt=0;cnt<count;cnt++)
         {
-          const uint64_t at_id = cnt+1;
+          int64_t at_id = -1;
           int64_t moleculeid = -1;
           double x=0.0, y=0.0, z=0.0;
           int64_t c0=-1 , c1=-1 , c2=-1 , c3=-1;
-          file >> typeMol >> typeAtom >> moleculeid >> x >> y >> z >> c0 >> c1 >> c2 >> c3;
+
+          assert( ! file.eof() && file.good() );
+          file >> typeMol >> typeAtom >> moleculeid >> at_id >> x >> y >> z >> c0 >> c1 >> c2 >> c3;
+          //lout <<"eof="<<file.eof()<<" good="<<file.good()<<" typeMol="<<typeMol<<" typeAtom="<<typeAtom<<" moleculeid="<<moleculeid<<" at_id="<<at_id<<" r="<<x<<","<<y<<","<<z<<" con="<<c0<<","<<c1<<","<<c2<<","<<c3 << std::endl;
 
           // convert position to grid's base
-          Vec3d r{x, y, z};    
-          r = inv_xform * Vec3d{ x, y, z };
-          IJK loc = domain_periodic_location( *domain, r );
-          if( ! grid->contains(loc) )
+          Vec3d r{x, y, z};
+          if( cnt == 0 )
           {
-            fatal_error() <<"particle #"<<at_id<<", ro="<<r<<", r="<<r<<"<< in cell "<<loc<<" not in grid : offset="<<grid->offset()<< " dims="<<grid->dimension() << std::endl;
+            phys_bbox.bmin = phys_bbox.bmax = r;
           }
-          if( ! is_inside(grid->cell_bounds(loc),r) )
+          else
           {
-            fatal_error()<<"particle #"<<at_id<<", ro="<<r<<", r="<<r<<"<< in cell "<<loc<<" not inside cell bounds ="<<grid->cell_bounds(loc)<<std::endl;
+            phys_bbox.bmin = min( phys_bbox.bmin , r );
+            phys_bbox.bmax = max( phys_bbox.bmax , r );
           }
+          r = inv_H * Vec3d{ x, y, z };
 
           auto it = molecule_name_map.find( typeMol );
           int itypeMol = -1;
@@ -218,10 +188,98 @@ namespace exaStamp
 
           const Vec3d v = { 0., 0., 0. }; // not read from file by now
           MoleculeTupleIO tp( r.x, r.y, r.z , v.x, v.y, v.z, at_id, itypeAtom, 0, std::array<uint64_t,4>{uint64_t(c0),uint64_t(c1),uint64_t(c2),uint64_t(c3)} );
-          //atom_data.push_back( tp );
-          grid->cell(loc).push_back( tp );      
+          atom_data.push_back( tp );     
         }
         file.close();
+
+        ldbg << "phys_bbox = " << phys_bbox << std::endl;    
+
+        AABB unit_bbox = { {0.0,0.0,0.0} , {0.0,0.0,0.0} };
+        if( ! atom_data.empty() ) unit_bbox.bmin = unit_bbox.bmax = Vec3d{ atom_data[0][field::rx] , atom_data[0][field::ry] , atom_data[0][field::rz] };
+        for(const auto& tp : atom_data)
+        {
+          Vec3d r = { tp[field::rx] , tp[field::ry] , tp[field::rz] };
+          unit_bbox.bmin = min( unit_bbox.bmin , r );
+          unit_bbox.bmax = max( unit_bbox.bmax , r );
+        }
+        
+        const Vec3d unit_size = unit_bbox.bmax - unit_bbox.bmin;
+        ldbg << "unit_bbox=" << unit_bbox << " , unit_size="<<unit_size<<std::endl;
+        const double cell_size = domain->cell_size() > 0.0 ? domain->cell_size() : 8.0 ;
+        domain->set_cell_size( cell_size );
+        const IJK grid_dims = { static_cast<ssize_t>(ceil(Lx/cell_size)) , static_cast<ssize_t>(ceil(Ly/cell_size)) , static_cast<ssize_t>(ceil(Lz/cell_size)) };
+        domain->set_grid_dimension( grid_dims );
+        ldbg << "domain grid = "<<grid_dims<< std::endl;
+        Vec3d dom_size = grid_dims * cell_size;
+        ldbg << "domain size = "<< dom_size << std::endl;
+        
+        domain->set_bounds( { {0.0,0.0,0.0} , dom_size } );
+        const Mat3d dom_H = { dom_size.x , 0.0 , 0.0
+                            , 0.0 , dom_size.y , 0.0
+                            , 0.0 , 0.0 , dom_size.z };
+        domain->set_xform( H * inverse( dom_H ) );
+        ldbg << "domain = " << *domain << std::endl;
+
+        const Mat3d dom_box = domain->xform() * dom_H;
+
+        const Vec3d dom_a = { dom_box.m11, dom_box.m12, dom_box.m13 };
+        const Vec3d dom_b = { dom_box.m21, dom_box.m22, dom_box.m23 };
+        const Vec3d dom_c = { dom_box.m31, dom_box.m32, dom_box.m33 };
+        const double dom_Lx = norm(dom_a);
+        const double dom_Ly = norm(dom_b);
+        const double dom_Lz = norm(dom_c);
+        ldbg << "dom_a = " << dom_a << " , norm = " << dom_Lx << std::endl;        
+        ldbg << "dom_b = " << dom_b << " , norm = " << dom_Ly << std::endl;        
+        ldbg << "dom_c = " << dom_c << " , norm = " << dom_Lz << std::endl;        
+        ldbg << "dom angle a.b = " << (180/M_PI) * acos( dot(dom_a,dom_b) / ( dom_Lx*dom_Ly ) ) << std::endl;        
+        ldbg << "dom angle a.c = " << (180/M_PI) * acos( dot(dom_a,dom_c) / ( dom_Lx*dom_Lz ) ) << std::endl;        
+        ldbg << "dom angle b.c = " << (180/M_PI) * acos( dot(dom_b,dom_c) / ( dom_Ly*dom_Lz ) ) << std::endl;        
+                            
+        const Mat3d inv_xform = domain->inv_xform();
+        ldbg << "file to grid inv_xform = " << inv_xform << std::endl;        
+        
+        grid->set_offset( IJK{0,0,0} );
+        grid->set_origin( domain->bounds().bmin );
+        grid->set_cell_size( domain->cell_size() );
+        grid->set_dimension( domain->grid_dimension() );
+
+        AABB dom_bbox = { {0.0,0.0,0.0} , {0.0,0.0,0.0} }; bool dom_bbox_init=true;
+        for(auto& tp : atom_data)
+        {
+          Vec3d r = { tp[field::rx] , tp[field::ry] , tp[field::rz] };
+          r = r * dom_size;
+          IJK loc = domain_periodic_location( *domain, r ); // grid->locate_cell( r );
+          tp[field::rx] = r.x; tp[field::ry] = r.y; tp[field::rz] = r.z;
+          if( dom_bbox_init )
+          {
+            dom_bbox_init = false;
+            dom_bbox.bmin = dom_bbox.bmax = r;
+          }
+          else
+          {
+            dom_bbox.bmin = min( dom_bbox.bmin , r );
+            dom_bbox.bmax = max( dom_bbox.bmax , r );
+          }
+          const uint64_t at_id = tp[field::id];
+          if( ! grid->contains(loc) )
+          {
+            fatal_error() <<"particle #"<<at_id<<", ro="<<r<<", r="<<r<<"<< in cell "<<loc<<" not in grid : offset="<<grid->offset()<< " dims="<<grid->dimension() << std::endl;
+          }
+          if( ! is_inside(grid->cell_bounds(loc),r) )
+          {
+            fatal_error()<<"particle #"<<at_id<<", ro="<<r<<", r="<<r<<"<< in cell "<<loc<<" not inside cell bounds ="<<grid->cell_bounds(loc)<<std::endl;
+          }
+        }
+        ldbg << "dom_bbox=" << dom_bbox <<std::endl;
+
+        for(const auto& tp : atom_data)
+        {
+          Vec3d r = { tp[field::rx] , tp[field::ry] , tp[field::rz] };
+          IJK loc = grid->locate_cell( r ); // domain_periodic_location( *domain, r );
+          grid->cell(loc).push_back( tp );
+        }
+
+        //fatal_error() << "not fully implemented" << std::endl;
         
         molecules->m_molecules.clear();
         for(const auto& p : molecule_name_map)
