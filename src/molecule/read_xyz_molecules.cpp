@@ -315,7 +315,7 @@ namespace exaStamp
       lout << "Real size        = "<<bounds_size(domain->bounds()) * Vec3d{domain->xform().m11,domain->xform().m22,domain->xform().m33} <<std::endl;
       lout << "Cell size        = "<<domain->cell_size()<<std::endl;
       lout << "Grid dimensions  = "<<domain->grid_dimension()<<" ("<<grid_cell_count(domain->grid_dimension())<<" cells)"<< std::endl;
-
+      lout << "================================="<< std::endl;
 #     ifndef NDEBUG
       bool particles_inside_cell = check_particles_inside_cell(*grid);
       assert( particles_inside_cell );

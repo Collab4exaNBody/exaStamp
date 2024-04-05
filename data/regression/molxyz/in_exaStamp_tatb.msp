@@ -32,12 +32,12 @@ domain:
 # user-specified global values
 global:
   dt: 1.0 fs
-  rcut_inc: 0.5 ang   # additional distance so that we don't have to rebuild neighbor list each time step
+  rcut_inc: 4.0 ang   # additional distance so that we don't have to rebuild neighbor list each time step
   simulation_end_iteration: 5000
   simulation_log_frequency: 1
   simulation_dump_frequency: 50
   simulation_dump_thermo_frequency: 1
-  init_temperature: 300. K
+#  init_temperature: 300. K
 
 langevin_thermostat:
   T: 300.0 K
