@@ -1,0 +1,25 @@
+chunk_neighbors:
+  config:
+    build_particle_offset: true
+    chunk_size: 1
+
+chunk_neighbors_impl:
+  - chunk_neighbors
+  - chunk_neighbors_to_flat_neighbors
+
+compute_force_prolog:
+  - copy_type_to_flat_array
+  - copy_position_to_flat_array
+  - zero_force_energy_flat: { ghost: true }
+
+compute_force_epilog:
+  - force_to_accel_flat
+  - copy_energy_from_flat_array
+
+verlet_first_half:
+  - push_flat_f_v_r: { dt_scale: 1.0 , xform_mode: INV_XFORM }
+  - push_flat_f_v: { dt_scale: 0.5  , xform_mode: IDENTITY }  
+
+verlet_second_half:
+  - push_flat_f_v: { dt_scale: 0.5 , xform_mode: IDENTITY }
+

@@ -3,6 +3,7 @@
 #include <onika/cuda/cuda.h>
 #include <exanb/core/grid.h>
 #include <onika/cuda/cuda_context.h>
+#include <onika/integral_constant.h>
 //#include <onika/cuda/profiling.h>
 
 #include "snapBs.h"
@@ -52,7 +53,7 @@ namespace SnapExt
           const IJK loc_a = { loc_a_no_gl.i+gl , loc_a_no_gl.j+gl , loc_a_no_gl.k+gl };
           const size_t cell_a = grid_ijk_to_index( dims, loc_a );
           compute_cell_particle_pairs_cell(cells,dims,loc_a,cell_a,rcut2 ,cpbuf_factory, optional, force_op,
-                                      cp_fields, CS, std::integral_constant<bool,false>{},
+                                      cp_fields, CS, onika::FalseType{},
                                       DefaultPositionFields{} , UseComputeBuffer , std::make_index_sequence<nb_fields>{} );
         }
       }
@@ -82,7 +83,8 @@ namespace SnapExt
                              , bool ghost, const OptionalArgsT& optional
                              , FieldSetT )
   {
-    //static constexpr onika::IntConst<1> const_1{};
+#if 0
+    static constexpr onika::IntConst<1> const_1{};
     static constexpr onika::IntConst<4> const_4{};
     static constexpr onika::IntConst<8> const_8{};
     
@@ -119,16 +121,18 @@ namespace SnapExt
 */
     std::cerr << "Deactivated GPU impelmentation, see file " << __FILE__ <<" at line " << __LINE__ << std::endl;
     std::abort();
-    /*
     // need to be fixed match new function API
     switch( cs )
     {
-      //case 1 : ONIKA_CU_LAUNCH_KERNEL( ctx.n_cu_blocks, BlockSize, 0, custr , cuda_snap_force_kernel, cells, ctx.d_kernel_counters, dims, gl, optional, cpbuf_factory, force_op, rcut2, const_1 , FieldSetT{} ); break;
+      case 1 : ONIKA_CU_LAUNCH_KERNEL( ctx.n_cu_blocks, BlockSize, 0, custr , cuda_snap_force_kernel, cells, ctx.d_kernel_counters, dims, gl, optional, cpbuf_factory, force_op, rcut2, const_1 , FieldSetT{} ); break;
       case 4 : ONIKA_CU_LAUNCH_KERNEL( ctx.n_cu_blocks, BlockSize, 0, custr , cuda_snap_force_kernel, cells, ctx.d_kernel_counters, dims, gl, optional, cpbuf_factory, force_op, rcut2, const_4 , FieldSetT{} ); break;
       case 8 : ONIKA_CU_LAUNCH_KERNEL( ctx.n_cu_blocks, BlockSize, 0, custr , cuda_snap_force_kernel, cells, ctx.d_kernel_counters, dims, gl, optional, cpbuf_factory, force_op, rcut2, const_8 , FieldSetT{} ); break;
+      //default: ONIKA_CU_LAUNCH_KERNEL( ctx.n_cu_blocks, BlockSize, 0, custr , cuda_snap_force_kernel, cells, ctx.d_kernel_counters, dims, gl, optional, cpbuf_factory, force_op, rcut2, cs      , FieldSetT{} ); break;
+    }
       default: ONIKA_CU_LAUNCH_KERNEL( ctx.n_cu_blocks, BlockSize, 0, custr , cuda_snap_force_kernel, cells, ctx.d_kernel_counters, dims, gl, optional, cpbuf_factory, force_op, rcut2, cs      , FieldSetT{} ); break;
     }
     */
+#endif
   }
 
 }
