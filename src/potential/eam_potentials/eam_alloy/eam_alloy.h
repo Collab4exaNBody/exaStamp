@@ -239,7 +239,7 @@ namespace exaStamp
     
     /*const double*/ phi = z2*recip;
     const double phip = ( z2p*recip - phi*recip ) * eam.conversion_z2r;
-
+    phi *= eam.conversion_z2r;
     const double psip = fpi * rhojp + fpj * rhoip + phip;
     const double fpair = psip*recip;
     

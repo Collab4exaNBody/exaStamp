@@ -195,6 +195,7 @@ namespace exaStamp
                               , snap_ctx->m_config.switchinnerflag()
                               );
           snap_ctx->m_thread_ctx[i].sna->init();
+          snap_ctx->m_thread_ctx[i].sna->grow_rij(1024);
         }
       }
 
@@ -307,7 +308,7 @@ namespace exaStamp
         auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform, cp_locks );
         ForceOp force_op { snap_ctx->m_thread_ctx.data(), snap_ctx->m_thread_ctx.size(),
                            grid->cell_particle_offset_data(), snap_ctx->m_beta.data(), snap_ctx->m_bispectrum.data(),
-                           snap_ctx->m_coefs.data(), ncoeff,
+                           snap_ctx->m_coefs.data(), snap_ctx->m_coefs.size(), ncoeff,
                            snap_ctx->m_factor.data(), snap_ctx->m_radelem.data(),
                            nullptr, nullptr,
                            snap_ctx->m_rcut, cutsq,
