@@ -132,11 +132,19 @@ namespace exaStamp
         const double Lz = norm(c);
         ldbg << "a = " << a << " norm=" << Lx << std::endl;        
         ldbg << "b = " << b << " norm=" << Ly << std::endl;        
-        ldbg << "c = " << c << " norm=" << Lz << std::endl;        
-        ldbg << "angle a.b = " << (180/M_PI) * acos( dot(a,b) / ( Lx*Ly ) ) << std::endl;        
-        ldbg << "angle a.c = " << (180/M_PI) * acos( dot(a,c) / ( Lx*Lz ) ) << std::endl;        
-        ldbg << "angle b.c = " << (180/M_PI) * acos( dot(b,c) / ( Ly*Lz ) ) << std::endl;        
-                 
+        ldbg << "c = " << c << " norm=" << Lz << std::endl;
+        const double angle_a_b = (180/M_PI) * acos( dot(a,b) / ( Lx*Ly ) );
+        const double angle_a_c = (180/M_PI) * acos( dot(a,c) / ( Lx*Lz ) );
+        const double angle_b_c = (180/M_PI) * acos( dot(b,c) / ( Ly*Lz ) );
+        ldbg << "angle a.b = " << angle_a_b << std::endl;        
+        ldbg << "angle a.c = " << angle_a_c << std::endl;        
+        ldbg << "angle b.c = " << angle_b_c << std::endl;        
+        
+        if( is_diagonal(H) && Lx==Ly && Ly==Lz )
+        {
+          ldbg << "cubic & diagonal H matrix" << std::endl;
+        }
+        
         const Mat3d inv_H = inverse(H);
         ldbg << "H^-1 = " << inv_H << std::endl;
 

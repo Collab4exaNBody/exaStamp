@@ -31,6 +31,8 @@ namespace exaStamp
       auto cells = grid->cells();
       size_t n_cells = grid->number_of_cells();
 
+      ldbg << "Rebuild molecule connectivity Id Map : MetaBuckets="<< IdMap::NbMetaBuckets << std::endl;
+
 #     pragma omp parallel for schedule(dynamic)
       for(size_t cell_i=0;cell_i<n_cells;cell_i++)
       {

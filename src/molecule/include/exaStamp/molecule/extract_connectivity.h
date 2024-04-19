@@ -338,9 +338,20 @@ namespace exaStamp
 //    lout << "grid offset = "<<grid.offset()<<std::endl;
 //    lout << "max_nt = "<<max_nt<<std::endl;
 
+    std::set<int64_t> atomIds;
+    std::set<int64_t> atomGhostIds;
+    const size_t n_cells = grid.number_of_cells();
+    for(size_t cell_i=0;cell_i<n_cells;cell_i++)
+    {
+      size_t n_particles = cells[cell_i].size();
+      const auto * __restrict__ ids = cells[cell_i][field::id];
+      if( grid.is_ghost_cell(cell_i) ) for(size_t p=0; p<n_particles; ++p) atomGhostIds.insert( ids[p] );
+      else for(size_t p=0; p<n_particles; ++p) atomIds.insert( ids[p] );
+    }
+
     auto field_cmol = grid.field_accessor( field::cmol );
 
-#   pragma omp parallel // num_threads(1)
+#   pragma omp parallel
     {
       int nt = omp_get_num_threads();
       int tid = omp_get_thread_num();
@@ -367,6 +378,26 @@ namespace exaStamp
         {
           uint64_t p_id = ids[p];
           const std::array<uint64_t, 4>& neigh = cmols[p];
+          
+          if( cell_is_here )
+          {
+            // first check connectivity consistency (all connex atoms must be found, at least in the ghost area)
+            for(int nbh=0;nbh<4;nbh++)
+            {
+              auto nbh_id = neigh[nbh];
+              if(nbh_id != atom_not_found )
+              {
+                if( atomIds.find(nbh_id)==atomIds.end() && atomGhostIds.find(nbh_id)==atomGhostIds.end() )
+                {
+#                 pragma omp critical(dbg_mesg)
+                  {
+                    fatal_error() << "Bad atom connectivity: cell @"<<cell_loc<<" atom #"<<p<<" (id="<<ids[p]<<") : cmol["<<nbh<<"]="<<nbh_id<<" not found in grid"<<std::endl;
+                  }
+                }
+              }
+            }
+          }
+          
           // assert( neigh[3]==std::numeric_limits<uint64_t>::max() );
           const bool p_is_leader = ( encode_cell_particle(cell_i,p,types[p]) == atom_from_idmap(p_id,id_map,id_map_ghosts) );
           if( p_is_leader )

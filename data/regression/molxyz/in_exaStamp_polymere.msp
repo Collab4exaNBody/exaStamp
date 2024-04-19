@@ -2,24 +2,14 @@
 includes:
   - config_molecule.msp
   - mol_polymere_forcefield_cl.cfg
-#  - xform_uniaxial.cfg
-  
-# this is required because compute force is called once before data is read
-#init_prolog:
-#  - deformation_xform:
-#      defbox: { extension: [ 1.0 , 1.0 , 1.0 ] }
-
-#xform_function: xform_time_interpolate_byparts
-
-#compute_loop_prolog:
-#  - xform_function
-#  - nbh_dist
 
 configuration:
-    logging:
-        debug: false
-    profiling:
-        summary: false
+  logging:
+    debug: true
+  debug:
+    filter: [ ".*read_xyz_molecules" , ".*id_map" ]
+  profiling:
+    summary: false
 
 input_data:
   - read_xyz_molecules:
@@ -37,6 +27,8 @@ global:
   simulation_log_frequency: 10
   simulation_dump_frequency: 1000
   simulation_dump_thermo_frequency: -1
+#  bond_max_dist: 20.0 ang
+#  bond_max_stretch: 1.5
 #  init_temperature: 300. K
 
 langevin_thermostat:
@@ -48,8 +40,8 @@ compute_force:
   - compute_intramolecular_forces
 #  - langevin_thermostat
 
-init_epilog:
-  - dump_data
+#init_epilog:
+#  - dump_data
   
 dump_data:
   - timestep_file: "molecule_dump_09d.xyz"
