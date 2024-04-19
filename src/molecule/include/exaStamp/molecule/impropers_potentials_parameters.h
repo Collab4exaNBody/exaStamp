@@ -50,16 +50,15 @@ namespace YAML
     static bool decode(const Node& node, ImpropersPotentialParameters& bs)
     {
       if( !node.IsSequence() )
-        {
-          lerr << "ImproperPotential type is not readable from config file." << std::endl;
-          abort();
-        }
+      {
+        lerr << "ImproperPotential type is not readable from config file." << std::endl;
+        abort();
+      }
       bs.m_potentials.clear();
       for(size_t n=0;n<node.size();++n)
-        {
-          bs.m_potentials.push_back(node[n].as<ImproperPotential>());
-        }
-
+      {
+        bs.m_potentials.push_back(node[n].as<ImproperPotential>());
+      }
       return true;
     }
   };

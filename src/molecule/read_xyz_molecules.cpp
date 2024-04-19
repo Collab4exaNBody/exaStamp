@@ -78,7 +78,7 @@ namespace exaStamp
       lout << "======== " << basename << " ========" << std::endl;
       //-------------------------------------------------------------------------------------------
 
-      using MoleculeTupleIO = onika::soatl::FieldTuple<field::_rx, field::_ry, field::_rz, field::_vx, field::_vy, field::_vz, field::_id, field::_type, field::_idmol, field::_cmol>;
+      using MoleculeTupleIO = onika::soatl::FieldTuple<field::_rx, field::_ry, field::_rz, field::_vx, field::_vy, field::_vz, field::_id, field::_type, field::_idmol, field::_cmol, field::_charge>;
       //using MoleculeTuple = decltype( grid.cells()[0][0] );      
       assert( grid->number_of_particles() == 0 );
 
@@ -154,11 +154,17 @@ namespace exaStamp
           int64_t at_id = -1;
           int64_t moleculeid = -1;
           double x=0.0, y=0.0, z=0.0;
-          int64_t c0=-1 , c1=-1 , c2=-1 , c3=-1;
+          int64_t c0=-1 , c1=-1 , c2=-1 , c3=-1 , c4=-1;
+          double charge = 0.0;
 
           assert( ! file.eof() && file.good() );
-          file >> typeMol >> typeAtom >> moleculeid >> at_id >> x >> y >> z >> c0 >> c1 >> c2 >> c3;
+          file >> typeMol >> typeAtom >> moleculeid >> at_id >> x >> y >> z >> c0 >> c1 >> c2 >> c3 >> c4 >> charge;
           //lout <<"eof="<<file.eof()<<" good="<<file.good()<<" typeMol="<<typeMol<<" typeAtom="<<typeAtom<<" moleculeid="<<moleculeid<<" at_id="<<at_id<<" r="<<x<<","<<y<<","<<z<<" con="<<c0<<","<<c1<<","<<c2<<","<<c3 << std::endl;
+
+          if( c4 != -1 )
+          {
+            fatal_error() << "atom connectivity with more than 4 bonds is not supported" << std::endl;
+          }
 
           // convert position to grid's base
           Vec3d r{x, y, z};
@@ -187,7 +193,7 @@ namespace exaStamp
           const int itypeAtom = type_name_to_index(typeAtom);
 
           const Vec3d v = { 0., 0., 0. }; // not read from file by now
-          MoleculeTupleIO tp( r.x, r.y, r.z , v.x, v.y, v.z, at_id, itypeAtom, 0, std::array<uint64_t,4>{uint64_t(c0),uint64_t(c1),uint64_t(c2),uint64_t(c3)} );
+          MoleculeTupleIO tp( r.x, r.y, r.z , v.x, v.y, v.z, at_id, itypeAtom, 0, std::array<uint64_t,4>{uint64_t(c0),uint64_t(c1),uint64_t(c2),uint64_t(c3)} , charge );
           atom_data.push_back( tp );     
         }
         file.close();

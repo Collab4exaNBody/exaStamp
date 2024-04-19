@@ -11,16 +11,40 @@
 
 #include <yaml-cpp/yaml.h>
 
+#ifndef XSTAMP_MAX_MOLECULE_ATOMS
+#define XSTAMP_MAX_MOLECULE_ATOMS 16
+#endif
+
+#ifndef XSTAMP_MAX_MOLECULE_BONDS
+#define XSTAMP_MAX_MOLECULE_BONDS 16
+#endif
+
+#ifndef XSTAMP_MAX_MOLECULE_BENDS
+#define XSTAMP_MAX_MOLECULE_BENDS 16
+#endif
+
+#ifndef XSTAMP_MAX_MOLECULE_TORSIONS
+#define XSTAMP_MAX_MOLECULE_TORSIONS 16
+#endif
+
+#ifndef XSTAMP_MAX_MOLECULE_IMPROPERS
+#define XSTAMP_MAX_MOLECULE_IMPROPERS 16
+#endif
+
+#ifndef XSTAMP_MAX_MOLECULE_PAIRS
+#define XSTAMP_MAX_MOLECULE_PAIRS 32
+#endif
+
 namespace exaStamp
 {
   using namespace exanb;
 
-  static constexpr size_t MAX_MOLECULE_ATOMS = 16;
-  static constexpr size_t MAX_MOLECULE_BONDS = 16;
-  static constexpr size_t MAX_MOLECULE_BENDS = 16;
-  static constexpr size_t MAX_MOLECULE_TORSIONS = 16;
-  static constexpr size_t MAX_MOLECULE_IMPROPERS = 16;
-  static constexpr size_t MAX_MOLECULE_PAIRS = 32;
+  static constexpr size_t MAX_MOLECULE_ATOMS = XSTAMP_MAX_MOLECULE_ATOMS;
+  static constexpr size_t MAX_MOLECULE_BONDS = XSTAMP_MAX_MOLECULE_BONDS;
+  static constexpr size_t MAX_MOLECULE_BENDS = XSTAMP_MAX_MOLECULE_BENDS;
+  static constexpr size_t MAX_MOLECULE_TORSIONS = XSTAMP_MAX_MOLECULE_TORSIONS;
+  static constexpr size_t MAX_MOLECULE_IMPROPERS = XSTAMP_MAX_MOLECULE_IMPROPERS;
+  static constexpr size_t MAX_MOLECULE_PAIRS = 256; //XSTAMP_MAX_MOLECULE_PAIRS;
 
   struct alignas(8) MoleculeSpecies
   {

@@ -358,7 +358,18 @@ namespace exaStamp
         }
       }
 
-
+      for(unsigned int m=0;m<nmol;m++)
+      {
+        lout << "molecule #"<<m<<" : '"<<molecules->m_molecules.at(m).name()<<"'" << std::endl;
+        if( weight.has_value() )
+        {
+          if( weight->find( molecules->m_molecules.at(m).name() ) == weight->end() )
+          {
+            fatal_error() << "weight has no entry for molecule name '"<<molecules->m_molecules.at(m).name()<<"'" << std::endl;
+          }
+        }
+      }
+      
       std::map< std::pair<int,int> , IntramolecularPairUserParam > pair_param_map;
       for( const auto & pp : *potentials_for_pairs )
       {
@@ -448,7 +459,7 @@ namespace exaStamp
                 {
                   if( molecule_compute_parameters->m_molecules[m].m_nb_pairs >= MAX_MOLECULE_PAIRS )
                   {
-                    fatal_error() << "intramolecular pair overflow"<<std::endl;
+                    fatal_error() << "intramolecular pair overflow: MAX_MOLECULE_PAIRS="<<MAX_MOLECULE_PAIRS<<std::endl;
                   }
                   if( w != 1.0 && w != 0.5 )
                   {

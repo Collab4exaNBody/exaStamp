@@ -77,17 +77,22 @@ namespace exaStamp
       }
     }
 
+    bool fatal_issue = false;
+    if( bonds.size()     > MAX_MOLECULE_BONDS     ) { lerr << "Number of bonds ("    <<bonds.size()     <<") exceeds max number of intramolecular bonds ("    <<MAX_MOLECULE_BONDS    <<")"<<std::endl; fatal_issue = true; }
+    if( angles.size()    > MAX_MOLECULE_BENDS     ) { lerr << "Number of angles ("   <<angles.size()    <<") exceeds max number of intramolecular angles ("   <<MAX_MOLECULE_BENDS    <<")"<<std::endl; fatal_issue = true; }
+    if( torsions.size()  > MAX_MOLECULE_TORSIONS  ) { lerr << "Number of torsions (" <<torsions.size()  <<") exceeds max number of intramolecular torsions (" <<MAX_MOLECULE_TORSIONS <<")"<<std::endl; fatal_issue = true; }
+    if( impropers.size() > MAX_MOLECULE_IMPROPERS ) { lerr << "Number of impropers ("<<impropers.size() <<") exceeds max number of intramolecular impropers ("<<MAX_MOLECULE_IMPROPERS<<")"<<std::endl; fatal_issue = true; }
+    if( fatal_issue ) { fatal_error()<<"Fatal issue while reading intramolecular data"<<std::endl; }
+
     m_nb_bonds = 0;
-    for(const auto& x:bonds   ) { for(int i=0;i<2;i++) m_bonds    [m_nb_bonds    ][i]=x[i]; ++m_nb_bonds; }
-
     m_nb_bends = 0;
-    for(const auto x:angles   ) { for(int i=0;i<3;i++) m_bends    [m_nb_bends    ][i]=x[i]; ++m_nb_bends; }
-
     m_nb_torsions = 0;
-    for(const auto x:torsions ) { for(int i=0;i<4;i++) m_torsions [m_nb_torsions ][i]=x[i]; ++m_nb_torsions; }
-
     m_nb_impropers = 0;
-    for(const auto x:impropers) { for(int i=0;i<4;i++) m_impropers[m_nb_impropers][i]=x[i]; ++m_nb_impropers; }
+
+    for(const auto& x:bonds)     { assert(m_nb_bonds    <MAX_MOLECULE_BONDS    ); for(int i=0;i<2;i++) { m_bonds    [m_nb_bonds    ][i]=x[i]; } ++m_nb_bonds; }
+    for(const auto& x:angles)    { assert(m_nb_bends    <MAX_MOLECULE_BENDS    ); for(int i=0;i<3;i++) { m_bends    [m_nb_bends    ][i]=x[i]; } ++m_nb_bends; }
+    for(const auto& x:torsions)  { assert(m_nb_torsions <MAX_MOLECULE_TORSIONS ); for(int i=0;i<4;i++) { m_torsions [m_nb_torsions ][i]=x[i]; } ++m_nb_torsions; }
+    for(const auto& x:impropers) { assert(m_nb_impropers<MAX_MOLECULE_IMPROPERS); for(int i=0;i<4;i++) { m_impropers[m_nb_impropers][i]=x[i]; } ++m_nb_impropers; }
   }
 
 }

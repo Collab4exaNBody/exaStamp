@@ -1,19 +1,19 @@
 # no-seq
 includes:
   - config_molecule.msp
-  - DonneesAtomesExaStamp_Bedrov.cfg
-  - xform_uniaxial.cfg
+  - mol_polymere_forcefield_cl.cfg
+#  - xform_uniaxial.cfg
   
 # this is required because compute force is called once before data is read
-init_prolog:
-  - deformation_xform:
-      defbox: { extension: [ 1.0 , 1.0 , 1.0 ] }
+#init_prolog:
+#  - deformation_xform:
+#      defbox: { extension: [ 1.0 , 1.0 , 1.0 ] }
 
-xform_function: xform_time_interpolate_byparts
+#xform_function: xform_time_interpolate_byparts
 
-compute_loop_prolog:
-  - xform_function
-  - nbh_dist
+#compute_loop_prolog:
+#  - xform_function
+#  - nbh_dist
 
 configuration:
     logging:
@@ -23,7 +23,7 @@ configuration:
 
 input_data:
   - read_xyz_molecules:
-      filename: molecule_triclinic_8x16x6_normal.xyz
+      filename: molecule_polymere.xyz
       
 domain:
   cell_size: 8 ang
@@ -52,10 +52,11 @@ init_epilog:
   - dump_data
   
 dump_data:
-  - timestep_file: "dir.dumps/snap_UO2_%09d.xyz"
+  - timestep_file: "molecule_dump_09d.xyz"
   - message: { mesg: "Write xyz " , endl: false }
   - print_dump_file:
       rebind: { mesg: filename }
       body:
         - message: { endl: true }
   - write_xyz_file
+

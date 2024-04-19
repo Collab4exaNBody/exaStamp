@@ -3,6 +3,12 @@ includes:
   - DonneesAtomesExaStamp_Bedrov.cfg
   - xform_uniaxial.cfg
   - config_molecule2.msp
+
+configuration:
+  logging:
+    debug: false
+  profiling:
+    summary: false
   
 # this is required because compute force is called once before data is read
 init_prolog:
@@ -15,15 +21,19 @@ compute_loop_prolog:
   - xform_function
   - nbh_dist
 
-configuration:
-    logging:
-        debug: false
-    profiling:
-        summary: false
+molecule_species:
+  molecules:
+    - { name: "TATB" }
 
 input_data:
-  - read_xyz_file_with_xform_molecules:
-      file: molecule_triclinic_8x16x6_normal.xyz
+  - molecule_species
+  - read_xyz_molecules:
+      filename: molecule_triclinic_8x16x6_normal.xyz
+  - id_map
+  - molecule_species_from_cmol
+  - intramolecular_setup
+  - nbh_dist
+  - dump_data: { bond_max_stretch: 1.15 } # uncomment to regenerate dump version
       
 domain:
   cell_size: 8 ang
@@ -37,7 +47,7 @@ global:
   simulation_log_frequency: 1
   simulation_dump_frequency: 50
   simulation_dump_thermo_frequency: 1
-  init_temperature: 300. K
+#  init_temperature: 300. K
 
 langevin_thermostat:
   T: 300.0 K
@@ -46,16 +56,16 @@ langevin_thermostat:
 # user-specified force components
 compute_force:
   - compute_extramolecular_forces
-  - intramolecular_compute
+#  - intramolecular_compute
 
-init_epilog:
-  - intramolecular_setup
+#init_epilog:
+#  - intramolecular_setup
   
-dump_data:
-  - timestep_file: "dir.dumps/snap_UO2_%09d.xyz"
-  - message: { mesg: "Write xyz " , endl: false }
-  - print_dump_file:
-      rebind: { mesg: filename }
-      body:
-        - message: { endl: true }
-  - write_xyz_file
+#dump_data:
+#  - timestep_file: "dir.dumps/snap_UO2_%09d.xyz"
+#  - message: { mesg: "Write xyz " , endl: false }
+#  - print_dump_file:
+#      rebind: { mesg: filename }
+#      body:
+#        - message: { endl: true }
+#  - write_xyz_file
