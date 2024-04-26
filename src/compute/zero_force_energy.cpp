@@ -1,6 +1,6 @@
-#pragma xstamp_cuda_enable
+// #pragma xstamp_cuda_enable // DO NOT REMOVE THIS LINE
 
-#pragma xstamp_grid_variant
+// #pragma xstamp_grid_variant // DO NOT REMOVE THIS LINE
 
 #include <exanb/core/operator.h>
 #include <exanb/core/operator_slot.h>
@@ -70,27 +70,9 @@ namespace exaStamp
 {
   using namespace exanb;
 
-  template<typename GridT
-    , class = AssertGridHasFields< GridT, field::_fx, field::_fy, field::_fz, field::_ep >
-    >
+  template<typename GridT, class _FX, class _FY, class _FZ, class _EP, class _VIRIAL, class _COUPLE >
   class ZeroForceEnergyNode : public OperatorNode
-  {
-    // compile time constant indicating if grid has type virial
-    using has_virial_field_t = typename GridT::CellParticles::template HasField < field::_virial > ;
-    static constexpr bool has_virial_field = has_virial_field_t::value;
-
-    using has_couple_field_t = typename GridT::CellParticles::template HasField < field::_couple > ;
-    static constexpr bool has_couple_field = has_couple_field_t::value;
-
-    using zero_field_set_t = std::conditional_t< has_couple_field ,
-                                    std::conditional_t< has_virial_field ,
-                                                 FieldSet<field::_fx, field::_fy, field::_fz,field::_ep,field::_couple,field::_virial> ,
-                                                 FieldSet<field::_fx, field::_fy, field::_fz,field::_ep,field::_couple> > ,
-                                    std::conditional_t< has_virial_field ,
-                                                 FieldSet<field::_fx, field::_fy, field::_fz,field::_ep,field::_virial> ,
-                                                 FieldSet<field::_fx, field::_fy, field::_fz,field::_ep> > > ;
-    static constexpr zero_field_set_t zero_field_set{};
-  
+  {  
     ADD_SLOT( GridT , grid  , INPUT_OUTPUT );
     ADD_SLOT( bool  , ghost  , INPUT , false );
 
@@ -98,17 +80,53 @@ namespace exaStamp
 
     inline void execute () override final
     {
-      compute_cell_particles( *grid , *ghost , ZeroCellParticleFields{} , zero_field_set , parallel_execution_context() );
+      auto fx = grid->field_accessor( onika::soatl::FieldId<_FX> {} );
+      auto fy = grid->field_accessor( onika::soatl::FieldId<_FY> {} );
+      auto fz = grid->field_accessor( onika::soatl::FieldId<_FZ> {} );
+      auto ep = grid->field_accessor( onika::soatl::FieldId<_EP> {} );
+
+      onika::soatl::FieldId<_VIRIAL> virial_field = {};
+      onika::soatl::FieldId<_COUPLE> couple_field = {};
+
+      ZeroCellParticleFields func = {};
+
+      if( grid->has_allocated_field(couple_field) )
+      {
+        auto couple = grid->field_accessor( couple_field );        
+        if( grid->has_allocated_field(virial_field) )
+        {
+          auto virial = grid->field_accessor( virial_field );        
+          compute_cell_particles( *grid , *ghost , func, onika::make_flat_tuple(fx,fy,fz,ep,couple,virial) , parallel_execution_context() );
+        }
+        else
+        {
+          compute_cell_particles( *grid , *ghost , func, onika::make_flat_tuple(fx,fy,fz,ep,couple) , parallel_execution_context() );
+        }
+      }
+      else
+      {
+        if( grid->has_allocated_field(virial_field) )
+        {
+          auto virial = grid->field_accessor( virial_field );        
+          compute_cell_particles( *grid , *ghost , func, onika::make_flat_tuple(fx,fy,fz,ep,virial) , parallel_execution_context() );
+        }
+        else
+        {
+          compute_cell_particles( *grid , *ghost , func, onika::make_flat_tuple(fx,fy,fz,ep) , parallel_execution_context() );
+        }
+      }
     }
 
   };
   
-  template<class GridT> using ZeroForceEnergyNodeTmpl = ZeroForceEnergyNode<GridT>;
+  template<class GridT> using ZeroForceEnergy = ZeroForceEnergyNode<GridT,field::_fx,field::_fy,field::_fz, field::_ep, field::_virial, field::_couple >;
+  template<class GridT> using ZeroForceEnergyFlat = ZeroForceEnergyNode<GridT,field::_flat_fx,field::_flat_fy,field::_flat_fz, field::_flat_ep, field::_virial, field::_couple>;
   
  // === register factories ===  
   CONSTRUCTOR_FUNCTION
   {
-   OperatorNodeFactory::instance()->register_factory( "zero_force_energy", make_grid_variant_operator< ZeroForceEnergyNodeTmpl > );
+   OperatorNodeFactory::instance()->register_factory( "zero_force_energy", make_grid_variant_operator< ZeroForceEnergy > );
+   OperatorNodeFactory::instance()->register_factory( "zero_force_energy_flat", make_grid_variant_operator< ZeroForceEnergyFlat > );
   }
 
 }

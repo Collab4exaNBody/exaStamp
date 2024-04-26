@@ -182,7 +182,7 @@ namespace exaStamp
       
       if (use_filtered_positions)
       {	
-	      PosititionFields< field::_rxf , field::_ryf, field::_rzf> FilteredPositionFields;
+	      auto FilteredPositionFields = onika::make_flat_tuple( field::rxf , field::ryf, field::rzf );
 	      compute_cell_particle_pairs( grid, *rcut_max , false, optional, cp_force_buf, deformation_gradient_compute_op , FieldSet<>{}, parallel_execution_context() , FilteredPositionFields);
 	      if (perform_dislocation_analysis) 
 	      {

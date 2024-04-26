@@ -19,15 +19,30 @@ rebuild_amr:
 ####################################################
 
 
+############ default ghost update parameters #######
+ghost_update_r: &ghost_update_parms
+  gpu_buffer_pack: true
+  async_buffer_pack: true
+  staging_buffer: true
+  serialize_pack_send: true
+  wait_all: false
+
+update_force_energy_from_ghost: *ghost_update_parms
+
+ghost_update_all_no_fv: *ghost_update_parms
+####################################################
+
+
+
 ################### Neighbor list update ############################
 chunk_neighbors:
   config:
-    free_scratch_memory: true
+    free_scratch_memory: false
     build_particle_offset: false
     subcell_compaction: true
     scratch_mem_per_cell: 1048576
     stream_prealloc_factor: 1.05 # standard value to avoid most of dynamic allocations
-    chunk_size: 8
+    chunk_size: 1
 
 chunk_neighbors_impl: chunk_neighbors
 
@@ -43,10 +58,12 @@ profile_ghost_comm_scheme: nop
 #profile_ghost_comm_scheme: print_ghost_comm_stats # exchange volume stats
 #profile_ghost_comm_scheme: print_ghost_comm_scheme # full print
 
+ghost_update_all_impl: ghost_update_all_no_fv
+
 ghost_full_update:
   - ghost_comm_scheme
   - profile_ghost_comm_scheme
-  - ghost_update_all_no_fv
+  - ghost_update_all_impl
   
 
 ################### parallel particle migration ############################

@@ -11,7 +11,6 @@
 // for rx, use xstamp::field::rx as a field descriptor
 XSTAMP_DECLARE_FIELD(uint64_t        ,id                ,"particle id");
 XSTAMP_DECLARE_FIELD(uint8_t         ,type              ,"particle type");
-XSTAMP_DECLARE_FIELD(uint64_t        ,id_type           ,"particle encoded id and type" );
 XSTAMP_DECLARE_FIELD(double          ,ep                ,"particle potential energy");
 XSTAMP_DECLARE_FIELD(double          ,rx                ,"particle position X");
 XSTAMP_DECLARE_FIELD(double          ,ry                ,"particle position Y");
@@ -26,10 +25,10 @@ XSTAMP_DECLARE_FIELD(double          ,ax                ,"particle acceleration 
 XSTAMP_DECLARE_FIELD(double          ,ay                ,"particle acceleration Y");
 XSTAMP_DECLARE_FIELD(double          ,az                ,"particle acceleration Z");
 XSTAMP_DECLARE_FIELD(double          ,charge            ,"particle electric charge");
-XSTAMP_DECLARE_FIELD(::exanb::Mat3d ,virial            ,"particle pressure virial tensor");
+XSTAMP_DECLARE_FIELD(::exanb::Mat3d  ,virial            ,"particle pressure virial tensor");
 
 // fields for molecule extension
-XSTAMP_DECLARE_FIELD(uint64_t                       ,idmol  ,"molecule Id");
+XSTAMP_DECLARE_FIELD(uint64_t                         ,idmol  ,"molecule Id");
 XSTAMP_DECLARE_FIELD(::exaStamp::AtomBondConnectivity ,cmol   ,"molecule bonds");
 
 // specific for sliplinks extension
@@ -44,6 +43,17 @@ XSTAMP_DECLARE_FIELD(::exanb::Vec3d           ,couple   ,"rigid molecule couple"
 XSTAMP_DECLARE_ALIAS( fx, ax )
 XSTAMP_DECLARE_ALIAS( fy, ay )
 XSTAMP_DECLARE_ALIAS( fz, az )
+
+// common flat arrays
+XSTAMP_DECLARE_FIELD(double          ,flat_rx           ,"coord X (flat)");
+XSTAMP_DECLARE_FIELD(double          ,flat_ry           ,"coord Y (flat)");
+XSTAMP_DECLARE_FIELD(double          ,flat_rz           ,"coord Z (flat)");
+XSTAMP_DECLARE_FIELD(double          ,flat_fx           ,"force X (flat)");
+XSTAMP_DECLARE_FIELD(double          ,flat_fy           ,"force Y (flat)");
+XSTAMP_DECLARE_FIELD(double          ,flat_fz           ,"force Z (flat)");
+XSTAMP_DECLARE_FIELD(double          ,flat_ep           ,"force X (flat)");
+XSTAMP_DECLARE_FIELD(uint8_t         ,flat_type         ,"atom type (flat)");
+XSTAMP_DECLARE_FIELD(::exanb::Mat3d  ,flat_virial       ,"virial tensor (flat)");
 
 namespace exanb
 {

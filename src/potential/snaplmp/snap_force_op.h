@@ -38,6 +38,7 @@ namespace exaStamp
     const double * const bispectrum = nullptr;
     
     const double * const coeffelem = nullptr;
+    const long coeffelem_size = 0;
     const long ncoeff = 0;
     
     const double * const wjelem = nullptr; // data of m_factor in snap_ctx
@@ -151,8 +152,8 @@ namespace exaStamp
       const int ielem = itype; //map[itype];
       const double radi = radelem[ielem];
 
-      snaptr->grow_rij(jnum);
-
+      //      snaptr->grow_rij(jnum);
+      assert( jnum < 1024 );
       int ninside = 0;
       for (int jj = 0; jj < jnum; jj++)
       {
@@ -208,7 +209,9 @@ namespace exaStamp
       //      const double * const coeffi = coeffelem /*[ielem]*/;
       for(int icoeff=0;icoeff<ncoeff;icoeff++)
       {
-	      betaloc[ icoeff ] = coeffelem[ itype * (ncoeff + 1 ) + icoeff + 1 ];
+        long coeffelem_idx = itype * (ncoeff + 1 ) + icoeff + 1;
+        assert( (coeffelem_idx >= 0) && (coeffelem_idx < coeffelem_size) );
+	      betaloc[ icoeff ] = coeffelem[ coeffelem_idx ];
 	    }
 
       //      std::cout << " My Type = " << itype << std::endl;
