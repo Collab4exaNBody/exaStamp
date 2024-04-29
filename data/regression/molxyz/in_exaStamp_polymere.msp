@@ -23,7 +23,7 @@ domain:
 global:
   dt: 1.0 fs
   rcut_inc: 4.0 ang   # additional distance so that we don't have to rebuild neighbor list each time step
-  simulation_end_iteration: 40
+  simulation_end_iteration: 10000
   simulation_log_frequency: 10
   simulation_dump_frequency: 1000
   simulation_dump_thermo_frequency: -1
