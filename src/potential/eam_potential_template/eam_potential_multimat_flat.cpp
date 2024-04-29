@@ -174,6 +174,7 @@ namespace exaStamp
         {
           if( log_energy )
           {
+            std::cout << "Log energy true" << std::endl;
             FlatRho2EmbOp<true> rho2emb_op{ *parameters, (*eam_ghost) ? nullptr : grid->particle_ghost_flag_data(), eam_scratch->m_pair_enabled.data()
                                           , types.m_flat_array_ptr, rho_emb.m_flat_array_ptr, energy.m_flat_array_ptr };
             parallel_for( n_particles , rho2emb_op , parallel_execution_context() );

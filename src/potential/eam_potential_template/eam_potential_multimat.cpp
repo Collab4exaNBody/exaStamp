@@ -54,17 +54,14 @@ namespace exaStamp
     using EamScratch = EamMultimatPotentialScratch< USTAMP_POTENTIAL_PARMS >;
     using StringVector = std::vector< std::string >;
     template<bool Sym,class CPLocksT> using SymRhoOp = PRIV_NAMESPACE_NAME::SymRhoOp<Sym,CPLocksT>;
-    template<bool Sym,class CPLocksT> using SymForceOp = PRIV_NAMESPACE_NAME::SymForceOp<Sym,CPLocksT>;
+    template<bool Sym,class CPLocksT, class VirFieldT> using SymForceOp = PRIV_NAMESPACE_NAME::SymForceOp<Sym,CPLocksT,VirFieldT>;
     using Rho2EmbOp = PRIV_NAMESPACE_NAME::Rho2EmbOp;
     using ForceOpExt = PRIV_NAMESPACE_NAME::ForceOpExtStorage;
     using ForceOpEnergyExt = PRIV_NAMESPACE_NAME::ForceEnergyOpExtStorage;
     using RhoOpExtStorage = PRIV_NAMESPACE_NAME::RhoOpExtStorage;
 
-    // compile time constant indicating if grid has virial field
-    static inline constexpr bool has_virial_field = GridHasField<GridT,field::_virial>::value;
-
     // attributes processed during computation
-    static inline constexpr FieldSet< field::_type > cp_force_fields_v{};
+    //static inline constexpr FieldSet< field::_type , field::_virial > cp_force_fields_v{};
     static inline constexpr FieldSet< field::_type > cp_emb_fields_v{};
     static inline constexpr FieldSet< field::_ep , field::_type > cp_emb_fields_energy_v{};
 
@@ -117,7 +114,7 @@ namespace exaStamp
       }
 
       const bool need_particle_locks = ( omp_get_max_threads() > 1 ) && ( *eam_symmetry ) ;
-      const bool need_virial = has_virial_field && log_energy && *compute_virial;
+      const bool need_virial = log_energy && *compute_virial;
 
       ldbg << "EAM Multimat: rho="<<std::boolalpha<< *eam_rho
            <<" , rho2emb="<< *eam_rho 
@@ -128,6 +125,9 @@ namespace exaStamp
            <<" , eflag="<< log_energy
            <<" , virflag="<<need_virial
            <<" , need_locks="<< need_particle_locks << std::endl;
+      
+      // we use eflag also to trigger virial computation
+      log_energy = log_energy || need_virial;
 
       size_t n_species = species->size();
       size_t n_type_pairs = unique_pair_count( n_species );
@@ -194,16 +194,20 @@ namespace exaStamp
         // 2nd pass parameters: compute final force using the emb term, only for non ghost particles (but reading EMB terms from neighbor particles)
         if( *eam_force )
         {
+          auto vir_field = grid->field_accessor(field::virial);
+          using VirFieldT = decltype(vir_field);
+          auto cp_force_fields_v = onika::make_flat_tuple( grid->field_accessor(field::type) , vir_field );
+          
           if( *eam_symmetry )
           {
             auto force_optional = make_compute_pair_optional_args( nbh_it_sym, cp_weight , cp_xform , cp_locks );
-            SymForceOp<true,CPLocksT> force_op { *parameters, eam_scratch->m_pair_enabled.data(), c_particle_offset, c_rho_emb_ptr , cp_locks };
+            SymForceOp<true,CPLocksT,VirFieldT> force_op { *parameters, eam_scratch->m_pair_enabled.data(), c_particle_offset, c_rho_emb_ptr , cp_locks , vir_field };
             compute_cell_particle_pairs( *grid, *rcut, false, force_optional, force_buf, force_op, cp_force_fields_v, parallel_execution_context() );
           }
           else
           {
             auto force_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks );
-            SymForceOp<false,CPLocksT> force_op { *parameters, eam_scratch->m_pair_enabled.data(), c_particle_offset, c_rho_emb_ptr, cp_locks };
+            SymForceOp<false,CPLocksT,VirFieldT> force_op { *parameters, eam_scratch->m_pair_enabled.data(), c_particle_offset, c_rho_emb_ptr, cp_locks , vir_field };
             compute_cell_particle_pairs( *grid, *rcut, false, force_optional, force_buf, force_op, cp_force_fields_v, parallel_execution_context() );
           }          
         }

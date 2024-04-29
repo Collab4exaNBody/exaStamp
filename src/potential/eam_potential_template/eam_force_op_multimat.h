@@ -191,9 +191,10 @@ namespace exaStamp
       double fpi = 0.0;
       Vec3d f = { 0. , 0. , 0. };
       double ep = 0.0;
+      Mat3d vir = Mat3d{ 0. , 0. , 0. , 0. , 0. , 0. , 0. , 0. , 0. };
     };
 
-    template<bool NewtonSym, class CPLocksT>
+    template<bool NewtonSym, class CPLocksT, class VirFieldT>
     struct SymForceOp
     {
       const onika::cuda::ro_shallow_copy_t<USTAMP_POTENTIAL_PARMS> p = {};
@@ -201,7 +202,8 @@ namespace exaStamp
       const size_t * __restrict__ m_cell_particle_offset = nullptr;
       const double * __restrict__ m_dEmb_data = nullptr;
       CPLocksT& cp_locks;
-
+      VirFieldT m_vir_field = {};
+      
       template<class ComputeBufferT, class CellParticlesT>
       ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE void operator () (ComputeBufferT& ctx, CellParticlesT cells, size_t cell_a, size_t p_a, exanb::ComputePairParticleContextStart ) const
       {
@@ -210,8 +212,8 @@ namespace exaStamp
         if constexpr ( std::is_same_v<decltype(ctx.ext),ForceEnergyOpExtStorage> )
         {
           ctx.ext.ep = 0.0;
+          ctx.ext.vir = Mat3d{ 0. , 0. , 0. , 0. , 0. , 0. , 0. , 0. , 0. };
         }
-        //ctx.vir = Mat3d{};
       }
 
       template<class ComputeBufferT, class CellParticlesT>
@@ -228,8 +230,16 @@ namespace exaStamp
           if constexpr ( std::is_same_v<decltype(ctx.ext),ForceEnergyOpExtStorage> )
           {
             ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_a][field::ep][p_a] , ctx.ext.ep );
+            ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_a][m_vir_field][p_a].m11 , ctx.ext.vir.m11 );
+            ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_a][m_vir_field][p_a].m12 , ctx.ext.vir.m12 );
+            ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_a][m_vir_field][p_a].m13 , ctx.ext.vir.m13 );
+            ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_a][m_vir_field][p_a].m21 , ctx.ext.vir.m21 );
+            ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_a][m_vir_field][p_a].m22 , ctx.ext.vir.m22 );
+            ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_a][m_vir_field][p_a].m23 , ctx.ext.vir.m23 );
+            ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_a][m_vir_field][p_a].m31 , ctx.ext.vir.m31 );
+            ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_a][m_vir_field][p_a].m32 , ctx.ext.vir.m32 );
+            ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_a][m_vir_field][p_a].m33 , ctx.ext.vir.m33 );
           }
-          //cells[cell_a][field::virial][p_a] += ctx.vir;
         }
         if constexpr ( !CPAA )
         {
@@ -239,8 +249,8 @@ namespace exaStamp
           if constexpr ( std::is_same_v<decltype(ctx.ext),ForceEnergyOpExtStorage> )
           {
             cells[cell_a][field::ep][p_a] += ctx.ext.ep ;
+            cells[cell_a][m_vir_field][p_a] += ctx.ext.vir;
           }
-          //cells[cell_a][field::virial][p_a] += ctx.vir;
         }
         if constexpr ( LOCK ) cp_locks[cell_a][p_a].unlock();
       }
@@ -248,7 +258,7 @@ namespace exaStamp
       template<class ComputeBufferT, class CellParticlesT>
       ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE void operator () (
         ComputeBufferT& ctx,
-        Vec3d dr_fe,double d2, int type_a, 
+        const Vec3d& dr,double d2, int type_a, const Mat3d& /*virial*/ ,
         CellParticlesT cells,size_t cell_b, size_t p_b
         , double /*scale*/) const
       {
@@ -265,9 +275,17 @@ namespace exaStamp
           const double r = sqrt( d2 );
           assert( r > 0.0 );
           double phi = 0.;
+          // dr vaut rj - ri
+          Vec3d dr_fe = dr; // en entrée dr_fe vaut rj-ri, en sortie il vaudra (rj-ri) * fpair;
+          // TODO: modif USTAMP_POTENTIAL_EAM_MM_FORCE, aka eam_alloy_mm_force pour renvoyer la force seule, et faire la mult à la main en sortie
           USTAMP_POTENTIAL_EAM_MM_FORCE(p,dr_fe,phi,r,ctx.ext.fpi,m_dEmb_data[m_cell_particle_offset[cell_b]+p_b],type_a,type_b);
           ctx.ext.f += dr_fe;
-          if constexpr ( eflag ) ctx.ext.ep += .5 * phi;          
+          Mat3d virlocal = tensor( dr_fe, dr ) * -0.5;
+          if constexpr ( eflag )
+            {
+              ctx.ext.ep += .5 * phi;
+              ctx.ext.vir += virlocal;
+            }
           if constexpr ( NewtonSym )
           {
             if constexpr ( LOCK ) cp_locks[cell_b][p_b].lock();
@@ -276,14 +294,30 @@ namespace exaStamp
               ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][field::fx][p_b] , - dr_fe.x );
               ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][field::fy][p_b] , - dr_fe.y );
               ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][field::fz][p_b] , - dr_fe.z );
-              if constexpr ( eflag ) ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][field::ep][p_b] , .5 * phi );
+              if constexpr ( eflag )
+                {
+                  ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][field::ep][p_b] , .5 * phi );
+                  ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][m_vir_field][p_b].m11 , virlocal.m11 );
+                  ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][m_vir_field][p_b].m12 , virlocal.m12 );
+                  ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][m_vir_field][p_b].m13 , virlocal.m13 );
+                  ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][m_vir_field][p_b].m21 , virlocal.m21 );
+                  ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][m_vir_field][p_b].m22 , virlocal.m22 );
+                  ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][m_vir_field][p_b].m23 , virlocal.m23 );
+                  ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][m_vir_field][p_b].m31 , virlocal.m31 );
+                  ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][m_vir_field][p_b].m32 , virlocal.m32 );
+                  ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][m_vir_field][p_b].m33 , virlocal.m33 );
+                }
             }
             if constexpr (!CPAA )
             {
               cells[cell_b][field::fx][p_b] -= dr_fe.x;
               cells[cell_b][field::fy][p_b] -= dr_fe.y;
               cells[cell_b][field::fz][p_b] -= dr_fe.z;
-              if constexpr ( eflag ) cells[cell_b][field::ep][p_b] += .5 * phi;
+              if constexpr ( eflag )
+                {
+                  cells[cell_b][field::ep][p_b] += .5 * phi;
+                  cells[cell_b][m_vir_field][p_b] += virlocal;
+                }
             }
             if constexpr ( LOCK ) cp_locks[cell_b][p_b].unlock();
           }
@@ -310,7 +344,7 @@ namespace exanb
 //    static inline constexpr bool RequiresNbhOptionalData = false; // interaction weighting
   };
 
-  template<bool NewtonSym, class CPLocksT> struct ComputePairTraits<exaStamp::PRIV_NAMESPACE_NAME::SymForceOp<NewtonSym,CPLocksT> >
+  template<bool NewtonSym, class CPLocksT, class VirFieldT> struct ComputePairTraits<exaStamp::PRIV_NAMESPACE_NAME::SymForceOp<NewtonSym,CPLocksT,VirFieldT> >
   {
     static inline constexpr bool ComputeBufferCompatible = false;
     static inline constexpr bool BufferLessCompatible    = true;
