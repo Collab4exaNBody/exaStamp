@@ -21,6 +21,7 @@ namespace exaStamp
   using namespace exanb;
 
   using BoolVector = std::vector<bool>;
+  using StringVector = std::vector<std::string>;
 
   template<
     class GridT,
@@ -34,9 +35,10 @@ namespace exaStamp
     ADD_SLOT( double      , physical_time , INPUT , DocString{"Physical time"} );
 
     ADD_SLOT( double      , scale_cell_size , INPUT ,OPTIONAL , DocString{"if set, change cell size stored in file by scaling it with given factor"} );
-    ADD_SLOT( BoolVector  , periodicity     , INPUT ,OPTIONAL , DocString{"if set, overrides domain's periodicity stored in file with this value"}  );
+    ADD_SLOT( BoolVector  , periodic     , INPUT ,OPTIONAL , DocString{"if set, overrides domain's periodicity stored in file with this value"}  );
+    ADD_SLOT( StringVector, mirror          , INPUT ,OPTIONAL , DocString{"if set, overrides domain's boundary mirror flags in file with provided values"}  );
     ADD_SLOT( bool        , expandable      , INPUT ,OPTIONAL , DocString{"if set, override domain expandability stored in file"} );
-    ADD_SLOT( AABB        , bounds          , INPUT ,OPTIONAL , DocString{"if set, override domain's bounds, filtering out particle outside of overriden bounds"} );
+    ADD_SLOT( AABB        , bounds          , INPUT ,OPTIONAL , DocString{"if set, override domain's bounds, filtering out particles outside of overriden bounds"} );
     ADD_SLOT( bool        , shrink_to_fit   , INPUT ,OPTIONAL , DocString{"if set to true and bounds was wpecified, try to reduce domain's grid size to the minimum size enclosing fixed bounds"} );
 
     ADD_SLOT( GridT       , grid     , INPUT_OUTPUT );
@@ -56,12 +58,12 @@ namespace exaStamp
         dump_filter.scale_cell_size = *scale_cell_size;
         ldbg << "force cell size scaling to "<<dump_filter.scale_cell_size<<std::endl;
       }
-      if( periodicity.has_value() )
+      if( periodic.has_value() )
       {
         dump_filter.override_periodicity = true;
-        if( periodicity->size() >= 1 ) dump_filter.periodic_x = periodicity->at(0);
-        if( periodicity->size() >= 2 ) dump_filter.periodic_y = periodicity->at(1);
-        if( periodicity->size() >= 3 ) dump_filter.periodic_z = periodicity->at(2);
+        if( periodic->size() >= 1 ) dump_filter.periodic_x = periodic->at(0);
+        if( periodic->size() >= 2 ) dump_filter.periodic_y = periodic->at(1);
+        if( periodic->size() >= 3 ) dump_filter.periodic_z = periodic->at(2);
         ldbg << "force periodicity to ("<<std::boolalpha<<dump_filter.periodic_x<<","<<dump_filter.periodic_y<<","<<dump_filter.periodic_z<<")" <<std::endl;
       }
       if( expandable.has_value() )
@@ -80,7 +82,22 @@ namespace exaStamp
           dump_filter.shrink_to_fit = *shrink_to_fit;
         }
       }
-      
+      if( mirror.has_value() )
+      {
+        dump_filter.override_mirroring = true;
+        for(auto m : *mirror)
+        {
+          if( exanb::str_tolower(m) == "x-" ) { dump_filter.mirror_x_min=true; }
+          if( exanb::str_tolower(m) == "x+" ) { dump_filter.mirror_x_max=true; }
+          if( exanb::str_tolower(m) == "x" )  { dump_filter.mirror_x_min=true; dump_filter.mirror_x_max=true; }
+          if( exanb::str_tolower(m) == "y-" ) { dump_filter.mirror_y_min=true; }
+          if( exanb::str_tolower(m) == "y+" ) { dump_filter.mirror_y_max=true; }
+          if( exanb::str_tolower(m) == "y" )  { dump_filter.mirror_y_min=true; dump_filter.mirror_y_max=true; }
+          if( exanb::str_tolower(m) == "z-" ) { dump_filter.mirror_z_min=true; }
+          if( exanb::str_tolower(m) == "z+" ) { dump_filter.mirror_z_max=true; }
+          if( exanb::str_tolower(m) == "z" )  { dump_filter.mirror_z_min=true; dump_filter.mirror_z_max=true; }
+        }
+      }
       exanb::read_dump( *mpi, ldbg, *grid, *domain, *physical_time, *timestep, file_name, dump_field_set , dump_filter );
     }
   };

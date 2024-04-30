@@ -1,0 +1,114 @@
+# no-seq
+
+includes: [ config_update_symmetric_forces.msp ]
+
+configuration:
+  logging:
+    debug: true
+  debug:
+    filter: [ ".*write_paraview_generic" , ".*ghost.*" , ".*read_dump_atoms" ]
+  profiling:
+    summary: true
+  onika:
+    gpu_sm_mult: 6
+    gpu_block_size: 256
+
+ghost_update_r:
+  gpu_buffer_pack: true
+  async_buffer_pack: false
+  staging_buffer: true
+
+update_force_energy_from_ghost:
+  gpu_buffer_pack: true
+  async_buffer_pack: false
+  staging_buffer: true
+
+meam_lj_force:
+  ghost: false
+  meam_type: Sn
+  rcut: 4.17 ang
+  parameters:
+    rmax: 4.17 ang
+    rmin: 0.0
+    Ecoh: 4.93474273599999995322e-19 J
+    E0: 4.93474273599999995322e-19 J
+    A: 1.000E+00
+    r0: 3.44 ang
+    alpha: 6.200E+00
+    delta: 0.000E+00
+    beta0: 6.200E+00
+    beta1: 6.000E+00
+    beta2: 6.000E+00
+    beta3: 6.000E+00
+    t0: 1.000E+00
+    t1: 4.500E+00
+    t2: 6.500E+00
+    t3: -0.183E+00
+    s0: 1.440E+02
+    s1: 0.000E+00
+    s2: 0.000E+00
+    s3: 0.000E+00
+    Cmin: 0.800E+00
+    Cmax: 2.800E+00
+    Z: 1.200E+01
+    rc: 4.0 ang
+    rp: 0.1 ang
+  lj_parameters:
+    - { type_a: O2  , type_b: O2 , rcut: 8 ang , epsilon: 162.2273150e-23 J , sigma: 3.58 ang }
+    - { type_a: N2  , type_b: N2 , rcut: 8 ang , epsilon: 131.3005758e-23 J , sigma: 3.70 ang }
+    - { type_a: O2  , type_b: N2 , rcut: 8 ang , epsilon: 145.9470447e-23 J , sigma: 3.64 ang }
+    - { type_a: O2  , type_b: Sn , rcut: 8 ang , epsilon: 150.0000000e-24 J , sigma: 3.00 ang }
+    - { type_a: N2  , type_b: Sn , rcut: 8 ang , epsilon: 150.0000000e-24 J , sigma: 3.00 ang }
+
+lj_multi_force:
+  rcut: 8 ang
+  common_parameters: { epsilon: 0.0 J , sigma: 0.0 ang }
+  parameters:
+    - {type_a: O2  , type_b: O2 , rcut: 8 ang ,  parameters: { epsilon: 162.2273150e-23 J , sigma: 3.58 ang } }
+    - {type_a: N2  , type_b: N2 , rcut: 8 ang ,  parameters: { epsilon: 131.3005758e-23 J , sigma: 3.70 ang } }
+    - {type_a: O2  , type_b: N2 , rcut: 8 ang ,  parameters: { epsilon: 145.9470447e-23 J , sigma: 3.64 ang } }
+    - {type_a: O2  , type_b: Sn , rcut: 8 ang ,  parameters: { epsilon: 150.0000000e-24 J , sigma: 3.00 ang } }
+    - {type_a: N2  , type_b: Sn , rcut: 8 ang ,  parameters: { epsilon: 150.0000000e-24 J , sigma: 3.00 ang } }
+
+compute_force:
+  - meam_lj_force
+
+grid_flavor: grid_flavor_multimat
+
+input_data:
+  - read_dump_atoms:
+      filename: atoms_000001011.MpiIO
+      mirror: [ X , Y , Z ] # this allows us to change domain bounds
+#      filename: meam_lj_Sn_O2_N2.dump
+#      periodic: [ false , false , false ] # this allows us to change domain bounds
+#      bounds: [ [ 2 ang , 2 ang , 2 ang ] , [ 298 ang , 298 ang , 298 ang ] ]
+#      shrink_to_fit: false
+
++first_iteration:
+  - print_domain
+  - grid_stats
+  - atom_neighbors_stats
+#  - dump_data
+
+global:
+  simulation_end_iteration: 2000
+  simulation_log_frequency: 10
+  simulation_dump_frequency: 10
+  rcut_inc: 1.25 ang
+  dt: 1.0e-3 ps
+
+write_paraview_generic:
+  write_box: true
+  write_ghost: true
+
+dump_data:
+  - timestep_file: "paraview/output_%09d"
+  - message: { mesg: "Write " , endl: false }
+  - print_dump_file:
+      rebind: { mesg: filename }
+      body:
+        - message: { endl: true }
+  - write_paraview_generic
+
+final_dump: nop
+

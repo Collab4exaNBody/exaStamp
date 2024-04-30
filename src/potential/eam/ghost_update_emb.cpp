@@ -42,6 +42,7 @@ namespace exaStamp
     ADD_SLOT( MPI_Comm                 , mpi               , INPUT , MPI_COMM_WORLD );
     ADD_SLOT( GhostCommunicationScheme , ghost_comm_scheme , INPUT_OUTPUT , OPTIONAL );
     ADD_SLOT( GridT                    , grid              , INPUT_OUTPUT);
+    ADD_SLOT( Domain                   , domain            , INPUT );
     ADD_SLOT( long                     , mpi_tag           , INPUT , 0 );
 
     ADD_SLOT( bool                     , gpu_buffer_pack   , INPUT , false );
@@ -66,7 +67,7 @@ namespace exaStamp
       auto emb_field = make_external_field_flat_array_accessor( *grid , emb_ptr , field::dEmb );
       auto ghost_update_fields = onika::make_flat_tuple( emb_field );
 
-      grid_update_ghosts( ldbg, *mpi, *ghost_comm_scheme, *grid, nullptr,
+      grid_update_ghosts( ldbg, *mpi, *ghost_comm_scheme, *grid, *domain, nullptr,
                           *ghost_comm_buffers, pecfunc, pesfunc, ghost_update_fields,
                           *mpi_tag, *gpu_buffer_pack, *async_buffer_pack, *staging_buffer,
                           *serialize_pack_send, *wait_all, std::false_type{} );
