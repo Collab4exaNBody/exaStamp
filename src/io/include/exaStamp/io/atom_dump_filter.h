@@ -11,6 +11,7 @@
 #include <exanb/core/basic_types_stream.h>
 #include <exanb/core/quaternion_operators.h>
 #include <exanb/core/quaternion_stream.h>
+#include <exanb/core/string_utils.h>
 
 namespace exaStamp
 {
@@ -63,7 +64,16 @@ namespace exaStamp
     bool override_domain_bounds = false;
     bool shrink_to_fit = false;
     AABB domain_bounds = { {0,0,0} , {0,0,0} };
-    
+
+    // optionally override domain mirror boundary flags
+    bool override_mirroring = false;
+    bool mirror_x_min = false;
+    bool mirror_x_max = false;
+    bool mirror_y_min = false;
+    bool mirror_y_max = false;
+    bool mirror_z_min = false;
+    bool mirror_z_max = false;
+
     // stats
     StorageType m_tuple_min;
     StorageType m_tuple_max;
@@ -165,7 +175,13 @@ namespace exaStamp
         if( domain.periodic_boundary_x() ) { domain_bounds.bmin.x = domain.bounds().bmin.x; domain_bounds.bmax.x = domain.bounds().bmax.x; }
         if( domain.periodic_boundary_y() ) { domain_bounds.bmin.y = domain.bounds().bmin.y; domain_bounds.bmax.y = domain.bounds().bmax.y; }
         if( domain.periodic_boundary_z() ) { domain_bounds.bmin.z = domain.bounds().bmin.z; domain_bounds.bmax.z = domain.bounds().bmax.z; }
-        //std::cout << "overriden domain bounds : " << domain_bounds << std::endl;
+        std::cout << "overriden domain bounds : " << domain_bounds << std::endl;
+      }
+      if( override_mirroring )
+      {
+        domain.set_mirror_x_min( mirror_x_min ); domain.set_mirror_x_max( mirror_x_max );
+        domain.set_mirror_y_min( mirror_y_min ); domain.set_mirror_y_max( mirror_y_max );
+        domain.set_mirror_z_min( mirror_z_min ); domain.set_mirror_z_max( mirror_z_max );
       }
     }
 

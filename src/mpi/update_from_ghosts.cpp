@@ -9,6 +9,7 @@
 #include <exanb/core/log.h>
 #include <exanb/core/basic_types_stream.h>
 #include <exanb/core/grid.h>
+#include <exanb/core/domain.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/particle_id_codec.h>
 #include <exanb/core/check_particles_inside_cell.h>
@@ -34,7 +35,7 @@ namespace exaStamp
   // === register factory ===
   template<typename GridT> using UpdateForceEnergyFromGhosts = UpdateFromGhosts< GridT , FieldSet<field::_fx,field::_fy,field::_fz, field::_ep>, UpdateValueAdd >;
   template<typename GridT> using UpdateFlatForceEnergyFromGhosts = UpdateFromGhosts< GridT , FieldSet<field::_flat_fx,field::_flat_fy,field::_flat_fz, field::_flat_ep>, UpdateValueAdd >;
-  template<typename GridT> using UpdateVirialForceEnergyFromGhosts = UpdateFromGhosts< GridT , FieldSet<field::_fx,field::_fy,field::_fz, field::_ep, field::_virial>, UpdateValueAdd >; //NICO
+  template<typename GridT> using UpdateVirialForceEnergyFromGhosts = UpdateFromGhosts< GridT , FieldSet<field::_fx,field::_fy,field::_fz, field::_ep, field::_virial>, UpdateValueAdd >;
   template<typename GridT> using UpdateFromGhostsTestId = UpdateFromGhosts< GridT , FieldSet<field::_id>, UpdateValueAssertEqual >;
 
   CONSTRUCTOR_FUNCTION
