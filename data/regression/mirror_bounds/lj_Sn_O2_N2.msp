@@ -1,0 +1,57 @@
+# no-seq
+
+configuration:
+  logging:
+    debug: false
+  debug:
+    filter: [ ".*write_paraview_generic" , ".*ghost.*" , ".*read_dump_atoms" ]
+  profiling:
+    summary: true
+
+lj_multi_force:
+  rcut: 8 ang
+  common_parameters: { epsilon: 0.0 J , sigma: 0.0 ang }
+  parameters:
+    - {type_a: O2  , type_b: O2 , rcut: 8 ang    , parameters: { epsilon: 162.2273150e-23 J , sigma: 3.58 ang } }
+    - {type_a: N2  , type_b: N2 , rcut: 8 ang    , parameters: { epsilon: 131.3005758e-23 J , sigma: 3.70 ang } }
+    - {type_a: O2  , type_b: N2 , rcut: 8 ang    , parameters: { epsilon: 145.9470447e-23 J , sigma: 3.64 ang } }
+    - {type_a: O2  , type_b: Sn , rcut: 8 ang    , parameters: { epsilon: 150.0000000e-24 J , sigma: 3.00 ang } }
+    - {type_a: N2  , type_b: Sn , rcut: 8 ang    , parameters: { epsilon: 150.0000000e-24 J , sigma: 3.00 ang } }
+    - {type_a: Sn  , type_b: Sn , rcut: 5.68 ang , parameters: { epsilon: 9.340E-20 J       , sigma: 0.227E-09 m } }
+
+compute_force:
+  - lj_multi_force
+
+grid_flavor: grid_flavor_multimat
+
+input_data:
+  - read_dump_atoms:
+      filename: lj_Sn_O2_N2_mirror.dump
+
++first_iteration:
+  - print_domain
+  - grid_stats
+  - atom_neighbors_stats
+
+global:
+  simulation_end_iteration: 10000
+  simulation_log_frequency: 10
+  simulation_dump_frequency: 1000
+  analysis_dump_frequency: 10
+  rcut_inc: 1.25 ang
+  dt: 1.0e-3 ps
+
+dump_analysis:
+  - timestep_file: "paraview/output_%09d"
+  - message: { mesg: "Write " , endl: false }
+  - print_dump_file:
+      rebind: { mesg: filename }
+      body:
+        - message: { endl: true }
+  - write_paraview_generic:
+      write_box: true
+      write_ghost: true
+
+
+#final_dump: nop
+
