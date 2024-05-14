@@ -3,38 +3,46 @@ compute_force: nop
 # default is no thermostat
 thermostat: nop
 
+compute_force: nop
+
+compute_force_prolog: zero_force_energy
+compute_force_epilog: force_to_accel
+
+compute_all_forces_energy:
+  - compute_force_prolog
+  - compute_force
+  - compute_force_epilog
+
+verlet_first_half:
+  - push_f_v_r: { dt_scale: 1.0 , xform_mode: INV_XFORM }
+  - push_f_v: { dt_scale: 0.5  , xform_mode: IDENTITY }  
+
+verlet_second_half:
+  - push_f_v: { dt_scale: 0.5 , xform_mode: IDENTITY }
+
 # define the verlet numerical scheme
-numerical_scheme_verlet_macro(compute_force_op):
+numerical_scheme_verlet:
   name: scheme
   body:
-    - push_f_v_r: { dt_scale: 1.0 , xform_mode: INV_XFORM }
-    - push_f_v: { dt_scale: 0.5  , xform_mode: IDENTITY }
+    - verlet_first_half
     - check_and_update_particles
 #    - cost_model_fitting_prolog
-    - zero_force_energy
-    - compute_force_op
-    - force_to_accel
-    - push_f_v: { dt_scale: 0.5 , xform_mode: IDENTITY }
+    - compute_all_forces_energy
+    - verlet_second_half
     - thermostat
 #    - cost_model_fitting_epilog
 
-# define the verlet numerical scheme
-numerical_scheme_verlet: numerical_scheme_verlet_macro(compute_force)
 
 # define the verlet numerical scheme
 numerical_scheme_basic:
-  - zero_force_energy
-  - compute_force
-  - force_to_accel
+  - compute_all_forces_energy
   - push_f_v: { xform_mode: IDENTITY }
   - push_v_r: { xform_mode: INV_XFORM }
   - check_and_update_particles
   - thermostat
   
 numerical_scheme_overdamped:
-  - zero_force_energy
-  - compute_force
-  - force_to_accel
+  - compute_all_forces_energy
   - push_f_r: { xform_mode: INV_XFORM }
   - check_and_update_particles
   - thermostat

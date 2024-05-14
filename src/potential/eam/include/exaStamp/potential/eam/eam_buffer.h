@@ -1,17 +1,20 @@
 
 #pragma once
 
+#include <exanb/fields.h>
+
+// EAM package specific fields
+XSTAMP_DECLARE_FIELD(double          ,rho_dEmb          ,"density or embedding term");
+
+
 #include <onika/memory/allocator.h>
 #include <onika/cuda/cuda.h>
 #include <vector>
 #include <utility>
 #include <exanb/compute/compute_pair_buffer.h>
 
-#include <exanb/fields.h>
 #include <exanb/core/config.h>
-#include <exanb/core/declare_field.h>
-
-XSTAMP_DECLARE_FIELD(double , dEmb ,"Embedding derivative");
+#include <exanb/core/thread.h>
 
 namespace exaStamp
 {
@@ -25,21 +28,24 @@ namespace exaStamp
     double m_rho_cutoff;
   };
 
-  struct EamParticleEmbField
+  struct EamAdditionalFields
   {
-    onika::memory::CudaMMVector< double > m_emb;
+    onika::memory::CudaMMVector< double > m_rho_emb; // unique storage for rho and emb
+    //onika::memory::CudaMMVector< double > m_emb;
   };
 
   template<class EamMultimatPotentialParmT>
   struct EamMultimatPotentialScratch
   {
-    onika::memory::CudaMMVector< PhiRhoCutoff > m_phi_rho_cutoff;
+//    onika::memory::CudaMMVector< PhiRhoCutoff > m_phi_rho_cutoff;
     onika::memory::CudaMMVector< uint8_t > m_pair_enabled;
     onika::memory::CudaMMVector< EamMultimatPotentialParmT > m_ro_potentials;
   };
 
   struct EAMSpecyPairInfo
   {
+//    int32_t m_type_a = 0;
+//    int32_t m_type_b = 0;
     double m_charge_a = 0.0;
     double m_charge_b = 0.0;
   };

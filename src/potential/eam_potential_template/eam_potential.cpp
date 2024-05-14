@@ -1,6 +1,8 @@
-#pragma xstamp_cuda_enable
+// #pragma xstamp_cuda_enable // DO NOT REMOVE THIS LINE
 
-#pragma xstamp_grid_variant
+// #pragma xstamp_grid_variant // DO NOT REMOVE THIS LINE
+
+#include <exaStamp/potential/eam/eam_buffer.h>
 
 #include <exanb/core/grid.h>
 #include <exanb/core/basic_types.h>
@@ -18,13 +20,11 @@
 #include <exanb/compute/compute_cell_particle_pairs.h>
 #include <exanb/core/xform.h>
 
-#include <exaStamp/potential/eam/eam_buffer.h>
 #include "potential.h"
+
+#ifndef USTAMP_POTENTIAL_EAM_MM // only for monomaterial EAM potentials
+
 #include "eam_force_op_singlemat.h"
-
-// this allows for parallel compilation of templated operator for each available field set
-
-
 
 #define EamPotentialOperatorName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_force)
 #define EamPotentialComputeEmbNoGhostName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_emb)
@@ -61,7 +61,7 @@ namespace exaStamp
     using ComputeFields = std::conditional_t< has_virial_field , ComputeFieldsWithVirial , ComputeFieldsWithoutVirial >;
 
     // ========= I/O slots =======================
-    ADD_SLOT( USTAMP_POTENTIAL_PARMS, parameters        , INPUT );
+    ADD_SLOT( USTAMP_POTENTIAL_PARMS, parameters        , INPUT_OUTPUT );
     ADD_SLOT( double                , rcut              , INPUT );
     ADD_SLOT( double                , rcut_max          , INPUT_OUTPUT , 0.0 );
     ADD_SLOT( double                , ghost_dist_max    , INPUT_OUTPUT , 0.0 );   
@@ -69,7 +69,7 @@ namespace exaStamp
     ADD_SLOT( GridT                 , grid              , INPUT_OUTPUT );
     ADD_SLOT( Domain                , domain            , INPUT , REQUIRED );
  
-    ADD_SLOT( EamParticleEmbField   , eam_particle_emb  , INPUT_OUTPUT );
+    ADD_SLOT( EamAdditionalFields   , eam_extra_fields , INPUT_OUTPUT );
 
   public:
 
@@ -88,22 +88,7 @@ namespace exaStamp
       {
         return ;
       }
-      
-      double phiCut = 0.;
-      double rhoCut = 0.;
-#     ifdef USTAMP_POTENTIAL_RCUT
-      {
-        double Rho = 0.;
-        double dRho = 0.;
-        double Phi = 0.;
-        double dPhi = 0.;
-        USTAMP_POTENTIAL_EAM_RHO( *parameters, *rcut, Rho, dRho );          
-        USTAMP_POTENTIAL_EAM_PHI( *parameters, *rcut, Phi, dPhi );
-        phiCut = Phi;
-        rhoCut = Rho;
-      }
-#     endif
-
+            
       auto compute_eam_force = [&]( const auto& cp_xform )
       {
         // common building blocks for both compute passes
@@ -115,18 +100,17 @@ namespace exaStamp
         if constexpr ( ComputeEmb )
         {
           // reset emb field to zero
-          eam_particle_emb->m_emb.clear();
-          eam_particle_emb->m_emb.resize( grid->number_of_particles() );
-          //eam_particle_emb->m_emb.assign( grid->number_of_particles() , 0.0 );
+          eam_extra_fields->m_rho_emb.clear();
+          eam_extra_fields->m_rho_emb.resize( grid->number_of_particles() );
+          //eam_extra_fields->m_emb.assign( grid->number_of_particles() , 0.0 );
 
           // build compute buffer
           using EmbCPBuf = ComputePairBuffer2<>;
           ComputePairBufferFactory< EmbCPBuf > emb_buf;
-          EmbOp emb_op { *parameters, rhoCut, phiCut };
+          EmbOp emb_op { *parameters };
 
           // Emb term computation will access, for each central atom, potential energy (internal field) and emb_field (externally stored extra field)
-          double * emb_ptr = eam_particle_emb->m_emb.data();
-          auto emb_field = make_external_field_flat_array_accessor( *grid , emb_ptr , field::dEmb );
+          auto emb_field = grid->field_accessor( field::rho_dEmb );
           auto emb_op_fields = make_field_tuple_from_field_set( FieldSet<field::_ep>{} , emb_field );
           auto emb_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks /* no additional fields required for neighbors */ );
           compute_cell_particle_pairs( *grid, *rcut, ComputeGhostEmb, emb_optional, emb_buf, emb_op, emb_op_fields , parallel_execution_context() );      
@@ -135,11 +119,11 @@ namespace exaStamp
         // 2nd pass parameters: compute final force using the emb term, only for non ghost particles (but reading EMB terms from neighbor particles)
         if constexpr ( ComputeForce )
         {
-          using ForceCPBuf = SimpleNbhComputeBuffer< FieldSet<field::_dEmb> >; /* we want extra neighbor storage space to store these fields */
+          using ForceCPBuf = SimpleNbhComputeBuffer< FieldSet<field::_rho_dEmb> >; /* we want extra neighbor storage space to store these fields */
           ComputePairBufferFactory< ForceCPBuf > force_buf;  
-          ForceOp force_op { *parameters, rhoCut, phiCut };
-          const double * c_emb_ptr = eam_particle_emb->m_emb.data();
-          auto c_emb_field = make_external_field_flat_array_accessor( *grid , c_emb_ptr , field::dEmb );
+          ForceOp force_op { *parameters };
+          const double * c_emb_ptr = eam_extra_fields->m_rho_emb.data();
+          auto c_emb_field = grid->field_const_accessor( field::rho_dEmb );
 
           // force computation will access, for each central atom, fields defined in ComputeFields plus external constant field c_emb_field
           auto force_op_fields = make_field_tuple_from_field_set( ComputeFields{} , c_emb_field );
@@ -171,4 +155,6 @@ namespace exaStamp
   }
 
 }
+
+#endif // only mono material EAM potentials will compile this code
 

@@ -15,6 +15,7 @@ add_subdirectory(molecule)
 add_subdirectory(mechanical)
 add_subdirectory(rigidmol)
 add_subdirectory(tutorial)
+add_subdirectory(flat_arrays)
 
 if(XSTAMP_ENABLE_SLIPLINK)
   add_subdirectory(sliplink)

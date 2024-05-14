@@ -7,7 +7,8 @@
 #include <exanb/core/operator_factory.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/mpi/grid_update_ghosts.h>
+
+#include <exanb/mpi/grid_update_from_ghosts.h>
 
 namespace exaStamp
 {
@@ -15,7 +16,7 @@ namespace exaStamp
   using namespace UpdateGhostsUtils;
 
   template<class GridT>
-  class EAMUpdateGhostsEMB : public OperatorNode
+  class EAMUpdateRhoFromGhosts : public OperatorNode
   {
     using UpdateGhostsScratch = typename UpdateGhostsUtils::UpdateGhostsScratch;
 
@@ -25,7 +26,6 @@ namespace exaStamp
     ADD_SLOT( MPI_Comm                 , mpi               , INPUT , MPI_COMM_WORLD );
     ADD_SLOT( GhostCommunicationScheme , ghost_comm_scheme , INPUT_OUTPUT , OPTIONAL );
     ADD_SLOT( GridT                    , grid              , INPUT_OUTPUT);
-    ADD_SLOT( Domain                   , domain            , INPUT );
     ADD_SLOT( long                     , mpi_tag           , INPUT , 0 );
 
     ADD_SLOT( bool                     , gpu_buffer_pack   , INPUT , false );
@@ -41,24 +41,24 @@ namespace exaStamp
     {
       if( ! ghost_comm_scheme.has_value() ) return;
       if( grid->number_of_particles() == 0 ) return;
-    
-      auto pecfunc = [self=this](auto ... args) { return self->parallel_execution_context(args...); };
+
+      auto pecfunc = [self=this](const char* stag) { return self->parallel_execution_context(stag); };
       auto pesfunc = [self=this](unsigned int i) { return self->parallel_execution_stream(i); };
 
       auto rho_emb_field = grid->field_accessor( field::rho_dEmb );
-      auto ghost_update_fields = onika::make_flat_tuple( rho_emb_field );
+      auto update_fields = onika::make_flat_tuple( rho_emb_field );
 
-      grid_update_ghosts( ldbg, *mpi, *ghost_comm_scheme, *grid, *domain, nullptr,
-                          *ghost_comm_buffers, pecfunc, pesfunc, ghost_update_fields,
+      grid_update_from_ghosts( ldbg, *mpi, *ghost_comm_scheme, *grid, nullptr,
+                          *ghost_comm_buffers, pecfunc,pesfunc, update_fields,
                           *mpi_tag, *gpu_buffer_pack, *async_buffer_pack, *staging_buffer,
-                          *serialize_pack_send, *wait_all, std::false_type{} );
+                          *serialize_pack_send, *wait_all, UpdateValueAdd{} );
     }
 
   };
 
   CONSTRUCTOR_FUNCTION
   {
-    OperatorNodeFactory::instance()->register_factory( "ghost_update_emb", make_grid_variant_operator<EAMUpdateGhostsEMB> );
+    OperatorNodeFactory::instance()->register_factory( "update_rho_from_ghost", make_grid_variant_operator<EAMUpdateRhoFromGhosts> );
   }
 
 }

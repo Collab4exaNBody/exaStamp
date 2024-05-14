@@ -35,8 +35,11 @@ compute_loop_stop:
   body:
     - sim_continue
 
-# default force computation is based on a pair potential, but it can be whatever user wants to
-compute_force: compute_force_pair
+# default force computation does nothing, these are placeholders used later on
+compute_loop_prolog: nop
+compute_loop_epilog: nop
+init_prolog: nop
+init_epilog: nop
 
 # executing potential sub nodes initializes rcut_max
 # won't actually compute anything since grid is empty at this time
@@ -63,19 +66,11 @@ preinit_rcut_max:
 
 first_iteration:
   - init_particles
-  - zero_force_energy
-  - compute_force
-  - force_to_accel
+  - compute_all_forces_energy
   - default_thermodynamic_state
   - default_print_thermodynamic_state: { lb_flag: false , move_flag: false , print_header: true }
   - default_dump_thermodynamic_state
   - next_time_step
-
-# does nothing, just placeholders
-compute_loop_prolog: nop
-compute_loop_epilog: nop
-init_prolog: nop
-init_epilog: nop
 
 # definin this enables user to use --set-init_cuda-enable_cuda false to disable cuda
 init_cuda:
@@ -112,6 +107,8 @@ compute_loop:
     
 particles_regions: []
 
+init_parameters: nop
+
 ######## simulation program description #################
 simulation:
   name: sim
@@ -121,6 +118,7 @@ simulation:
     - make_empty_grid
     - grid_flavor
     - global
+    - init_parameters
     - generate_default_species
     - particle_regions
     - preinit_rcut_max

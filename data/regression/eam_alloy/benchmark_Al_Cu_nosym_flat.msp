@@ -1,0 +1,6 @@
+includes:
+  - benchmark_Al_Cu.msp
+  - config_flat_arrays.msp
+
+compute_force: compute_force_flat_nosym
+
