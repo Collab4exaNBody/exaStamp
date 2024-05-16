@@ -44,7 +44,6 @@ namespace exaStamp
     ADD_SLOT( Domain      , domain               , INPUT );
     ADD_SLOT( bool        , binary_mode          , INPUT , true);
     ADD_SLOT( bool        , write_box            , INPUT , true);
-    ADD_SLOT( bool        , write_external_box   , INPUT , false);
     ADD_SLOT( bool        , write_ghost          , INPUT , false);
     ADD_SLOT( std::string , compression          , INPUT , "default");
     ADD_SLOT( std::string , filename             , INPUT , "output"); // default value for backward compatibility
@@ -65,7 +64,7 @@ namespace exaStamp
     
       //using CellParticleAcessor = GridParticleFieldAccessor<typename GridT::CellParticles * const>;
       auto cells = grid->cells_accessor(); //{ grid->cells() };
-      ParaviewWriteTools::write_particles(ldbg,*mpi,*grid,cells,*domain,*filename,field_selector,*compression,*binary_mode,*write_box,*write_external_box,*write_ghost, grid_fields ... );
+      ParaviewWriteTools::write_particles(ldbg,*mpi,*grid,cells,*domain,*filename,field_selector,*compression,*binary_mode,*write_box,*write_ghost, grid_fields ... );
     }
 
     template<class... fid>

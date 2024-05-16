@@ -71,10 +71,10 @@ namespace exaStamp
         {
           return sp[ cells[c][field::type][pos] ].m_name;
         }
-        else
-        {
+        //else // commented out to avoid intel compiler warnings
+        //{
           return "XX";
-        }
+        //}
       };
 
       std::unordered_map<std::string,double> conv_scale;
