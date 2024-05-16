@@ -53,7 +53,7 @@ global:
 compute_force:
   - compute_extramolecular_forces
   - compute_intramolecular_forces
-  - langevin_thermostat: { gamma: 1.e12 1/s , T: 413 K }
+#  - langevin_thermostat: { gamma: 1.e12 1/s , T: 413 K }
 
 
 # user-specified dump data

@@ -91,8 +91,7 @@ dump_data_grid_vtk:
   - resize_grid_cell_values
   - atom_cell_projection
   - timestep_file: "grid_%09d"
-  - write_grid_vtk:
-      use_point_data: false
+  - write_grid_vtk
 
 #dump_data: dump_data_stamp_v3
 dump_data: dump_data_atoms
