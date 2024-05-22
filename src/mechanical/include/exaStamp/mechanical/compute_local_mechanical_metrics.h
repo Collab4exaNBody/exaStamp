@@ -478,7 +478,7 @@ namespace exaStamp
         
         vector_gradient_tensor = AikBkj(vec_tens_ref_position_tensor, inv_ref_tens_ref_position_tensor);
 
-        save_nan(vector_gradient_tensor);
+        if( has_nan(vector_gradient_tensor) ) { vector_gradient_tensor = make_identity_matrix(); }
 
 	local_mechanical_data[tab.cell].vector_gradient_tensor[tab.part] = vector_gradient_tensor;
 
