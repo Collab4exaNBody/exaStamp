@@ -1,0 +1,6 @@
+# print user value using units in internal unit system :
+# -----------------------------------------------
+simulation:
+  - input_value: { mesg: "Enter value with unit : " }
+  - print_real: { prefix: "Internal unit value = " , suffix: "\n" }
+
