@@ -1,0 +1,54 @@
+# no-seq
+includes:
+  - config_molecule.msp
+  - mol_polymere_forcefield_cl.cfg
+
+configuration:
+  logging:
+    debug: true
+  debug:
+    filter: [ ".*read_fatomes_mol" , ".*id_map" ]
+  profiling:
+    summary: false
+
+input_data:
+  - read_fatomes_mol:
+      filename: molecule_polymere.FAtomes
+      
+domain:
+  cell_size: 8 ang
+  periodic: [true, true, true]
+
+# user-specified global values
+global:
+  dt: 1.0 fs
+  rcut_inc: 4.0 ang   # additional distance so that we don't have to rebuild neighbor list each time step
+  simulation_end_iteration: 10000
+  simulation_log_frequency: 10
+  simulation_dump_frequency: 1000
+  simulation_dump_thermo_frequency: -1
+#  bond_max_dist: 20.0 ang
+#  bond_max_stretch: 1.5
+#  init_temperature: 300. K
+
+langevin_thermostat:
+  T: 300.0 K
+  gamma: 0.1 ps^-1
+
+compute_force:
+  - compute_extramolecular_forces
+  - compute_intramolecular_forces
+#  - langevin_thermostat
+
+#init_epilog:
+#  - dump_data
+  
+dump_data:
+  - timestep_file: "molecule_dump_09d.xyz"
+  - message: { mesg: "Write xyz " , endl: false }
+  - print_dump_file:
+      rebind: { mesg: filename }
+      body:
+        - message: { endl: true }
+  - write_xyz_file
+
