@@ -54,6 +54,9 @@ std::cout<<tab.cell*10000+tab.part<<" "<<tab.cell<<" "<<tab.part<<" "<<tab.count
 //--------------------------- end of debug configuration ---------------------------------
 
 
+// enable potential variant code generation only if it is meaningful for this particular potential
+#if defined(USTAMP_POTENTIAL_ENABLE_RIGIDMOL) || !defined(USTAMP_POTENTIAL_RIGIDMOL)
+
 namespace exaStamp
 {
   using namespace exanb;
@@ -65,7 +68,6 @@ namespace exaStamp
     >
   class OPERATOR_NAME : public OperatorNode
   {
-
     
 #   if defined(USTAMP_POTENTIAL_RIGIDMOL) // Rigid molecule for single molecule type pair, multiple atom parameters
 
@@ -88,6 +90,9 @@ namespace exaStamp
 #   endif
 
     // compile time constant indicating if grid has virial field
+#   if defined(USTAMP_POTENTIAL_RIGIDMOL)
+    using ComputeFields = FieldSet< field::_fx ,field::_fy ,field::_fz, field::_ep, field::_couple >;
+#   else
     static inline constexpr bool has_virial_field = GridHasField<GridT,field::_virial>::value;
     static inline constexpr bool has_ep_field = GridHasField<GridT,field::_ep>::value;
     using _ComputeFields = FieldSet< field::_fx ,field::_fy ,field::_fz POTENTIAL_ADDITIONAL_FIELDS DEBUG_ADDITIONAL_FIELDS >;
@@ -97,6 +102,7 @@ namespace exaStamp
     using ComputeFields = std::conditional_t< has_ep_field ,
                             std::conditional_t< has_virial_field , _ComputeFieldsEpVirial , _ComputeFieldsEp > ,
                             std::conditional_t< has_virial_field , _ComputeFieldsVirial , _ComputeFields > >;
+#   endif
 
     using CellParticles = typename GridT::CellParticles;
 
@@ -423,7 +429,11 @@ namespace exaStamp
     template<bool HasWeight>
     static inline auto make_cp_buf_factory( std::integral_constant<bool,HasWeight> )
     {
+#     if defined(USTAMP_POTENTIAL_RIGIDMOL)
+      return make_empty_pair_buffer<RigidMoleculePairContext>();
+#     else
       return ComputePairBufferFactory< ComputePairBuffer2<HasWeight,ComputeBufferStoreNeighbors> > {};
+#     endif
     }
 
     template<bool HasXForm, bool HasWeight>
@@ -451,7 +461,6 @@ namespace exaStamp
         , compute_pair_scratch.cp_force
         , ComputeFields{}
         , gpu_exec_ctx );
-
     }
 
     // used only once to compute energy cutoff
@@ -482,6 +491,9 @@ namespace exaStamp
   }
 
 }
+
+#endif // defined(USTAMP_POTENTIAL_ENABLE_RIGIDMOL) || !defined(USTAMP_POTENTIAL_RIGIDMOL)
+
 
 #undef OPERATOR_NAME
 #undef OPERATOR_NAME_STR

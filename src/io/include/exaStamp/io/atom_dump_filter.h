@@ -30,6 +30,7 @@ namespace exaStamp
     static constexpr bool has_field_id = TupleT::has_field(field::id);
     static constexpr bool has_field_type = TupleT::has_field(field::type);
     static constexpr bool has_field_id_type = has_field_id && has_field_type;
+    static constexpr size_t MAX_PARTICLE_SPECIES = 1ul << 16;
     using StorageType = TupleT; /*std::conditional_t<
       has_field_id_type , 
       onika::soatl::FieldTupleFromFieldIds< AddDefaultFields< MergeFieldSet< RemoveFields< DumpFieldSet , FieldSet<field::_id,field::_type> > , FieldSet<field::_id_type> > > > , 
@@ -62,7 +63,7 @@ namespace exaStamp
     bool override_domain_bounds = false;
     bool shrink_to_fit = false;
     AABB domain_bounds = { {0,0,0} , {0,0,0} };
-
+    
     // stats
     StorageType m_tuple_min;
     StorageType m_tuple_max;
@@ -218,7 +219,11 @@ namespace exaStamp
     inline size_t write_optional_header( WriteFuncT write_func )
     {
       size_t n = 0;
-      size_t n_species = particle_species.size();
+      if( particle_species.size() >= MAX_PARTICLE_SPECIES )
+      {
+        fatal_error() << "Number of particle species too big ("<<particle_species.size()<<")" <<std::endl;
+      }
+      size_t n_species = particle_species.size() + MAX_PARTICLE_SPECIES * ParticleSpecie::MaxRigidMolAtoms;
       n += write_func( n_species );
       for(const auto& sp : particle_species) { n += write_func( sp ); }
       n += optional_header_io.write_optional_header( write_func );
@@ -232,9 +237,36 @@ namespace exaStamp
       ParticleSpecies backup_species = species;
       size_t n = 0;
       size_t n_species = 0;
+      size_t max_rigid_molecule = LEGACY_MAX_RIGID_MOLECULE_ATOMS;
       n += read_func( n_species );
+      if( n_species >= MAX_PARTICLE_SPECIES )
+      {
+        n_species = n_species % MAX_PARTICLE_SPECIES;
+        max_rigid_molecule = n_species / MAX_PARTICLE_SPECIES;
+      }
       species.resize( n_species );
-      for(auto& sp : species) { n += read_func( sp ); }
+      
+      if( max_rigid_molecule == ParticleSpecie::MaxRigidMolAtoms )
+      {
+        for(auto& sp : species) { n += read_func( sp ); }
+      }
+      else if( max_rigid_molecule == LEGACY_MAX_RIGID_MOLECULE_ATOMS )
+      {
+        for(auto& sp : species)
+        {
+          ParticleSpecieTmpl<LEGACY_MAX_RIGID_MOLECULE_ATOMS> tmp;
+          n += read_func( tmp );
+          if( tmp.m_rigid_atom_count > ParticleSpecie::MaxRigidMolAtoms )
+          {
+            fatal_error() << "Rigid molecule "<<tmp.name()<<" has more atoms than supported : "<<tmp.m_rigid_atom_count<<" > "<<ParticleSpecie::MaxRigidMolAtoms<<std::endl;
+          }
+          sp.copy_from( tmp );
+        }
+      }
+      else
+      {
+        fatal_error()<<"Rigid molecule max atoms in dump ("<<max_rigid_molecule<<") is not supported in this software version (compiled for "<<ParticleSpecie::MaxRigidMolAtoms<<")"<<std::endl;
+      }
       if( keep_species )
       {
         auto find_species = [&species](const std::string& name) -> bool { for(const auto& sp:species) { if(sp.name()==name) return true; } return false; };

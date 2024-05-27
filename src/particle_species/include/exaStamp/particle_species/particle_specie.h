@@ -14,11 +14,16 @@
 
 #include <onika/memory/allocator.h>
 
+#ifndef XSTAMP_MAX_RIGID_MOLECULE_ATOMS
+#define XSTAMP_MAX_RIGID_MOLECULE_ATOMS 16
+#endif
+
 namespace exaStamp
 {
   static constexpr size_t MAX_PARTICLE_SPECIES = 256;
   static constexpr size_t MAX_ATOM_NAME_LEN = 16;
-  static constexpr size_t MAX_RIGID_MOLECULE_ATOMS = 16; // WARNING, changing this constant will make the dump reader fail
+  static constexpr size_t LEGACY_MAX_RIGID_MOLECULE_ATOMS = 16; // WARNING, changing this constant will make the dump reader fail
+  static constexpr size_t MAX_RIGID_MOLECULE_ATOMS = XSTAMP_MAX_RIGID_MOLECULE_ATOMS;
 
   struct alignas(8) RigidMoleculeAtom
   {
@@ -26,8 +31,10 @@ namespace exaStamp
     int m_atom_type = -1;
   };
 
-  struct ParticleSpecie
+  template<size_t _MaxRigidMolAtoms = MAX_RIGID_MOLECULE_ATOMS>
+  struct ParticleSpecieTmpl
   {
+    static inline constexpr size_t MaxRigidMolAtoms = _MaxRigidMolAtoms;
     static inline constexpr size_t MAX_STR_LEN = MAX_ATOM_NAME_LEN;
   
     double m_mass = 0.;
@@ -39,9 +46,9 @@ namespace exaStamp
     unsigned int m_molecule_place = 0;    // place in molecule of this atom
 */
     exanb::Vec3d m_minert {0.,0.,0.};
-    RigidMoleculeAtom m_rigid_atoms[MAX_RIGID_MOLECULE_ATOMS];
+    RigidMoleculeAtom m_rigid_atoms[MaxRigidMolAtoms];
 
-    char m_rigid_atom_names[MAX_RIGID_MOLECULE_ATOMS][MAX_STR_LEN];    
+    char m_rigid_atom_names[MaxRigidMolAtoms][MAX_STR_LEN];    
     char m_name[MAX_STR_LEN] = {'\0'};
     char m_molecule_name[MAX_STR_LEN] = {'\0'};
     
@@ -64,8 +71,26 @@ namespace exaStamp
     inline std::string name() const { return m_name; }
     inline std::string molecule_name() const { return m_molecule_name; }
     inline std::string rigid_atom_name(size_t i) const { return m_rigid_atom_names[i]; }
+    
+    template< size_t MaxRA >
+    inline void copy_from( const ParticleSpecieTmpl<MaxRA>& from )
+    {
+      m_mass = from.m_mass;
+      m_charge = from.m_charge;
+      m_z = from.m_z;
+      m_rigid_atom_count = from.m_rigid_atom_count;
+      m_minert = from.m_minert;
+      set_name( from.name() );
+      set_molecule_name( from.molecule_name() );
+      for(unsigned int i=0;i<m_rigid_atom_count;i++)
+      {
+        m_rigid_atoms[i] = from.m_rigid_atoms[i];
+        set_rigid_atom_name(i, from.rigid_atom_name(i) );
+      }
+    }
   };
 
+  using ParticleSpecie = ParticleSpecieTmpl<>;
   using ParticleSpecies = onika::memory::CudaMMVector<ParticleSpecie>;
 
   struct MinimalParticleSpecies

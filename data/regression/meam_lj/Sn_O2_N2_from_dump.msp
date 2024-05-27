@@ -7,9 +7,6 @@ configuration:
     filter: [ ".*meam_lj_force" , ".*lj_multi_force" ]
   profiling:
     summary: true
-  onika:
-    gpu_sm_mult: 6
-    gpu_block_size: 256
 
 #meam_force:
 meam_lj_force:
@@ -77,8 +74,13 @@ input_data:
   - grid_stats
   - atom_neighbors_stats
 
+chunk_neighbors:
+  config:
+    build_particle_offset: true
+    chunk_size: 1
+
 global:
-  simulation_end_iteration: 50
+  simulation_end_iteration: 1020
   simulation_log_frequency: 10
   simulation_dump_frequency: 1000
   rcut_inc: 1.25 ang

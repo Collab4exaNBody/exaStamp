@@ -10,7 +10,7 @@
 #include <yaml-cpp/yaml.h>
 #include <exanb/core/quantity_yaml.h>
 #include <exanb/core/basic_types_yaml.h>
-
+#include <exanb/core/basic_types_operators.h>
 #include <exanb/core/quaternion_to_matrix.h>
 
 #ifndef PRIV_NAMESPACE_NAME
@@ -37,6 +37,11 @@ namespace exaStamp
   struct RigidMoleculePairContext
   {
     Vec3d mol_atom_ra[MAX_RIGID_MOLECULE_ATOMS];
+    /*
+    Vec3d force;
+    Vec3d couple;
+    double ep;
+    */
   };
 
   namespace PRIV_NAMESPACE_NAME
@@ -45,21 +50,21 @@ namespace exaStamp
     struct RigidMolPotentialPairParam
     {
       onika::cuda::ro_shallow_copy_t< USTAMP_POTENTIAL_PARAMS > p;
-      double rcut = 0.0;
       PairPotentialMinimalParameters pair_params;
+      double rcut = 0.0;
       double ecut = 0.0;
     };
   
     struct RigidMolPotentialParameters
     {
       using UserPotParams = std::map< std::pair<std::string,std::string> , RigidMolPotentialPairParam >;
-      static constexpr size_t MAX_TYPE_PAIR_IDS = 16;
+      static constexpr size_t MAX_TYPE_PAIR_IDS = 15;
+      static constexpr size_t MAX_RIGIDMOL_ATOM_TYPES = 1;
       RigidMolPotentialPairParam m_pair_params[MAX_TYPE_PAIR_IDS]; // indexed by type pair id
       RigidMoleculeAtom m_atoms[MAX_RIGID_MOLECULE_ATOMS];
       unsigned int m_n_atoms = 0;
       unsigned int m_nb_pair_params = 0;
       UserPotParams * m_user_pot_parameters = nullptr;
-      //uint8_t m_user_pot_data[ sizeof(UserPotParams) ];
     };
   
     // helper functor, with templated call operator (with/without weights)
@@ -67,123 +72,9 @@ namespace exaStamp
     {
       const RigidMolPotentialParameters* __restrict__ p;
 
-     // without virial computation
-      template<bool UseWeights, class CellParticlesT, class Mat3dT>
+      template<class CPBufferT, class CellParticlesT>
       ONIKA_HOST_DEVICE_FUNC inline void operator () (
-        size_t n,
-        ComputePairBuffer2<UseWeights,true>& tab,
-        double& _ep,
-        double& _fx,
-        double& _fy,
-        double& _fz,
-        const Mat3dT& /* _virial */,
-        const Quaternion& orient_a,
-        Vec3d& _couple,
-        DEBUG_ADDITIONAL_PARAMETERS
-        CellParticlesT cells
-        ) const
-      {
-        const auto & p = *(this->p);
-        
-        Vec3d mol_atom_ra[MAX_RIGID_MOLECULE_ATOMS];
-
-        // pre-compute atom a force site positions
-        if( n > 0 )
-        {
-          const Mat3d mat_a = quaternion_to_matrix( orient_a );        
-          for(unsigned int sub_atom_a=0; sub_atom_a<p.m_n_atoms; ++sub_atom_a)
-          {
-            mol_atom_ra[sub_atom_a] = mat_a * p.m_atoms[sub_atom_a].m_pos;
-          }
-        }
-        
-        //int nPairs = 0;
-        for(size_t i=0;i<n;i++)
-        {
-          size_t cell_b=0, p_b=0;
-          tab.nbh.get(i,cell_b,p_b);
-          const auto orient_b = cells[cell_b][field::orient][p_b];
-          const Mat3d mat_b = quaternion_to_matrix( orient_b );
-          const Vec3d mol_b_r = { tab.drx[i] , tab.dry[i] , tab.drz[i] };
-          const auto weight = tab.nbh_data.get(i);
-/*
-          Vec3d mol_atom_rb[MAX_RIGID_MOLECULE_ATOMS];
-          for(unsigned int sub_atom_b=0; sub_atom_b<p.m_n_atoms; ++sub_atom_b)
-          {
-            mol_atom_rb[sub_atom_b] = mat_b * p.m_atoms[sub_atom_b].m_pos;
-          }
-*/        
-          for(unsigned int sub_atom_a=0; sub_atom_a<p.m_n_atoms; ++sub_atom_a)
-          {
-            const unsigned int type_a = p.m_atoms[sub_atom_a].m_atom_type;
-            const Vec3d ra = mol_atom_ra[sub_atom_a]; // mat_a * p.m_atoms[sub_atom_a].m_pos;
-            Vec3d site_a_F = { 0., 0., 0. };
-            double site_a_ep = 0.;
-          
-            // calcul sub-a
-            for(unsigned int sub_atom_b=0; sub_atom_b<p.m_n_atoms; ++sub_atom_b)
-            {
-              const unsigned int type_b = p.m_atoms[sub_atom_b].m_atom_type;
-              const unsigned int pair_id = unique_pair_id(type_a,type_b);
-              const auto& pp = p.m_pair_params[pair_id]; 
-              const Vec3d rb =  mol_b_r + /*mol_atom_rb[sub_atom_b]*/ mat_b * p.m_atoms[sub_atom_b].m_pos;
-              const Vec3d dr = rb - ra;
-              const double rcut2 = pp.rcut * pp.rcut;
-              const double d2 = norm2(dr);
-              if( d2 <= rcut2 && weight > 0.0 )
-              {
-                //++ nPairs;
-                const double r = sqrt(d2);
-                double e=0.0, de=0.0;
-
-#               if USTAMP_POTENTIAL_HANDLE_FORCE_WEIGHTING
-                USTAMP_POTENTIAL_COMPUTE( pp.p, pp.pair_params, r, e, de , weight );
-#               else
-                USTAMP_POTENTIAL_COMPUTE( pp.p, pp.pair_params, r, e, de );
-                e *= weight;
-                de *= weight;
-#               endif
-                e -= pp.ecut * weight;
-                de /= r;
-                
-                site_a_F += de * dr;
-                site_a_ep += e * 0.5;
-              }
-            }
-            // _virial += ???
-            _ep += site_a_ep;
-            _fx += site_a_F.x;
-            _fy += site_a_F.y;
-            _fz += site_a_F.z;
-            _couple += cross( ra , site_a_F );
-          }
-        }
-        //printf("%d nbh, %d interactions\n",int(n),int(nPairs));
-      }
-
-      // without virial computation
-      template<bool UseWeights, class CellParticlesT>
-      ONIKA_HOST_DEVICE_FUNC inline void operator () (
-        size_t n,
-        ComputePairBuffer2<UseWeights,true>& tab,
-        double& ep,
-        double& fx,
-        double& fy,
-        double& fz,
-        const Quaternion& orient_a,
-        Vec3d& couple_a,
-        DEBUG_ADDITIONAL_PARAMETERS
-        CellParticlesT cells
-        ) const
-      {
-        //using Mat3d = ::exanb::FakeMat3d;
-        this->operator () ( n, tab, ep, fx, fy, fz, FakeMat3d{}, orient_a, couple_a, DEBUG_ADDITIONAL_PARAMETER_NAMES cells );
-      }
-
-
-      template<class CellParticlesT>
-      ONIKA_HOST_DEVICE_FUNC inline void operator () (
-        RigidMoleculePairContext& p_a_ctx,
+        CPBufferT& cpbuf,
         CellParticlesT* cells,
         size_t cell_a,
         size_t p_a,
@@ -194,104 +85,99 @@ namespace exaStamp
         const Mat3d mat_a = quaternion_to_matrix( cells[cell_a][field::orient][p_a] );
         for(unsigned int sub_atom_a=0; sub_atom_a<p.m_n_atoms; ++sub_atom_a)
         {
-          p_a_ctx.mol_atom_ra[sub_atom_a] = mat_a * p.m_atoms[sub_atom_a].m_pos;
+          cpbuf.ext.mol_atom_ra[sub_atom_a] = mat_a * p.m_atoms[sub_atom_a].m_pos;
         }
+        /*
+        cpbuf.ext.force = Vec3d{ 0. , 0. , 0. };
+        cpbuf.ext.couple = Vec3d{ 0. , 0. , 0. };
+        cpbuf.ext.ep = 0.0;
+        */
       }
 
-      template<class CellParticlesT, class Mat3dT>
+      template<class CPBufferT, class CellParticlesT>
       ONIKA_HOST_DEVICE_FUNC inline void operator () (
-        const RigidMoleculePairContext& p_a_ctx,
+        CPBufferT& cpbuf,
         const Vec3d& dr, double d2,
-        double& _ep,
-        double& _fx,
-        double& _fy,
-        double& _fz,
-        const Mat3dT& /* _virial */,
-        const Quaternion& orient_a,
-        Vec3d& _couple,
+        double& fx, double& fy, double& fz, double& ep, Vec3d& couple,
         DEBUG_ADDITIONAL_PARAMETERS
         CellParticlesT cells,size_t cell_b,size_t p_b,
         double weight
         ) const
       {
         const auto & p = *(this->p);
-        //int nPairs = 0;
-        //for(size_t i=0;i<n;i++)
-        //{
-        //  size_t cell_b=0, p_b=0;
-        //  tab.nbh.get(i,cell_b,p_b);
-          const auto orient_b = cells[cell_b][field::orient][p_b];
-          const Mat3d mat_b = quaternion_to_matrix( orient_b );
-          const Vec3d mol_b_r = dr; // { tab.drx[i] , tab.dry[i] , tab.drz[i] };
-        //  const auto weight = tab.nbh_data.get(i);
-        
-          for(unsigned int sub_atom_a=0; sub_atom_a<p.m_n_atoms; ++sub_atom_a)
-          {
-            const unsigned int type_a = p.m_atoms[sub_atom_a].m_atom_type;
-            const Vec3d ra = p_a_ctx.mol_atom_ra[sub_atom_a]; // mat_a * p.m_atoms[sub_atom_a].m_pos;
-            Vec3d site_a_F = { 0., 0., 0. };
-            double site_a_ep = 0.;
-          
-            // calcul sub-a
-            for(unsigned int sub_atom_b=0; sub_atom_b<p.m_n_atoms; ++sub_atom_b)
-            {
-              const unsigned int type_b = p.m_atoms[sub_atom_b].m_atom_type;
-              const unsigned int pair_id = unique_pair_id(type_a,type_b);
-              const auto& pp = p.m_pair_params[pair_id]; 
-              const Vec3d rb =  mol_b_r + mat_b * p.m_atoms[sub_atom_b].m_pos;
-              const Vec3d dr = rb - ra;
-              const double rcut2 = pp.rcut * pp.rcut;
-              const double d2 = norm2(dr);
-              if( d2 <= rcut2 && weight > 0.0 )
-              {
-                //++ nPairs;
-                const double r = sqrt(d2);
-                double e=0.0, de=0.0;
-                
-#               if USTAMP_POTENTIAL_HANDLE_FORCE_WEIGHTING
-                USTAMP_POTENTIAL_COMPUTE( pp.p, pp.pair_params, r, e, de , weight );
-#               else
-                USTAMP_POTENTIAL_COMPUTE( pp.p, pp.pair_params, r, e, de );
-                e *= weight;
-                de *= weight;
-#               endif
-                e -= pp.ecut * weight;
-                de /= r;
-                
-                site_a_F += de * dr;
-                site_a_ep += e * 0.5;
-              }
-            }
-            // _virial += ???
-            _ep += site_a_ep;
-            _fx += site_a_F.x;
-            _fy += site_a_F.y;
-            _fz += site_a_F.z;
-            _couple += cross( ra , site_a_F );
-          }
-        //}
-        //printf("%d nbh, %d interactions\n",int(n),int(nPairs));
-      }
 
-      template<class CellParticlesT>
+        const auto orient_b = cells[cell_b][field::orient][p_b];
+        const Mat3d mat_b = quaternion_to_matrix( orient_b );
+        const Vec3d mol_b_r = dr; // { tab.drx[i] , tab.dry[i] , tab.drz[i] };
+
+        for(unsigned int sub_atom_a=0; sub_atom_a<p.m_n_atoms; ++sub_atom_a)
+        {
+          const unsigned int type_a = p.m_atoms[sub_atom_a].m_atom_type;
+          const Vec3d ra = cpbuf.ext.mol_atom_ra[sub_atom_a]; // mat_a * p.m_atoms[sub_atom_a].m_pos;
+          Vec3d site_a_F = { 0., 0., 0. };
+          double site_a_ep = 0.;
+        
+          // calcul sub-a
+          for(unsigned int sub_atom_b=0; sub_atom_b<p.m_n_atoms; ++sub_atom_b)
+          {
+            const unsigned int type_b = p.m_atoms[sub_atom_b].m_atom_type;
+            const unsigned int pair_id = unique_pair_id(type_a,type_b);
+            const auto& pp = p.m_pair_params[pair_id]; 
+            const Vec3d rb =  mol_b_r + mat_b * p.m_atoms[sub_atom_b].m_pos;
+            const Vec3d dr = rb - ra;
+            const double rcut2 = pp.rcut * pp.rcut;
+            const double d2 = norm2(dr);
+            if( d2 <= rcut2 && weight > 0.0 )
+            {
+              //++ nPairs;
+              const double r = sqrt(d2);
+              double e=0.0, de=0.0;
+              
+#               if USTAMP_POTENTIAL_HANDLE_FORCE_WEIGHTING
+              USTAMP_POTENTIAL_COMPUTE( pp.p, pp.pair_params, r, e, de , weight );
+#               else
+              USTAMP_POTENTIAL_COMPUTE( pp.p, pp.pair_params, r, e, de );
+              e *= weight;
+              de *= weight;
+#               endif
+              e -= pp.ecut * weight;
+              de /= r;
+              
+              site_a_F += de * dr;
+              site_a_ep += e * 0.5;
+            }
+          }
+          // _virial += ???
+          
+          fx += site_a_F.x;
+          fy += site_a_F.y;
+          fz += site_a_F.z;
+          ep += site_a_ep;
+          couple += cross( ra , site_a_F );
+          /*
+          cpbuf.ext.force  += site_a_F;
+          cpbuf.ext.ep     += site_a_ep;
+          cpbuf.ext.couple += cross( ra , site_a_F );
+          */
+        }
+      }
+/*
+      template<class CPBufferT, class CellParticlesT>
       ONIKA_HOST_DEVICE_FUNC inline void operator () (
-        const RigidMoleculePairContext& p_a_ctx,
-        const Vec3d& dr, double d2,
-        double& _ep,
-        double& _fx,
-        double& _fy,
-        double& _fz,
-        //Mat3dT& /* _virial */,
-        const Quaternion& orient_a,
-        Vec3d& _couple,
-        DEBUG_ADDITIONAL_PARAMETERS
-        CellParticlesT cells,size_t cell_b,size_t p_b,
-        double weight
+        CPBufferT& cpbuf,
+        CellParticlesT* cells,
+        size_t cell_a,
+        size_t p_a,
+        exanb::ComputePairParticleContextStop
         ) const
       {
-        this->operator() ( p_a_ctx, dr, d2, _ep, _fx, _fy, _fz, FakeMat3d{}, orient_a, _couple, DEBUG_ADDITIONAL_PARAMETER_NAMES cells, cell_b, p_b, weight );
+        cells[cell_a][field::fx][p_a]     += cpbuf.ext.force.x;
+        cells[cell_a][field::fy][p_a]     += cpbuf.ext.force.y;
+        cells[cell_a][field::fz][p_a]     += cpbuf.ext.force.z;
+        cells[cell_a][field::ep][p_a]     += cpbuf.ext.ep;
+        cells[cell_a][field::couple][p_a] += cpbuf.ext.couple;
       }
-
+*/
     };
   }
 
@@ -307,6 +193,13 @@ namespace exanb
 #   else
     static inline constexpr bool CudaCompatible = false;
 #   endif
+
+    static inline constexpr bool ComputeBufferCompatible = false;
+    static inline constexpr bool BufferLessCompatible    = true;
+
+    static inline constexpr bool HasParticleContextStart      = true;    
+    static inline constexpr bool HasParticleContext           = true;
+    static inline constexpr bool HasParticleContextStop       = false;
   };
 
 }

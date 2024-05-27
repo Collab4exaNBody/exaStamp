@@ -40,15 +40,15 @@ namespace exaStamp
     struct PotentialPairParam
     {
       onika::cuda::ro_shallow_copy_t< USTAMP_POTENTIAL_PARAMS > p;
-      double rcut = 0.0;
       PairPotentialMinimalParameters pair_params;
+      double rcut = 0.0;
       double ecut = 0.0;
     };
   
     struct PotentialMultiParameters
     {
       using UserPotParams = std::map< std::pair<std::string,std::string> , PotentialPairParam >;
-      static constexpr size_t MAX_TYPE_PAIR_IDS = 256;
+      static constexpr size_t MAX_TYPE_PAIR_IDS = 16;
       PotentialPairParam m_pair_params[MAX_TYPE_PAIR_IDS]; // indexed by type pair id
       size_t m_nb_pair_params = 0;
       UserPotParams * m_user_pot_parameters = nullptr;
