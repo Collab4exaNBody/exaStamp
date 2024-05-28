@@ -30,6 +30,12 @@
 #define DEBUG_ADDITIONAL_PARAMETER_NAMES /**/
 #endif
 
+#if USTAMP_POTENTIAL_HANDLE_FORCE_WEIGHTING
+# define USTAMP_POTENTIAL_COMPUTE_WEIGHT(PotParam,PairParam,r,e,de,weight) USTAMP_POTENTIAL_COMPUTE(PotParam,PairParam,r,e,de,weight)
+#else
+# define USTAMP_POTENTIAL_COMPUTE_WEIGHT(PotParam,PairParam,r,e,de,weight) USTAMP_POTENTIAL_COMPUTE(PotParam,PairParam,r,e,de); e*=weight; de*=weight
+#endif
+
 namespace exaStamp
 {
   using namespace exanb;
@@ -40,6 +46,9 @@ namespace exaStamp
     Vec3d force;
     Vec3d couple;
     double ep;
+    uint16_t type_a;
+    uint16_t n_atoms_a;
+    uint16_t atoms_start_a;
   };
 
   namespace PRIV_NAMESPACE_NAME
@@ -56,11 +65,15 @@ namespace exaStamp
     struct RigidMolPotentialParameters
     {
       using UserPotParams = std::map< std::pair<std::string,std::string> , RigidMolPotentialPairParam >;
-      static constexpr size_t MAX_TYPE_PAIR_IDS = 15;
-      static constexpr size_t MAX_RIGIDMOL_ATOM_TYPES = 1;
+
+      static constexpr size_t MAX_TYPE_PAIR_IDS = 15; // this lets room for 5 single atom species
+      static constexpr size_t MAX_RIGIDMOL_ATOM_TYPES = 6; // single atoms and rigid molecule species together
+      static constexpr size_t MAX_ALL_MOLECULE_ATOMS = 4;  // all rigid molecule atoms (position and type for each atom in each rigid molecule with more than 1 atom)
       RigidMolPotentialPairParam m_pair_params[MAX_TYPE_PAIR_IDS]; // indexed by type pair id
-      RigidMoleculeAtom m_atoms[MAX_RIGID_MOLECULE_ATOMS];
-      unsigned int m_n_atoms = 0;
+      RigidMoleculeAtom m_atoms[MAX_ALL_MOLECULE_ATOMS];
+      uint16_t m_n_atoms[MAX_RIGIDMOL_ATOM_TYPES];
+      uint16_t m_atoms_start[MAX_RIGIDMOL_ATOM_TYPES];
+      
       unsigned int m_nb_pair_params = 0;
       UserPotParams * m_user_pot_parameters = nullptr;
     };
@@ -80,20 +93,26 @@ namespace exaStamp
         ) const
       {
         const auto & p = *(this->p);
-        const Mat3d mat_a = quaternion_to_matrix( cells[cell_a][field::orient][p_a] );
-        for(unsigned int sub_atom_a=0; sub_atom_a<p.m_n_atoms; ++sub_atom_a)
+        cpbuf.ext.type_a = cells[cell_a][field::type][p_a];
+        cpbuf.ext.n_atoms_a = p.m_n_atoms[cpbuf.ext.type_a];
+        cpbuf.ext.atoms_start_a = p.m_atoms_start[cpbuf.ext.type_a];
+        if( cpbuf.ext.n_atoms_a > 1 )
         {
-          cpbuf.ext.mol_atom_ra[sub_atom_a] = mat_a * p.m_atoms[sub_atom_a].m_pos;
+          const Mat3d mat_a = quaternion_to_matrix( cells[cell_a][field::orient][p_a] );
+          for(unsigned int sub_atom_a=0; sub_atom_a < cpbuf.ext.n_atoms_a; ++sub_atom_a)
+          {
+            cpbuf.ext.mol_atom_ra[sub_atom_a] = mat_a * p.m_atoms[ cpbuf.ext.atoms_start_a + sub_atom_a ].m_pos;
+          }
+          cpbuf.ext.couple = Vec3d{ 0. , 0. , 0. };
         }
         cpbuf.ext.force = Vec3d{ 0. , 0. , 0. };
-        cpbuf.ext.couple = Vec3d{ 0. , 0. , 0. };
         cpbuf.ext.ep = 0.0;
       }
 
       template<class CPBufferT, class CellParticlesT>
       ONIKA_HOST_DEVICE_FUNC inline void operator () (
         CPBufferT& cpbuf,
-        const Vec3d& dr, double d2,
+        const Vec3d& mol_b_r, double d2,
         DEBUG_ADDITIONAL_PARAMETERS
         CellParticlesT cells,size_t cell_b,size_t p_b,
         double weight
@@ -101,111 +120,119 @@ namespace exaStamp
       {
         const auto & p = *(this->p);
 
-        const auto orient_b = cells[cell_b][field::orient][p_b];
-        const Mat3d mat_b = quaternion_to_matrix( orient_b );
-        const Vec3d mol_b_r = dr; // { tab.drx[i] , tab.dry[i] , tab.drz[i] };
+        const unsigned int rm_type_b = cells[cell_b][field::type][p_b];
+        const unsigned int n_atoms_b = p.m_n_atoms[rm_type_b];
+        const unsigned int atoms_start_b = p.m_atoms_start[rm_type_b];
 
-        for(unsigned int sub_atom_a=0; sub_atom_a<p.m_n_atoms; ++sub_atom_a)
+        if( cpbuf.ext.n_atoms_a > 1 )
         {
-          const unsigned int type_a = p.m_atoms[sub_atom_a].m_atom_type;
-          const Vec3d ra = cpbuf.ext.mol_atom_ra[sub_atom_a]; // mat_a * p.m_atoms[sub_atom_a].m_pos;
-          Vec3d site_a_F = { 0., 0., 0. };
-          double site_a_ep = 0.;
-        
-          for(unsigned int sub_atom_b=0; sub_atom_b<p.m_n_atoms; ++sub_atom_b)
+          if( n_atoms_b > 1 )
           {
-            const unsigned int type_b = p.m_atoms[sub_atom_b].m_atom_type;
-            const unsigned int pair_id = unique_pair_id(type_a,type_b);
-            const auto& pp = p.m_pair_params[pair_id]; 
-            const Vec3d rb =  mol_b_r + mat_b * p.m_atoms[sub_atom_b].m_pos;
-            const Vec3d dr = rb - ra;
-            const double rcut2 = pp.rcut * pp.rcut;
-            const double d2 = norm2(dr);
-            if( d2 <= rcut2 && weight > 0.0 )
+            const auto orient_b = cells[cell_b][field::orient][p_b];
+            const Mat3d mat_b = quaternion_to_matrix( orient_b );
+            for(unsigned int sub_atom_a=0; sub_atom_a < cpbuf.ext.n_atoms_a ; ++sub_atom_a)
             {
-              const double r = sqrt(d2);
-              double e=0.0, de=0.0;
-              
-#             if USTAMP_POTENTIAL_HANDLE_FORCE_WEIGHTING
-              USTAMP_POTENTIAL_COMPUTE( pp.p, pp.pair_params, r, e, de , weight );
-#             else
-              USTAMP_POTENTIAL_COMPUTE( pp.p, pp.pair_params, r, e, de );
-              e *= weight;
-              de *= weight;
-#             endif
-              e -= pp.ecut * weight;
-              de /= r;
-              
-              site_a_F += de * dr;
-              site_a_ep += e * 0.5;
+              const unsigned int type_a = p.m_atoms[ cpbuf.ext.atoms_start_a + sub_atom_a ].m_atom_type;
+              const Vec3d ra = cpbuf.ext.mol_atom_ra[sub_atom_a];
+              Vec3d site_a_F = { 0., 0., 0. };
+              double site_a_ep = 0.;
+              for(unsigned int sub_atom_b=0; sub_atom_b<n_atoms_b; ++sub_atom_b)
+              {
+                const unsigned int type_b = p.m_atoms[ atoms_start_b + sub_atom_b ].m_atom_type;
+                const unsigned int pair_id = unique_pair_id(type_a,type_b);
+                const auto& pp = p.m_pair_params[pair_id]; 
+                const Vec3d rb =  mol_b_r + mat_b * p.m_atoms[ atoms_start_b + sub_atom_b ].m_pos;
+                const Vec3d dr = rb - ra;
+                const double rcut2 = pp.rcut * pp.rcut;
+                const double d2 = norm2(dr);
+                if( d2 <= rcut2 && weight > 0.0 )
+                {
+                  const double r = sqrt(d2);
+                  double e=0.0, de=0.0;                  
+                  USTAMP_POTENTIAL_COMPUTE_WEIGHT( pp.p, pp.pair_params, r, e, de , weight );
+                  e -= pp.ecut * weight;
+                  de /= r;
+                  site_a_F += de * dr;
+                  site_a_ep += e * 0.5;
+                }
+              }
+              cpbuf.ext.force  += site_a_F;
+              cpbuf.ext.ep     += site_a_ep;
+              cpbuf.ext.couple += cross( ra , site_a_F );
             }
           }
-          cpbuf.ext.force  += site_a_F;
-          cpbuf.ext.ep     += site_a_ep;
-          cpbuf.ext.couple += cross( ra , site_a_F );
-        }
-      }
-
-      template<class CPBufferT, class CellParticlesT>
-      ONIKA_HOST_DEVICE_FUNC inline void operator () (
-        size_t n,
-        CPBufferT& cpbuf,
-        DEBUG_ADDITIONAL_PARAMETERS
-        CellParticlesT cells
-        ) const
-      {
-        const auto & p = *(this->p);
-               
-        for(size_t i=0;i<n;i++)
-        {
-          size_t cell_b=0, p_b=0;
-          cpbuf.nbh.get(i,cell_b,p_b);
-          const auto orient_b = cells[cell_b][field::orient][p_b];
-          const Mat3d mat_b = quaternion_to_matrix( orient_b );
-          const Vec3d mol_b_r = { cpbuf.drx[i] , cpbuf.dry[i] , cpbuf.drz[i] };
-          const auto weight = cpbuf.nbh_data.get(i);
-
-          for(unsigned int sub_atom_a=0; sub_atom_a<p.m_n_atoms; ++sub_atom_a)
+          else // particle B is a single atom
           {
-            const unsigned int type_a = p.m_atoms[sub_atom_a].m_atom_type;
-            const Vec3d ra = cpbuf.ext.mol_atom_ra[sub_atom_a];
-            Vec3d site_a_F = { 0., 0., 0. };
-            double site_a_ep = 0.;
-          
-            for(unsigned int sub_atom_b=0; sub_atom_b<p.m_n_atoms; ++sub_atom_b)
+            for(unsigned int sub_atom_a=0; sub_atom_a < cpbuf.ext.n_atoms_a ; ++sub_atom_a)
             {
-              const unsigned int type_b = p.m_atoms[sub_atom_b].m_atom_type;
-              const unsigned int pair_id = unique_pair_id(type_a,type_b);
+              const unsigned int type_a = p.m_atoms[ cpbuf.ext.atoms_start_a + sub_atom_a ].m_atom_type;
+              const Vec3d ra = cpbuf.ext.mol_atom_ra[ sub_atom_a ]; // mat_a * p.m_atoms[sub_atom_a].m_pos;
+              const unsigned int pair_id = unique_pair_id(type_a,rm_type_b);
               const auto& pp = p.m_pair_params[pair_id]; 
-              const Vec3d rb =  mol_b_r + mat_b * p.m_atoms[sub_atom_b].m_pos;
-              const Vec3d dr = rb - ra;
+              const Vec3d dr = mol_b_r - ra;
               const double rcut2 = pp.rcut * pp.rcut;
               const double d2 = norm2(dr);
               if( d2 <= rcut2 && weight > 0.0 )
               {
                 const double r = sqrt(d2);
-                double e=0.0, de=0.0;
-
-#               if USTAMP_POTENTIAL_HANDLE_FORCE_WEIGHTING
-                USTAMP_POTENTIAL_COMPUTE( pp.p, pp.pair_params, r, e, de , weight );
-#               else
-                USTAMP_POTENTIAL_COMPUTE( pp.p, pp.pair_params, r, e, de );
-                e *= weight;
-                de *= weight;
-#               endif
+                double e=0.0, de=0.0;                  
+                USTAMP_POTENTIAL_COMPUTE_WEIGHT( pp.p, pp.pair_params, r, e, de , weight );
                 e -= pp.ecut * weight;
                 de /= r;
-                
-                site_a_F += de * dr;
-                site_a_ep += e * 0.5;
+                const Vec3d site_a_F = de * dr;
+                cpbuf.ext.force  += site_a_F;
+                cpbuf.ext.couple += cross( ra , site_a_F );
+                cpbuf.ext.ep     += e * 0.5;
               }
             }
-            cpbuf.ext.force  += site_a_F;
-            cpbuf.ext.ep     += site_a_ep;
-            cpbuf.ext.couple += cross( ra , site_a_F );
+          }
+          
+        }
+        else // central particle a is a single atom
+        {
+          if( n_atoms_b > 1 )
+          {
+            const auto orient_b = cells[cell_b][field::orient][p_b];
+            const Mat3d mat_b = quaternion_to_matrix( orient_b );
+            for(unsigned int sub_atom_b=0; sub_atom_b<n_atoms_b; ++sub_atom_b)
+            {
+              const unsigned int type_b = p.m_atoms[ atoms_start_b + sub_atom_b ].m_atom_type;
+              const unsigned int pair_id = unique_pair_id(cpbuf.ext.type_a,type_b);
+              const auto& pp = p.m_pair_params[pair_id]; 
+              const Vec3d dr = mol_b_r + mat_b * p.m_atoms[ atoms_start_b + sub_atom_b ].m_pos;
+              const double rcut2 = pp.rcut * pp.rcut;
+              const double d2 = norm2(dr);
+              if( d2 <= rcut2 && weight > 0.0 )
+              {
+                const double r = sqrt(d2);
+                double e=0.0, de=0.0;                  
+                USTAMP_POTENTIAL_COMPUTE_WEIGHT( pp.p, pp.pair_params, r, e, de , weight );
+                e -= pp.ecut * weight;
+                de /= r;
+                cpbuf.ext.force += de * dr;
+                cpbuf.ext.ep    += e * 0.5;
+              }
+            }
+          }
+          else // single atom pair, just a basic pair potential
+          {
+            const unsigned int pair_id = unique_pair_id(cpbuf.ext.type_a,rm_type_b);
+            const auto& pp = p.m_pair_params[pair_id]; 
+            const Vec3d dr = mol_b_r;
+            const double rcut2 = pp.rcut * pp.rcut;
+            const double d2 = norm2(dr);
+            if( d2 <= rcut2 && weight > 0.0 )
+            {
+              const double r = sqrt(d2);
+              double e=0.0, de=0.0;                  
+              USTAMP_POTENTIAL_COMPUTE_WEIGHT( pp.p, pp.pair_params, r, e, de , weight );
+              e -= pp.ecut * weight;
+              de /= r;
+              cpbuf.ext.force += de * dr;
+              cpbuf.ext.ep    += e * 0.5;
+            }
           }
         }
-        //printf("%d nbh, %d interactions\n",int(n),int(nPairs));
       }
 
       template<class CPBufferT, class CellParticlesT>

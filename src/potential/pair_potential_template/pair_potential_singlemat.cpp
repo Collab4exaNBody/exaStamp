@@ -136,7 +136,9 @@ namespace exaStamp
     ADD_SLOT( double                    , rcut_max             , INPUT_OUTPUT , 0.0 );
     ADD_SLOT( exanb::GridChunkNeighbors , chunk_neighbors      , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
     ADD_SLOT( ParticleSpecies           , species              , INPUT , OPTIONAL );
+
     ADD_SLOT( std::string               , type                 , INPUT , OPTIONAL );
+    
     ADD_SLOT( bool                      , ghost                , INPUT , false );
     ADD_SLOT( GridT                     , grid                 , INPUT_OUTPUT );
     ADD_SLOT( Domain                    , domain               , INPUT , REQUIRED );
@@ -161,12 +163,13 @@ namespace exaStamp
           lerr_stream() << "no species input, cannot continue" << std::endl;
           std::abort();
         }
+        
+        // we need to specify a particular species only for mono-material pair potential
         size_t specy_index = 0;
-#       ifndef USTAMP_POTENTIAL_MULTI_PARAM
+#       if !defined(USTAMP_POTENTIAL_RIGIDMOL) && !defined(USTAMP_POTENTIAL_MULTI_PARAM)
         if( species.size() > 1 && ! type_has_value )
         {
-          lerr_stream() <<"Error: exactly 1 atom type expected (single material) but found "<<species.size()<<std::endl;
-          std::abort();
+          fatal_error() <<"Error: exactly 1 atom type expected (single material) but found "<<species.size()<<std::endl;
         }
         if( type_has_value )
         {
@@ -198,18 +201,18 @@ namespace exaStamp
           ldbg<<"param_max_rcut = "<< param_max_rcut<<std::endl;
         }
 
-#       if defined(USTAMP_POTENTIAL_RIGIDMOL)  
-        if( ! species.empty() )
+        for(size_t i=0;i<species.size();i++)
         {
-          auto & rigidmol = species.at(specy_index);
-          size_t na = rigidmol.m_rigid_atom_count;
-          for(size_t j=0;j<na;j++)
+          const auto & sp = species.at(i);
+          if( sp.m_rigid_atom_count > 1 )
           {
-            rigid_mol_max_radius = std::max( rigid_mol_max_radius , norm( rigidmol.m_rigid_atoms[j].m_pos ) );
+            for(size_t j=0;j<sp.m_rigid_atom_count;j++)
+            {
+              rigid_mol_max_radius = std::max( rigid_mol_max_radius , norm( sp.m_rigid_atoms[j].m_pos ) );
+            }
           }
         }
         ldbg << "rigidmol max radius = " << rigid_mol_max_radius << std::endl;
-#       endif
 
 #       endif // defined(USTAMP_POTENTIAL_RIGIDMOL) || defined(USTAMP_POTENTIAL_MULTI_PARAM)
 
@@ -235,20 +238,14 @@ namespace exaStamp
 #         ifdef USTAMP_POTENTIAL_RIGIDMOL
           using MultiPairParams = PRIV_NAMESPACE_NAME::RigidMolPotentialParameters;
           using SinglePairParam = PRIV_NAMESPACE_NAME::RigidMolPotentialPairParam;
-          const size_t specy_index = compute_pair_scratch.species_index;
-          if( species.at(specy_index).m_rigid_atom_count <= 1 )
-          {
-            lerr_stream() << "Rigid molecule pair potential cannot be applied on mono-atomic molecule '"<<species.at(specy_index).name()<<"'"<<std::endl;
-            std::abort();
-          }
-          bool rebuild_force_op_parameters = ( compute_pair_scratch.cp_force.p==nullptr ) ? true : ( compute_pair_scratch.cp_force.p->m_n_atoms != species.at(specy_index).m_rigid_atom_count );
 #         endif
 
 #         ifdef USTAMP_POTENTIAL_MULTI_PARAM
           using MultiPairParams = PRIV_NAMESPACE_NAME::PotentialMultiParameters;
           using SinglePairParam = PRIV_NAMESPACE_NAME::PotentialPairParam;
-          bool rebuild_force_op_parameters = ( compute_pair_scratch.cp_force.p==nullptr );
 #         endif
+
+          const bool rebuild_force_op_parameters = ( compute_pair_scratch.cp_force.p==nullptr );
 
           if( rebuild_force_op_parameters )
           {
@@ -261,19 +258,55 @@ namespace exaStamp
             auto & pot_params = compute_pair_scratch.parameters_storage[0];
 #           endif
 
-#           ifdef USTAMP_POTENTIAL_RIGIDMOL
-            pot_params.m_n_atoms = species.at(specy_index).m_rigid_atom_count;
-            for(unsigned int a=0;a<pot_params.m_n_atoms;a++)
+            // special check for optimizations :
+            // all singla atom species must declared first, then all rigid molecule.
+            // this way we can account only for the first Ns single atom species to build set of type pairs
+            size_t first_rigid_molecule_index = species.size();
+            for(size_t i=0;i<species.size();i++)
             {
-              pot_params.m_atoms[a] = species.at(specy_index).m_rigid_atoms[a];
+              if( species[i].m_rigid_atom_count < 1 )
+              {
+                fatal_error()<<"rigid_atom_count must be 1 or more"<<std::endl;
+              }
+              if( species[i].m_rigid_atom_count > 1 )
+              {
+                first_rigid_molecule_index = std::min( first_rigid_molecule_index , i );
+              }
+              else if( i > first_rigid_molecule_index )
+              {
+                fatal_error()<<"All single atom species must be declared first (before rigid molecules)"<<std::endl;
+              }
             }
+            ldbg << "nb species = "<<species.size()<<" , nb single atoms = "<<first_rigid_molecule_index<<std::endl;
+
+#           ifdef USTAMP_POTENTIAL_RIGIDMOL
+            size_t total_rigidmol_atoms = 0;
+            for(size_t i=0;i<species.size();i++)
+            {
+              const size_t rma = species.at(i).m_rigid_atom_count;
+              pot_params.m_n_atoms[i] = rma;
+              pot_params.m_atoms_start[i] = total_rigidmol_atoms;
+              ldbg << "Type "<<i<<" : atoms="<<pot_params.m_n_atoms[i]<<" , start="<<pot_params.m_atoms_start[i]<<std::endl;
+              if( rma > 1 )
+              {
+                if( (total_rigidmol_atoms+rma) > MultiPairParams::MAX_ALL_MOLECULE_ATOMS )
+                {
+                  fatal_error() << "Too many rigid molecule atoms (max="<<MultiPairParams::MAX_ALL_MOLECULE_ATOMS<<")"<<std::endl;
+                }
+                for(size_t a=0;a<rma;a++)
+                {
+                  pot_params.m_atoms[total_rigidmol_atoms+a] = species.at(i).m_rigid_atoms[a];
+                }
+                total_rigidmol_atoms += rma;
+              }
+            }
+            ldbg << "total_rigidmol_atoms = "<<total_rigidmol_atoms<<std::endl;
 #           endif
 
-            const unsigned int n_type_pairs = unique_pair_count( species.size() );
+            const unsigned int n_type_pairs = unique_pair_count( first_rigid_molecule_index );
             if( n_type_pairs > MultiPairParams::MAX_TYPE_PAIR_IDS )
             {
-              lerr_stream() << "Too many atom types for singlemat rigid molecule implementation. Increase MAX_TYPE_PAIR_IDS"<<std::endl;
-              std::abort();
+              fatal_error() << "Too many atom types for singlemat rigid molecule implementation. Increase MAX_TYPE_PAIR_IDS"<<std::endl;
             }
  
             ldbg << "n_type_pairs = "<<n_type_pairs<<" , m_user_pot_parameters="<< (void*)parameters.m_user_pot_parameters <<std::endl;
@@ -282,6 +315,10 @@ namespace exaStamp
             {
               unsigned int type_a=0, type_b=0;
               pair_id_to_type_pair( pair_id, type_a, type_b );
+              if( type_a >= first_rigid_molecule_index || type_b >= first_rigid_molecule_index )
+              {
+                fatal_error() << "Inconsistent atom type or not a single atom type : type_a="<<type_a<<", type_b="<<type_b<<", Nspecies="<<species.size()<<", Nsingle="<<first_rigid_molecule_index<<std::endl;
+              }
               pot_params.m_pair_params[pair_id] = SinglePairParam {};
               pot_params.m_pair_params[pair_id].p = compute_pair_scratch.common_parameters;
               pot_params.m_pair_params[pair_id].rcut = rcut; 

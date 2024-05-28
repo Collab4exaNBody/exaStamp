@@ -15,7 +15,7 @@ configuration:
   logging:
     debug: false
   debug:
-    filter: [".*write_dump.*" , ".*read_dump.*" ]
+    filter: [".*write_dump.*" , ".*read_dump.*" , ".*ljrf_rigidmol_force" ]
 
 # best config for GPU :
 chunk_neighbors:
@@ -24,7 +24,6 @@ chunk_neighbors:
     build_particle_offset: true
 
 ljrf_rigidmol_force:
-  type: H2O
   rcut: 8 ang
   parameters:
     - { type_a: O , type_b: O , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } , lj_rcut: 8 ang , lj: { epsilon: 1.286776984E-21 J , sigma: 0.31589E-09 m } } }
@@ -59,10 +58,10 @@ input_data:
 
 global:
   dt: 5.0e-4 ps
-#  init_temperature: 280 K
-  simulation_end_iteration: 9020
+  simulation_end_iteration: 9010
   simulation_log_frequency: 10
   simulation_dump_frequency: -1
+  rcut_inc: 0.5 ang
 
 final_dump: nop
 
