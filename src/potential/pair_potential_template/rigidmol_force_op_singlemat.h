@@ -37,11 +37,9 @@ namespace exaStamp
   struct RigidMoleculePairContext
   {
     Vec3d mol_atom_ra[MAX_RIGID_MOLECULE_ATOMS];
-    /*
     Vec3d force;
     Vec3d couple;
     double ep;
-    */
   };
 
   namespace PRIV_NAMESPACE_NAME
@@ -87,18 +85,15 @@ namespace exaStamp
         {
           cpbuf.ext.mol_atom_ra[sub_atom_a] = mat_a * p.m_atoms[sub_atom_a].m_pos;
         }
-        /*
         cpbuf.ext.force = Vec3d{ 0. , 0. , 0. };
         cpbuf.ext.couple = Vec3d{ 0. , 0. , 0. };
         cpbuf.ext.ep = 0.0;
-        */
       }
 
       template<class CPBufferT, class CellParticlesT>
       ONIKA_HOST_DEVICE_FUNC inline void operator () (
         CPBufferT& cpbuf,
         const Vec3d& dr, double d2,
-        double& fx, double& fy, double& fz, double& ep, Vec3d& couple,
         DEBUG_ADDITIONAL_PARAMETERS
         CellParticlesT cells,size_t cell_b,size_t p_b,
         double weight
@@ -117,7 +112,6 @@ namespace exaStamp
           Vec3d site_a_F = { 0., 0., 0. };
           double site_a_ep = 0.;
         
-          // calcul sub-a
           for(unsigned int sub_atom_b=0; sub_atom_b<p.m_n_atoms; ++sub_atom_b)
           {
             const unsigned int type_b = p.m_atoms[sub_atom_b].m_atom_type;
@@ -129,17 +123,16 @@ namespace exaStamp
             const double d2 = norm2(dr);
             if( d2 <= rcut2 && weight > 0.0 )
             {
-              //++ nPairs;
               const double r = sqrt(d2);
               double e=0.0, de=0.0;
               
-#               if USTAMP_POTENTIAL_HANDLE_FORCE_WEIGHTING
+#             if USTAMP_POTENTIAL_HANDLE_FORCE_WEIGHTING
               USTAMP_POTENTIAL_COMPUTE( pp.p, pp.pair_params, r, e, de , weight );
-#               else
+#             else
               USTAMP_POTENTIAL_COMPUTE( pp.p, pp.pair_params, r, e, de );
               e *= weight;
               de *= weight;
-#               endif
+#             endif
               e -= pp.ecut * weight;
               de /= r;
               
@@ -147,21 +140,74 @@ namespace exaStamp
               site_a_ep += e * 0.5;
             }
           }
-          // _virial += ???
-          
-          fx += site_a_F.x;
-          fy += site_a_F.y;
-          fz += site_a_F.z;
-          ep += site_a_ep;
-          couple += cross( ra , site_a_F );
-          /*
           cpbuf.ext.force  += site_a_F;
           cpbuf.ext.ep     += site_a_ep;
           cpbuf.ext.couple += cross( ra , site_a_F );
-          */
         }
       }
-/*
+
+      template<class CPBufferT, class CellParticlesT>
+      ONIKA_HOST_DEVICE_FUNC inline void operator () (
+        size_t n,
+        CPBufferT& cpbuf,
+        DEBUG_ADDITIONAL_PARAMETERS
+        CellParticlesT cells
+        ) const
+      {
+        const auto & p = *(this->p);
+               
+        for(size_t i=0;i<n;i++)
+        {
+          size_t cell_b=0, p_b=0;
+          cpbuf.nbh.get(i,cell_b,p_b);
+          const auto orient_b = cells[cell_b][field::orient][p_b];
+          const Mat3d mat_b = quaternion_to_matrix( orient_b );
+          const Vec3d mol_b_r = { cpbuf.drx[i] , cpbuf.dry[i] , cpbuf.drz[i] };
+          const auto weight = cpbuf.nbh_data.get(i);
+
+          for(unsigned int sub_atom_a=0; sub_atom_a<p.m_n_atoms; ++sub_atom_a)
+          {
+            const unsigned int type_a = p.m_atoms[sub_atom_a].m_atom_type;
+            const Vec3d ra = cpbuf.ext.mol_atom_ra[sub_atom_a];
+            Vec3d site_a_F = { 0., 0., 0. };
+            double site_a_ep = 0.;
+          
+            for(unsigned int sub_atom_b=0; sub_atom_b<p.m_n_atoms; ++sub_atom_b)
+            {
+              const unsigned int type_b = p.m_atoms[sub_atom_b].m_atom_type;
+              const unsigned int pair_id = unique_pair_id(type_a,type_b);
+              const auto& pp = p.m_pair_params[pair_id]; 
+              const Vec3d rb =  mol_b_r + mat_b * p.m_atoms[sub_atom_b].m_pos;
+              const Vec3d dr = rb - ra;
+              const double rcut2 = pp.rcut * pp.rcut;
+              const double d2 = norm2(dr);
+              if( d2 <= rcut2 && weight > 0.0 )
+              {
+                const double r = sqrt(d2);
+                double e=0.0, de=0.0;
+
+#               if USTAMP_POTENTIAL_HANDLE_FORCE_WEIGHTING
+                USTAMP_POTENTIAL_COMPUTE( pp.p, pp.pair_params, r, e, de , weight );
+#               else
+                USTAMP_POTENTIAL_COMPUTE( pp.p, pp.pair_params, r, e, de );
+                e *= weight;
+                de *= weight;
+#               endif
+                e -= pp.ecut * weight;
+                de /= r;
+                
+                site_a_F += de * dr;
+                site_a_ep += e * 0.5;
+              }
+            }
+            cpbuf.ext.force  += site_a_F;
+            cpbuf.ext.ep     += site_a_ep;
+            cpbuf.ext.couple += cross( ra , site_a_F );
+          }
+        }
+        //printf("%d nbh, %d interactions\n",int(n),int(nPairs));
+      }
+
       template<class CPBufferT, class CellParticlesT>
       ONIKA_HOST_DEVICE_FUNC inline void operator () (
         CPBufferT& cpbuf,
@@ -177,7 +223,7 @@ namespace exaStamp
         cells[cell_a][field::ep][p_a]     += cpbuf.ext.ep;
         cells[cell_a][field::couple][p_a] += cpbuf.ext.couple;
       }
-*/
+
     };
   }
 
@@ -199,7 +245,7 @@ namespace exanb
 
     static inline constexpr bool HasParticleContextStart      = true;    
     static inline constexpr bool HasParticleContext           = true;
-    static inline constexpr bool HasParticleContextStop       = false;
+    static inline constexpr bool HasParticleContextStop       = true;
   };
 
 }

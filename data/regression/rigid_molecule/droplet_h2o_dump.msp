@@ -20,7 +20,8 @@ configuration:
 # best config for GPU :
 chunk_neighbors:
   config:
-    chunk_size: 4
+    chunk_size: 1
+    build_particle_offset: true
 
 ljrf_rigidmol_force:
   type: H2O
@@ -59,7 +60,7 @@ input_data:
 global:
   dt: 5.0e-4 ps
 #  init_temperature: 280 K
-  simulation_end_iteration: 9100
+  simulation_end_iteration: 9020
   simulation_log_frequency: 10
   simulation_dump_frequency: -1
 

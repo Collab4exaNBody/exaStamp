@@ -74,24 +74,27 @@ namespace exaStamp
     using ForceOp = PRIV_NAMESPACE_NAME::RigidMolForceOp;
     using PotParameters = PRIV_NAMESPACE_NAME::RigidMolPotentialParameters;
     static inline constexpr bool ComputeBufferStoreNeighbors = true;
+    using ComputeBufferExtendedStorage = RigidMoleculePairContext;
     
 #   elif defined(USTAMP_POTENTIAL_MULTI_PARAM) // single potential, multiple pair parameters
 
     using ForceOp = PRIV_NAMESPACE_NAME::PairMultiForceOp;
     using PotParameters = PRIV_NAMESPACE_NAME::PotentialMultiParameters;
     static inline constexpr bool ComputeBufferStoreNeighbors = false;
+    using ComputeBufferExtendedStorage = NoExtraStorage;
     
 #   else  // single potential, single parameters
 
     using ForceOp = PRIV_NAMESPACE_NAME::ForceOp;
     using PotParameters = USTAMP_POTENTIAL_PARAMS;
     static inline constexpr bool ComputeBufferStoreNeighbors = false; // in case of debugging, force this one to true
+    using ComputeBufferExtendedStorage = NoExtraStorage;
     
 #   endif
 
     // compile time constant indicating if grid has virial field
 #   if defined(USTAMP_POTENTIAL_RIGIDMOL)
-    using ComputeFields = FieldSet< field::_fx ,field::_fy ,field::_fz, field::_ep, field::_couple >;
+    using ComputeFields = FieldSet< /* field::_fx ,field::_fy ,field::_fz, field::_ep, field::_couple */ >;
 #   else
     static inline constexpr bool has_virial_field = GridHasField<GridT,field::_virial>::value;
     static inline constexpr bool has_ep_field = GridHasField<GridT,field::_ep>::value;
@@ -429,11 +432,7 @@ namespace exaStamp
     template<bool HasWeight>
     static inline auto make_cp_buf_factory( std::integral_constant<bool,HasWeight> )
     {
-#     if defined(USTAMP_POTENTIAL_RIGIDMOL)
-      return make_empty_pair_buffer<RigidMoleculePairContext>();
-#     else
-      return ComputePairBufferFactory< ComputePairBuffer2<HasWeight,ComputeBufferStoreNeighbors> > {};
-#     endif
+      return ComputePairBufferFactory< ComputePairBuffer2<HasWeight,ComputeBufferStoreNeighbors,ComputeBufferExtendedStorage> > {};
     }
 
     template<bool HasXForm, bool HasWeight>

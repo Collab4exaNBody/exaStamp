@@ -169,7 +169,7 @@ namespace exaStamp
           onika::parallel::parallel_memset( rho_emb_ptr , grid->number_of_particles() , 0.0 , parallel_execution_context() );
 
           auto rho_op_fields = make_field_tuple_from_field_set( FieldSet< field::_type >{} );
-          auto rho_buf_factory = make_empty_pair_buffer<RhoOpExtStorage>();
+          auto rho_buf_factory = ComputePairBufferFactory< ComputePairBuffer2<false,false,RhoOpExtStorage> > {}; // make_empty_pair_buffer<RhoOpExtStorage>();
           if( *eam_symmetry )
           {
             auto rho_optional = make_compute_pair_optional_args( nbh_it_sym, cp_weight , cp_xform , cp_locks, ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{} );
@@ -220,8 +220,8 @@ namespace exaStamp
       
       auto compute_eam_xform_locks = [&](const auto& cp_xform, const auto& cp_locks)
       {
-        if( log_energy ) compute_eam_force( cp_xform, cp_locks, cp_emb_fields_energy_v , make_empty_pair_buffer<ForceOpEnergyExt>() );
-        else             compute_eam_force( cp_xform, cp_locks, cp_emb_fields_v        , make_empty_pair_buffer<ForceOpExt>() );
+        if( log_energy ) compute_eam_force( cp_xform, cp_locks, cp_emb_fields_energy_v , ComputePairBufferFactory< ComputePairBuffer2<false,false,ForceOpEnergyExt> >{} );
+        else             compute_eam_force( cp_xform, cp_locks, cp_emb_fields_v        , ComputePairBufferFactory< ComputePairBuffer2<false,false,ForceOpExt> >{} );
       };
 
       if( domain->xform_is_identity() )
