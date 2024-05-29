@@ -15,21 +15,14 @@ update_particles_fast_body:
 #thermostat:
 #  - langevin_rigidmol
 
-numerical_scheme_verlet_rigidmol:
-  name: scheme
-  body:
-    - push_f_v: { dt_scale: 0.5 }
-    - push_v_r: { dt_scale: 1.0 }
-    - torque_to_quaternion
-    - check_and_update_particles
-    - zero_force_energy # automatically set couple to 0 if couple is present, same for virial
-    - compute_force
-    - force_to_accel
-    - push_f_v: { dt_scale: 0.5 }
-    - push_torque_angmom
-    - thermostat
+verlet_first_half:
+  - push_f_v_r: { dt_scale: 1.0 , xform_mode: INV_XFORM }
+  - push_f_v: { dt_scale: 0.5  , xform_mode: IDENTITY }  
+  - torque_to_quaternion
 
-numerical_scheme: numerical_scheme_verlet_rigidmol
+verlet_second_half:
+  - push_f_v: { dt_scale: 0.5 , xform_mode: IDENTITY }
+  - push_torque_angmom
 
 do_init_temperature:
   - init_mass_center

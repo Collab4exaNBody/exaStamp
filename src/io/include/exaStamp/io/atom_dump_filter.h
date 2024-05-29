@@ -111,7 +111,10 @@ namespace exaStamp
         {
           if( m_ref.m_n_tuples > 0 ) m_ref.m_tuple_avg[f] = m_ref.m_tuple_avg[f] / double(m_ref.m_n_tuples);
         }
-        out<< f.short_name() << ": " << static_cast<FiledPrintType>( m_ref.m_tuple_avg[f] ) << " / "<< static_cast<FiledPrintType>(m_ref.m_tuple_min[f]) <<" / "<< static_cast<FiledPrintType>(m_ref.m_tuple_max[f]) << std::endl;
+        out << f.short_name() << ": " << std::scientific << std::setprecision(6) 
+            << static_cast<FiledPrintType>( m_ref.m_tuple_avg[f] ) << " / "
+            << static_cast<FiledPrintType>( m_ref.m_tuple_min[f] ) << " / "
+            << static_cast<FiledPrintType>( m_ref.m_tuple_max[f] ) << std::endl;
        }
     };
     template<class StreamT> StatsPrinter<StreamT> stats_printer(StreamT & out) { return StatsPrinter<StreamT>{*this,out}; }
