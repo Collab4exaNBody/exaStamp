@@ -224,6 +224,7 @@ namespace exaStamp
         fatal_error() << "Number of particle species too big ("<<particle_species.size()<<")" <<std::endl;
       }
       size_t n_species = particle_species.size() + MAX_PARTICLE_SPECIES * ParticleSpecie::MaxRigidMolAtoms;
+      ldbg << "write modified n_species : "<<n_species<<" = "<<particle_species.size()<<" + "<<MAX_PARTICLE_SPECIES<<" * "<< ParticleSpecie::MaxRigidMolAtoms<<std::endl;
       n += write_func( n_species );
       for(const auto& sp : particle_species) { n += write_func( sp ); }
       n += optional_header_io.write_optional_header( write_func );
@@ -241,8 +242,9 @@ namespace exaStamp
       n += read_func( n_species );
       if( n_species >= MAX_PARTICLE_SPECIES )
       {
-        n_species = n_species % MAX_PARTICLE_SPECIES;
         max_rigid_molecule = n_species / MAX_PARTICLE_SPECIES;
+        n_species = n_species % MAX_PARTICLE_SPECIES;
+        ldbg << "decode n_species in file to n_species="<<n_species<<" , max_rigid_molecule="<<max_rigid_molecule<<std::endl;
       }
       species.resize( n_species );
       

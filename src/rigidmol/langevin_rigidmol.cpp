@@ -52,6 +52,8 @@ namespace exaStamp
       const double friction_ratio       = *(this->friction_ratio);
       const double xsir = xsi * friction_ratio;
 
+      const auto * __restrict__ species_ptr = species->data();
+
       // partie 1
 #     pragma omp parallel
       {
@@ -75,33 +77,14 @@ namespace exaStamp
 
           for(size_t j=0;j<n;j++)
           {
-            int t = type_atom[j];
+            const int t = type_atom[j];
             //recuperation moment inertiel et de la masse
-            Vec3d minert = species->at(t).m_minert;
-            double mass = species->at(t).m_mass;
+            const double mass = species_ptr[t].m_mass;
             //calcul du parametre alpha pour la vitesse du CM
-            double alphaCM = std::exp( - xsi * dt / mass ) ;
+            const double alphaCM = std::exp( - xsi * dt / mass ) ;
             //calcul du terme de dissipation pour le CM
-            double sigmaCM_langevin = std::sqrt( k * T * (1.-alphaCM*alphaCM) / mass ) ;
-            //calcul du parametre alpha pour le moment angulaire
-            Vec3d alphaL = {0. , 0. , 0.};
-            Vec3d sigmaL_langevin = {0. , 0. , 0.};
-            //calcul du terme de dissipation pour le moment angulaire
-            if (minert.x > 0.) 
-            {
-              alphaL.x = std::exp(-xsir * dt / minert.x);
-              sigmaL_langevin.x = std::sqrt( k * T * (1. - alphaL.x * alphaL.x) / minert.x);
-            }
-            if (minert.y > 0.) 
-            { 
-              alphaL.y = std::exp(-xsir * dt / minert.y);
-              sigmaL_langevin.y = std::sqrt( k * T * (1. - alphaL.y * alphaL.y) / minert.y);
-            }
-            if (minert.z > 0.)
-            { 
-              alphaL.z = std::exp(-xsir * dt / minert.z);
-              sigmaL_langevin.z = std::sqrt( k * T * (1. - alphaL.z * alphaL.z) / minert.z);
-            }
+            const double sigmaCM_langevin = std::sqrt( k * T * (1.-alphaCM*alphaCM) / mass ) ;
+
             //application du thermostat sur les vitesses de CM
             //creation vecteur aleatoire
             //distribution uniforme, on ajoute un test sur la norme du vecteur (http://corysimon.github.io/articles/uniformdistn-on-sphere/)
@@ -112,39 +95,64 @@ namespace exaStamp
               vec_alea_v.y = f_rand(re);
               vec_alea_v.z = f_rand(re);
             }
-//            vec_alea_v = vec_alea_v / norm(vec_alea_v);
             vx[j] = alphaCM * vx[j] + sigmaCM_langevin * vec_alea_v.x;
             vy[j] = alphaCM * vy[j] + sigmaCM_langevin * vec_alea_v.y;
             vz[j] = alphaCM * vz[j] + sigmaCM_langevin * vec_alea_v.z;
-            //creation vecteur aleatoire
-            Vec3d vec_alea_L={0., 0., 0.};
-            while (norm(vec_alea_L)<1.e-6)
+
+            if( species_ptr[t].m_rigid_atom_count > 1 )
             {
-              vec_alea_L.x = f_rand(re);
-              vec_alea_L.y = f_rand(re);
-              vec_alea_L.z = f_rand(re);
+              const Vec3d minert = species_ptr[t].m_minert;
+              //calcul du parametre alpha pour le moment angulaire
+              Vec3d alphaL = {0. , 0. , 0.};
+              Vec3d sigmaL_langevin = {0. , 0. , 0.};
+              //calcul du terme de dissipation pour le moment angulaire
+              if (minert.x > 0.) 
+              {
+                alphaL.x = std::exp(-xsir * dt / minert.x);
+                sigmaL_langevin.x = std::sqrt( k * T * (1. - alphaL.x * alphaL.x) / minert.x);
+              }
+              if (minert.y > 0.) 
+              { 
+                alphaL.y = std::exp(-xsir * dt / minert.y);
+                sigmaL_langevin.y = std::sqrt( k * T * (1. - alphaL.y * alphaL.y) / minert.y);
+              }
+              if (minert.z > 0.)
+              { 
+                alphaL.z = std::exp(-xsir * dt / minert.z);
+                sigmaL_langevin.z = std::sqrt( k * T * (1. - alphaL.z * alphaL.z) / minert.z);
+              }
+                          
+              //creation vecteur aleatoire
+              Vec3d vec_alea_L={0., 0., 0.};
+              while (norm(vec_alea_L)<1.e-6)
+              {
+                vec_alea_L.x = f_rand(re);
+                vec_alea_L.y = f_rand(re);
+                vec_alea_L.z = f_rand(re);
+              }
+              //application du thermostat sur le moment angulaire
+              Vec3d angmom_m;
+              //calcul du moment angulaire dans le repere mobile
+              Mat3d mat_lab_bf;
+              mat_lab_bf.m11 = orient[j].w*orient[j].w + orient[j].x*orient[j].x - orient[j].y*orient[j].y - orient[j].z*orient[j].z;
+              mat_lab_bf.m22 = orient[j].w*orient[j].w - orient[j].x*orient[j].x + orient[j].y*orient[j].y - orient[j].z*orient[j].z;
+              mat_lab_bf.m33 = orient[j].w*orient[j].w - orient[j].x*orient[j].x - orient[j].y*orient[j].y + orient[j].z*orient[j].z;
+              mat_lab_bf.m12 = 2.0 * (orient[j].x*orient[j].y + orient[j].w*orient[j].z ); 
+              mat_lab_bf.m21 = 2.0 * (orient[j].x*orient[j].y - orient[j].w*orient[j].z );
+              mat_lab_bf.m13 = 2.0 * (orient[j].x*orient[j].z - orient[j].w*orient[j].y );
+              mat_lab_bf.m31 = 2.0 * (orient[j].x*orient[j].z + orient[j].w*orient[j].y );
+              mat_lab_bf.m23 = 2.0 * (orient[j].y*orient[j].z + orient[j].w*orient[j].x );
+              mat_lab_bf.m32 = 2.0 * (orient[j].y*orient[j].z - orient[j].w*orient[j].x );
+              angmom_m = mat_lab_bf * angmom[j];
+              //application du thermostat
+              angmom_m.x = alphaL.x * angmom_m.x + minert.x * sigmaL_langevin.x * vec_alea_L.x;
+              angmom_m.y = alphaL.y * angmom_m.y + minert.y * sigmaL_langevin.y * vec_alea_L.y;
+              angmom_m.z = alphaL.z * angmom_m.x + minert.z * sigmaL_langevin.z * vec_alea_L.z;
+              //retour dans la base du labo
+              Mat3d mat_bf_lab = transpose(mat_lab_bf);
+              angmom[j] = mat_bf_lab * angmom_m;
             }
-            //application du thermostat sur le moment angulaire
-            Vec3d angmom_m;
-            //calcul du moment angulaire dans le repere mobile
-            Mat3d mat_lab_bf;
-            mat_lab_bf.m11 = orient[j].w*orient[j].w + orient[j].x*orient[j].x - orient[j].y*orient[j].y - orient[j].z*orient[j].z;
-            mat_lab_bf.m22 = orient[j].w*orient[j].w - orient[j].x*orient[j].x + orient[j].y*orient[j].y - orient[j].z*orient[j].z;
-            mat_lab_bf.m33 = orient[j].w*orient[j].w - orient[j].x*orient[j].x - orient[j].y*orient[j].y + orient[j].z*orient[j].z;
-            mat_lab_bf.m12 = 2.0 * (orient[j].x*orient[j].y + orient[j].w*orient[j].z ); 
-            mat_lab_bf.m21 = 2.0 * (orient[j].x*orient[j].y - orient[j].w*orient[j].z );
-            mat_lab_bf.m13 = 2.0 * (orient[j].x*orient[j].z - orient[j].w*orient[j].y );
-            mat_lab_bf.m31 = 2.0 * (orient[j].x*orient[j].z + orient[j].w*orient[j].y );
-            mat_lab_bf.m23 = 2.0 * (orient[j].y*orient[j].z + orient[j].w*orient[j].x );
-            mat_lab_bf.m32 = 2.0 * (orient[j].y*orient[j].z - orient[j].w*orient[j].x );
-            angmom_m = mat_lab_bf * angmom[j];
-            //application du thermostat
-            angmom_m.x = alphaL.x * angmom_m.x + minert.x * sigmaL_langevin.x * vec_alea_L.x;
-            angmom_m.y = alphaL.y * angmom_m.y + minert.y * sigmaL_langevin.y * vec_alea_L.y;
-            angmom_m.z = alphaL.z * angmom_m.x + minert.z * sigmaL_langevin.z * vec_alea_L.z;
-            //retour dans la base du labo
-            Mat3d mat_bf_lab = transpose(mat_lab_bf);
-            angmom[j] = mat_bf_lab * angmom_m;
+            
           }
         }
         GRID_OMP_FOR_END

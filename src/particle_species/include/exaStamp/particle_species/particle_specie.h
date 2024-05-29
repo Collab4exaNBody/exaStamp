@@ -15,7 +15,7 @@
 #include <onika/memory/allocator.h>
 
 #ifndef XSTAMP_MAX_RIGID_MOLECULE_ATOMS
-#define XSTAMP_MAX_RIGID_MOLECULE_ATOMS 16
+#define XSTAMP_MAX_RIGID_MOLECULE_ATOMS 4
 #endif
 
 namespace exaStamp

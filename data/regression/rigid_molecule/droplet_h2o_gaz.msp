@@ -14,9 +14,9 @@ configuration:
     summary: true
   logging:
     parallel: false
-    debug: false
+    debug: true
   debug:
-    filter: [ ".*grid_particle_slicing" , ".*print_plot1d" ]
+    filter: [ ".*write_dump_rigidmol" , ".*read_dump_rigidmol" ]
 
 chunk_neighbors:
   config:
@@ -35,13 +35,13 @@ ljrf_rigidmol_force:
 
 compute_force: 
   - ljrf_rigidmol_force
-#  - wall_v2:
-#      normal: [ 1.0, 0.0, 0.0 ]
-#      offset: -360.0 ang
-#      cutoff: 2.4 ang
-#      epsilon: 1.0e-19 J
-#      exponent: 2
-#      collective_stats: true
+  - wall_v2:
+      normal: [ 1.0, 0.0, 0.0 ]
+      offset: 0.0 ang
+      cutoff: 2.4 ang
+      epsilon: 1.0e-19 J
+      exponent: 2
+      collective_stats: true
 
 grid_flavor: grid_flavor_rigidmol
 
@@ -53,23 +53,23 @@ grid_flavor: grid_flavor_rigidmol
 
 global:
   dt: 5.0e-4 ps
-  simulation_end_iteration: 10
+  simulation_end_iteration: 1000
   simulation_log_frequency: 10
-  analysis_dump_frequency: 10
-  simulation_dump_frequency: 1000
+#  analysis_dump_frequency: 10
+  simulation_dump_frequency: 50
   rcut_inc: 1.5 ang
 
 grid_cell_particle_splatting:
   splat_size: 4.0 ang
   grid_subdiv: 3
 
-dump_data: dump_data_grid_vtk
+#dump_data: dump_data_grid_vtk
 
-#thermostat:
-#  - langevin_rigidmol:
-#      T: 320 K
-#      friction : 5.0e1
-#      friction_ratio : 1.
+xx_thermostat:
+  - langevin_rigidmol:
+      T: 320 K
+      friction : 5.0e1
+      friction_ratio : 1.
 
 replicate_domain:
   repeat: [ 1 , 1 , 1 ]
