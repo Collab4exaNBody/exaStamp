@@ -7,7 +7,7 @@ configuration:
   logging:
     debug: true
   debug:
-    filter: [ ".*read_xyz_molecules" , ".*id_map" ]
+    filter: [ ".*read_xyz_molecules" , ".*id_map" , ".*molecule_pair_weight" ]
   profiling:
     summary: false
 

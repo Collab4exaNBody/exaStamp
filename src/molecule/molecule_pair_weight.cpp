@@ -18,6 +18,7 @@
 #include <exanb/particle_neighbors/chunk_neighbors_apply.h>
 
 #include <exaStamp/molecule/molecule_species.h>
+#include <exaStamp/molecule/intramolecular_pair_weight.h>
 
 #include <unordered_set>
 
@@ -30,11 +31,13 @@ namespace exaStamp
     >
   class MoleculePairWeightChunk : public OperatorNode
   {
-    using WeightMap = std::map<std::string, std::vector<double> >;
-
     ADD_SLOT( GridT              , grid              , INPUT , REQUIRED);    
-    ADD_SLOT( exanb::GridChunkNeighbors , chunk_neighbors   , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
-    ADD_SLOT( WeightMap          , weight            , INPUT , REQUIRED );
+    ADD_SLOT( exanb::GridChunkNeighbors , chunk_neighbors   , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );    
+
+    ADD_SLOT( MoleculeSpeciesVector , molecules , INPUT , DocString{"Molecule descriptions"} );
+
+    ADD_SLOT( IntramolecularPairWeighting , weight   , INPUT , IntramolecularPairWeighting{} );
+
     ADD_SLOT( CompactGridPairWeights , compact_nbh_weight , INPUT_OUTPUT );
     
     ADD_SLOT( ParticleSpecies    , species           , INPUT , REQUIRED );
@@ -48,58 +51,44 @@ namespace exaStamp
     inline void execute () override final
     {
       assert( chunk_neighbors->number_of_cells() == grid->number_of_cells() );
-
       const bool no_intramolecular = *ignore_intramolecular;
-      const WeightMap&        weight_map = *weight;
-      // NeighborPairWeight&      nbh_weight = *(this->nbh_weight);
+      
+      std::map< std::string , size_t > molecule_name_map;
+      size_t n_molecules = molecules->m_molecules.size();
+      for(size_t i=0;i<n_molecules;i++)
+      {
+        molecule_name_map[ molecules->m_molecules[i].name() ] = i;
+      }
+      std::unordered_map< uint64_t , MolecularPairWeight > molid_weight_map;
 
-/*
-      const ChemicalBonds&      bonds     =  *chemical_bonds;
-      const ChemicalAngles&     angles    =  *chemical_angles;
-      const ChemicalTorsions&   torsions  =  *chemical_torsions;
-*/
+      ldbg << "Intramolecular pair weighting map :"<<std::endl;      
+      for( const auto & p : weight->m_molecule_weight )
+      {
+        molid_weight_map[ molecule_name_map[p.first] ] = p.second;
+        ldbg << p.first << " : bond="<<p.second.m_bond_weight<<" , bond_rf="<<p.second.m_rf_bond_weight
+                        <<" , bend="<<p.second.m_bend_weight<<" , bend_rf="<<p.second.m_rf_bend_weight
+                        <<" , torsion="<<p.second.m_torsion_weight<<" , torsion_rf="<<p.second.m_rf_torsion_weight<<std::endl;
+      }
 
       auto cells = grid->cells_accessor();
       auto field_idmol = grid->field_accessor( field::idmol );
       size_t n_cells = grid->number_of_cells(); // nbh.size();
 
       CompactGridPairWeights& cgpw = *compact_nbh_weight;
-//      cgpw.m_cell_weights.clear();
       cgpw.m_cell_weights.resize( n_cells );
-
-      size_t nspecies = species->size();
-      std::vector<double> mol_weight(nspecies*3,1.0);
-      if( ! no_intramolecular )
-      {
-        if( !chemical_bonds.has_value() || !chemical_angles.has_value() || !chemical_torsions.has_value() )
-        {
-          fatal_error()<<"chemical_bonds, chemical_angles and chemical_torsions must be defined unless ignore_intramolecular is set to true"<<std::endl;
-        }
-        for(size_t i=0;i<nspecies;i++)
-        {
-	         const auto & w = weight_map.at(species->at(i).molecule_name());
-           mol_weight[i*3+0] = w[0];
-           mol_weight[i*3+1] = w[1];
-           mol_weight[i*3+2] = w[2];
-        }
-      }
 
       const IJK dims = grid->dimension();
       int gl = grid->ghost_layers();
 
+      size_t n_total_nbh=0, n_positive_weights=0;
+
       // index chemical links by their extrema to rapidly find if an atom pair belongs to a chemical link
       MultiThreadedConcurrentMap< std::unordered_map< std::array<uint64_t,2>, uint64_t> , 256 > chemicalMap;
 
-      //auto T0 = std::chrono::high_resolution_clock::now();
-      //auto T1 = T0;
-      //auto T2 = T0;
-
-      size_t n_total_nbh=0, n_positive_weights=0;
-
-
 #     pragma omp parallel
       {
-#       pragma omp for nowait
+
+#       pragma omp for
         for(size_t i=0;i<n_cells;i++) cgpw.m_cell_weights[i].clear();
 
         if( ! no_intramolecular )
@@ -108,25 +97,23 @@ namespace exaStamp
           const size_t n_angles = chemical_angles->size();
           const size_t n_torsions = chemical_torsions->size();
 
-        // parallel construction of chemical link map : extrema pair -> link type (0 bond, 1 angle, 2 torsion)
-#         pragma omp for nowait
+          // parallel construction of chemical link map : extrema pair -> link type (0 bond, 1 angle, 2 torsion)
+#         pragma omp for
           for(size_t i=0;i<n_torsions;i++) chemicalMap.insert( { { (*chemical_torsions)[i][0] , (*chemical_torsions)[i][3] } , 2 } );
           
-#         pragma omp for nowait
+#         pragma omp barrier
+
+#         pragma omp for
           for(size_t i=0;i<n_angles;i++) chemicalMap.insert( { { (*chemical_angles)[i][0] , (*chemical_angles)[i][2] } , 1 } );
           
-#         pragma omp for nowait
+#         pragma omp barrier
+
+#         pragma omp for
           for(size_t i=0;i<n_bonds;i++) chemicalMap.insert( { (*chemical_bonds)[i] , 0 } );
         }
 
 #       pragma omp barrier
 
-/*
-#       pragma omp single
-        {
-          T1 = std::chrono::high_resolution_clock::now();
-        }
-*/
         GRID_OMP_FOR_BEGIN(dims-2*gl,_,block_loc, schedule(dynamic) reduction(+:n_total_nbh,n_positive_weights) )
         {
           IJK loc_a = block_loc + gl;
@@ -140,7 +127,7 @@ namespace exaStamp
           const auto& sp = *species;
   
           apply_cell_particle_neighbors(*grid, *chunk_neighbors, cell_a, loc_a, std::false_type() /* not symetric */,
-            [cells,cell_a,no_intramolecular,field_idmol,&cgpw,idmol_a,id_a,type_a,&chemicalMap,&mol_weight,&sp ,&n_total_nbh, &n_positive_weights]
+            [cells,cell_a,no_intramolecular,field_idmol,&cgpw,idmol_a,id_a,type_a,&chemicalMap,&molid_weight_map,&sp ,&n_total_nbh, &n_positive_weights]
             ( unsigned int p_a, size_t cell_b, unsigned int p_b , size_t p_nbh_index )
             {
               const uint64_t* idmol_b = cells[cell_b].field_pointer_or_null(field_idmol);
@@ -181,21 +168,21 @@ namespace exaStamp
                 // Second case----------------------------------------------------------------
                 // If the first term of "weight" is -1, no extramolecular potential
                 // applied between atoms of a same molecule
-                else if( mol_weight[int(type_a[p_a])*3+0] == -1 /*bond_weight[ type_a[p_a] ] == -1*/ )
-                {
-                  pair_weight = 0.0;
-                }
                 else
                 {
-                  assert( mol_weight[int(type_a[p_a])*3+0] == mol_weight[int(type_b[p_b])*3+0] );
-                  assert( mol_weight[int(type_a[p_a])*3+1] == mol_weight[int(type_b[p_b])*3+1] );
-                  assert( mol_weight[int(type_a[p_a])*3+2] == mol_weight[int(type_b[p_b])*3+2] );
-                  
+                  int moltype_a = molecule_type_from_id( idmol_a[p_a] );
+                  assert( moltype_a == molecule_type_from_id( idmol_b[p_b] ) );
                   // Third case : we check weights----------------------------------------------
                   auto it = chemicalMap.find(pair);
                   if( it != chemicalMap.end() )
                   {
-                    pair_weight = mol_weight[int(type_a[p_a])*3 + it->second ] ;
+                    if( it->second == 0 ) pair_weight = molid_weight_map[moltype_a].m_bond_weight;
+                    else if( it->second == 1 ) pair_weight = molid_weight_map[moltype_a].m_bend_weight;
+                    else if( it->second == 2 ) pair_weight = molid_weight_map[moltype_a].m_torsion_weight;
+                    else
+                    {
+                      fatal_error() << "Internal error: inconsistent chemical link type "<<it->second<<" in chemicalMap"<<std::endl;
+                    }
                   }
                   else
                   {

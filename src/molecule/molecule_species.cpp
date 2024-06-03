@@ -19,7 +19,9 @@ namespace exaStamp
     inline void execute ()  override final
     {
       for(const auto& mol:molecules->m_molecules)
-      ldbg << "+ molecule "<< mol.name() << std::endl;
+      {
+        ldbg << "+ molecule "<< mol.name() << std::endl;
+      }
     }
 
   };
