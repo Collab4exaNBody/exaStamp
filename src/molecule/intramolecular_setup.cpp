@@ -22,6 +22,7 @@
 #include <exanb/core/particle_id_codec.h>
 
 #include <exaStamp/molecule/pair_potential_parameters.h>
+#include <exaStamp/molecule/intramolecular_pair_weight.h>
 
 #include <onika/oarray_stream.h>
 
@@ -90,9 +91,7 @@ namespace exaStamp
   
   template< class GridT >
   class IntramolecularSetup : public OperatorNode
-  {    
-    using WeightMap = std::map<std::string, std::vector<double> >;
-
+  {
     ADD_SLOT( GridT    , grid   , INPUT_OUTPUT);
 
     ADD_SLOT( ParticleSpecies       , species           , INPUT , REQUIRED );
@@ -106,7 +105,7 @@ namespace exaStamp
     ADD_SLOT( ImpropersPotentialParameters , potentials_for_impropers , INPUT, OPTIONAL );
 
     ADD_SLOT( IntramolecularPairUserParamVector, potentials_for_pairs , INPUT , OPTIONAL );
-    ADD_SLOT( WeightMap          , weight            , INPUT , OPTIONAL );
+    ADD_SLOT( IntramolecularPairWeighting , weight   , INPUT , IntramolecularPairWeighting{} );
 
     ADD_SLOT( MoleculeSetComputeParams     , molecule_compute_parameters , INPUT_OUTPUT, DocString{"Intramolecular functionals' parameters"} );
 
@@ -352,9 +351,12 @@ namespace exaStamp
       // look for and initialize pair potentials
       if( weight.has_value() )
       {
-        for(const auto& pw:*weight)
+        ldbg << "Intramolecular pair weighting map :"<<std::endl;      
+        for( const auto & p : weight->m_molecule_weight )
         {
-          ldbg <<pw.first<<" pair weighting : bond="<<pw.second[0]<<" angle="<<pw.second[1]<<" torsion="<<pw.second[2]<<std::endl;
+          ldbg << p.first << " : bond="<<p.second.m_bond_weight<<" , bond_rf="<<p.second.m_rf_bond_weight
+                          <<" , bend="<<p.second.m_bend_weight<<" , bend_rf="<<p.second.m_rf_bend_weight
+                          <<" , torsion="<<p.second.m_torsion_weight<<" , torsion_rf="<<p.second.m_rf_torsion_weight<<std::endl;
         }
       }
 
@@ -363,7 +365,7 @@ namespace exaStamp
         lout << "molecule #"<<m<<" : '"<<molecules->m_molecules.at(m).name()<<"'" << std::endl;
         if( weight.has_value() )
         {
-          if( weight->find( molecules->m_molecules.at(m).name() ) == weight->end() )
+          if( weight->m_molecule_weight.find( molecules->m_molecules.at(m).name() ) == weight->m_molecule_weight.end() )
           {
             fatal_error() << "weight has no entry for molecule name '"<<molecules->m_molecules.at(m).name()<<"'" << std::endl;
           }
@@ -432,28 +434,25 @@ namespace exaStamp
                 const char* type="pair";
                 if( weight.has_value() )
                 {
-                  if( torsions.find({i,j}) != torsions.end() )
+                  if( bonds.find({i,j}) != bonds.end() )
                   {
-                    w = weight->at(molecules->m_molecules.at(m).name())[2];
-                    type="torsion";
-//                    if(w==0.0) ldbg<<"pair "<<i<<" / "<<j<<" skipped because torsion weight=0"<<std::endl;
-                  }
-                  else if( bends.find({i,j}) != bends.end() )
-                  {
-                    w = weight->at(molecules->m_molecules.at(m).name())[1];
-                    type="bend";
-//                    if(w==0.0) ldbg<<"pair "<<i<<" / "<<j<<" skipped because bend weight=0"<<std::endl;
-                  }
-                  else if( bonds.find({i,j}) != bonds.end() )
-                  {
-                    w = weight->at(molecules->m_molecules.at(m).name())[0];
+                    w = weight->m_molecule_weight.at(molecules->m_molecules.at(m).name()).m_bond_weight;
                     type="bond";
 //                    if(w==0.0) ldbg<<"pair "<<i<<" / "<<j<<" skipped because bond weight=0"<<std::endl;
                   }
-                  else
+                  else if( bends.find({i,j}) != bends.end() )
                   {
-                    w = 1.0;
+                    w = weight->m_molecule_weight.at(molecules->m_molecules.at(m).name()).m_bend_weight;
+                    type="bend";
+//                    if(w==0.0) ldbg<<"pair "<<i<<" / "<<j<<" skipped because bend weight=0"<<std::endl;
                   }
+                  else if( torsions.find({i,j}) != torsions.end() )
+                  {
+                    w = weight->m_molecule_weight.at(molecules->m_molecules.at(m).name()).m_torsion_weight;
+                    type="torsion";
+//                    if(w==0.0) ldbg<<"pair "<<i<<" / "<<j<<" skipped because torsion weight=0"<<std::endl;
+                  }
+                  else { w = 1.0; }
                 }
                 if( w > 0.0 )
                 {
@@ -463,7 +462,7 @@ namespace exaStamp
                   }
                   if( w != 1.0 && w != 0.5 )
                   {
-                    fatal_error() << "intramolecular pair potential weighting only supports 1 or 0.5 weight factor"<<std::endl;
+                    fatal_error() << "intramolecular pair potential weighting only supports 0.0, 0.5 or 1.0 weight factor"<<std::endl;
                   }
 
                   ldbg << molecules->m_molecules.at(m).name() <<" : pair#"<<molecule_compute_parameters->m_molecules[m].m_nb_pairs<<" , "<<i<<" / "<<j<<" , type="<<type<<" , weight="<<w<<std::endl;
