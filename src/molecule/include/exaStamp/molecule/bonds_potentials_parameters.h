@@ -40,6 +40,7 @@ namespace YAML
   using exaStamp::BondPotential;
   using exaStamp::IntraMolecularPotentialFunctional;
   using exaStamp::IntraMolecularHarmFunctional;
+  using exaStamp::IntraMolecularBondOPLSFunctional;
   using exaStamp::IntraMolecularQuarFunctional;
 
   template<> struct convert<BondsPotentialParameters>
@@ -97,6 +98,14 @@ namespace YAML
           // e = 1/2 k * (r-r0)^2
           // F = k * (r-r0)
           b.potential = std::make_shared<IntraMolecularHarmFunctional>(k,r0);
+        }
+      if(b.type=="opls_bond") // same as harm_bond without 1/2 factor for energy
+        {
+          double k  = node["parameters"]["k" ].as<Quantity>().convert();
+          double r0 = node["parameters"]["r0"].as<Quantity>().convert();
+          // e = k * (r-r0)^2
+          // F = k * (r-r0)
+          b.potential = std::make_shared<IntraMolecularBondOPLSFunctional>(k,r0);
         }
       else if(b.type=="quar_bond")
         {

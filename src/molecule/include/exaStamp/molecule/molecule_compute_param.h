@@ -10,7 +10,34 @@
 
 namespace exaStamp
 {
-  using MoleculeGenericFuncParam = onika::oarray_t<double,4>;
+  struct MoleculeGenericFuncParam
+  {
+    double p0 = 0.0;
+    double p1 = 0.0;
+    double p2 = 0.0;
+    float x0 = 0.0;
+    float coeff = 0.0;
+    ONIKA_HOST_DEVICE_FUNC inline bool is_null() const { return p0==0.0 && p1==0.0 && p2==0.0 && x0==0.0f && coeff==0.0f; }
+    inline bool operator < (const MoleculeGenericFuncParam& m) const
+    {
+      if( p0 < m.p0 ) return true;
+      else if( p0 > m.p0 ) return false;
+
+      if( p1 < m.p1 ) return true;
+      else if( p1 > m.p1 ) return false;
+
+      if( p2 < m.p2 ) return true;
+      else if( p2 > m.p2 ) return false;
+
+      if( x0 < m.x0 ) return true;
+      else if( x0 > m.x0 ) return false;
+
+      if( coeff < m.coeff ) return true;
+      else if( coeff > m.coeff ) return false;
+      
+      return false;
+    }
+  };
 
   struct MoleculeComputeParams
   {
@@ -57,6 +84,11 @@ namespace exaStamp
 
   };
 
+}
+
+inline exanb::LogStreamWrapper& operator << ( exanb::LogStreamWrapper& out , const exaStamp::MoleculeGenericFuncParam& m )
+{
+  return out<<"("<<m.p0<<","<<m.p1<<","<<m.p2<<","<<m.x0<<","<<m.coeff<<")";
 }
 
 // specialize ReadOnlyShallowCopyType so MoleculeListsRO is the read only type for MoleculeLists

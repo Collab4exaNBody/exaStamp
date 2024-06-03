@@ -115,7 +115,7 @@ namespace exaStamp
     
     inline void execute ()  override final
     {
-      static constexpr MoleculeGenericFuncParam null_param = {0.0,0.0,0.0,0.0};
+      //static constexpr MoleculeGenericFuncParam null_param = {0.0,0.0,0.0,0.0};
 
       const unsigned int nmol = molecules->m_molecules.size();    
       for(unsigned int m=0;m<nmol;m++)
@@ -151,11 +151,11 @@ namespace exaStamp
         
         onika::oarray_t<int,4> types = {a,b,-1,-1};
         auto param = bond.potential->generic_parameters();
-        if( param != null_param )
+        if( ! param.is_null() )
         {
           if( parameter_id_map.find(param)==parameter_id_map.end() )
           {
-            ldbg<<"add parameter pack "<<format_array(param)<<" -> "<<parameter_id<<" , for types "<<format_array(types)<<std::endl;
+            ldbg<<"add parameter pack "<<param<<" -> "<<parameter_id<<" , for types "<<format_array(types)<<std::endl;
             parameter_id_map[param] = parameter_id++;
           }
           parameter_map[ types ] = parameter_id_map[param];
@@ -173,11 +173,11 @@ namespace exaStamp
         
         onika::oarray_t<int,4> types = {a,b,c,-1};
         auto param = angle.m_potential_function->generic_parameters();
-        if( param != null_param )
+        if( ! param.is_null() )
         {
           if( parameter_id_map.find(param)==parameter_id_map.end() )
           {
-            ldbg<<"add parameter pack "<<format_array(param)<<" -> "<<parameter_id<<" , for types "<<format_array(types)<<std::endl;
+            ldbg<<"add parameter pack "<<param<<" -> "<<parameter_id<<" , for types "<<format_array(types)<<std::endl;
             parameter_id_map[param] = parameter_id++;
           }
           parameter_map[ types ] = parameter_id_map[param];
@@ -196,11 +196,11 @@ namespace exaStamp
                 
         onika::oarray_t<int,4> types = {a,b,c,d};
         auto param = torsion.m_potential_function->generic_parameters();
-        if( param != null_param )
+        if( ! param.is_null() )
         {
           if( parameter_id_map.find(param)==parameter_id_map.end() )
           {
-            ldbg<<"add parameter pack "<<format_array(param)<<" -> "<<parameter_id<<" , for types "<<format_array(types)<<std::endl;
+            ldbg<<"add parameter pack "<<param<<" -> "<<parameter_id<<" , for types "<<format_array(types)<<std::endl;
             parameter_id_map[param] = parameter_id++;
           }
           parameter_map[ types ] = parameter_id_map[param];
@@ -221,11 +221,11 @@ namespace exaStamp
 
         onika::oarray_t<int,4> types = {a,b,c,d};
         auto param = improper.m_potential_function->generic_parameters();
-        if( param != null_param )
+        if( ! param.is_null() )
         {
           if( parameter_id_map.find(param)==parameter_id_map.end() )
           {
-            ldbg<<"add parameter pack "<<format_array(param)<<" -> "<<parameter_id<<" , for types "<<format_array(types)<<std::endl;
+            ldbg<<"add parameter pack "<<param<<" -> "<<parameter_id<<" , for types "<<format_array(types)<<std::endl;
             parameter_id_map[param] = parameter_id++;
           }
           parameter_map[ types ] = parameter_id_map[param];

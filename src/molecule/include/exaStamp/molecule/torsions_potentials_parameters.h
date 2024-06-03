@@ -46,7 +46,7 @@ namespace YAML
   using exaStamp::IntraMolecularHarmFunctional;
   using exaStamp::IntraMolecularCompassFunctional;
   using exaStamp::IntraMolecularHalfCompassFunctional;
-  using exaStamp::IntraMolecularOPLSFunctional;
+  using exaStamp::IntraMolecularCosOPLSFunctional;
   using exaStamp::IntraMolecularCosTwoFunctional;
 
   template<> struct convert<TorsionPotential>
@@ -155,7 +155,7 @@ namespace YAML
                          +               k2 * sin(2*phi)
                          -        1.5  * k3 * sin(3*phi);};
 */
-        b.m_potential_function = std::make_shared<IntraMolecularOPLSFunctional>(k1,k2,k3);
+        b.m_potential_function = std::make_shared<IntraMolecularCosOPLSFunctional>(k1,k2,k3);
       }
     else if(b.type=="cos_two")
       {

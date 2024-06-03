@@ -43,7 +43,7 @@ namespace YAML
   using exaStamp::IntraMolecularPotentialFunctional;
   using exaStamp::IntraMolecularHarmFunctional;
   using exaStamp::IntraMolecularHarmX2Functional;
-  using exaStamp::IntraMolecularOPLSFunctional;
+  using exaStamp::IntraMolecularCosOPLSFunctional;
 
   template<> struct convert<ImpropersPotentialParameters>
   {
@@ -142,7 +142,7 @@ namespace YAML
           //                                          +            k2 * sin(2*chi)  
           //                                          -      1.5 * k3 * sin(3*chi);};
 
-          b.m_potential_function = std::make_shared<IntraMolecularOPLSFunctional>(k1,k2,k3);
+          b.m_potential_function = std::make_shared<IntraMolecularCosOPLSFunctional>(k1,k2,k3);
         }
       else if(b.type=="no_potential")
         {

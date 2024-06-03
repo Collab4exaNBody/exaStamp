@@ -39,6 +39,7 @@ namespace YAML
   using exaStamp::BendPotential;
   using exaStamp::IntraMolecularPotentialFunctional;
   using exaStamp::IntraMolecularHarmFunctional;
+  using exaStamp::IntraMolecularBondOPLSFunctional;
   using exaStamp::IntraMolecularQuarFunctional;
 
   template<> struct convert<BendsPotentialParameters>
@@ -92,6 +93,12 @@ namespace YAML
           double k  = node["parameters"]["k" ].as<Quantity>().convert();
           double theta0 = node["parameters"]["theta0"].as<Quantity>().convert();
           b.m_potential_function = std::make_shared<IntraMolecularHarmFunctional>(k,theta0);
+        }
+      if(b.type=="opls_bend")
+        {
+          double k  = node["parameters"]["k" ].as<Quantity>().convert();
+          double theta0 = node["parameters"]["theta0"].as<Quantity>().convert();
+          b.m_potential_function = std::make_shared<IntraMolecularBondOPLSFunctional>(k,theta0);
         }
       else if(b.type=="quar_bend")
         {
