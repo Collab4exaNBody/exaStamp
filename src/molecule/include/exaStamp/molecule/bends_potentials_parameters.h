@@ -48,8 +48,7 @@ namespace YAML
     {
       if( !node.IsSequence() )
         {
-          lerr << "BendPotential type is not readable from config file." << std::endl;
-          abort();
+          fatal_error() << "BendPotential type is not readable from config file." << std::endl;
         }
 
       for(size_t n=0;n<node.size();++n)
@@ -68,23 +67,20 @@ namespace YAML
       // potential gestion
       if(!node["potential"])
         {
-          lerr << "No potential type given in the bond interaction. Choice are harm_bend, bend and no_potential." << std::endl;
-          abort();
+          fatal_error() << "No potential type given in the bond interaction. Choice are harm_bend, bend and no_potential." << std::endl;
         }
       b.type = node["potential"].as<std::string>();
 
       // Types gestion
       if( !node["types"] )
         {
-          lerr << "No types elements given in the bend interaction (example types: [C, O, C])." << std::endl;
-          abort();
+          fatal_error() << "No types elements given in the bend interaction (example types: [C, O, C])." << std::endl;
         }
       b.species = {node["types"][0].as<std::string>(), node["types"][1].as<std::string>(), node["types"][2].as<std::string>()};
 
       if( !node["parameters"] && b.type!="no_potential" )
         {
-          lerr << "No parameters elements given in the bend interaction." << std::endl;
-          abort();
+          fatal_error() << "No parameters elements given in the bend interaction." << std::endl;
         }
 
       // Energy and forces gestion
@@ -94,7 +90,7 @@ namespace YAML
           double theta0 = node["parameters"]["theta0"].as<Quantity>().convert();
           b.m_potential_function = std::make_shared<IntraMolecularHarmFunctional>(k,theta0);
         }
-      if(b.type=="opls_bend")
+      else if(b.type=="opls_bend")
         {
           double k  = node["parameters"]["k" ].as<Quantity>().convert();
           double theta0 = node["parameters"]["theta0"].as<Quantity>().convert();
@@ -114,8 +110,7 @@ namespace YAML
         }
       else
         {
-          lerr << "Type of bend potential " << b.type << " unknown. Type can be harm_bend, quar_bend, no_potential" << std::endl;
-          abort();
+          fatal_error() << "Unknown bend potential type " << b.type << std::endl;
         }
       return true;
     }

@@ -99,7 +99,7 @@ namespace YAML
           // F = k * (r-r0)
           b.potential = std::make_shared<IntraMolecularHarmFunctional>(k,r0);
         }
-      if(b.type=="opls_bond") // same as harm_bond without 1/2 factor for energy
+      else if(b.type=="opls_bond") // same as harm_bond without 1/2 factor for energy
         {
           double k  = node["parameters"]["k" ].as<Quantity>().convert();
           double r0 = node["parameters"]["r0"].as<Quantity>().convert();
