@@ -45,11 +45,33 @@ namespace exaStamp
     {
       return m_B_ISEXP6==0.0;
     }
+
     ONIKA_HOST_DEVICE_FUNC inline bool is_exp6() const
     {
       return m_B_ISEXP6!=0.0;
     }
+
+    inline void set_lj_parameters(double sigma, double epsilon, double rcut)
+    {
+      m_B_ISEXP6 = 0.0;
+      m_C_EPSILON = epsilon;
+      m_D_SIGMA = sigma;
+      m_rcut = rcut;
+      m_ecut = 0.0;
+      assert( is_lj() );
+    }
     
+    inline void set_exp6_parameters(double A, double B, double C, double D, double rcut)
+    {
+      m_A = A;
+      m_B_ISEXP6 = B;
+      m_C_EPSILON = C;
+      m_D_SIGMA = D;
+      m_rcut = rcut;
+      m_ecut = 0.0;
+      assert( is_exp6() );
+    }
+
     inline bool operator < ( const IntramolecularLJExp6Param& r ) const
     {
       // ecut and ecut_rf omitted on prupose
@@ -128,22 +150,15 @@ namespace YAML
         {
           if( ! node["parameters"]["lj_rcut"] ) { fatal_error()<<"missing rcut for LJ"<<std::endl; }
           auto lj = node["parameters"]["lj"].as<LennardJonesParms>();
-          p.m_ljexp6.m_B_ISEXP6 = 0.0;
-          p.m_ljexp6.m_C_EPSILON = lj.epsilon;
-          p.m_ljexp6.m_D_SIGMA = lj.sigma;
-          assert( p.m_ljexp6.is_lj() );
-          p.m_ljexp6.m_rcut = node["parameters"]["lj_rcut"].as<Quantity>().convert();
+          double rcut = node["parameters"]["lj_rcut"].as<Quantity>().convert();
+          p.m_ljexp6.set_lj_parameters(lj.sigma, lj.epsilon, rcut);
         }
         else if( node["parameters"]["exp6"] )
         {
           if( ! node["parameters"]["exp6_rcut"] ) { fatal_error()<<"missing rcut for Exp6"<<std::endl; }
           auto exp6 = node["parameters"]["exp6"].as<Exp6Parms>();
-          p.m_ljexp6.m_A = exp6.A;
-          p.m_ljexp6.m_B_ISEXP6 = exp6.B;
-          p.m_ljexp6.m_C_EPSILON = exp6.C;
-          p.m_ljexp6.m_D_SIGMA = exp6.D;          
-          assert( p.m_ljexp6.is_exp6() );
-          p.m_ljexp6.m_rcut = node["parameters"]["exp6_rcut"].as<Quantity>().convert();
+          double rcut = node["parameters"]["exp6_rcut"].as<Quantity>().convert();
+          p.m_ljexp6.set_exp6_parameters(exp6.A, exp6.B, exp6.C, exp6.D, rcut);
         }
         if( node["parameters"]["rf"] )
         {

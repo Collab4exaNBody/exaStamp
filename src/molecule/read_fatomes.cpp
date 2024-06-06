@@ -26,6 +26,7 @@
 #include <exaStamp/molecule/bends_potentials_parameters.h>
 #include <exaStamp/molecule/torsions_potentials_parameters.h>
 #include <exaStamp/molecule/impropers_potentials_parameters.h>
+#include <exaStamp/molecule/intramolecular_pair_weight.h>
 
 #include <exanb/core/check_particles_inside_cell.h>
 #include <exanb/core/parallel_random.h>
@@ -67,16 +68,21 @@ namespace exaStamp
   {
     ADD_SLOT( MPI_Comm        , mpi          , INPUT , MPI_COMM_WORLD  );
     ADD_SLOT( std::string     , filename     , INPUT , REQUIRED );
+    ADD_SLOT( std::string     , stampinput   , INPUT , OPTIONAL );
     ADD_SLOT( Domain          , domain       , INPUT_OUTPUT );
     ADD_SLOT( GridT           , grid         , INPUT_OUTPUT );
-    ADD_SLOT( ParticleSpecies , species      , INPUT ); // optional. if no species given, type ids are allocated automatically
+
+    ADD_SLOT( ParticleSpecies , species      , INPUT_OUTPUT ); 
 
     ADD_SLOT( MoleculeSpeciesVector , molecules , INPUT_OUTPUT, MoleculeSpeciesVector{} , DocString{"Molecule descriptions"} );
 
-    ADD_SLOT( BondsPotentialParameters     , potentials_for_bonds     , INPUT_OUTPUT, BondsPotentialParameters{} );
-    ADD_SLOT( BendsPotentialParameters     , potentials_for_angles    , INPUT_OUTPUT, BendsPotentialParameters{} );
-    ADD_SLOT( TorsionsPotentialParameters  , potentials_for_torsions  , INPUT_OUTPUT, TorsionsPotentialParameters{} );
-    ADD_SLOT( ImpropersPotentialParameters , potentials_for_impropers , INPUT_OUTPUT, ImpropersPotentialParameters{} );
+    ADD_SLOT( BondsPotentialParameters         , potentials_for_bonds     , INPUT_OUTPUT, BondsPotentialParameters{} );
+    ADD_SLOT( BendsPotentialParameters         , potentials_for_angles    , INPUT_OUTPUT, BendsPotentialParameters{} );
+    ADD_SLOT( TorsionsPotentialParameters      , potentials_for_torsions  , INPUT_OUTPUT, TorsionsPotentialParameters{} );
+    ADD_SLOT( ImpropersPotentialParameters     , potentials_for_impropers , INPUT_OUTPUT, ImpropersPotentialParameters{} );
+    ADD_SLOT( IntramolecularPairUserParamVector, potentials_for_pairs     , INPUT_OUTPUT , IntramolecularPairUserParamVector{} );
+
+    ADD_SLOT( IntramolecularPairWeighting , weight   , INPUT_OUTPUT , IntramolecularPairWeighting{} );
 
   public:
     inline void execute () override final
@@ -127,6 +133,7 @@ namespace exaStamp
       std::string atom_pos_unit;
       bool force_field_description = false;
       bool atom_bonds_description = false;
+      bool intramol_weight_description = false;
       
       if(rank==0)
       {
@@ -202,9 +209,49 @@ namespace exaStamp
           }
           else if( kw == "Potentiel" )
           {
-            int ta=0, tb=0;
-            iss >> ta >> tb >> kw;
-            ldbg << "Skip pair potential "<<kw<<" for pair "<<ta<<" , "<<tb<<std::endl;
+            int ita=0, itb=0;
+            std::string typepot;
+            iss >> ita >> itb >> typepot;
+            std::string ta = species->at(ita).name();
+            std::string tb = species->at(ita).name();
+            ldbg << "pair potential "<<typepot<<" for pair "<<ta<<" , "<<tb<<std::endl;
+            std::map<std::string,double> params;
+            IntramolecularPairUserParam pot = { ta, tb };
+            if( typepot == "LJ" )
+            {
+              std::string p1,u1, p2, u2, p3, u3;
+              double v1, v2, v3;
+              iss >> p1 >> v1 >> u1 >> p2 >> v2 >> u2 >> p3 >> v3 >> u3;
+              params[p1] = exanb::make_quantity( v1 , read_unit(u1) ).convert();
+              params[p2] = exanb::make_quantity( v2 , read_unit(u2) ).convert();
+              params[p3] = exanb::make_quantity( v3 , read_unit(u3) ).convert();
+              double sigma = params["sigma"];
+              double epsilon = params["epsilon"];
+              double rc = params["rc"];
+              ldbg<< "LJ params : sigma="<<sigma<<" , epsilon="<<epsilon<<" , rc="<<rc<<std::endl;
+              std::string ext;
+              iss >> ext;
+              if( ext == "CONV_EXP6v1" )
+              {
+                iss >> p1 >> v1 >> u1 >> p2 >> v2 >> u2;
+                params[p1] = exanb::make_quantity( v1 , read_unit(u1) ).convert();
+                params[p2] = exanb::make_quantity( v2 , read_unit(u2) ).convert();
+                double alpha = params["alpha"];
+                double D = params["d"];
+                double rmin = sigma * pow( 2. , 1./6. );
+                double A = 6. * epsilon * exp(alpha) / ( alpha - 6. );
+                double B = alpha / rmin;
+                double C = epsilon * alpha / ( alpha - 6. ) * pow(rmin,6);
+                ldbg << "Exp6 conversion : alpha="<<alpha<<" , D="<<D<<" , rmin="<<rmin<<" , A="<<A<<" , B="<<B<<" , C="<<C << std::endl;
+                pot.m_ljexp6.set_exp6_parameters( A, B, C, D, rc );
+              }
+              else
+              {
+                if( !ext.empty() ) { fatal_error()<<"unexpected LJ modifier '"<<ext<<"'"<<std::endl; }
+                pot.m_ljexp6.set_lj_parameters( sigma, epsilon, rc );
+              }
+              potentials_for_pairs->push_back(pot);
+            }
           }
           else if( kw == "Regle_melange" ) { iss >> tmp; ldbg << "Regle_melange = "<<tmp<<std::endl; }
           else if( kw == "PositionDesAtomesCart" ) { iss >> atom_pos_unit; ldbg << "PositionDesAtomesCart = "<<atom_pos_unit<<std::endl; }
@@ -212,6 +259,7 @@ namespace exaStamp
           else if( kw == "ModificationChargeDesAtomes" ) { iss >> atom_charge_unit; ldbg << "ModificationChargeDesAtomes = "<<atom_charge_unit<<std::endl; }
           else if( kw == "ChampDeForces" ) { force_field_description = true; }
           else if( kw == "Zmatrice" ) { atom_bonds_description = true; }
+          else if( kw == "ContribDispRepIntra" ) { intramol_weight_description = true; }
           else
           {
             fatal_error() << "unexpected token "<<kw << " at line "<<lineno <<std::endl;
@@ -417,8 +465,12 @@ namespace exaStamp
               p1 = exanb::make_quantity( p1 , read_unit(u1) ).convert(); if( std::isnan(p1) ) p1=0.0;
               p2 = exanb::make_quantity( p2 , read_unit(u2) ).convert(); if( std::isnan(p2) ) p2=0.0;
               p3 = exanb::make_quantity( p3 , read_unit(u3) ).convert(); if( std::isnan(p3) ) p3=0.0;
-              ldbg << "Intramolecular force fireld "<<fftype<<" for "<<t1<<","<<t2<<","<<t3<<","<<t4<<" : p1="<<p1<<" , p2="<<p2<<" , p3="<<p3<< std::endl;
+              ldbg << "Intramolecular "<<fftype<<" for "<<t1<<","<<t2<<","<<t3<<","<<t4<<" : p1="<<p1<<" , p2="<<p2<<" , p3="<<p3<< std::endl;
               potentials_for_torsions->m_potentials.push_back( TorsionPotential{ fftype , {t1,t2,t3,t4} , std::make_shared<IntraMolecularCosOPLSFunctional>(p1,p2,p3) } );
+            }
+            else
+            {
+              fatal_error() << "unknown force field type "<<fftype<<std::endl;
             }
           }
           process_kw_line( next_line() );
@@ -440,7 +492,42 @@ namespace exaStamp
             atom_data[at_id][field::cmol] = { uint64_t(c1), uint64_t(c2), uint64_t(c3), uint64_t(c4) };
           }
         }
-        
+             
+        while( !intramol_weight_description && !file.eof() )
+        {
+          process_kw_line( next_line() );
+        }
+        if( intramol_weight_description )
+        {
+          int n = 0;
+          next_line() >> n;
+          ldbg << "Reading "<<n<<" intramolecular pair weights"<<std::endl;
+          weight->m_molecule_weight.clear();
+          for(int i=0;i<n;i++)
+          {
+            std::string ta, tb;
+            MolecularPairWeight w;
+            next_line() >> ta >> tb >> w.m_bond_weight >> w.m_bend_weight >> w.m_torsion_weight >> w.m_rf_bond_weight >> w.m_rf_bend_weight >> w.m_rf_torsion_weight;
+            ldbg << ta << " - " << tb << " weights : pair bond="<<w.m_bond_weight<<", angle="<<w.m_bend_weight<<", torsion="<<w.m_torsion_weight<<" , rf bond="<<w.m_rf_bond_weight<<", angle="<<w.m_rf_bend_weight<<", torsion="<<w.m_rf_torsion_weight<<std::endl;
+            for(const auto& p : molecule_name_map)
+            {
+              const auto it = weight->m_molecule_weight.find(p.first);
+              if( it != weight->m_molecule_weight.end() )
+              {
+                if( it->second.m_bond_weight != w.m_bond_weight || it->second.m_bend_weight != w.m_bend_weight || it->second.m_torsion_weight != w.m_torsion_weight
+                  ||it->second.m_rf_bond_weight != w.m_rf_bond_weight || it->second.m_rf_bend_weight != w.m_rf_bend_weight || it->second.m_rf_torsion_weight != w.m_rf_torsion_weight )
+                {
+                  fatal_error() << "Different pair weights for distinct particle type pairs is not supported yet" << std::endl;
+                }
+              }
+              else
+              {
+                weight->m_molecule_weight[ p.first ] = w;
+              }
+            }
+          }
+        }
+
         file.close();
 
         

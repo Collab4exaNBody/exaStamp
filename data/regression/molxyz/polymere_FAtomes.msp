@@ -7,9 +7,11 @@ configuration:
   logging:
     debug: true
   debug:
-    filter: [ ".*read_fatomes_mol" , ".*id_map" ]
+    filter: [ ".*read_fatomes_mol" , ".*id_map" , ".*molecule_pair_weight" ]
   profiling:
     summary: false
+
+preinit_rcut_max: nop
 
 input_data:
   - read_fatomes_mol:
