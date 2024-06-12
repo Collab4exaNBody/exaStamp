@@ -123,12 +123,10 @@ exit 0
 
 
 ######################## GCC+Cuda version ##########################
-export PROJECT_SETUP_ENV_COMMANDS="module purge ; module load gnu/11.2.0 nvhpc/23.11 mpi/openmpi texlive cmake"
+export PROJECT_SETUP_ENV_COMMANDS="module purge ; module load gnu/11.2.0 nvhpc/24.3 mpi/openmpi texlive cmake/3.26.4"
 eval ${PROJECT_SETUP_ENV_COMMANDS}
 
-export CUDA_SDK=/ccc/products/nvhpc-23.11/system/default/Linux_x86_64/23.11/cuda/12.3
-unset TBB_ROOT MPI_ROOT
-BUILD_DIR=$CCCSCRATCHDIR/build/generic-gcc
+BUILD_DIR=$CCCSCRATCHDIR/build/exaStamp-gcc
 SRC_DIR=$HOME/dev/ExaStamp-main
 XNB_DIR=$HOME/dev/exaNBody
 
@@ -136,20 +134,33 @@ mkdir -p $BUILD_DIR
 rm -rf $BUILD_DIR/*
 cd $BUILD_DIR
 
-ccmake -DXNB_PRODUCT_VARIANT=rigidmol \
+cmake -DXNB_PRODUCT_VARIANT=rigidmol \
        -DXNB_BUILD_CUDA=ON \
        -DCMAKE_CUDA_ARCHITECTURES=80 \
        -DONIKA_HAVE_OPENMP_DETACH=OFF \
        -DONIKA_HAVE_OPENMP_TOOLS=OFF \
-       -DCUDA_SDK_ROOT_DIR=${CUDA_SDK} \
-       -DCMAKE_CUDA_COMPILER=${CUDA_SDK}/bin/nvcc \
+       -DCMAKE_CUDA_COMPILER=/ccc/products/cuda-12.4/system/default/bin/nvcc \
+       -DMPIEXEC_MAX_NUMPROCS=32 \
+       -DMPIEXEC_PREFLAGS="-pa100-bxi" \
+       -DMPIEXEC_EXECUTABLE="/usr/bin/ccc_mprun" \
+       -DMPIEXEC_NUMCORE_FLAG="-c" \
+       -DMPIEXEC_NUMPROC_FLAG="-n" \
+       -DMPIEXEC_PREFLAGS_DBG="-pa100-bxi;-Xall;xterm;-e" \
+       -DMPIEXEC_PREALLOC_FLAG="-K" \
+       -DHOST_ALWAYS_USE_MPIRUN=ON \
+       -DHOST_HW_CORES=128 \
+       -DHOST_HW_THREADS=256 \
        -Dyaml-cpp_DIR=/ccc/home/cont001/xstampdev/xstampdev/tools/yaml-cpp-gcc8.4/lib/cmake/yaml-cpp \
        -DCMAKE_BUILD_TYPE=Release \
        -DXSTAMP_BUILD_exaStampLCHBOP=OFF \
-       -DEXASTAMP_TEST_DATA_DIR=${HOME}/data \
+       -DXSTAMP_BUILD_exaStampSnapLMP=ON \
+       -DXSTAMP_THIRD_PARTY_TOOLS_ROOT=/ccc/home/cont001/xstampdev/xstampdev/tools \
+       -DEXASTAMP_TEST_DATA_DIR=/ccc/home/cont001/xstampdev/xstampdev/data \
        -DPROJECT_SETUP_ENV_COMMANDS="${PROJECT_SETUP_ENV_COMMANDS}" \
        -DexaNBody_DIR=${XNB_DIR} \
        ${SRC_DIR}
+
+cat README.txt
 
 exit 0
 
