@@ -6,6 +6,7 @@
 #include <exanb/core/operator_slot.h>
 #include <exanb/core/operator_factory.h>
 #include <exanb/core/grid.h>
+#include <exanb/core/domain.h>
 #include <exanb/core/make_grid_variant_operator.h>
 
 #include <exanb/mpi/grid_update_from_ghosts.h>
@@ -26,6 +27,7 @@ namespace exaStamp
     ADD_SLOT( MPI_Comm                 , mpi               , INPUT , MPI_COMM_WORLD );
     ADD_SLOT( GhostCommunicationScheme , ghost_comm_scheme , INPUT_OUTPUT , OPTIONAL );
     ADD_SLOT( GridT                    , grid              , INPUT_OUTPUT);
+    ADD_SLOT( Domain                   , domain            , INPUT );
     ADD_SLOT( long                     , mpi_tag           , INPUT , 0 );
 
     ADD_SLOT( bool                     , gpu_buffer_pack   , INPUT , false );
@@ -48,7 +50,7 @@ namespace exaStamp
       auto rho_emb_field = grid->field_accessor( field::rho_dEmb );
       auto update_fields = onika::make_flat_tuple( rho_emb_field );
 
-      grid_update_from_ghosts( ldbg, *mpi, *ghost_comm_scheme, *grid, nullptr,
+      grid_update_from_ghosts( ldbg, *mpi, *ghost_comm_scheme, *grid, *domain, nullptr,
                           *ghost_comm_buffers, pecfunc,pesfunc, update_fields,
                           *mpi_tag, *gpu_buffer_pack, *async_buffer_pack, *staging_buffer,
                           *serialize_pack_send, *wait_all, UpdateValueAdd{} );
