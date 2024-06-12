@@ -70,10 +70,11 @@ exit 0
 
 
 # OpenMPI (bxi only)
-export PROJECT_SETUP_ENV_COMMANDS="module purge ; module load inteloneapi/22.1.2 gnu/8.4.0 nvhpc/23.1 mpi/openmpi/4.1.4 texlive cmake/3.20.3"
+#export PROJECT_SETUP_ENV_COMMANDS="module purge ; module load inteloneapi/22.1.2 gnu/8.4.0 nvhpc/23.1 mpi/openmpi/4.1.4 texlive cmake/3.20.3"
+export PROJECT_SETUP_ENV_COMMANDS="module purge ; module load inteloneapi/22.1.2 gnu/8.4.0 nvhpc/24.3 mpi/openmpi/4.1.4 texlive cmake/3.26.4"
 eval ${PROJECT_SETUP_ENV_COMMANDS}
 
-BUILD_DIR=$CCCSCRATCHDIR/build/exaStamp-cuda
+BUILD_DIR=$CCCSCRATCHDIR/build/exaStamp-3.5-mol
 SRC_DIR=$HOME/dev/ExaStamp-main
 XNB_DIR=$HOME/dev/exaNBody
 
@@ -92,9 +93,9 @@ cmake -DXNB_PRODUCT_VARIANT=rigidmol \
        -DONIKA_HAVE_OPENMP_TOOLS=OFF \
        -DCMAKE_C_COMPILER=icc \
        -DCMAKE_CXX_COMPILER=icpc \
-       -DCMAKE_CXX_FLAGS="-diag-disable=15518 -diag-disable=15552 -fp-model fast=2 -no-prec-div -qoverride-limits" \
+       -DCMAKE_CXX_FLAGS="-diag-disable=15518 -diag-disable=15552" \
        -DCMAKE_Fortran_COMPILER=ifort \
-       -DCMAKE_CUDA_COMPILER=/ccc/products/cuda-12.0/system/nvhpc-231/bin/nvcc \
+       -DCMAKE_CUDA_COMPILER=/ccc/products/cuda-12.4/system/default/bin/nvcc \
        -DCMAKE_CUDA_FLAGS="-ccbin /ccc/products/icx-22.1.2/system/default/22.1.2/bin/intel64/icpc" \
        -DMPIEXEC_MAX_NUMPROCS=32 \
        -DMPIEXEC_PREFLAGS="-pa100-bxi" \
