@@ -31,8 +31,8 @@ namespace exaStamp
   {
     ADD_SLOT( MPI_Comm    , mpi             , INPUT );
     ADD_SLOT( std::string , filename , INPUT );
-    ADD_SLOT( long        , timestep      , INPUT , DocString{"Iteration number"} );
-    ADD_SLOT( double      , physical_time , INPUT , DocString{"Physical time"} );
+    ADD_SLOT( long        , timestep      , INPUT_OUTPUT , DocString{"Iteration number"} );
+    ADD_SLOT( double      , physical_time , INPUT_OUTPUT , DocString{"Physical time"} );
 
     ADD_SLOT( double      , scale_cell_size , INPUT ,OPTIONAL , DocString{"if set, change cell size stored in file by scaling it with given factor"} );
     ADD_SLOT( BoolVector  , periodic     , INPUT ,OPTIONAL , DocString{"if set, overrides domain's periodicity stored in file with this value"}  );
