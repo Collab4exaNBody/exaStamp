@@ -95,6 +95,8 @@ namespace exaStamp
           assert( a < 65536 );
           assert( b < 65536 );
           potentials_for_bonds->m_type_pair_to_potential[ (a<<16) | b ] = b_type.potential;
+          const auto gp = b_type.potential->generic_parameters();
+          ldbg << "Bond potential for "<<b_type.species.at(0)<<" / "<<b_type.species.at(1)<<" : p0="<<gp.p0<<", p1="<<gp.p1<<", p2="<<gp.p2<<", x0="<<gp.x0<<", coeff="<<gp.coeff<<std::endl;
         }
       }
 

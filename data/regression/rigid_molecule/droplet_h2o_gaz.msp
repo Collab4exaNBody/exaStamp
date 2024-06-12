@@ -53,7 +53,7 @@ grid_flavor: grid_flavor_rigidmol
 
 global:
   dt: 5.0e-4 ps
-  simulation_end_iteration: 1000
+  simulation_end_iteration: 200
   simulation_log_frequency: 10
 #  analysis_dump_frequency: 10
   simulation_dump_frequency: 50

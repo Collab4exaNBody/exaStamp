@@ -20,7 +20,7 @@ namespace exaStamp
     double RF0 = 0.0;
     double RF1 = 0.0;
     double RF2 = 0.0;
-    double ecut = 0.0;
+    double ecut = 0.0;    
   };
 
   // core computation kernel for reaction field potential
@@ -31,6 +31,30 @@ namespace exaStamp
     double c  = c1 * c2;
     e  = ( (                 p_rc.RF0/r  - p_rc.RF2                   + p_rc.RF1*r2 ) - p_rc.ecut ) * c;
     de =   ( - p_rc.RF0/r2                          + 2.*p_rc.RF1 * r               ) * c;
+  }
+
+  inline void init_rf(ReactionFieldParms& v, double rc, double epsilon)
+  {
+    const double one_FourPiEpsilon0 = 1./4./M_PI/UnityConverterHelper::convert(exanb::legacy_constant::epsilonZero, "C^2.s^2/m^3/kg^1");
+    v.rc = rc;
+    if( rc==0.0 || epsilon==0.0 )
+    {
+      v.rc = 1e-18;
+      v.RF0 = 0.0;
+      v.RF1 = 0.0;
+      v.RF2 = 0.0;
+      v.ecut = 0.0;
+    }
+    else
+    {
+      v.RF0     = one_FourPiEpsilon0;
+      v.RF1     = one_FourPiEpsilon0 / pow(v.rc,3) * (epsilon - 1.)/(2.*epsilon + 1.);
+      v.RF2     = one_FourPiEpsilon0 / v.rc * (3. * epsilon)/(2.*epsilon + 1.);
+      v.ecut    = 0.0;
+      double e=0.0, de=0.0;
+      reaction_field_compute_energy( v , 1.0 , 1.0 , v.rc , e , de );
+      v.ecut = e;
+    }      
   }
 
 }
@@ -48,33 +72,8 @@ namespace YAML
   {
     static bool decode(const Node& node, ReactionFieldParms& v)
     {
-      const double one_FourPiEpsilon0 = 1./4./M_PI/UnityConverterHelper::convert(exanb::legacy_constant::epsilonZero, "C^2.s^2/m^3/kg^1");
-
       if( !node.IsMap() ) { return false; }
-      double epsilon = node["epsilon"].as<double>();
-      v.rc      = node["rc"]     .as<Quantity>().convert();;
-
-      if( v.rc==0.0 || epsilon==0.0 )
-      {
-        v.rc = 1e-18;
-        v.RF0 = 0.0;
-        v.RF1 = 0.0;
-        v.RF2 = 0.0;
-        v.ecut = 0.0;
-      }
-      else
-      {
-        v.RF0     = one_FourPiEpsilon0;
-        v.RF1     = one_FourPiEpsilon0 / pow(v.rc,3) * (epsilon - 1.)/(2.*epsilon + 1.);
-        v.RF2     = one_FourPiEpsilon0 / v.rc * (3. * epsilon)/(2.*epsilon + 1.);
-        v.ecut    = 0.0;
-
-        // ecut parameter, multiplied by c1*c2 ensures that potenbtial always equals 0 at r = rc
-        double e=0.0, de=0.0;
-        reaction_field_compute_energy( v , 1.0 , 1.0 , v.rc , e , de );
-        v.ecut = e;
-      }
-
+      init_rf( v, node["rc"].as<Quantity>().convert() , node["epsilon"].as<double>() );
       return true;
     }
   };

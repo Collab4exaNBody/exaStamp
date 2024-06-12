@@ -32,6 +32,7 @@
 #include <exanb/core/parallel_random.h>
 #include <exanb/core/math_utils.h>
 #include <exanb/core/basic_types_operators.h>
+#include <exanb/core/string_utils.h>
 #include <exanb/defbox/deformation.h>
 #include <exanb/defbox/deformation_math.h>
 
@@ -80,7 +81,9 @@ namespace exaStamp
     ADD_SLOT( BendsPotentialParameters         , potentials_for_angles    , INPUT_OUTPUT, BendsPotentialParameters{} );
     ADD_SLOT( TorsionsPotentialParameters      , potentials_for_torsions  , INPUT_OUTPUT, TorsionsPotentialParameters{} );
     ADD_SLOT( ImpropersPotentialParameters     , potentials_for_impropers , INPUT_OUTPUT, ImpropersPotentialParameters{} );
+    
     ADD_SLOT( IntramolecularPairUserParamVector, potentials_for_pairs     , INPUT_OUTPUT , IntramolecularPairUserParamVector{} );
+    ADD_SLOT( double                           , pair_potential_rcut      , INPUT_OUTPUT , 0.0 );
 
     ADD_SLOT( IntramolecularPairWeighting , weight   , INPUT_OUTPUT , IntramolecularPairWeighting{} );
 
@@ -233,11 +236,9 @@ namespace exaStamp
               iss >> ext;
               if( ext == "CONV_EXP6v1" )
               {
-                iss >> p1 >> v1 >> u1 >> p2 >> v2 >> u2;
-                params[p1] = exanb::make_quantity( v1 , read_unit(u1) ).convert();
-                params[p2] = exanb::make_quantity( v2 , read_unit(u2) ).convert();
-                double alpha = params["alpha"];
-                double D = params["d"];
+                double alpha=0.0, D=0.0;
+                iss >> p1 >> alpha >> p2 >> D >> u2;
+                D = exanb::make_quantity( D , read_unit(u2) ).convert();
                 double rmin = sigma * pow( 2. , 1./6. );
                 double A = 6. * epsilon * exp(alpha) / ( alpha - 6. );
                 double B = alpha / rmin;
@@ -275,6 +276,7 @@ namespace exaStamp
         species->resize(nb_atom_types);
 
         int atom_type_count = 0;
+        std::map<std::string,size_t> atom_type_index;
         while( atom_type_count < nb_atom_types )
         {
           //ldbg << "read atom types : atom_type_count="<<atom_type_count<<std::endl;
@@ -288,6 +290,7 @@ namespace exaStamp
             species->at(atom_type_count).m_rigid_atoms[ 0 ] = { Vec3d{0.,0.,0.} , -1 };
             species->at(atom_type_count).set_rigid_atom_name( 0 , atom_name );
             species->at(atom_type_count).m_rigid_atom_count = 1;
+            atom_type_index[atom_name] = atom_type_count;
             atom_name.clear();
             atom_mass = std::numeric_limits<double>::quiet_NaN();
             atom_charge = std::numeric_limits<double>::quiet_NaN();
@@ -528,8 +531,48 @@ namespace exaStamp
           }
         }
 
+        // close main file
         file.close();
 
+        // if available, open and read Stamp init file to get reaction field parameters
+        if( stampinput.has_value() )
+        {
+          //ldbg << "Init file = "<< *stampinput << std::endl;
+          file.open( data_file_path( *stampinput ) );
+        }
+        if( file.good() )
+        {
+          ldbg << "Reading additional init file "<< *stampinput << std::endl;
+          lineno = -1;
+          std::map< std::string , double > init;
+          while( !file.eof() )
+          {
+            std::string k;
+            double v = 0.0;
+            next_line() >> k >> v;
+            //ldbg << "READ "<<k<<" = "<<v<<std::endl;
+            init[k] = v;
+          }
+          if( init["ReactionField"] == 1 )
+          {
+            double rf_epsilon = init["ReactionField_epsilon"];
+            double rf_rc = init["ReactionField_rc"];
+            ldbg << "found RF parameters : epsilon="<<rf_epsilon<<" , rcut="<<rf_rc<<std::endl;
+            for( auto & pot : *potentials_for_pairs )
+            {
+              init_rf( pot.m_rf.m_param , rf_rc , rf_epsilon );
+              pot.m_rf.m_c1 = species->at(atom_type_index[pot.m_type_a]).m_charge;
+              pot.m_rf.m_c2 = species->at(atom_type_index[pot.m_type_b]).m_charge;
+              ldbg << "update RF parameters for pair "<<pot.m_type_a<<" / "<<pot.m_type_b<<" : c1="<<pot.m_rf.m_c1<<", c2="<<pot.m_rf.m_c2<<", RF0="<<pot.m_rf.m_param.RF0<<", RF1="<<pot.m_rf.m_param.RF1<<", RF2="<<pot.m_rf.m_param.RF2<< std::endl;
+            }
+          }
+        }
+        
+        for(const auto& pot : *potentials_for_pairs )
+        {
+          *pair_potential_rcut = std::max( *pair_potential_rcut , std::max( pot.m_ljexp6.m_rcut , pot.m_rf.m_param.rc ) );
+        }
+        ldbg << "global pair potential rcut = "<< *pair_potential_rcut << std::endl;
         
         double cell_size = domain->cell_size() > 0.0 ? domain->cell_size() : 8.0 ;
         ldbg << "cell_size = "<<cell_size << std::endl;
@@ -602,10 +645,13 @@ namespace exaStamp
         }
         ldbg << "dom_bbox=" << dom_bbox <<std::endl;
 
+        ldbg <<std::endl << "Atomes maille elementaire : "<<atom_data.size()<<std::endl;
         for(const auto& tp : atom_data)
         {
-          Vec3d r = { tp[field::rx] , tp[field::ry] , tp[field::rz] };
+          const Vec3d r = { tp[field::rx] , tp[field::ry] , tp[field::rz] };
+          const Vec3d v = { tp[field::vx] , tp[field::vy] , tp[field::vz] };
           IJK loc = grid->locate_cell( r ); // domain_periodic_location( *domain, r );
+          ldbg << format_string("\t%d : %s , Pos=(% .5e,% .5e,% .5e) , V=(% .5e,% .5e,% .5e)\n",tp[field::id], species->at(tp[field::type]).name(), r.x,r.y,r.z, v.x,v.y,v.z );
           grid->cell(loc).push_back( tp );
         }
 

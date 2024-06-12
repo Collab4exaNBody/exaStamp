@@ -5,9 +5,9 @@ includes:
 
 configuration:
   logging:
-    debug: true
+    debug: false
   debug:
-    filter: [ ".*read_fatomes_mol" , ".*id_map" , ".*molecule_pair_weight" ]
+    filter: [ ".*read_fatomes_mol" , ".*id_map" , ".*molecule_pair_weight" , ".*exp6rf_multi_force" , ".*compute_force_bond" , ".*compute_force_bend" , ".*compute_force_torsion" , ".*compute_force_improper" ]
   profiling:
     summary: false
 
@@ -16,6 +16,7 @@ preinit_rcut_max: nop
 input_data:
   - read_fatomes_mol:
       filename: molecule_polymere.FAtomes
+      stampinput: molecule_polymere.init
       
 domain:
   cell_size: 8 ang
@@ -25,8 +26,8 @@ domain:
 global:
   dt: 1.0 fs
   rcut_inc: 4.0 ang   # additional distance so that we don't have to rebuild neighbor list each time step
-  simulation_end_iteration: 10000
-  simulation_log_frequency: 10
+  simulation_end_iteration: 11
+  simulation_log_frequency: 1
   simulation_dump_frequency: 1000
   simulation_dump_thermo_frequency: -1
 #  bond_max_dist: 20.0 ang
@@ -39,7 +40,8 @@ langevin_thermostat:
 
 compute_force:
   - compute_extramolecular_forces
-  - compute_intramolecular_forces
+  - debug_particle: { ids: [ 846 , 847 ] }
+#  - compute_intramolecular_forces
 #  - langevin_thermostat
 
 #init_epilog:

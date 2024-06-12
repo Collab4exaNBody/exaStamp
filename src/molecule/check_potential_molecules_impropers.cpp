@@ -81,6 +81,8 @@ namespace exaStamp
           if( alt_key < key ) key = alt_key;
           potentials_for_impropers->m_type_to_potential[key] = b_type.m_potential_function;
 
+          const auto gp = b_type.m_potential_function->generic_parameters();
+          ldbg << "Improper potential for "<<b_type.species.at(0)<<"/"<<b_type.species.at(1)<<"/"<<b_type.species.at(2)<<"/"<<b_type.species.at(3)<< " : p0="<<gp.p0<<", p1="<<gp.p1<<", p2="<<gp.p2<<", x0="<<gp.x0<<", coeff="<<gp.coeff<<std::endl;
         }
       }
 
