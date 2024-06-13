@@ -1,0 +1,170 @@
+#
+# Potentiel TIP4P/2005 - J.L.F. Abascal and C. Vega, J. Chem. Phys. 123, 234505 (2005)
+#
+
+# enable-if-XSTAMP_BUILD_PAIR_zero enable-if-XSTAMP_BUILD_PAIR_lennard_jones
+includes:
+  - config_rigidmol.msp
+
+configuration:
+  onika:
+    gpu_sm_mult: 4
+    gpu_block_size: 128
+  profiling:
+    summary: true
+  logging:
+    parallel: false
+    debug: true
+  debug:
+    filter: [ ".*write_dump_rigidmol" , ".*read_dump_rigidmol" ]
+
+chunk_neighbors:
+  config:
+    build_particle_offset: true
+    chunk_size: 1
+
+ljrf_rigidmol_force:
+  rcut: 8 ang
+  parameters:
+    - { type_a: O , type_b: O , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } , lj_rcut: 8 ang , lj: { epsilon: 1.286776984E-21 J , sigma: 0.31589E-09 m } } }
+    - { type_a: O , type_b: M , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: O , type_b: H , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: H , type_b: M , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: M , type_b: M , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: H , type_b: H , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: Air , type_b: Air , rcut: 8 ang , parameters: { lj_rcut: 8 ang , lj: { epsilon: 1.08468E-21 J , sigma: 0.3711-09 m } } }
+    - { type_a: Air , type_b: O   , rcut: 8 ang , parameters: { lj_rcut: 8 ang , lj: { epsilon: 0.0 J , sigma: 0.7127E-09 m } } }
+    - { type_a: Air , type_b: H   , rcut: 8 ang , parameters: { lj_rcut: 8 ang , lj: { epsilon: 0.0 J , sigma: 0.7127E-09 m } } }
+
+compute_force: 
+  - ljrf_rigidmol_force
+  - wall_v2:
+      normal: [ 1.0, 0.0, 0.0 ]
+      offset: 0.0 ang
+      cutoff: 2.4 ang
+      epsilon: 1.0e-19 J
+      exponent: 2
+      collective_stats: true
+
+grid_flavor: grid_flavor_rigidmol
+
++first_iteration:
+  - print_domain
+  - chunk_neighbors_stats
+  - grid_stats
+  - memory_stats
+
+global:
+  dt: 5.0e-4 ps
+  simulation_end_iteration: 50
+  simulation_log_frequency: 10
+#  analysis_dump_frequency: 10
+  simulation_dump_frequency: 1000
+  rcut_inc: 1.5 ang
+
+grid_cell_particle_splatting:
+  splat_size: 4.0 ang
+  grid_subdiv: 3
+
+final_dump: nop
+
+#dump_data: dump_data_grid_vtk
+
+xx_thermostat:
+  - langevin_rigidmol:
+      T: 320 K
+      friction : 5.0e1
+      friction_ratio : 1.
+
+replicate_domain:
+  repeat: [ 1 , 1 , 1 ]
+
+input_data:
+#
+###################################
+#  Common part needed both
+#  for initial setup and restart
+###################################
+  - particle_regions:
+      - BOX:
+          bounds: [ [ 10 ang , 10 ang , 10 ang ] , [ 360 ang , 360 ang , 360 ang ] ]
+      - HOLE:
+          quadric:
+            shape: sphere
+            transform:
+              - scale: [ 160 ang , 160 ang , 160 ang ] 
+              - translate: [ 180 ang , 180 ang , 180 ang ]
+      - DROPLET:
+          quadric:
+            shape: sphere
+            transform:
+              - scale: [ 150 ang , 150 ang , 150 ang ] 
+              - translate: [ 180 ang , 180 ang , 180 ang ]
+#
+#
+  - has_dump_file:
+      rebind: { result: has_dump_file }
+      body: [ file_exists: { filename: lastLegacyDump } ]
+#
+################################
+#   Initial system setup
+# ##############################
+  - generate_initial_grid:
+      condition: not has_dump_file
+      body:
+        - message: "Initial run, building system ..."
+#     *** Species configuration ***
+        - species:
+            verbose: false
+            species:
+              - H: { mass: 1.007 Da , z: 1 , charge: 0.5564 e-  , molecule: H2O }
+              - O: { mass: 16 Da    , z: 8 , charge: 0.0 e-     , molecule: H2O }
+              - M: { mass: 0.000 Da , z: 0 , charge: -1.1128 e- , molecule: H2O }
+              - Air: { mass: 28.8 Da , z: 0 , charge: 0.0 e- }
+              - H2O:
+                  charge: 0.0 e-
+                  z: 0
+                  mass: 0.0 Da
+                  rigid_molecule:
+                    - O: [  0.00000000 ang ,  0.00000000 ang ,  0.00000000 ang ]
+                    - H: [  0.75695033 ang ,  0.58588228 ang ,  0.00000000 ang ]
+                    - H: [ -0.75695033 ang ,  0.58588228 ang ,  0.00000000 ang ]
+                    - M: [  0.00000000 ang ,  0.15460000 ang ,  0.00000000 ang ]
+#     *** Domain configuration ***
+        - domain:
+            cell_size: 30.0 ang
+            periodic: [true,true,true]
+#            expandable: true
+#     *** Generate lattice with geometrical constraints ***
+        - lattice:
+            structure: SC
+            types: [ H2O ]
+            size: [ 3.103 ang , 3.103 ang , 3.103 ang ]
+            noise: 0.1 ang
+            noise_cutoff: 0.2 ang
+            repeats: [ 120 , 120 , 120 ]
+            region: DROPLET
+        - lattice:
+            init_domain: false
+            structure: SC
+            types: [ Air ]
+            size: [ 8 ang , 8 ang , 8 ang ]
+            noise: 0.1 ang
+            noise_cutoff: 0.2 ang
+            repeats: [ 45 , 45 , 45 ]
+            region: BOX and not HOLE
+#
+#     *** Initialize temperature ***
+        - random_orient
+#
+###################################
+#  Restart from dump file
+###################################
+  - read_from_last_dump:
+      condition: has_dump_file
+      body:
+        - message: "Restart from last dump ..."
+        - read_dump_rigidmol:
+            filename: lastLegacyDump
+  - replicate_domain
+
