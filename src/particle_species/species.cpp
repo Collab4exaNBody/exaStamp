@@ -12,6 +12,7 @@
 #include <iomanip>
 #include <string>
 #include <unordered_map>
+#include <algorithm>
 
 namespace exaStamp
 {
@@ -40,6 +41,8 @@ namespace exaStamp
         if(*verbose) lout<<"No species defined"<<std::endl;
       }
 
+      std::sort( species->begin() , species->end() , [](const ParticleSpecie& a, const ParticleSpecie& b) -> bool { return a.m_rigid_atom_count < b.m_rigid_atom_count; } );
+
       std::unordered_map<std::string,unsigned int> type_map;
       for(unsigned int i=0;i<species->size();i++)
       {
@@ -50,6 +53,7 @@ namespace exaStamp
       for(unsigned int a=0;a<species->size();a++)
       {
         ParticleSpecie& atom = species->at(a);
+      	lout << "Type #"<<a<<" = "<<atom.name()<<std::endl;
         if( atom.m_rigid_atom_count == 1 && first_rigid_molecule != -1 )
         {
           lerr << "single atom encountered after the first rigid molecule. rigid molecules must be at end of the list"<<std::endl;
