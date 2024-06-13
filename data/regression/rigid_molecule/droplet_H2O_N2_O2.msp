@@ -7,16 +7,13 @@ includes:
   - config_rigidmol.msp
 
 configuration:
-  onika:
-    gpu_sm_mult: 4
-    gpu_block_size: 128
   profiling:
     summary: true
   logging:
     parallel: false
-    debug: true
+    debug: false
   debug:
-    filter: [ ".*write_dump_rigidmol" , ".*read_dump_rigidmol" ]
+    filter: [ ".*write_dump_rigidmol" , ".*read_dump_rigidmol" , ".*ljrf_rigidmol_force" ]
 
 chunk_neighbors:
   config:
@@ -24,6 +21,7 @@ chunk_neighbors:
     chunk_size: 1
 
 ljrf_rigidmol_force:
+#ljrf_multi_force:
   rcut: 8 ang
   parameters:
     - { type_a: O , type_b: O , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } , lj_rcut: 8 ang , lj: { epsilon: 1.286776984E-21 J , sigma: 0.31589E-09 m } } }
@@ -33,11 +31,11 @@ ljrf_rigidmol_force:
     - { type_a: M , type_b: M , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
     - { type_a: H , type_b: H , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
     - { type_a: Air , type_b: Air , rcut: 8 ang , parameters: { lj_rcut: 8 ang , lj: { epsilon: 1.08468E-21 J , sigma: 0.3711-09 m } } }
-    - { type_a: Air , type_b: O   , rcut: 8 ang , parameters: { lj_rcut: 8 ang , lj: { epsilon: 0.0 J , sigma: 0.7127E-09 m } } }
-    - { type_a: Air , type_b: H   , rcut: 8 ang , parameters: { lj_rcut: 8 ang , lj: { epsilon: 0.0 J , sigma: 0.7127E-09 m } } }
+    - { type_a: Air , type_b: O   , rcut: 8 ang , parameters: { lj_rcut: 8 ang , lj: { epsilon: 1.0e-22 J , sigma: 0.7127E-09 m } } }
 
 compute_force: 
   - ljrf_rigidmol_force
+#  - ljrf_multi_force
   - wall_v2:
       normal: [ 1.0, 0.0, 0.0 ]
       offset: 0.0 ang
@@ -56,17 +54,18 @@ grid_flavor: grid_flavor_rigidmol
 
 global:
   dt: 5.0e-4 ps
-  simulation_end_iteration: 50
+  simulation_end_iteration: 500
   simulation_log_frequency: 10
 #  analysis_dump_frequency: 10
-  simulation_dump_frequency: 1000
+  simulation_dump_frequency: 100
+#  init_temperature: 300 K
   rcut_inc: 1.5 ang
 
 grid_cell_particle_splatting:
   splat_size: 4.0 ang
   grid_subdiv: 3
 
-final_dump: nop
+#final_dump: nop
 
 #dump_data: dump_data_grid_vtk
 
@@ -98,7 +97,7 @@ input_data:
           quadric:
             shape: sphere
             transform:
-              - scale: [ 150 ang , 150 ang , 150 ang ] 
+              - scale: [ 140 ang , 140 ang , 140 ang ] 
               - translate: [ 180 ang , 180 ang , 180 ang ]
 #
 #
@@ -132,7 +131,7 @@ input_data:
                     - M: [  0.00000000 ang ,  0.15460000 ang ,  0.00000000 ang ]
 #     *** Domain configuration ***
         - domain:
-            cell_size: 30.0 ang
+            cell_size: 10.0 ang
             periodic: [true,true,true]
 #            expandable: true
 #     *** Generate lattice with geometrical constraints ***
@@ -148,10 +147,10 @@ input_data:
             init_domain: false
             structure: SC
             types: [ Air ]
-            size: [ 8 ang , 8 ang , 8 ang ]
+            size: [ 34 ang , 34 ang , 34 ang ]
             noise: 0.1 ang
             noise_cutoff: 0.2 ang
-            repeats: [ 45 , 45 , 45 ]
+            repeats: [ 11 , 11 , 11 ]
             region: BOX and not HOLE
 #
 #     *** Initialize temperature ***
