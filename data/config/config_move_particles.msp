@@ -27,6 +27,8 @@ ghost_update_r: &ghost_update_parms
   serialize_pack_send: true
   wait_all: false
 
+ghost_update_rq: *ghost_update_parms
+
 update_force_energy_from_ghost: *ghost_update_parms
 
 ghost_update_all_no_fv: *ghost_update_parms
