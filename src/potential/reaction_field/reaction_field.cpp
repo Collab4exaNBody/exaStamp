@@ -34,6 +34,7 @@ namespace exaStamp
   {
     static inline constexpr bool ComputeEnergy = false;
     static inline constexpr bool ComputeVirial = false;
+    double charge_a = 0.0;
     Vec3d f = {0.,0.,0.};
   };
 
@@ -55,7 +56,7 @@ namespace exaStamp
   };
 
   // Reaction Field Compute functor
-  template<class CPLocksT, class ChargeFieldT, class VirFieldT, bool _PerAtomCharge=false, bool _UseSymetry=false, bool _ComputeEnergy = false, bool _ComputeVirial = false>
+  template<class CPLocksT, class ChargeFieldT, class TypeFieldT , class VirialFieldT, bool _PerAtomCharge=false, bool _UseSymetry=false, bool _ComputeEnergy = false, bool _ComputeVirial = false>
   struct ReactioFieldForceOp
   {
     static inline constexpr bool PerAtomCharge = _PerAtomCharge;
@@ -68,7 +69,8 @@ namespace exaStamp
     const ParticleSpecie * __restrict__ m_species = nullptr;
     CPLocksT & m_locks;
     ChargeFieldT m_charge_field;
-    VirFieldT m_virial_field;
+    TypeFieldT m_type_field;
+    VirialFieldT m_virial_field;
 
     template<class ComputeBufferT, class CellParticlesT>
     ONIKA_HOST_DEVICE_FUNC
@@ -83,8 +85,8 @@ namespace exaStamp
           ctx.ext.virial = Mat3d{0.,0.,0.,0.,0.,0.,0.,0.,0.};
         }
       }
-      if constexpr (  PerAtomCharge ) ctx.charge_a = cells[cell_a][m_charge_field][p_a] ];
-      if constexpr ( !PerAtomCharge ) ctx.charge_a = m_species[ cells[cell_a][field::type][p_a] ].m_charge;
+      if constexpr (  PerAtomCharge ) ctx.ext.charge_a = cells[cell_a][m_charge_field][p_a];
+      if constexpr ( !PerAtomCharge ) ctx.ext.charge_a = m_species[ cells[cell_a][field::type][p_a] ].m_charge;
     }
 
     template<class ComputeBufferT, class CellParticlesT>
@@ -93,7 +95,7 @@ namespace exaStamp
     {
       static constexpr bool CPAA = UseSymetry &&   onika::cuda::gpu_device_execution_t::value;
       static constexpr bool LOCK = UseSymetry && ! onika::cuda::gpu_device_execution_t::value;
-      if constexpr ( LOCK ) cp_locks[cell_a][p_a].lock();
+      if constexpr ( LOCK ) m_locks[cell_a][p_a].lock();
       if constexpr ( CPAA )
       {
         ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_a][field::fx][p_a] , ctx.ext.f.x );
@@ -130,7 +132,7 @@ namespace exaStamp
           }
         }
       }
-      if constexpr ( LOCK ) cp_locks[cell_a][p_a].unlock();
+      if constexpr ( LOCK ) m_locks[cell_a][p_a].unlock();
     }
 
     template<class ComputeBufferT, class CellParticlesT>
@@ -143,7 +145,7 @@ namespace exaStamp
       static constexpr bool LOCK = UseSymetry && ! onika::cuda::gpu_device_execution_t::value;
 
       double charge_b = 0.0;
-      if constexpr (  PerAtomCharge ) charge_b = cells[cell_b][m_charge_field][p_b] ];
+      if constexpr (  PerAtomCharge ) charge_b = cells[cell_b][m_charge_field][p_b];
       if constexpr ( !PerAtomCharge ) charge_b = m_species[ cells[cell_b][field::type][p_b] ].m_charge;
 
       const double r = std::sqrt(d2);
@@ -153,19 +155,19 @@ namespace exaStamp
       de /= r;
       const Vec3d dr_fe = de * dr;
       ctx.f += dr_fe;
-      [[maybe_unsued]] Mat3d virial;
+      [[maybe_unused]] Mat3d virial;
       if constexpr ( ComputeEnergy )
       {
         ctx.ep += .5 * e;
         if constexpr ( ComputeVirial )
         {
           virial = tensor( dr_fe, dr ) * -0.5;
-          ctx.virial += virial
+          ctx.virial += virial;
         }
       }
       if constexpr ( UseSymetry )
       {
-        if constexpr ( LOCK ) cp_locks[cell_b][p_b].lock();
+        if constexpr ( LOCK ) m_locks[cell_b][p_b].lock();
         if constexpr ( CPAA )
         {            
           ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_b][field::fx][p_b] , - dr_fe.x );
@@ -202,19 +204,39 @@ namespace exaStamp
             }
           }
         }
-        if constexpr ( LOCK ) cp_locks[cell_b][p_b].unlock();
+        if constexpr ( LOCK ) m_locks[cell_b][p_b].unlock();
       }
     }
     
   };
 
+}
+
+namespace exanb
+{
+  template<class CPLocksT, class ChargeFieldT, class TypeFieldT , class VirialFieldT, bool _PerAtomCharge, bool _UseSymetry, bool _ComputeEnergy, bool _ComputeVirial>
+  struct ComputePairTraits< exaStamp::ReactioFieldForceOp<CPLocksT,ChargeFieldT,TypeFieldT,VirialFieldT,_PerAtomCharge,_UseSymetry,_ComputeEnergy,_ComputeVirial> >
+  {
+    static inline constexpr bool RequiresBlockSynchronousCall = false;
+    static inline constexpr bool ComputeBufferCompatible      = false;
+    static inline constexpr bool BufferLessCompatible         = true;
+    static inline constexpr bool HasParticleContextStart      = true;    
+    static inline constexpr bool HasParticleContext           = true;
+    static inline constexpr bool HasParticleContextStop       = true;
+    static inline constexpr bool CudaCompatible               = true;
+  };
+}
+
+
+namespace exaStamp
+{
 
   template<
     class GridT,
     class = AssertGridHasFields< GridT, field::_ep ,field::_fx ,field::_fy ,field::_fz >
     >
   class ReactionFieldPC : public OperatorNode
-  {      
+  {
     // ========= I/O slots =======================
     ADD_SLOT( ReactionFieldParms        , parameters          , INPUT , REQUIRED );
     ADD_SLOT( exanb::GridChunkNeighbors , chunk_neighbors     , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
@@ -230,7 +252,7 @@ namespace exaStamp
     ADD_SLOT( GridT                     , grid                , INPUT_OUTPUT );
     ADD_SLOT( double                    , rcut_max            , INPUT_OUTPUT , 0.0 );
 
-    ADD_SLOT( GridParticleLocks     , particle_locks      , INPUT_OUTPUT , OPTIONAL , DocString{"particle spin locks"} );
+    ADD_SLOT( GridParticleLocks         , particle_locks      , INPUT_OUTPUT , OPTIONAL , DocString{"particle spin locks"} );
 
     // ========= Internal types =======================
 
@@ -263,9 +285,14 @@ namespace exaStamp
       }
        
       const bool need_particle_locks = ( omp_get_max_threads() > 1 ) && ( *use_symmetry ) ;
-      const bool need_virial = log_energy && *compute_virial;
+      const bool need_virial = log_energy ; // && *compute_virial;
       const bool pair_weights = compact_nbh_weight.has_value() && ( *enable_pair_weights );
-      const bool ghost = *use_symmetry;
+      const bool need_ghost = *use_symmetry;
+
+      if( need_particle_locks && ! particle_locks.has_value() )
+      {
+        fatal_error() << "missing particle_locks value"<<std::endl;
+      }
 
       ldbg << std::boolalpha
            <<"Reaction field: rc="<< rcut
@@ -273,40 +300,66 @@ namespace exaStamp
            <<" , log_energy="<< log_energy
            <<" , need_virial="<< need_virial
            <<" , use_symmetry="<< *use_symmetry
-           <<" , ghost="<< ghost
+           <<" , ghost="<< need_ghost
+           <<" , per_atom_charge="<< *per_atom_charge
            <<" , need_locks="<< need_particle_locks << std::endl;
 
 
-      
-      auto charge_field = grid-> , auto virial_field
-      if( ! log_energy )
+      using ChargeFieldT = decltype( grid->field_accessor( field::charge ) );
+      using VirialFieldT = decltype( grid->field_accessor( field::virial ) );
+      using TypeFieldT   = decltype( grid->field_accessor( field::type   ) );      
+
+      ChargeFieldT charge_field = {};
+      TypeFieldT   type_field   = {};
+      VirialFieldT virial_field = {};
+
+      if( *per_atom_charge )
       {
-        using ComputeContext = ReactionFieldComputeContext<false,false>;
-        
+        charge_field = grid->field_accessor( field::charge );
+      }
+      else
+      {
+        type_field = grid->field_accessor( field::type );
+      }      
+      if( need_virial )
+      {
+        virial_field = grid->field_accessor( field::virial );
       }
             
-      auto compute_force_energy = [&](auto cp_locks, auto cp_weight, auto force_op, auto cp_ctx, )
+      auto compute_force_energy = [&](auto & cp_locks, const auto & cp_weight, const auto & force_op, auto && cpbuf_factory )
       {
         exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
-        auto force_buf = make_default_pair_buffer();
         LinearXForm cp_xform { domain->xform() };
         auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform, cp_locks );
-        
-        //  template<class CPLocksT, class ChargeFieldT, class VirFieldT, bool _PerAtomCharge=false, bool _UseSymetry=false, bool _ComputeEnergy = false, bool _ComputeVirial = false>
-        ReactioFieldForceOp<decltype(cp_locks),>
-        
-
-        compute_cell_particle_pairs( *grid, rcut, *ghost, optional, force_buf, force_op , force_op_fields , DefaultPositionFields{} , parallel_execution_context() );
+//        [[maybe_unused]] static constexpr onika::parallel::AssertFunctorSizeFitIn< alignof(force_op) , 1 , decltype(force_op) > _check_functor_size = {};
+        compute_cell_particle_pairs2( *grid, rcut, need_ghost, optional, cpbuf_factory, force_op, onika::FlatTuple<>{}, DefaultPositionFields{}, parallel_execution_context() );
       };
       
-        ComputePairOptionalLocks<false> cp_locks {};
-      using ComputeFields = FieldSet<field::_ep,field::_fx,field::_fy,field::_fz,field::_type,field::_charge>;
-      ForceOp<false> force_op { *parameters , species->data() };
-        
-      const bool use_weights = compact_nbh_weight.has_value() && *enable_pair_weights;
-      if( use_weights ) compute_force_opt_weights( CompactPairWeightIterator{ compact_nbh_weight->m_cell_weights.data() } );
-      else              compute_force_opt_weights( ComputePairNullWeightIterator{} );
+      auto compute_force_energy_opt_weights = [&](auto & cp_locks, auto && cp_weight)
+      {
+        // template<class CPLocksT, class ChargeFieldT, class TypeFieldT , class VirialFieldT, bool _PerAtomCharge=false, bool _UseSymetry=false, bool _ComputeEnergy = false, bool _ComputeVirial = false>
+        if( log_energy )
+        {
+          using ForceOp = ReactioFieldForceOp<decltype(cp_locks),ChargeFieldT,TypeFieldT,VirialFieldT,true,false,true,true>;
+          using CPBufT = ComputePairBuffer2<false,false, ReactionFieldComputeContext<true,true> >;
+          compute_force_energy( cp_locks, cp_weight, ForceOp{*parameters, species->data(), cp_locks, charge_field, type_field, virial_field} , make_compute_pair_buffer<CPBufT>() );
+        }
+        else
+        {
+          using ForceOp = ReactioFieldForceOp<decltype(cp_locks),ChargeFieldT,TypeFieldT,VirialFieldT,true,false,false,false>;
+          using CPBufT = ComputePairBuffer2<false,false, ReactionFieldComputeContext<false,false> >;
+          compute_force_energy( cp_locks, cp_weight, ForceOp{*parameters, species->data(), cp_locks, charge_field, type_field, virial_field} , make_compute_pair_buffer<CPBufT>() );
+        }
+      };
       
+      auto compute_force_energy_opt_locks = [&](auto && cp_locks)
+      {
+        if( pair_weights ) compute_force_energy_opt_weights( cp_locks, CompactPairWeightIterator{ compact_nbh_weight->m_cell_weights.data() } );
+        else               compute_force_energy_opt_weights( cp_locks, ComputePairNullWeightIterator{} );
+      };
+
+      if( need_particle_locks ) compute_force_energy_opt_locks( ComputePairOptionalLocks<false>{} );
+      else                      compute_force_energy_opt_locks( ComputePairOptionalLocks<true>{ particle_locks->data() } );      
     }
 
   };
