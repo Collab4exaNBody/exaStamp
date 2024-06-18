@@ -63,5 +63,13 @@ namespace exaStamp
     }
   };
 
+  struct ChargeFunctor
+  {
+    const ParticleSpecie* __restrict__ m_species = nullptr;  
+    ONIKA_HOST_DEVICE_FUNC inline double operator () (unsigned int type) const
+    {
+      return m_species[type].m_mass;
+    }
+  };
 
 }

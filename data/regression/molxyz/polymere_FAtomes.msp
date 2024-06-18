@@ -5,7 +5,7 @@ includes:
 
 configuration:
   logging:
-    debug: false
+    debug: true
   debug:
     filter: [ ".*read_fatomes_mol" , ".*id_map" , ".*molecule_pair_weight" , ".*exp6rf_multi_force" , ".*compute_force_bond" , ".*compute_force_bend" , ".*compute_force_torsion" , ".*compute_force_improper" ]
   profiling:
@@ -39,8 +39,9 @@ langevin_thermostat:
   gamma: 0.1 ps^-1
 
 compute_force:
+  - debug_particle: { ids: [ 846 ] }
   - compute_extramolecular_forces
-  - debug_particle: { ids: [ 846 , 847 ] }
+  - debug_particle: { ids: [ 846 ] }
 #  - compute_intramolecular_forces
 #  - langevin_thermostat
 

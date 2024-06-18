@@ -141,7 +141,7 @@ input_data:
             size: [ 3.103 ang , 3.103 ang , 3.103 ang ]
             noise: 0.1 ang
             noise_cutoff: 0.2 ang
-            repeats: [ 120 , 120 , 120 ]
+            repeats: [ 3231 , 161 , 161 ]
             region: DROPLET
         - lattice:
             init_domain: false

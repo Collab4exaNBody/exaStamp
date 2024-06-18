@@ -21,3 +21,5 @@ ONIKA_DECLARE_FIELD_COMBINER( exaStamp, MultimatMomentumCombiner , momentum , ex
 ONIKA_DECLARE_FIELD_COMBINER( exaStamp, MonomatMassCombiner  , mass , exaStamp::MassFunctor )
 ONIKA_DECLARE_FIELD_COMBINER( exaStamp, MultimatMassCombiner , mass , exaStamp::MassFunctor , exanb::field::_type )
 
+ONIKA_DECLARE_FIELD_COMBINER( exaStamp, AtomTypeChargeCombiner , type_charge , exaStamp::ChargeFunctor , exanb::field::_type )
+
