@@ -42,6 +42,7 @@ namespace exaStamp
   {
     static inline constexpr bool ComputeEnergy = true;
     static inline constexpr bool ComputeVirial = false;
+    double charge_a = 0.0;
     Vec3d f = {0.,0.,0.};
     double ep = 0.0;
   };
@@ -50,6 +51,7 @@ namespace exaStamp
   {
     static inline constexpr bool ComputeEnergy = true;
     static inline constexpr bool ComputeVirial = true;
+    double charge_a = 0.0;
     Vec3d f = {0.,0.,0.};
     double ep = 0.0;
     Mat3d virial = {0.,0.,0.,0.,0.,0.,0.,0.,0.};
@@ -150,19 +152,19 @@ namespace exaStamp
 
       const double r = std::sqrt(d2);
       double e=0.0, de=0.0;
-      reaction_field_compute_energy( m_params, ctx.charge_a, charge_b, r, e, de );
+      reaction_field_compute_energy( m_params, ctx.ext.charge_a, charge_b, r, e, de );
       e *= weight; de *= weight; // weighting function
       de /= r;
       const Vec3d dr_fe = de * dr;
-      ctx.f += dr_fe;
+      ctx.ext.f += dr_fe;
       [[maybe_unused]] Mat3d virial;
       if constexpr ( ComputeEnergy )
       {
-        ctx.ep += .5 * e;
+        ctx.ext.ep += .5 * e;
         if constexpr ( ComputeVirial )
         {
           virial = tensor( dr_fe, dr ) * -0.5;
-          ctx.virial += virial;
+          ctx.ext.virial += virial;
         }
       }
       if constexpr ( UseSymetry )
@@ -332,7 +334,8 @@ namespace exaStamp
         LinearXForm cp_xform { domain->xform() };
         auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform, cp_locks );
 //        [[maybe_unused]] static constexpr onika::parallel::AssertFunctorSizeFitIn< alignof(force_op) , 1 , decltype(force_op) > _check_functor_size = {};
-        compute_cell_particle_pairs2( *grid, rcut, need_ghost, optional, cpbuf_factory, force_op, onika::FlatTuple<>{}, DefaultPositionFields{}, parallel_execution_context() );
+        static constexpr std::true_type use_cells_accessor = {};
+        compute_cell_particle_pairs2( *grid, rcut, need_ghost, optional, cpbuf_factory, force_op, onika::FlatTuple<>{}, DefaultPositionFields{}, parallel_execution_context(), use_cells_accessor );
       };
       
       auto compute_force_energy_opt_weights = [&](auto & cp_locks, auto && cp_weight)
@@ -369,7 +372,7 @@ namespace exaStamp
   // === register factories ===  
   CONSTRUCTOR_FUNCTION
   {  
-    OperatorNodeFactory::instance()->register_factory( "reaction_field_pc" , make_grid_variant_operator<ReactionFieldPCTmpl> );
+    OperatorNodeFactory::instance()->register_factory( "reaction_field" , make_grid_variant_operator<ReactionFieldPCTmpl> );
   }
 
 }

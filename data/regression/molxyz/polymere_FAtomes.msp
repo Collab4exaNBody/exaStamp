@@ -24,7 +24,7 @@ domain:
 
 # user-specified global values
 global:
-  dt: 1.0 fs
+  dt: 1.0e-16 s
   rcut_inc: 4.0 ang   # additional distance so that we don't have to rebuild neighbor list each time step
   simulation_end_iteration: 11
   simulation_log_frequency: 1
