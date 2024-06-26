@@ -53,7 +53,7 @@ namespace exaStamp
       for(unsigned int a=0;a<species->size();a++)
       {
         ParticleSpecie& atom = species->at(a);
-      	lout << "Type #"<<a<<" = "<<atom.name()<<std::endl;
+      	//lout << "Type #"<<a<<" = "<<atom.name()<<std::endl;
         if( atom.m_rigid_atom_count == 1 && first_rigid_molecule != -1 )
         {
           lerr << "single atom encountered after the first rigid molecule. rigid molecules must be at end of the list"<<std::endl;

@@ -82,19 +82,19 @@ input_data:
 ###################################
   - particle_regions:
       - BOX:
-          bounds: [ [ 10 ang , 10 ang , 10 ang ] , [ 360 ang , 360 ang , 360 ang ] ]
+          bounds: [ [ 0 ang , 0 ang , 0 ang ] , [ 800 ang , 400 ang , 400 ang ] ]
       - HOLE:
           quadric:
             shape: sphere
             transform:
-              - scale: [ 160 ang , 160 ang , 160 ang ] 
-              - translate: [ 180 ang , 180 ang , 180 ang ]
+              - scale: [ 150 ang , 150 ang , 150 ang ] 
+              - translate: [ 400 ang , 200 ang , 200 ang ]
       - DROPLET:
           quadric:
             shape: sphere
             transform:
               - scale: [ 140 ang , 140 ang , 140 ang ] 
-              - translate: [ 180 ang , 180 ang , 180 ang ]
+              - translate: [ 400 ang , 200 ang , 200 ang ]
 #
 #
   - has_dump_file:
@@ -126,26 +126,29 @@ input_data:
                     - M: [  0.00000000 ang ,  0.15460000 ang ,  0.00000000 ang ]
 #     *** Domain configuration ***
         - domain:
-            cell_size: 30.0 ang
-            periodic: [true,true,true]
-#            expandable: true
+            cell_size: 20.0 ang
+            bounds: [ [ 0.0 ang , 0.0 ang , 0.0 ang ] , [ 800.0 ang , 400.0 ang , 400.0 ang ] ]
+            grid_dims: [ 40 , 20 , 20 ]
+            periodic: [ false , true , true ]
+            expandable: true
+            xform: [ [ 1 , 0 , 0 ] , [ 0 , 1 , 0 ] , [ 0 , 0 , 1 ] ]
+        - init_rcb_grid
 #     *** Generate lattice with geometrical constraints ***
         - lattice:
             structure: SC
             types: [ H2O ]
-            size: [ 3.103 ang , 3.103 ang , 3.103 ang ]
+            size: [ 3.104 ang , 3.104 ang , 3.104 ang ]
             noise: 0.1 ang
             noise_cutoff: 0.2 ang
-            repeats: [ 120 , 120 , 120 ]
+            repeats: [ 260 , 130 , 130 ]
             region: DROPLET
         - lattice:
-            init_domain: false
-            structure: BCC
-            types: [ O , H ]
-            size: [ 15 ang , 15 ang , 15 ang ]
+            structure: SC
+            types: [ O ]
+            size: [ 34 ang , 34 ang , 34 ang ]
             noise: 0.1 ang
             noise_cutoff: 0.2 ang
-            repeats: [ 24 , 24 , 24 ]
+            repeats: [ 24 , 12 , 12 ]
             region: BOX and not HOLE
 #
 #     *** Initialize temperature ***
