@@ -7,13 +7,10 @@ includes:
   - config_rigidmol.msp
 
 configuration:
-  onika:
-    gpu_sm_mult: 4
-    gpu_block_size: 128
   profiling:
     summary: true
   logging:
-    parallel: true
+    parallel: false
     debug: true
   debug:
     filter: [ ".*write_dump_rigidmol" , ".*read_dump_rigidmol" , ".*extend_domain" , ".*init_rcb_grid" ]
@@ -81,20 +78,18 @@ input_data:
 #  for initial setup and restart
 ###################################
   - particle_regions:
-      - BOX:
-          bounds: [ [ 0 ang , 0 ang , 0 ang ] , [ 2000 ang , 1000 ang , 1000 ang ] ]
       - HOLE:
           quadric:
             shape: sphere
             transform:
               - scale: [ 800 ang , 800 ang , 800 ang ] 
-              - translate: [ 1000 ang , 500 ang , 500 ang ]
+              - translate: [ 10000 ang , 5000 ang , 5000 ang ]
       - DROPLET:
           quadric:
             shape: sphere
             transform:
               - scale: [ 780 ang , 780 ang , 780 ang ] 
-              - translate: [ 1000 ang , 500 ang , 500 ang ]
+              - translate: [ 10000 ang , 5000 ang , 5000 ang ]
 #
 #
   - has_dump_file:
@@ -126,9 +121,9 @@ input_data:
                     - M: [  0.00000000 ang ,  0.15460000 ang ,  0.00000000 ang ]
 #     *** Domain configuration ***
         - domain:
-            cell_size: 20.0 ang
-            bounds: [ [ 0.0 ang , 0.0 ang , 0.0 ang ] , [ 800.0 ang , 400.0 ang , 400.0 ang ] ]
-            grid_dims: [ 40 , 20 , 20 ]
+            cell_size: 50.0 ang
+            bounds: [ [ 0.0 ang , 0.0 ang , 0.0 ang ] , [ 20000.0 ang , 10000.0 ang , 10000.0 ang ] ]
+            grid_dims: [ 400 , 200 , 200 ]
             periodic: [ false , true , true ]
             expandable: true
             xform: [ [ 1 , 0 , 0 ] , [ 0 , 1 , 0 ] , [ 0 , 0 , 1 ] ]
@@ -147,7 +142,7 @@ input_data:
             size: [ 34 ang , 34 ang , 34 ang ]
             noise: 0.1 ang
             noise_cutoff: 0.2 ang
-            region: BOX and not HOLE
+            region: not HOLE
 #
 #     *** Initialize temperature ***
         - move_particles
