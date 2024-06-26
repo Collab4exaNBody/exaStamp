@@ -82,19 +82,19 @@ input_data:
 ###################################
   - particle_regions:
       - BOX:
-          bounds: [ [ 0 ang , 0 ang , 0 ang ] , [ 800 ang , 400 ang , 400 ang ] ]
+          bounds: [ [ 0 ang , 0 ang , 0 ang ] , [ 2000 ang , 1000 ang , 1000 ang ] ]
       - HOLE:
           quadric:
             shape: sphere
             transform:
-              - scale: [ 150 ang , 150 ang , 150 ang ] 
-              - translate: [ 400 ang , 200 ang , 200 ang ]
+              - scale: [ 800 ang , 800 ang , 800 ang ] 
+              - translate: [ 1000 ang , 500 ang , 500 ang ]
       - DROPLET:
           quadric:
             shape: sphere
             transform:
-              - scale: [ 140 ang , 140 ang , 140 ang ] 
-              - translate: [ 400 ang , 200 ang , 200 ang ]
+              - scale: [ 780 ang , 780 ang , 780 ang ] 
+              - translate: [ 1000 ang , 500 ang , 500 ang ]
 #
 #
   - has_dump_file:
@@ -140,7 +140,7 @@ input_data:
             size: [ 3.104 ang , 3.104 ang , 3.104 ang ]
             noise: 0.1 ang
             noise_cutoff: 0.2 ang
-            repeats: [ 260 , 130 , 130 ]
+            repeats: [ 645 , 323 , 323 ]
             region: DROPLET
         - lattice:
             structure: SC
@@ -148,7 +148,7 @@ input_data:
             size: [ 34 ang , 34 ang , 34 ang ]
             noise: 0.1 ang
             noise_cutoff: 0.2 ang
-            repeats: [ 24 , 12 , 12 ]
+            repeats: [ 59 , 30 , 30 ]
             region: BOX and not HOLE
 #
 #     *** Initialize temperature ***
