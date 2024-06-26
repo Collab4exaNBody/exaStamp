@@ -140,7 +140,6 @@ input_data:
             size: [ 3.104 ang , 3.104 ang , 3.104 ang ]
             noise: 0.1 ang
             noise_cutoff: 0.2 ang
-            repeats: [ 645 , 323 , 323 ]
             region: DROPLET
         - lattice:
             structure: SC
@@ -148,7 +147,6 @@ input_data:
             size: [ 34 ang , 34 ang , 34 ang ]
             noise: 0.1 ang
             noise_cutoff: 0.2 ang
-            repeats: [ 59 , 30 , 30 ]
             region: BOX and not HOLE
 #
 #     *** Initialize temperature ***
