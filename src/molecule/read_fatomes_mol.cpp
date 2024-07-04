@@ -649,9 +649,9 @@ namespace exaStamp
         for(const auto& tp : atom_data)
         {
           const Vec3d r = { tp[field::rx] , tp[field::ry] , tp[field::rz] };
-          const Vec3d v = { tp[field::vx] , tp[field::vy] , tp[field::vz] };
           IJK loc = grid->locate_cell( r ); // domain_periodic_location( *domain, r );
-          ldbg << format_string("\t%d : %s , Pos=(% .5e,% .5e,% .5e) , V=(% .5e,% .5e,% .5e)\n",tp[field::id], species->at(tp[field::type]).name(), r.x,r.y,r.z, v.x,v.y,v.z );
+//          const Vec3d v = { tp[field::vx] , tp[field::vy] , tp[field::vz] };
+//          ldbg << format_string("\t%d : %s , Pos=(% .5e,% .5e,% .5e) , V=(% .5e,% .5e,% .5e)\n",tp[field::id], species->at(tp[field::type]).name(), r.x,r.y,r.z, v.x,v.y,v.z );
           grid->cell(loc).push_back( tp );
         }
 

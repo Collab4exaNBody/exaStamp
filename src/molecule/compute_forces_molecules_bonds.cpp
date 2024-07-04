@@ -115,8 +115,7 @@ namespace exaStamp
         Vec3d tmp = xform * size_box;
         if( fabs(tmp.x) <= 1.5 || fabs(tmp.y) <= 1.5 || fabs(tmp.z) <= 1.5 )
         {
-          lerr<<"xform="<<xform<<", size_box="<<size_box<<", tmp="<<tmp<<std::endl;
-          std::abort();
+          fatal_error()<<"xform="<<xform<<", size_box="<<size_box<<", tmp="<<tmp<<std::endl;
         }
       }
 #     endif
@@ -178,6 +177,25 @@ namespace exaStamp
           double dEp_dr = fe.first;
           Vec3d F = ( r * dEp_dr ) / norm_r;
 
+#if 0
+          // Debug Th. C.
+#         pragma omp critical(dbgèmesg)
+          {
+            const uint64_t atid1 = cells[cell[0]][field::id][pos[0]];
+            const uint64_t atid2 = cells[cell[1]][field::id][pos[1]];
+            if( atid1==846 || atid1==3004 || atid1==11323 )
+            {
+              printf("BOND %05ld - %05ld : x1=(% .5e,% .5e,% .5e) x2=(% .5e,% .5e,% .5e) dr=(% .5e,% .5e,% .5e) f=(% .5e,% .5e,% .5e)\n"
+                    , atid1 , atid2
+                    , ra.x , ra.y , ra.z
+                    , rb.x , rb.y , rb.z
+                    , r.x , r.y , r.z
+                    , F.x , F.y , F.z );
+            }
+          }
+          /*******************/
+#endif
+          
           force_buf.m_force_enegery[i].m_force = F;
           force_buf.m_force_enegery[i].m_energy = e * 0.5;
           if( has_virial_field )

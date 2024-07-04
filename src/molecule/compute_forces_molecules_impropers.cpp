@@ -267,6 +267,28 @@ namespace exaStamp
             const Mat3d virac = vira + virc;
             const Mat3d vircd = virc + vird;
 
+#if 0
+            // Debug Th. C.
+#           pragma omp critical(dbgèmesg)
+            {
+              const uint64_t atid1 = cells[cell[0]][field::id][pos[0]];
+              const uint64_t atid2 = cells[cell[1]][field::id][pos[1]];
+              const uint64_t atid3 = cells[cell[2]][field::id][pos[2]];
+              const uint64_t atid4 = cells[cell[3]][field::id][pos[3]];
+              if( atid1==846 || atid1==3004 || atid1==11323 || atid4==846 || atid4==3004 || atid4==11323 )
+              {
+                printf("IMPROPER %05ld - %05ld - %05ld - %05ld : x1=(% .5e,% .5e,% .5e) x2=(% .5e,% .5e,% .5e) x3=(% .5e,% .5e,% .5e) x4=(% .5e,% .5e,% .5e) f=(% .5e,% .5e,% .5e)\n"
+                      , atid1 , atid2 , atid3 , atid4
+                      , r0.x , r0.y , r0.z
+                      , r1.x , r1.y , r1.z
+                      , r2.x , r2.y , r2.z
+                      , r3.x , r3.y , r3.z
+                      , Fa.x , Fa.y , Fa.z );
+              }
+            }
+            /*******************/
+#endif
+
             (*particle_locks)[cell[0]][pos[0]].lock();
             cells[cell[0]][field::ep][pos[0]] += e;
             cells[cell[0]][field::fx][pos[0]] += Fa.x; 
@@ -282,7 +304,6 @@ namespace exaStamp
             cells[cell[1]][field::fz][pos[1]] += Fo.z; 
             virial_add_contribution( cells[cell[1]] , pos[1] , virac);
             (*particle_locks)[cell[1]][pos[1]].unlock();
-
 
             (*particle_locks)[cell[2]][pos[2]].lock();
             cells[cell[2]][field::ep][pos[2]] += e;

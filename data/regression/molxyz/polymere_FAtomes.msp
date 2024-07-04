@@ -41,9 +41,9 @@ langevin_thermostat:
 compute_force:
   - debug_particle: { ids: [ 846 , 3004 , 11323 ] }
   - compute_extramolecular_forces
-  - debug_particle: { ids: [ 846 , 3004 , 11323 ] }
-#  - compute_intramolecular_forces
+  - compute_intramolecular_forces
 #  - langevin_thermostat
+  - debug_particle: { ids: [ 846 , 3004 , 11323 ] }
 
 #init_epilog:
 #  - dump_data

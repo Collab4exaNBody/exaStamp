@@ -106,7 +106,7 @@ namespace exaStamp
     }
     inline MoleculeGenericFuncParam generic_parameters() const override final
     {
-      return {k/2,0.,0.,t0,1.0f};
+      return {k,0.,0.,t0,1.0f};
     }
   private:
     double k = 0.0;
@@ -126,7 +126,7 @@ namespace exaStamp
     }
     inline MoleculeGenericFuncParam generic_parameters() const override final
     {
-      return {k/2,0.,0.,t0,2.0f}; // energy is scaled up x2 compared to standard harm bond form
+      return {k,0.,0.,t0,2.0f}; // energy is scaled up x2 compared to standard harm bond form
     }
   private:
     double k = 0.0;
@@ -174,7 +174,7 @@ namespace exaStamp
     }
     inline MoleculeGenericFuncParam generic_parameters() const override final
     {
-      return {k2,k3,k4,t0,1.0};
+      return {k2,k3,k4,t0,1.0f};
     }
   private:
     double k2 = 0.0;

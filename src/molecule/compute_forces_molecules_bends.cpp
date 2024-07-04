@@ -227,6 +227,27 @@ namespace exaStamp
           const Mat3d virial1 = tensor (F1,r1) * 0.5;
           const Mat3d virial2 = tensor (F2,r2) * 0.5;
 
+#if 0
+          // Debug Th. C.
+#         pragma omp critical(dbgèmesg)
+          {
+            const uint64_t atid1 = cells[cell[0]][field::id][pos[0]];
+            const uint64_t atid2 = cells[cell[1]][field::id][pos[1]];
+            const uint64_t atid3 = cells[cell[2]][field::id][pos[2]];
+            if( atid1==846 || atid1==3004 || atid1==11323 )
+            {
+              printf("ANGLE %05ld - %05ld - %05ld : x1=(% .5e,% .5e,% .5e) x2=(% .5e,% .5e,% .5e) x3=(% .5e,% .5e,% .5e) teta=% .5e f=(% .5e,% .5e,% .5e)\n"
+                    , atid1 , atid2 , atid3
+                    , ra.x , ra.y , ra.z
+                    , rb.x , rb.y , rb.z
+                    , rc.x , rc.y , rc.z
+                    , theta * 180. / acos(-1.)
+                    , F1.x , F1.y , F1.z );
+            }
+          }
+          /*******************/
+#endif
+
 //          compute_bend_interaction(r1, r2, e, F1, F2, * (it->second) );
           // add force, energy and virial contributions to 3 corresponding atoms
 
