@@ -468,7 +468,7 @@ namespace exaStamp
         {
           const double c1 = molecule_compute_parameters.m_rf_params[pidx_rf].m_c1;
           const double c2 = molecule_compute_parameters.m_rf_params[pidx_rf].m_c2;
-          reaction_field_compute_energy( molecule_compute_parameters.m_rf_params[pidx_rf].m_param, c1, c2, d, rf_e, rf_de );
+          reaction_field_compute_energy( molecule_compute_parameters.m_rf_params[pidx_rf].m_param, c1 * c2, d, rf_e, rf_de );
         }
                     
         double e = ljexp6_e + rf_e ;

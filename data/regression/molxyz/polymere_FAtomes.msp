@@ -1,32 +1,55 @@
 # no-seq
 includes:
   - config_molecule.msp
-  - mol_polymere_forcefield_cl.cfg
 
 configuration:
   logging:
-    debug: true
+    debug: false
   debug:
     filter: [ ".*read_fatomes_mol" , ".*id_map" , ".*molecule_pair_weight" , ".*exp6rf_multi_force" , ".*compute_force_bond" , ".*compute_force_bend" , ".*compute_force_torsion" , ".*compute_force_improper" ]
   profiling:
     summary: false
 
+ljexp6rf_pc:
+  parameters:
+    &intramolecular_pair_potentials
+    - { type_a: CT , type_b: CT , potential: { rcut: 1.250000e-09 m , exp6: { A: 3.391542e-16 J , B: 3.505559e+10 1/m , C: 2.989356e-78 J.m^6 , D: 3.476172e-25 J } } }
+    - { type_a: CT , type_b: HC , potential: { rcut: 1.250000e-09 m , exp6: { A: 2.286577e-16 J , B: 4.147834e+10 1/m , C: 7.344838e-79 J.m^6 , D: 3.476172e-25 J } } }
+    - { type_a: HC , type_b: HC , potential: { rcut: 1.250000e-09 m , exp6: { A: 1.541610e-16 J , B: 4.907783e+10 1/m , C: 1.804624e-79 J.m^6 , D: 3.476172e-25 J } } }
+
+reaction_field:
+  parameters: { epsilon: 2.200000e+00 , rc: 1.250000e-09 m }
+  enable_pair_weights: true
+  per_atom_charge: true
+  use_symmetry: false
+  compute_virial: false
+
+molecule_pair_weight:
+  weight: &intramolecular_weighting
+    MOL: { bond: 0.0 , bond_rf: 0.0 , bend: 0.0 , bend_rf: 0.0 , torsion: 0.5 , torsion_rf: 0.5 }
+
+intramolecular_pair_weight: molecule_pair_weight
+
+#intramolecular_setup:
+#  weight: *intramolecular_weighting
+#  potentials_for_pairs: *intramolecular_pair_potentials
+
 preinit_rcut_max: nop
+
+domain:
+  cell_size: 8 ang
+  periodic: [true, true, true]
 
 input_data:
   - read_fatomes_mol:
       filename: molecule_polymere.FAtomes
       stampinput: molecule_polymere.init
       
-domain:
-  cell_size: 8 ang
-  periodic: [true, true, true]
-
 # user-specified global values
 global:
   dt: 1.0e-16 s
   rcut_inc: 4.0 ang   # additional distance so that we don't have to rebuild neighbor list each time step
-  simulation_end_iteration: 11
+  simulation_end_iteration: 10
   simulation_log_frequency: 1
   simulation_dump_frequency: 1000
   simulation_dump_thermo_frequency: -1
@@ -38,16 +61,23 @@ langevin_thermostat:
   T: 300.0 K
   gamma: 0.1 ps^-1
 
+compute_intramolecular_forces:
+  - compute_force_bond
+  - compute_force_bend
+  - compute_force_torsion
+  - compute_force_improper
+
+compute_extramolecular_forces:
+  - ljexp6rf_pc
+  - reaction_field
+
 compute_force:
-  - debug_particle: { ids: [ 846 , 3004 , 11323 ] }
+#  - debug_particle: { ids: [ 846 , 3004 , 11323 ] }
   - compute_extramolecular_forces
   - compute_intramolecular_forces
 #  - langevin_thermostat
-  - debug_particle: { ids: [ 846 , 3004 , 11323 ] }
+#  - debug_particle: { ids: [ 846 , 3004 , 11323 ] }
 
-#init_epilog:
-#  - dump_data
-  
 dump_data:
   - timestep_file: "molecule_dump_09d.xyz"
   - message: { mesg: "Write xyz " , endl: false }
@@ -56,4 +86,10 @@ dump_data:
       body:
         - message: { endl: true }
   - write_xyz_file
+
+simulation_epilog:
+  - check_values:
+      file: molxyz_polymere.dat
+      acc_threshold: 5.e-8
+      pos_threshold: 1.e-12
 

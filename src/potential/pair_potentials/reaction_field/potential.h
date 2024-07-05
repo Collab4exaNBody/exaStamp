@@ -15,7 +15,7 @@ namespace exaStamp
 
   ONIKA_HOST_DEVICE_FUNC inline void reaction_field_compute_energy(const ReactionFieldParms& p_rc, const PairPotentialMinimalParameters& p_pair, double r, double& e, double& de)
   {
-    reaction_field_compute_energy( p_rc, p_pair.m_atom_a.m_charge, p_pair.m_atom_b.m_charge, r, e, de );
+    reaction_field_compute_energy( p_rc, p_pair.m_atom_a.m_charge * p_pair.m_atom_b.m_charge, r, e, de );
   }
 }
 

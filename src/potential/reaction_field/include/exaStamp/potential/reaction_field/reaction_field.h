@@ -24,11 +24,11 @@ namespace exaStamp
   };
 
   // core computation kernel for reaction field potential
-  ONIKA_HOST_DEVICE_FUNC inline void reaction_field_compute_energy(const ReactionFieldParms& p_rc, double c1, double c2, double r, double& e, double& de)
+  ONIKA_HOST_DEVICE_FUNC inline void reaction_field_compute_energy(const ReactionFieldParms& p_rc, double c /* =c1*c2 */, double r, double& e, double& de)
   {
     assert( r > 0. );
-    double r2 = r*r;
-    double c  = c1 * c2;
+    const double r2 = r * r;
+    // double c  = c1 * c2;
     e  = ( (                 p_rc.RF0/r  - p_rc.RF2                   + p_rc.RF1*r2 ) - p_rc.ecut ) * c;
     de =   ( - p_rc.RF0/r2                          + 2.*p_rc.RF1 * r               ) * c;
   }
@@ -52,7 +52,7 @@ namespace exaStamp
       v.RF2     = one_FourPiEpsilon0 / v.rc * (3. * epsilon)/(2.*epsilon + 1.);
       v.ecut    = 0.0;
       double e=0.0, de=0.0;
-      reaction_field_compute_energy( v , 1.0 , 1.0 , v.rc , e , de );
+      reaction_field_compute_energy( v , 1.0 , v.rc , e , de );
       v.ecut = e;
     }      
   }

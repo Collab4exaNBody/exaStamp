@@ -1,0 +1,2 @@
+list(APPEND ljexp6rf_LINK_LIBRARIES exp6 lennard_jones exaStampReactionFieldParticleCharge exaStampLJExp6RFParticleCharge exaStampCompute)
+

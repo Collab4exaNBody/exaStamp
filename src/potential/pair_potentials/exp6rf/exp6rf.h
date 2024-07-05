@@ -37,7 +37,7 @@ namespace exaStamp
     double rf_e=0.0, rf_de=0.0;
     if( r <= p.rf.rc /*_rcut*/ )
     {
-      reaction_field_compute_energy( p.rf, pp.m_atom_a.m_charge, pp.m_atom_b.m_charge, r, rf_e, rf_de );
+      reaction_field_compute_energy( p.rf, pp.m_atom_a.m_charge * pp.m_atom_b.m_charge, r, rf_e, rf_de );
     }
 
     e = exp6_e + rf_e;
