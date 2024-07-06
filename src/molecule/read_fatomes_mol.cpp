@@ -27,6 +27,7 @@
 #include <exaStamp/molecule/torsions_potentials_parameters.h>
 #include <exaStamp/molecule/impropers_potentials_parameters.h>
 #include <exaStamp/molecule/intramolecular_pair_weight.h>
+#include <exaStamp/potential/ljexp6rf/ljexp6rf.h>
 
 #include <exanb/core/check_particles_inside_cell.h>
 #include <exanb/core/parallel_random.h>
@@ -82,10 +83,10 @@ namespace exaStamp
     ADD_SLOT( TorsionsPotentialParameters      , potentials_for_torsions  , INPUT_OUTPUT, TorsionsPotentialParameters{} );
     ADD_SLOT( ImpropersPotentialParameters     , potentials_for_impropers , INPUT_OUTPUT, ImpropersPotentialParameters{} );
     
-    ADD_SLOT( IntramolecularPairUserParamVector, potentials_for_pairs     , INPUT_OUTPUT , IntramolecularPairUserParamVector{} );
-    ADD_SLOT( double                           , pair_potential_rcut      , INPUT_OUTPUT , 0.0 );
+    ADD_SLOT( LJExp6RFMultiParms               , potentials_for_pairs     , INPUT_OUTPUT , LJExp6RFMultiParms{} );
+    ADD_SLOT( double                           , rcut_max                 , INPUT_OUTPUT , 0.0 );
 
-    ADD_SLOT( IntramolecularPairWeighting , weight   , INPUT_OUTPUT , IntramolecularPairWeighting{} );
+    ADD_SLOT( IntramolecularPairWeighting      , mol_pair_weights         , INPUT_OUTPUT , IntramolecularPairWeighting{} );
 
   public:
     inline void execute () override final
@@ -166,7 +167,7 @@ namespace exaStamp
 
         auto read_unit = [this] ( std::string u ) -> std::string
         {
-          const std::map<std::string,std::string> replace = { {"ang2","ang^2"} , {"deg","degree"} };
+          const std::map<std::string,std::string> replace = { {"J/mol.m6","J*m^6   "} , {"ang2","ang^2"} , {"deg","degree"} , {"m6","m^6"} , {"m-1","m^-1"} };
           for(const auto& r : replace)
           {
             auto p = u.find(r.first);
@@ -216,10 +217,10 @@ namespace exaStamp
             std::string typepot;
             iss >> ita >> itb >> typepot;
             std::string ta = species->at(ita).name();
-            std::string tb = species->at(ita).name();
+            std::string tb = species->at(itb).name();
             ldbg << "pair potential "<<typepot<<" for pair "<<ta<<" , "<<tb<<std::endl;
             std::map<std::string,double> params;
-            IntramolecularPairUserParam pot = { ta, tb };
+            LJExp6RFMultiParmsPair pot = { ta, tb };
             if( typepot == "LJ" )
             {
               std::string p1,u1, p2, u2, p3, u3;
@@ -244,15 +245,40 @@ namespace exaStamp
                 double B = alpha / rmin;
                 double C = epsilon * alpha / ( alpha - 6. ) * pow(rmin,6);
                 ldbg << "Exp6 conversion : alpha="<<alpha<<" , D="<<D<<" , rmin="<<rmin<<" , A="<<A<<" , B="<<B<<" , C="<<C << std::endl;
-                pot.m_ljexp6.set_exp6_parameters( A, B, C, D, rc );
+                pot.m_params.set_exp6_parameters( A, B, C, D, rc );
               }
               else
               {
                 if( !ext.empty() ) { fatal_error()<<"unexpected LJ modifier '"<<ext<<"'"<<std::endl; }
-                pot.m_ljexp6.set_lj_parameters( sigma, epsilon, rc );
+                pot.m_params.set_lj_parameters( sigma, epsilon, rc );
               }
-              potentials_for_pairs->push_back(pot);
             }
+            else if( typepot == "Exp6v1" )
+            {
+              std::string p1,u1, p2, u2, p3, u3, p4, u4, p5, u5;
+              double v1, v2, v3, v4, v5;
+              iss >> p1 >> v1 >> u1 >> p2 >> v2 >> u2 >> p3 >> v3 >> u3 >> p4 >> v4 >> u4 >> p5 >> v5 >> u5;
+              u1 = read_unit(u1);
+              u2 = read_unit(u2);
+              u3 = read_unit(u3);
+              u4 = read_unit(u4);
+              u5 = read_unit(u5);
+              ldbg << p1<<"=" << v1 <<" "<< u1<<" , "<< p2<<"=" << v2<<" " << u2<<" , " << p3<<"=" << v3<<" " << u3<<" , " << p4<<"=" << v4<<" " << u4<<" , " << p5<<"=" << v5<<" " << u5<<std::endl;
+              params[p1] = exanb::make_quantity( v1 , u1 ).convert();
+              params[p2] = exanb::make_quantity( v2 , u2 ).convert();
+              params[p3] = exanb::make_quantity( v3 , u3 ).convert();
+              params[p4] = exanb::make_quantity( v4 , u4 ).convert();
+              params[p5] = exanb::make_quantity( v5 , u5 ).convert();
+              const double A=params["a"], B=params["b"], C=params["c"], D=params["d"], rc=params["rc"];
+              ldbg << "Exp6v1 : A="<<A<<" , B="<<B<<" , C="<<C<<" , D="<<D<<" , rc="<<rc<<std::endl;
+              pot.m_params.set_exp6_parameters( A, B, C, D, rc );
+            }
+            else
+            {
+              fatal_error() << "Potential "<<typepot<<" is not supported"<<std::endl;
+            }
+            pot.m_params.update_ecut();
+            potentials_for_pairs->m_potentials.push_back(pot);
           }
           else if( kw == "Regle_melange" ) { iss >> tmp; ldbg << "Regle_melange = "<<tmp<<std::endl; }
           else if( kw == "PositionDesAtomesCart" ) { iss >> atom_pos_unit; ldbg << "PositionDesAtomesCart = "<<atom_pos_unit<<std::endl; }
@@ -505,7 +531,7 @@ namespace exaStamp
           int n = 0;
           next_line() >> n;
           ldbg << "Reading "<<n<<" intramolecular pair weights"<<std::endl;
-          weight->m_molecule_weight.clear();
+          mol_pair_weights->m_molecule_weight.clear();
           for(int i=0;i<n;i++)
           {
             std::string ta, tb;
@@ -514,8 +540,8 @@ namespace exaStamp
             ldbg << ta << " - " << tb << " weights : pair bond="<<w.m_bond_weight<<", angle="<<w.m_bend_weight<<", torsion="<<w.m_torsion_weight<<" , rf bond="<<w.m_rf_bond_weight<<", angle="<<w.m_rf_bend_weight<<", torsion="<<w.m_rf_torsion_weight<<std::endl;
             for(const auto& p : molecule_name_map)
             {
-              const auto it = weight->m_molecule_weight.find(p.first);
-              if( it != weight->m_molecule_weight.end() )
+              const auto it = mol_pair_weights->m_molecule_weight.find(p.first);
+              if( it != mol_pair_weights->m_molecule_weight.end() )
               {
                 if( it->second.m_bond_weight != w.m_bond_weight || it->second.m_bend_weight != w.m_bend_weight || it->second.m_torsion_weight != w.m_torsion_weight
                   ||it->second.m_rf_bond_weight != w.m_rf_bond_weight || it->second.m_rf_bend_weight != w.m_rf_bend_weight || it->second.m_rf_torsion_weight != w.m_rf_torsion_weight )
@@ -525,7 +551,7 @@ namespace exaStamp
               }
               else
               {
-                weight->m_molecule_weight[ p.first ] = w;
+                mol_pair_weights->m_molecule_weight[ p.first ] = w;
               }
             }
           }
@@ -557,22 +583,39 @@ namespace exaStamp
           {
             double rf_epsilon = init["ReactionField_epsilon"];
             double rf_rc = init["ReactionField_rc"];
+            rf_rc = EXANB_QUANTITY( rf_rc * m ); // StampV4 has implicit meter unit for distances
             ldbg << "found RF parameters : epsilon="<<rf_epsilon<<" , rcut="<<rf_rc<<std::endl;
-            for( auto & pot : *potentials_for_pairs )
+            std::set< std::pair<std::string,std::string> > existing_pair_pots;
+            for( auto & pot : potentials_for_pairs->m_potentials )
             {
-              init_rf( pot.m_rf.m_param , rf_rc , rf_epsilon );
-              pot.m_rf.m_c1 = species->at(atom_type_index[pot.m_type_a]).m_charge;
-              pot.m_rf.m_c2 = species->at(atom_type_index[pot.m_type_b]).m_charge;
-              ldbg << "update RF parameters for pair "<<pot.m_type_a<<" / "<<pot.m_type_b<<" : c1="<<pot.m_rf.m_c1<<", c2="<<pot.m_rf.m_c2<<", RF0="<<pot.m_rf.m_param.RF0<<", RF1="<<pot.m_rf.m_param.RF1<<", RF2="<<pot.m_rf.m_param.RF2<< std::endl;
+              existing_pair_pots.insert( { pot.m_type_a , pot.m_type_b } );
+              existing_pair_pots.insert( { pot.m_type_b , pot.m_type_a } );
+              pot.m_params.set_reaction_field_parameters( rf_rc , rf_epsilon );
+              ldbg << "update RF parameters for pair "<<pot.m_type_a<<" / "<<pot.m_type_b<<", rc="<<rf_rc<<", epsilon="<<rf_epsilon<< std::endl;
+            }
+            unsigned int n_species = species->size();
+            for(unsigned int i=0;i<n_species;i++)
+            {
+              for(unsigned int j=i;j<n_species;j++)
+              {
+                if( existing_pair_pots.find( { species->at(i).name() , species->at(j).name() } ) == existing_pair_pots.end() )
+                {
+                  LJExp6RFMultiParmsPair pot = { species->at(i).name() , species->at(j).name() , {} };
+                  pot.m_params.set_reaction_field_parameters( rf_rc , rf_epsilon );
+                  potentials_for_pairs->m_potentials.push_back( pot );
+                  ldbg<<"add RF parameters for pair "<<pot.m_type_a<<" / "<<pot.m_type_b<<", rc="<<rf_rc<<", epsilon="<<rf_epsilon<< std::endl;
+                }
+              }
             }
           }
         }
         
-        for(const auto& pot : *potentials_for_pairs )
+        for(const auto& pot : potentials_for_pairs->m_potentials )
         {
-          *pair_potential_rcut = std::max( *pair_potential_rcut , std::max( pot.m_ljexp6.m_rcut , pot.m_rf.m_param.rc ) );
+          ldbg<<"potentials_for_pairs: "<<pot.m_type_a<<" / "<<pot.m_type_b<<" => " << pot.m_params << std::endl;
+          *rcut_max = std::max( *rcut_max , std::max( pot.m_params.m_rcut , pot.m_params.m_rf.rc ) );
         }
-        ldbg << "global pair potential rcut = "<< *pair_potential_rcut << std::endl;
+        ldbg << "global pair potential rcut = "<< *rcut_max << std::endl;
         
         double cell_size = domain->cell_size() > 0.0 ? domain->cell_size() : 8.0 ;
         ldbg << "cell_size = "<<cell_size << std::endl;

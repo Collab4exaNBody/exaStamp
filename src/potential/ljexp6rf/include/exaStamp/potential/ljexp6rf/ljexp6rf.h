@@ -106,7 +106,25 @@ namespace exaStamp
       m_ecut = e;
     }
 
+    template<class StreamT>
+    inline StreamT& to_stream(StreamT& out) const
+    {
+      const char* sep = "";
+      out << std::setprecision(4);
+      if( m_rcut>0.0 ) 
+      {
+        if(is_lj()) out<<"LJ(epsilon="<<m_C_EPSILON<<",sigma="<<m_D_SIGMA;
+        else out<<"Exp6(A="<<m_A<<",B="<<m_B_ISEXP6<<",C="<<m_C_EPSILON<<",D="<<m_D_SIGMA;
+        out<<",rcut="<<m_rcut<<",ecut="<<m_ecut<<")";
+        sep = "+";
+      }
+      if(m_rf.rc>0.0) out << sep << "RF(rc="<<m_rf.rc<<",RF0="<<m_rf.RF0<<",RF1="<<m_rf.RF1<<",RF2="<<m_rf.RF2<<",ecut="<<m_rf.ecut<<")";
+      return out;
+    }
+
   };
+
+  inline std::ostream& operator << (std::ostream& out , const LJExp6RFParms& p) { return p.to_stream(out); }
 
   struct LJExp6RFMultiParmsPair
   {

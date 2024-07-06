@@ -1,0 +1,32 @@
+includes: [ config_molecule.msp ]
+
+ljexp6rf_pc:
+  enable_pair_weights: true
+  per_atom_charge: true
+  use_symmetry: false
+  compute_virial: false
+
+intramolecular_pair_weight:
+  rebind: { weight: mol_pair_weights }
+  body: [ molecule_pair_weight ]
+
+compute_intramolecular_forces:
+  - compute_force_bond
+  - compute_force_bend
+  - compute_force_torsion
+  - compute_force_improper
+
+compute_extramolecular_forces:
+  rebind: { parameters: potentials_for_pairs }
+  body: [ ljexp6rf_pc ]
+
+compute_force:
+  - compute_extramolecular_forces
+  - compute_intramolecular_forces
+
+preinit_rcut_max: nop
+
+domain:
+  cell_size: 8 ang
+  periodic: [true, true, true]
+

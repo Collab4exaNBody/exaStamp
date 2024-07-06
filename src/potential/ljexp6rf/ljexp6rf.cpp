@@ -26,36 +26,15 @@ namespace exaStamp
   using onika::memory::DEFAULT_ALIGNMENT;
 
   template<bool _ComputeEnergy, bool _ComputeVirial>
-  struct LJExp6RFComputeContext;
-
-  template<> struct LJExp6RFComputeContext<false,false>
+  struct LJExp6RFComputeContext
   {
-    static inline constexpr bool ComputeEnergy = false;
-    static inline constexpr bool ComputeVirial = false;
-    double charge_a = 0.0;
-    Vec3d f = {0.,0.,0.};
-    int type_a = 0;
-  };
-
-  template<> struct LJExp6RFComputeContext<true,false>
-  {
-    static inline constexpr bool ComputeEnergy = true;
-    static inline constexpr bool ComputeVirial = false;
-    double charge_a = 0.0;
-    Vec3d f = {0.,0.,0.};
-    double ep = 0.0;
-    int type_a = 0;
-  };
-
-  template<> struct LJExp6RFComputeContext<true,true>
-  {
-    static inline constexpr bool ComputeEnergy = true;
-    static inline constexpr bool ComputeVirial = true;
-    double charge_a = 0.0;
-    Vec3d f = {0.,0.,0.};
-    double ep = 0.0;
-    Mat3d virial = {0.,0.,0.,0.,0.,0.,0.,0.,0.};
-    int type_a = 0;
+    using EnergyT = std::conditional_t<_ComputeEnergy,double,onika::FlatTuple<> >;
+    using VirialT = std::conditional_t<_ComputeVirial,Mat3d,onika::FlatTuple<> >;
+    double charge_a;
+    Vec3d f;
+    EnergyT ep;
+    VirialT virial;
+    unsigned int type_a;
   };
 
   // Reaction Field Compute functor
@@ -233,7 +212,7 @@ namespace exaStamp
     ADD_SLOT( GridT                     , grid                , INPUT_OUTPUT );
     ADD_SLOT( double                    , rcut_max            , INPUT_OUTPUT , 0.0 );
 
-    ADD_SLOT( GridParticleLocks         , particle_locks      , INPUT_OUTPUT , OPTIONAL , DocString{"particle spin locks"} );
+    ADD_SLOT( GridParticleLocks         , particle_locks      , INPUT_OUTPUT , OPTIONAL , DocString{"particle access locks"} );
 
     ADD_SLOT( LJExp6RFScratch          , scratch             , PRIVATE );
 
@@ -251,8 +230,10 @@ namespace exaStamp
       double rcut = 0.0; 
       for(const auto& pot : parameters->m_potentials)
       {
+        ldbg<<"potentials_for_pairs: "<<pot.m_type_a<<" / "<<pot.m_type_b<<" => " << pot.m_params << std::endl;
         rcut = std::max( rcut , std::max( pot.m_params.m_rcut , pot.m_params.m_rf.rc ) );
       }
+      ldbg << "global pair potential rcut = "<< rcut << std::endl;
       *rcut_max = std::max( *rcut_max , rcut );
       
       size_t n_cells = grid->number_of_cells();
