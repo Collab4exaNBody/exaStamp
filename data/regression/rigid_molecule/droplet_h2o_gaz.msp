@@ -82,14 +82,14 @@ input_data:
           quadric:
             shape: sphere
             transform:
-              - scale: [ 800 ang , 800 ang , 800 ang ] 
-              - translate: [ 10000 ang , 5000 ang , 5000 ang ]
+              - scale: [ 200 ang , 200 ang , 200 ang ] 
+              - translate: [ 1000 ang , 500 ang , 500 ang ]
       - DROPLET:
           quadric:
             shape: sphere
             transform:
-              - scale: [ 780 ang , 780 ang , 780 ang ] 
-              - translate: [ 10000 ang , 5000 ang , 5000 ang ]
+              - scale: [ 190 ang , 190 ang , 190 ang ] 
+              - translate: [ 1000 ang , 500 ang , 500 ang ]
 #
 #
   - has_dump_file:
@@ -122,8 +122,8 @@ input_data:
 #     *** Domain configuration ***
         - domain:
             cell_size: 50.0 ang
-            bounds: [ [ 0.0 ang , 0.0 ang , 0.0 ang ] , [ 20000.0 ang , 10000.0 ang , 10000.0 ang ] ]
-            grid_dims: [ 400 , 200 , 200 ]
+            bounds: [ [ 0.0 ang , 0.0 ang , 0.0 ang ] , [ 2000.0 ang , 1000.0 ang , 1000.0 ang ] ]
+            grid_dims: [ 40 , 20 , 20 ]
             periodic: [ false , true , true ]
             expandable: true
             xform: [ [ 1 , 0 , 0 ] , [ 0 , 1 , 0 ] , [ 0 , 0 , 1 ] ]
@@ -150,7 +150,7 @@ input_data:
         - simple_cost_model
         - load_balance_rcb
         - migrate_cell_particles
-        - random_orient
+        - global: { init_temperature: 300 K }
 #
 ###################################
 #  Restart from dump file
