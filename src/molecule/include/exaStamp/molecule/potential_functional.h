@@ -37,7 +37,7 @@ namespace exaStamp
     const auto k3 = m.p1;
     const auto k4 = m.p2;
     const auto t0 = m.x0;
-    const auto energy_scale = m.coeff;
+    // const auto energy_scale = m.coeff;
     const double tmp = t - t0;
     return { 2 * k2 *      tmp
            + 3 * k3 *  pow(tmp,2)
@@ -45,7 +45,7 @@ namespace exaStamp
            ,
            ( k2 * pow(tmp,2)
            + k3 * pow(tmp,3)
-           + k4 * pow(tmp,4) ) * energy_scale
+           + k4 * pow(tmp,4) ) //* energy_scale
            };  
   }
 
@@ -118,27 +118,6 @@ namespace exaStamp
   {
   public:
     inline IntraMolecularBondOPLSFunctional(double _k, double _t0) : k(_k), t0(_t0) {}
-    inline ScalarForceEnergy force_energy(double t) const override final
-    {
-      return intramolecular_quar( generic_parameters() , t );
-/*      return { k *     (t - t0)
-               , k * pow((t - t0),2) }; */
-    }
-    inline MoleculeGenericFuncParam generic_parameters() const override final
-    {
-      return {k,0.,0.,t0,2.0f}; // energy is scaled up x2 compared to standard harm bond form
-    }
-  private:
-    double k = 0.0;
-    float t0 = 0.0;
-  };
-
-
-  // Harm potential 1.0
-  class IntraMolecularHarmX2Functional : public IntraMolecularPotentialFunctional
-  {
-  public:
-    inline IntraMolecularHarmX2Functional(double _k, double _t0) : k(_k), t0(_t0) {}
     inline ScalarForceEnergy force_energy(double t) const override final
     {
       return intramolecular_quar( generic_parameters() , t );

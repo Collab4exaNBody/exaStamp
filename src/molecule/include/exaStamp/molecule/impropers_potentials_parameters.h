@@ -42,7 +42,6 @@ namespace YAML
   using exaStamp::ImpropersPotentialParameters;
   using exaStamp::IntraMolecularPotentialFunctional;
   using exaStamp::IntraMolecularHarmFunctional;
-  using exaStamp::IntraMolecularHarmX2Functional;
   using exaStamp::IntraMolecularCosOPLSFunctional;
 
   template<> struct convert<ImpropersPotentialParameters>
@@ -106,21 +105,6 @@ namespace YAML
           b.f_forces = [k,chi0](const double chi){return       k *     (chi - chi0);};
           */
           b.m_potential_function = std::make_shared<IntraMolecularHarmFunctional>(k,chi0);
-        }
-      else if(b.type=="harm_improper1.0")
-        {
-
-          //b.params.push_back(node["parameters"]["k"   ].as<Quantity>().convert());
-          //b.params.push_back(node["parameters"]["chi0"].as<Quantity>().convert());
-          double k    = node["parameters"]["k"   ].as<Quantity>().convert(); //b.params.at(0);
-          double chi0 = node["parameters"]["chi0"].as<Quantity>().convert(); //b.params.at(1);
-
-
-          // e = k * (chi-chi0)^2
-          // F = 2 k * (chi-chi0)
-          //b.f_energy = [k,chi0](const double chi){return      k * pow((chi - chi0),2);};
-          //b.f_forces = [k,chi0](const double chi){return  2 * k *     (chi - chi0);};
-          b.m_potential_function = std::make_shared<IntraMolecularHarmX2Functional>(k,chi0);
         }
       else if(b.type=="opls_improper")
         {

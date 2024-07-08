@@ -220,7 +220,7 @@ namespace exaStamp
             std::string tb = species->at(itb).name();
             ldbg << "pair potential "<<typepot<<" for pair "<<ta<<" , "<<tb<<std::endl;
             std::map<std::string,double> params;
-            LJExp6RFMultiParmsPair pot = { ta, tb };
+            LJExp6RFMultiParmsPair pot = { ta, tb }; // declare 'mixed' potential
             if( typepot == "LJ" )
             {
               std::string p1,u1, p2, u2, p3, u3;
@@ -245,12 +245,12 @@ namespace exaStamp
                 double B = alpha / rmin;
                 double C = epsilon * alpha / ( alpha - 6. ) * pow(rmin,6);
                 ldbg << "Exp6 conversion : alpha="<<alpha<<" , D="<<D<<" , rmin="<<rmin<<" , A="<<A<<" , B="<<B<<" , C="<<C << std::endl;
-                pot.m_params.set_exp6_parameters( A, B, C, D, rc );
+                pot.m_params.set_exp6_parameters( A, B, C, D, rc ); // set exp6 parameters
               }
               else
               {
                 if( !ext.empty() ) { fatal_error()<<"unexpected LJ modifier '"<<ext<<"'"<<std::endl; }
-                pot.m_params.set_lj_parameters( sigma, epsilon, rc );
+                pot.m_params.set_lj_parameters( sigma, epsilon, rc ); // set LJ parameters
               }
             }
             else if( typepot == "Exp6v1" )
@@ -271,16 +271,29 @@ namespace exaStamp
               params[p5] = exanb::make_quantity( v5 , u5 ).convert();
               const double A=params["a"], B=params["b"], C=params["c"], D=params["d"], rc=params["rc"];
               ldbg << "Exp6v1 : A="<<A<<" , B="<<B<<" , C="<<C<<" , D="<<D<<" , rc="<<rc<<std::endl;
-              pot.m_params.set_exp6_parameters( A, B, C, D, rc );
+              pot.m_params.set_exp6_parameters( A, B, C, D, rc ); // set exp6 parameters
             }
             else
             {
               fatal_error() << "Potential "<<typepot<<" is not supported"<<std::endl;
             }
             pot.m_params.update_ecut();
-            potentials_for_pairs->m_potentials.push_back(pot);
+            potentials_for_pairs->m_potentials.push_back(pot); // Important: add pair potential parameters
           }
-          else if( kw == "Regle_melange" ) { iss >> tmp; ldbg << "Regle_melange = "<<tmp<<std::endl; }
+          else if( kw == "Regle_melange" )
+          {
+            iss >> tmp; ldbg << "Regle_melange = "<<tmp<<std::endl;
+            int ita = 0;
+            int itb = 1;
+            LJExp6RFParms* params_for_pair = potentials_for_pairs->params_for_pair( species->at(ita).name(), species->at(itb).name() );
+            if( params_for_pair == nullptr )
+            {
+              LJExp6RFMultiParmsPair pot = { species->at(ita).name(), species->at(itb).name() };
+              double A=0.0,B=0.0,C=0.0,D=0.0,rc=1.0;
+              pot.m_params.set_exp6_parameters( A, B, C, D, rc );
+              potentials_for_pairs->m_potentials.push_back(pot);
+            }
+          }
           else if( kw == "PositionDesAtomesCart" ) { iss >> atom_pos_unit; ldbg << "PositionDesAtomesCart = "<<atom_pos_unit<<std::endl; }
           else if( kw == "VitesseDesAtomes" ) { iss >> atom_speed_unit; ldbg << "VitesseDesAtomes = "<<atom_speed_unit<<std::endl; }
           else if( kw == "ModificationChargeDesAtomes" ) { iss >> atom_charge_unit; ldbg << "ModificationChargeDesAtomes = "<<atom_charge_unit<<std::endl; }
@@ -365,6 +378,7 @@ namespace exaStamp
         atom_data.reserve( count );
         std::string typeAtom;
       
+        // Read atom positions
         for(uint64_t cnt=0;cnt<count;cnt++)
         {
           //int64_t moleculeid = -1;

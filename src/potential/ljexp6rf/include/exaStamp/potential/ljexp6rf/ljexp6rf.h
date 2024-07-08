@@ -136,6 +136,14 @@ namespace exaStamp
   struct LJExp6RFMultiParms
   {
     std::vector<LJExp6RFMultiParmsPair> m_potentials;
+    inline LJExp6RFParms* params_for_pair(const std::string& type_a, const std::string& type_b)
+    {
+      for(auto& elem : m_potentials)
+      {
+        if( ( elem.m_type_a == type_a && elem.m_type_b == type_b ) || ( elem.m_type_b == type_a && elem.m_type_a == type_b ) ) return & elem.m_params;
+      }
+      return nullptr;
+    }
   };
 
 }

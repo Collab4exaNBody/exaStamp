@@ -2,7 +2,7 @@ includes: [ config_molecule_stampv4.msp ]
 
 configuration:
   logging:
-    debug: true
+    debug: false
   debug:
     filter: [ ".*read_fatomes_mol" , ".*ljexp6rf_pc" ]
   profiling:
@@ -45,4 +45,19 @@ simulation_epilog:
       file: molxyz_polymere.dat
       acc_threshold: 1.e-8
       pos_threshold: 1.e-12
+
+# surcharge fichier config_molecule_stampv4.msp
+#compute_intramolecular_forces:
+#  - compute_force_bond
+#  - compute_force_bend
+#  - compute_force_torsion
+#  - compute_force_improper
+
+#compute_extramolecular_forces:
+#  rebind: { parameters: potentials_for_pairs }
+#  body: [ ljexp6rf_pc ]
+
+#compute_force:
+#  - compute_extramolecular_forces
+#  - compute_intramolecular_forces
 
