@@ -140,28 +140,28 @@ namespace exaStamp
         snap_ctx->m_factor.assign( nmat, 1.0 );
         snap_ctx->m_radelem.assign( nmat, 0.0 );
 
-	int cnt=0;
-	for ( const auto& mat : snap_ctx->m_config.materials() )
-	  {
-	    snap_ctx->m_factor[cnt] = mat.weight();	    
-	    snap_ctx->m_radelem[cnt] = mat.radelem();
-	    cnt+=1;
-	  }
+        int cnt=0;
+        for ( const auto& mat : snap_ctx->m_config.materials() )
+        {
+          snap_ctx->m_factor[cnt] = mat.weight();	    
+          snap_ctx->m_radelem[cnt] = mat.radelem();
+          cnt+=1;
+        }
 
         // snap_ctx->m_factor.assign( MAX_PARTICLE_SPECIES, 1.0 );
         // snap_ctx->m_factor[0] = mat.weight();
         // snap_ctx->m_radelem.assign( MAX_PARTICLE_SPECIES, 0.0 );
         // snap_ctx->m_radelem[0] = mat.radelem();
-	size_t ncoefs_per_specy = snap_ctx->m_config.materials()[0].number_of_coefficients();
+        size_t ncoefs_per_specy = snap_ctx->m_config.materials()[0].number_of_coefficients();
         snap_ctx->m_coefs.resize( nmat * ncoefs_per_specy );
         for(int j=0;j<nmat;j++)
-	  {
-	    const auto& mat = snap_ctx->m_config.materials()[j];
-	    for(size_t i=0;i<ncoefs_per_specy;i++)
-	      {
-		snap_ctx->m_coefs[ j * ncoefs_per_specy + i ] = mat.coefficient(i);
-	      }
-	  }
+        {
+          const auto& mat = snap_ctx->m_config.materials()[j];
+          for(size_t i=0;i<ncoefs_per_specy;i++)
+          {
+            snap_ctx->m_coefs[ j * ncoefs_per_specy + i ] = mat.coefficient(i);
+          }
+        }
 
       }
       

@@ -192,10 +192,8 @@ namespace exaStamp
 
       // compute Ui, Yi for atom I
 
-      if (chemflag)
-        snaptr->compute_ui(ninside, ielem);
-      else
-        snaptr->compute_ui(ninside, 0);
+      if (chemflag) snaptr->compute_ui(ninside, ielem);
+      else          snaptr->compute_ui(ninside, 0);
 
       // for neighbors of I within cutoff:
       // compute Fij = dEi/dRj = -dEi/dRi
@@ -214,15 +212,9 @@ namespace exaStamp
 	      betaloc[ icoeff ] = coeffelem[ coeffelem_idx ];
 	    }
 
-      //      std::cout << " My Type = " << itype << std::endl;
-
-      // for(int icoeff=0;icoeff<ncoeff;icoeff++)
-      // 	{
-      // 	  std::cout << " Coeff " << icoeff << " = " << betaloc[icoeff] << std::endl;
-      // 	}
 
       //      snaptr->compute_yi( /* beta[ii] ==> */ beta + ( ncoeff * ( cell_particle_offset[buf.cell] + buf.part ) ) );
-      snaptr->compute_yi(betaloc.data());
+      snaptr->compute_yi( betaloc.data() );
 
       for (int jj = 0; jj < ninside; jj++)
       {
@@ -230,20 +222,20 @@ namespace exaStamp
         snaptr->compute_duidrj(jj);
 
         double fij[3];
-	fij[0]=0.;
-	fij[1]=0.;
-	fij[2]=0.;	
+	      fij[0]=0.;
+	      fij[1]=0.;
+	      fij[2]=0.;	
         snaptr->compute_deidrj(fij);
         
-	//        if( conv_energy_units )
-	//        {
-	fij[0] *= conv_energy_factor;
-	fij[1] *= conv_energy_factor;
-	fij[2] *= conv_energy_factor;
-	//        }
+	      //        if( conv_energy_units )
+	      //        {
+	      fij[0] *= conv_energy_factor;
+	      fij[1] *= conv_energy_factor;
+	      fij[2] *= conv_energy_factor;
+	      //        }
 
-	//        [[maybe_unused]] const Mat3dT v_contrib = tensor( Vec3d{ fij[0] , fij[1] , fij[2] }, Vec3d{ snaptr->rij[jj][0] , snaptr->rij[jj][1] , snaptr->rij[jj][2] } );
-	Mat3d v_contrib = tensor( Vec3d{ fij[0] , fij[1] , fij[2] }, Vec3d{ snaptr->rij[jj][0] , snaptr->rij[jj][1] , snaptr->rij[jj][2] } );
+	      //        [[maybe_unused]] const Mat3dT v_contrib = tensor( Vec3d{ fij[0] , fij[1] , fij[2] }, Vec3d{ snaptr->rij[jj][0] , snaptr->rij[jj][1] , snaptr->rij[jj][2] } );
+	      Mat3d v_contrib = tensor( Vec3d{ fij[0] , fij[1] , fij[2] }, Vec3d{ snaptr->rij[jj][0] , snaptr->rij[jj][1] , snaptr->rij[jj][2] } );
         if constexpr ( compute_virial ) { _vir += v_contrib * -1.0; }
 
         /*
@@ -268,20 +260,21 @@ namespace exaStamp
         cells[cell_b][field::fx][p_b] -= fij[0];//*scale[itype][itype];
         cells[cell_b][field::fy][p_b] -= fij[1];//*scale[itype][itype];
         cells[cell_b][field::fz][p_b] -= fij[2];//*scale[itype][itype];
-	// PL : for virial, no reciprocal contribution apparently.
-	//        if constexpr ( compute_virial ) { cells[cell_b][field::virial][p_b] += v_contrib * 0.5; }
+	      // PL : for virial, no reciprocal contribution apparently.
+	      //        if constexpr ( compute_virial ) { cells[cell_b][field::virial][p_b] += v_contrib * 0.5; }
         lock_b.unlock();
       }
 
-      if (eflag) {
-	//        assert(ielem==0);
+      if (eflag)
+      {
+	      // assert(ielem==0);
         const long bispectrum_ii_offset = ncoeff * ( cell_particle_offset[buf.cell] + buf.part );
 
         // evdwl = energy of atom I, sum over coeffs_k * Bi_k
         const double * const coeffi = coeffelem /*[ielem]*/;
-	//	coeffelem[ itype * (ncoeff + 1 ) + icoeff + 1 ]
-	double evdwl = coeffi[itype * (ncoeff + 1)];
-	//	std::cout << "TYpe = " << itype << "e0 = " << evdwl << std::endl;
+	      //	coeffelem[ itype * (ncoeff + 1 ) + icoeff + 1 ]
+	      double evdwl = coeffi[itype * (ncoeff + 1)];
+	      //	std::cout << "TYpe = " << itype << "e0 = " << evdwl << std::endl;
 
         // snaptr->copy_bi2bvec();
 
@@ -291,7 +284,7 @@ namespace exaStamp
 
         for (int icoeff = 0; icoeff < ncoeff; icoeff++)
           evdwl += betaloc[icoeff] * bispectrum[ bispectrum_ii_offset + icoeff ] /*bispectrum[ii][icoeff]*/ ;
-	  //          evdwl += coeffi[itype * (ncoeff + 1) + icoeff+1] * bispectrum[ bispectrum_ii_offset + icoeff ] /*bispectrum[ii][icoeff]*/ ;
+	      // evdwl += coeffi[itype * (ncoeff + 1) + icoeff+1] * bispectrum[ bispectrum_ii_offset + icoeff ] /*bispectrum[ii][icoeff]*/ ;
 
         // quadratic contributions
 
@@ -324,7 +317,6 @@ namespace exaStamp
       fz += _fz;
       if constexpr ( compute_virial ) { virial += _vir; }
       lock_a.unlock();
-      
     }
   };
 

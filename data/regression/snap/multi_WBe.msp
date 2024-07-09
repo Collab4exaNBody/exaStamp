@@ -1,0 +1,54 @@
+includes:
+  - config_update_symmetric_forces.msp
+
+zbl_multi_force:
+  rcut: 4.8 ang
+  parameters:
+    - { type_a: Be , type_b: W  , rcut: 4.8 ang , parameters: { r1: 4.0 ang , rc: 4.8 ang } }
+    - { type_a: W  , type_b: W  , rcut: 4.8 ang , parameters: { r1: 4.0 ang , rc: 4.8 ang } }
+    - { type_a: Be , type_b: Be , rcut: 4.8 ang , parameters: { r1: 4.0 ang , rc: 4.8 ang } }
+  
+snaplmp_force:
+  parameters:
+    nt: 2
+    param: "WBe_Wood_PRB2019.snapparam"
+    coef: "WBe_Wood_PRB2019.snapcoeff"
+  
+species:
+  - W:
+      mass:  183.84 Da
+      z: 74
+  - Be:
+      mass:  9.012182 Da
+      z: 4
+
+grid_flavor: grid_flavor_multimat
+
+input_data:
+  - read_xyz_file_with_xform:
+      file: noisy_W_Be.xyz
+      pbc_adjust_xform: true
+  
+compute_force:
+  - zbl_multi_force
+  - snaplmp_force
+    
+domain:
+  cell_size: 6.0 ang
+  periodic: [true,true,true]
+
+global:
+  simulation_end_iteration: 500
+  simulation_log_frequency: 1
+  rcut_inc: 2.0 ang
+  dt: 1.0e-3 ps
+  simulation_dump_frequency: -1
+  simulation_dump_thermo_frequency: 1
+  is_dump_virial: false
+
+dump_data:
+  - timestep_file: "dir.dumps/traj_nve_uo2.%09d"
+  - write_xyz:
+      fields: [ velocity , force , mv2 , processor_id ]
+      units: { velocity: "ang/ps" , force: "eV/ang" }
+  

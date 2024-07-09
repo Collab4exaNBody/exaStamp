@@ -32,13 +32,7 @@ namespace exaStamp
     const bool chemflag = false;
 
     template<class ComputeBufferT, class CellParticlesT>
-    inline void operator ()
-      (
-      int jnum ,
-      ComputeBufferT& buf,
-      int type,
-      CellParticlesT cells
-      ) const
+    inline void operator () ( int jnum, ComputeBufferT& buf, int type, CellParticlesT cells ) const
     {
       size_t tid = omp_get_thread_num();
       assert( tid < n_thread_ctx );
@@ -46,11 +40,11 @@ namespace exaStamp
       auto snaptr = snap_ctx.sna;
 
       // start of SNA
-      //      int type=0;
+      // int type=0;
       const int itype = type; //type[i];
       const int ielem = itype; //map[itype];
       const double radi = radelem[ielem];
-      //      std::cout << "radius here for bispectrum = " << radi << std::endl;
+      // std::cout << "radius here for bispectrum = " << radi << std::endl;
 
       snaptr->grow_rij(jnum);
       
@@ -63,14 +57,14 @@ namespace exaStamp
         const double dely = buf.dry[jj]; //x[j][1] - ytmp;
         const double delz = buf.drz[jj]; //x[j][2] - ztmp;
         const double rsq = delx*delx + dely*dely + delz*delz;
-	const int jtype = buf.ext.type[j];
-	//	const int jtype = 0;
+	      const int jtype = buf.ext.type[j];
+	      // const int jtype = 0;
         const int jelem = jtype; //map[jtype];
 
-	double cut_ij = (radelem[jtype]+radelem[itype])*rcutfac;
-	double cutsq_ij=cut_ij*cut_ij;
-	// cutsq[itype][jtype] = (radelem[itype]+radelem[jtype])*rcutfac;
-	//	std::cout << "custq[" << itype << "][" << jtype << "] = " << cutsq_ij << std::endl;
+	      double cut_ij = (radelem[jtype]+radelem[itype])*rcutfac;
+	      double cutsq_ij=cut_ij*cut_ij;
+	      // cutsq[itype][jtype] = (radelem[itype]+radelem[jtype])*rcutfac;
+	      // std::cout << "custq[" << itype << "][" << jtype << "] = " << cutsq_ij << std::endl;
 
         if (rsq < cutsq_ij/*[itype][jtype]*/&&rsq>1e-20) {
           snaptr->rij[ninside][0] = delx;
@@ -88,11 +82,12 @@ namespace exaStamp
         }
       }
 
-      //snaptr->reorder_rij(ninside);
 
-      //const double chk_rij = snaptr->chk_rij(ninside);
+      /********** DEBUG ***************/
+      // snaptr->reorder_rij(ninside);
+      // const double chk_rij = snaptr->chk_rij(ninside);
       const bool chosen = false; //fabs(chk_rij-1.862026)<0.00001;
-      //snaptr->set_dbg_chosen(chosen);
+      // snaptr->set_dbg_chosen(chosen);
       if(chosen)
       {
         printf("SNAPDBG: compute_bispectrum: switchinnerflag=%d, cutsq=% .3e, rcutfac=% .3e, ninside=%d\n",switchinnerflag,cutsq,rcutfac,ninside);
@@ -102,22 +97,24 @@ namespace exaStamp
                  jj,snaptr->rij[jj][0],snaptr->rij[jj][1],snaptr->rij[jj][2] , snaptr->wj[jj], snaptr->rcutij[jj], snaptr->sinnerij[jj], snaptr->dinnerij[jj] );          
         }
       }
-      
-      if (chemflag)
-        snaptr->compute_ui(ninside, ielem);
-      else
-        snaptr->compute_ui(ninside, 0);
+      /*******************************/
+
+
+      if (chemflag) snaptr->compute_ui(ninside, ielem);
+      else          snaptr->compute_ui(ninside, 0);
+
       snaptr->compute_zi();
-      if (chemflag)
-        snaptr->compute_bi(ielem);
-      else
-        snaptr->compute_bi(0);
+
+      if (chemflag) snaptr->compute_bi(ielem);
+      else          snaptr->compute_bi(0);
 
       const long bispectrum_ii_offset = ncoeff * ( cell_particle_offset[buf.cell] + buf.part );
       for (int icoeff = 0; icoeff < ncoeff; icoeff++) {
         bispectrum[ bispectrum_ii_offset + icoeff ] /*[ii][icoeff]*/ = snaptr->blist[icoeff];
       }
 
+
+      /********** DEBUG ***************/
       if( chosen )
       {
         for (int icoeff = 0; icoeff < ncoeff; icoeff++)
@@ -127,6 +124,7 @@ namespace exaStamp
         }
         printf("\n");
       }
+      /*******************************/
 
     }
     

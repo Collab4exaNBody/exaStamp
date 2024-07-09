@@ -1,0 +1,48 @@
+includes:
+  - config_update_symmetric_forces.msp
+
+zbl_compute_force:
+  rcut: 4.8 ang
+  parameters: { r1: 4.0 ang, rc: 4.8 ang }
+  
+snaplmp_force:
+  parameters:
+    nt: 2
+    param: "Ta06A.snapparam"
+    coef: "Ta06A.snapcoeff"
+  
+species:
+  - Ta:
+      mass:  180.94788000 Da
+      z: 73
+
+grid_flavor: grid_flavor_multimat
+
+input_data:
+  - read_xyz_file_with_xform:
+      file: noisy_Ta.xyz
+      pbc_adjust_xform: true
+  
+compute_force:
+  - zbl_compute_force
+  - snaplmp_force
+    
+domain:
+  cell_size: 6.0 ang
+  periodic: [true,true,true]
+
+global:
+  simulation_end_iteration: 500
+  simulation_log_frequency: 1
+  rcut_inc: 2.0 ang
+  dt: 1.0e-3 ps
+  simulation_dump_frequency: -1
+  simulation_dump_thermo_frequency: 1
+  is_dump_virial: false
+
+dump_data:
+  - timestep_file: "dir.dumps/traj_nve_uo2.%09d"
+  - write_xyz:
+      fields: [ velocity , force , mv2 , processor_id ]
+      units: { velocity: "ang/ps" , force: "eV/ang" }
+
