@@ -4,6 +4,7 @@
 #include <cmath>
 #include "snap_compute_ui.h"
 #include "snap_compute_yi.h"
+#include "snap_compute_duidrj.h"
 
 namespace exaStamp
 {
@@ -210,12 +211,20 @@ namespace exaStamp
       for (int jj = 0; jj < ninside; jj++)
       {
         int j = snaptr->inside[jj];
-        snaptr->compute_duidrj(jj);
+
+        // snaptr->compute_duidrj(jj);
+        snap_compute_duidrj( snaptr->twojmax, snaptr->idxu_block, snaptr->rij, snaptr->rcutij, snaptr->wj
+                           , snaptr->ulist_r_ij, snaptr->ulist_i_ij, snaptr->rootpqarray
+                           , snaptr->sinnerij, snaptr->dinnerij
+                           , snaptr->rmin0, snaptr->rfac0, snaptr->switch_flag, snaptr->switch_inner_flag, snaptr->chem_flag                             
+                           , snaptr->dulist_r, snaptr->dulist_i
+                           , jj);
 
         double fij[3];
 	      fij[0]=0.;
 	      fij[1]=0.;
 	      fij[2]=0.;	
+        snaptr->elem_duarray = snaptr->chem_flag ? snaptr->element[jj] : 0 ;
         snaptr->compute_deidrj(fij);
         
 	      //        if( conv_energy_units )
