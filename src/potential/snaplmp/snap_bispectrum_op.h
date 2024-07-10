@@ -57,7 +57,7 @@ namespace exaStamp
         const double dely = buf.dry[jj]; //x[j][1] - ytmp;
         const double delz = buf.drz[jj]; //x[j][2] - ztmp;
         const double rsq = delx*delx + dely*dely + delz*delz;
-	      const int jtype = buf.ext.type[j];
+	      const int jtype = buf.nbh_pt[j][field::type];
 	      // const int jtype = 0;
         const int jelem = jtype; //map[jtype];
 

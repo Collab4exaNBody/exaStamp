@@ -32,17 +32,17 @@ domain:
   periodic: [true,true,true]
 
 global:
-  simulation_end_iteration: 500
-  simulation_log_frequency: 1
+  simulation_end_iteration: 30
+  simulation_log_frequency: 10
   rcut_inc: 2.0 ang
   dt: 1.0e-3 ps
   simulation_dump_frequency: -1
-  simulation_dump_thermo_frequency: 1
-  is_dump_virial: false
+  simulation_dump_thermo_frequency: -1
 
-dump_data:
-  - timestep_file: "dir.dumps/traj_nve_uo2.%09d"
-  - write_xyz:
-      fields: [ velocity , force , mv2 , processor_id ]
-      units: { velocity: "ang/ps" , force: "eV/ang" }
+final_dump: nop
+
+simulation_epilog:
+  - check_values:
+      file: snap_mono_Ta.dat
+      threshold: 1.e-9
 

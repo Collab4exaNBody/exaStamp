@@ -9,6 +9,7 @@ namespace exaStamp
 //  using onika::memory::DEFAULT_ALIGNMENT;
 //  using namespace SnapExt;
 
+#if 0
   // additional storage space added to compute buffer created by compute_cell_particle_pairs
   struct alignas(onika::memory::DEFAULT_ALIGNMENT) SnapComputeBuffer
   {
@@ -26,9 +27,10 @@ namespace exaStamp
       exanb::DefaultComputePairBufferAppendFunc{} ( tab, dr, d2, cells, cell_b, p_b, weight );
     }
   };
+#endif
 
   // Force operator
-  struct alignas(onika::memory::DEFAULT_ALIGNMENT) ForceOp 
+  struct alignas(onika::memory::DEFAULT_ALIGNMENT) SnapLMPForceOp 
   {
     SnapLMPThreadContext* m_thread_ctx = nullptr;
     const size_t n_thread_ctx = 0;
@@ -38,8 +40,8 @@ namespace exaStamp
     const double * const bispectrum = nullptr;
     
     const double * const coeffelem = nullptr;
-    const long coeffelem_size = 0;
-    const long ncoeff = 0;
+    const unsigned int coeffelem_size = 0;
+    const unsigned int ncoeff = 0;
     
     const double * const wjelem = nullptr; // data of m_factor in snap_ctx
     const double * const radelem = nullptr;
@@ -163,11 +165,11 @@ namespace exaStamp
         const double dely = buf.dry[jj]; //x[j][1] - ytmp;
         const double delz = buf.drz[jj]; //x[j][2] - ztmp;
         const double rsq = delx*delx + dely*dely + delz*delz;
-	const int jtype = buf.ext.type[jj]; //type[j];
+        const int jtype = buf.nbh_pt[jj][field::type];; //buf.ext.type[jj]; 
         const int jelem = jtype; //map[jtype];
 
-	double cut_ij = (radelem[jtype]+radelem[itype])*rcutfac;
-	double cutsq_ij=cut_ij*cut_ij;
+	      double cut_ij = (radelem[jtype]+radelem[itype])*rcutfac;
+	      double cutsq_ij=cut_ij*cut_ij;
 
         if (rsq < cutsq_ij/*[itype][jtype]*/&&rsq>1e-20) {
           snaptr->rij[ninside][0] = delx;
@@ -205,9 +207,9 @@ namespace exaStamp
       betaloc.resize(ncoeff);
 
       //      const double * const coeffi = coeffelem /*[ielem]*/;
-      for(int icoeff=0;icoeff<ncoeff;icoeff++)
+      for(unsigned int icoeff=0;icoeff<ncoeff;icoeff++)
       {
-        long coeffelem_idx = itype * (ncoeff + 1 ) + icoeff + 1;
+        unsigned int coeffelem_idx = itype * (ncoeff + 1 ) + icoeff + 1;
         assert( (coeffelem_idx >= 0) && (coeffelem_idx < coeffelem_size) );
 	      betaloc[ icoeff ] = coeffelem[ coeffelem_idx ];
 	    }
@@ -282,18 +284,23 @@ namespace exaStamp
 
         // linear contributions
 
-        for (int icoeff = 0; icoeff < ncoeff; icoeff++)
+        for (unsigned int icoeff = 0; icoeff < ncoeff; icoeff++)
+        {
           evdwl += betaloc[icoeff] * bispectrum[ bispectrum_ii_offset + icoeff ] /*bispectrum[ii][icoeff]*/ ;
 	      // evdwl += coeffi[itype * (ncoeff + 1) + icoeff+1] * bispectrum[ bispectrum_ii_offset + icoeff ] /*bispectrum[ii][icoeff]*/ ;
+        }
 
         // quadratic contributions
 
-        if (quadraticflag) {
+        if (quadraticflag)
+        {
           int k = ncoeff+1;
-          for (int icoeff = 0; icoeff < ncoeff; icoeff++) {
+          for (unsigned int icoeff = 0; icoeff < ncoeff; icoeff++) 
+          {
             double bveci = bispectrum[ bispectrum_ii_offset + icoeff ] /*bispectrum[ii][icoeff]*/ ;
             evdwl += 0.5*coeffi[k++]*bveci*bveci;
-            for (int jcoeff = icoeff+1; jcoeff < ncoeff; jcoeff++) {
+            for (unsigned int jcoeff = icoeff+1; jcoeff < ncoeff; jcoeff++) 
+            {
               double bvecj = bispectrum[ bispectrum_ii_offset + jcoeff ] /*bispectrum[ii][jcoeff]*/ ;
               evdwl += coeffi[k++]*bveci*bvecj;
             }

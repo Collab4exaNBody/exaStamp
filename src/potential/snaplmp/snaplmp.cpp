@@ -64,9 +64,12 @@ namespace exaStamp
     // shortcut to the Compute buffer used (and passed to functor) by compute_cell_particle_pairs
     static constexpr bool UseWeights = false;
     static constexpr bool UseNeighbors = true;
-    //static constexpr bool UseLocks = true;
-    //    using ComputeBuffer = ComputePairBuffer2<UseWeights,UseNeighbors>;
-    using ComputeBuffer = ComputePairBuffer2<UseWeights,UseNeighbors,SnapComputeBuffer,CopyParticleType>;
+
+//    using ComputeBuffer = ComputePairBuffer2<UseWeights,UseNeighbors,SnapComputeBuffer,CopyParticleType>; // original
+    using ComputeBuffer = ComputePairBuffer2< UseWeights, UseNeighbors
+                                            , NoExtraStorage, DefaultComputePairBufferAppendFunc
+                                            , exanb::MAX_PARTICLE_NEIGHBORS, ComputePairBuffer2Weights
+                                            , FieldSet<field::_type> >;
 
     using CellParticles = typename GridT::CellParticles;
 
@@ -219,7 +222,7 @@ namespace exaStamp
       // exanb objects to perform computations with neighbors      
       ComputePairNullWeightIterator cp_weight{};
       exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
-      auto force_buf = make_compute_pair_buffer<ComputeBuffer>();      
+      auto force_buf = make_compute_pair_buffer<ComputeBuffer>(); // make_compute_pair_buffer< SimpleNbhComputeBuffer< FieldSet<field::_type> > >();
       LinearXForm cp_xform { domain->xform() };
 
       // constants to resize bispectrum and beta intermediate terms
@@ -305,10 +308,12 @@ namespace exaStamp
 
       auto compute_opt_locks = [&](auto cp_locks)
       {
-        auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform, cp_locks );
-        ForceOp force_op { snap_ctx->m_thread_ctx.data(), snap_ctx->m_thread_ctx.size(),
+        
+        auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform, cp_locks
+                      , ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{}, grid->field_accessors_from_field_set(FieldSet<field::_type>{}) );
+        SnapLMPForceOp force_op { snap_ctx->m_thread_ctx.data(), snap_ctx->m_thread_ctx.size(),
                            grid->cell_particle_offset_data(), snap_ctx->m_beta.data(), snap_ctx->m_bispectrum.data(),
-                           snap_ctx->m_coefs.data(), snap_ctx->m_coefs.size(), ncoeff,
+                           snap_ctx->m_coefs.data(), static_cast<unsigned int>(snap_ctx->m_coefs.size()), static_cast<unsigned int>(ncoeff),
                            snap_ctx->m_factor.data(), snap_ctx->m_radelem.data(),
                            nullptr, nullptr,
                            snap_ctx->m_rcut, cutsq,
