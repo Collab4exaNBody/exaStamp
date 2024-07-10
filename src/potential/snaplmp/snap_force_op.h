@@ -1,36 +1,236 @@
 #pragma once
 
 #include <exanb/core/physics_constants.h>
+#include <cmath>
 
 namespace exaStamp
 {
 
   using namespace exanb;
-//  using onika::memory::DEFAULT_ALIGNMENT;
-//  using namespace SnapExt;
 
-#if 0
-  // additional storage space added to compute buffer created by compute_cell_particle_pairs
-  struct alignas(onika::memory::DEFAULT_ALIGNMENT) SnapComputeBuffer
+  static inline void snap_zero_uarraytot( // READ ONLY
+                                          int nelements
+                                        , int twojmax
+                                        , int const * idxu_block
+                                        , int idxu_max
+                                        , double wself
+                                        , bool wselfall_flag
+                                          // WRITE ONLY
+                                        , double * ulisttot_r, double * ulisttot_i
+                                          // ORIGINAL PARAMETERS
+                                        , int ielem ) 
   {
-    alignas(onika::memory::DEFAULT_ALIGNMENT) int type[exanb::MAX_PARTICLE_NEIGHBORS];
-  };
+    for (int jelem = 0; jelem < nelements; jelem++)
+    for (int j = 0; j <= twojmax; j++) {
+      int jju = idxu_block[j];
+      for (int mb = 0; mb <= j; mb++) {
+        for (int ma = 0; ma <= j; ma++) {
+          ulisttot_r[jelem*idxu_max+jju] = 0.0;
+          ulisttot_i[jelem*idxu_max+jju] = 0.0;
 
-  // functor that populate compute buffer's extended storage for particle charges
-  struct CopyParticleType
-  {
-    template<class ComputeBufferT, class FieldArraysT>
-    /* ONIKA_HOST_DEVICE_FUNC */ inline void operator () (ComputeBufferT& tab, const Vec3d& dr, double d2, FieldArraysT cells, size_t cell_b, size_t p_b, double weight) const noexcept
-    {
-      assert( ssize_t(tab.count) < ssize_t(tab.MaxNeighbors) );
-      tab.ext.type[tab.count] = cells[cell_b][field::type][p_b];
-      exanb::DefaultComputePairBufferAppendFunc{} ( tab, dr, d2, cells, cell_b, p_b, weight );
+          // utot(j,ma,ma) = wself, sometimes
+          if (jelem == ielem || wselfall_flag)
+            if (ma==mb)
+            ulisttot_r[jelem*idxu_max+jju] = wself; ///// double check this
+          jju++;
+        }
+      }
     }
-  };
-#endif
+  }
+
+  static inline void snap_compute_uarray( // READ ONLY
+                                          int twojmax
+                                        , int const * idxu_block
+                                        , double const * const * rootpqarray
+                                          // WRITE ONLY
+                                        , double * const * ulist_r_ij, double * const * ulist_i_ij
+                                          // ORIGINAL PARAMETERS
+                                        , double x, double y, double z, double z0, double r, int jj )
+  {
+    double r0inv;
+    double a_r, b_r, a_i, b_i;
+    double rootpq;
+
+    // compute Cayley-Klein parameters for unit quaternion
+
+    r0inv = 1.0 / sqrt(r * r + z0 * z0);
+    a_r = r0inv * z0;
+    a_i = -r0inv * z;
+    b_r = r0inv * y;
+    b_i = -r0inv * x;
+
+    // VMK Section 4.8.2
+    double* ulist_r = ulist_r_ij[jj];
+    double* ulist_i = ulist_i_ij[jj];
+
+    ulist_r[0] = 1.0;
+    ulist_i[0] = 0.0;
+
+    for (int j = 1; j <= twojmax; j++) {
+      int jju = idxu_block[j];
+      int jjup = idxu_block[j-1];
+
+      // fill in left side of matrix layer from previous layer
+
+      for (int mb = 0; 2*mb <= j; mb++) {
+        ulist_r[jju] = 0.0;
+        ulist_i[jju] = 0.0;
+
+        for (int ma = 0; ma < j; ma++) {
+          rootpq = rootpqarray[j - ma][j - mb];
+          ulist_r[jju] +=
+            rootpq *
+            (a_r * ulist_r[jjup] +
+             a_i * ulist_i[jjup]);
+          ulist_i[jju] +=
+            rootpq *
+            (a_r * ulist_i[jjup] -
+             a_i * ulist_r[jjup]);
+
+          rootpq = rootpqarray[ma + 1][j - mb];
+          ulist_r[jju+1] =
+            -rootpq *
+            (b_r * ulist_r[jjup] +
+             b_i * ulist_i[jjup]);
+          ulist_i[jju+1] =
+            -rootpq *
+            (b_r * ulist_i[jjup] -
+             b_i * ulist_r[jjup]);
+          jju++;
+          jjup++;
+        }
+        jju++;
+      }
+
+      // copy left side to right side with inversion symmetry VMK 4.4(2)
+      // u[ma-j][mb-j] = (-1)^(ma-mb)*Conj([u[ma][mb])
+
+      jju = idxu_block[j];
+      jjup = jju+(j+1)*(j+1)-1;
+      int mbpar = 1;
+      for (int mb = 0; 2*mb <= j; mb++) {
+        int mapar = mbpar;
+        for (int ma = 0; ma <= j; ma++) {
+          if (mapar == 1) {
+            ulist_r[jjup] = ulist_r[jju];
+            ulist_i[jjup] = -ulist_i[jju];
+          } else {
+            ulist_r[jjup] = -ulist_r[jju];
+            ulist_i[jjup] = ulist_i[jju];
+          }
+          mapar = -mapar;
+          jju++;
+          jjup--;
+        }
+        mbpar = -mbpar;
+      }
+    }
+  }
+
+  static inline double snap_compute_sfac( // READ ONLY
+                                          double rmin0, bool switch_flag, bool switch_inner_flag
+                                          // ORIGINAL PARAMTERS
+                                        , double r, double rcut, double sinner, double dinner)
+  {
+    double sfac = 0.0;
+
+    // calculate sfac = sfac_outer
+
+    if (switch_flag == 0) sfac = 1.0;
+    else if (r <= rmin0) sfac = 1.0;
+    else if (r > rcut) sfac = 0.0;
+    else {
+      double rcutfac = M_PI / (rcut - rmin0);
+      sfac = 0.5 * (cos((r - rmin0) * rcutfac) + 1.0);
+    }
+
+    // calculate sfac *= sfac_inner, rarely visited
+
+    if (switch_inner_flag == 1 && r < sinner + dinner) {
+      if (r > sinner - dinner) {
+        double rcutfac = (M_PI/2) / dinner;
+        sfac *= 0.5 * (1.0 - cos( (M_PI/2) + (r - sinner) * rcutfac));
+      } else sfac = 0.0;
+    }
+
+    return sfac;
+  }
+
+  static inline void snap_add_uarraytot( // READ ONLY
+                                         double rmin0, bool switch_flag, bool switch_inner_flag
+                                       , int twojmax, bool chem_flag, int const * element
+                                       , double const * rcutij, double const * sinnerij, double const * dinnerij, double const * wj
+                                       , int const * idxu_block , int idxu_max
+                                       , double const * const * ulist_r_ij, double const * const * ulist_i_ij
+                                         // WRITE ONLY
+                                       , double * ulisttot_r, double * ulisttot_i
+                                         // ORIGINAL PARAMETERS
+                                       , double r, int jj)
+  {
+    double sfac;
+    int jelem;
+
+    sfac = snap_compute_sfac( rmin0, switch_flag, switch_inner_flag, r, rcutij[jj], sinnerij[jj], dinnerij[jj]);
+    sfac *= wj[jj];
+
+    if (chem_flag) jelem = element[jj];
+    else jelem = 0;
+
+    double const * ulist_r = ulist_r_ij[jj];
+    double const * ulist_i = ulist_i_ij[jj];
+
+    for (int j = 0; j <= twojmax; j++) {
+      int jju = idxu_block[j];
+      for (int mb = 0; mb <= j; mb++)
+        for (int ma = 0; ma <= j; ma++) {
+          ulisttot_r[jelem*idxu_max+jju] +=
+            sfac * ulist_r[jju];
+          ulisttot_i[jelem*idxu_max+jju] +=
+            sfac * ulist_i[jju];
+          jju++;
+        }
+    }
+  }
+
+
+  static inline void snap_compute_ui( LAMMPS_NS::SNA * snaptr
+                                    , double const * const * rij
+                                    , double const * rcutij, double rmin0, double rfac0
+                                    , /*parameters*/ int jnum, int ielem)
+  {
+    // utot(j,ma,mb) = 0 for all j,ma,ma
+    // utot(j,ma,ma) = 1 for all j,ma
+    // for j in neighbors of i:
+    //   compute r0 = (x,y,z,z0)
+    //   utot(j,ma,mb) += u(r0;j,ma,mb) for all j,ma,mb
+
+    snap_zero_uarraytot( snaptr->nelements, snaptr->twojmax, snaptr->idxu_block, snaptr->idxu_max, snaptr->wself, snaptr->wselfall_flag
+                         , snaptr->ulisttot_r, snaptr->ulisttot_i
+                         , ielem );
+    
+    for (int j = 0; j < jnum; j++)
+    {
+      const double x = rij[j][0];
+      const double y = rij[j][1];
+      const double z = rij[j][2];
+      const double rsq = x * x + y * y + z * z;
+      const double r = sqrt(rsq);
+
+      const double theta0 = (r - rmin0) * rfac0 * M_PI / (rcutij[j] - rmin0);
+      const double z0 = r / tan(theta0);
+
+      snap_compute_uarray( snaptr->twojmax, snaptr->idxu_block, snaptr->rootpqarray, snaptr->ulist_r_ij, snaptr->ulist_i_ij, x, y, z, z0, r, j);
+      
+      snap_add_uarraytot( snaptr->rmin0, snaptr->switch_flag, snaptr->switch_inner_flag, snaptr->twojmax, snaptr->chem_flag, snaptr->element
+                        , snaptr->rcutij, snaptr->sinnerij, snaptr->dinnerij, snaptr->wj
+                        , snaptr->idxu_block, snaptr->idxu_max, snaptr->ulist_r_ij, snaptr->ulist_i_ij, snaptr->ulisttot_r, snaptr->ulisttot_i
+                        , r, j);
+    }
+  }
+
 
   // Force operator
-  struct alignas(onika::memory::DEFAULT_ALIGNMENT) SnapLMPForceOp 
+  struct SnapLMPForceOp 
   {
     SnapLMPThreadContext* m_thread_ctx = nullptr;
     const size_t n_thread_ctx = 0;
@@ -194,8 +394,8 @@ namespace exaStamp
 
       // compute Ui, Yi for atom I
 
-      if (chemflag) snaptr->compute_ui(ninside, ielem);
-      else          snaptr->compute_ui(ninside, 0);
+      if (chemflag) snap_compute_ui(snaptr,snaptr->rij,snaptr->rcutij,snaptr->rmin0,snaptr->rfac0, ninside, ielem); // snaptr->compute_ui(ninside, ielem);
+      else          snap_compute_ui(snaptr,snaptr->rij,snaptr->rcutij,snaptr->rmin0,snaptr->rfac0, ninside, 0);     // snaptr->compute_ui(ninside, 0);
 
       // for neighbors of I within cutoff:
       // compute Fij = dEi/dRj = -dEi/dRi
