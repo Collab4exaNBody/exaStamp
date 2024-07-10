@@ -193,10 +193,18 @@ namespace exaStamp
   }
 
 
-  static inline void snap_compute_ui( LAMMPS_NS::SNA * snaptr
-                                    , double const * const * rij
-                                    , double const * rcutij, double rmin0, double rfac0
-                                    , /*parameters*/ int jnum, int ielem)
+  static inline void snap_compute_ui( // READ ONLY
+                                      int nelements, int twojmax, int idxu_max, int const * idxu_block, int const * element
+                                    , double const * const * rij, double const * rcutij, double const * const * rootpqarray
+                                    , double const * sinnerij, double const * dinnerij, double const * wj
+                                    , bool wselfall_flag, bool switch_flag, bool switch_inner_flag, bool chem_flag
+                                    , double wself, double rmin0, double rfac0
+                                      // SCRATCH BUFFER
+                                    , double * const * ulist_r_ij, double * const * ulist_i_ij
+                                      // WRITE ONLY
+                                    , double * ulisttot_r, double * ulisttot_i
+                                      // ORIGINAL PARAMETERS
+                                    , int jnum, int ielem)
   {
     // utot(j,ma,mb) = 0 for all j,ma,ma
     // utot(j,ma,ma) = 1 for all j,ma
@@ -204,9 +212,7 @@ namespace exaStamp
     //   compute r0 = (x,y,z,z0)
     //   utot(j,ma,mb) += u(r0;j,ma,mb) for all j,ma,mb
 
-    snap_zero_uarraytot( snaptr->nelements, snaptr->twojmax, snaptr->idxu_block, snaptr->idxu_max, snaptr->wself, snaptr->wselfall_flag
-                         , snaptr->ulisttot_r, snaptr->ulisttot_i
-                         , ielem );
+    snap_zero_uarraytot( nelements, twojmax, idxu_block, idxu_max, wself, wselfall_flag, ulisttot_r, ulisttot_i, ielem );
     
     for (int j = 0; j < jnum; j++)
     {
@@ -219,11 +225,11 @@ namespace exaStamp
       const double theta0 = (r - rmin0) * rfac0 * M_PI / (rcutij[j] - rmin0);
       const double z0 = r / tan(theta0);
 
-      snap_compute_uarray( snaptr->twojmax, snaptr->idxu_block, snaptr->rootpqarray, snaptr->ulist_r_ij, snaptr->ulist_i_ij, x, y, z, z0, r, j);
+      snap_compute_uarray( twojmax, idxu_block, rootpqarray, ulist_r_ij, ulist_i_ij, x, y, z, z0, r, j);
       
-      snap_add_uarraytot( snaptr->rmin0, snaptr->switch_flag, snaptr->switch_inner_flag, snaptr->twojmax, snaptr->chem_flag, snaptr->element
-                        , snaptr->rcutij, snaptr->sinnerij, snaptr->dinnerij, snaptr->wj
-                        , snaptr->idxu_block, snaptr->idxu_max, snaptr->ulist_r_ij, snaptr->ulist_i_ij, snaptr->ulisttot_r, snaptr->ulisttot_i
+      snap_add_uarraytot( rmin0, switch_flag, switch_inner_flag, twojmax, chem_flag, element
+                        , rcutij, sinnerij, dinnerij, wj
+                        , idxu_block, idxu_max, ulist_r_ij, ulist_i_ij, ulisttot_r, ulisttot_i
                         , r, j);
     }
   }
@@ -393,9 +399,12 @@ namespace exaStamp
       //snaptr->set_dbg_chosen(chosen);
 
       // compute Ui, Yi for atom I
-
-      if (chemflag) snap_compute_ui(snaptr,snaptr->rij,snaptr->rcutij,snaptr->rmin0,snaptr->rfac0, ninside, ielem); // snaptr->compute_ui(ninside, ielem);
-      else          snap_compute_ui(snaptr,snaptr->rij,snaptr->rcutij,snaptr->rmin0,snaptr->rfac0, ninside, 0);     // snaptr->compute_ui(ninside, 0);
+      snap_compute_ui( snaptr->nelements, snaptr->twojmax, snaptr->idxu_max, snaptr->idxu_block, snaptr->element
+                     , snaptr->rij, snaptr->rcutij, snaptr->rootpqarray, snaptr->sinnerij, snaptr->dinnerij, snaptr->wj
+                     , snaptr->wselfall_flag, snaptr->switch_flag, snaptr->switch_inner_flag, snaptr->chem_flag
+                     , snaptr->wself, snaptr->rmin0, snaptr->rfac0
+                     , snaptr->ulist_r_ij, snaptr->ulist_i_ij, snaptr->ulisttot_r, snaptr->ulisttot_i
+                     , ninside, chemflag ? ielem : 0); // snaptr->compute_ui(ninside, ielem);
 
       // for neighbors of I within cutoff:
       // compute Fij = dEi/dRj = -dEi/dRi
