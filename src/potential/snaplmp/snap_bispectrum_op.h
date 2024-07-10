@@ -1,5 +1,9 @@
 #pragma once
 
+#include "snap_compute_ui.h"
+#include "snap_compute_zi.h"
+#include "snap_compute_bi.h"
+
 namespace exaStamp
 {
 
@@ -82,7 +86,7 @@ namespace exaStamp
         }
       }
 
-
+#if 0
       /********** DEBUG ***************/
       // snaptr->reorder_rij(ninside);
       // const double chk_rij = snaptr->chk_rij(ninside);
@@ -98,22 +102,37 @@ namespace exaStamp
         }
       }
       /*******************************/
+#endif
 
+      snap_compute_ui( snaptr->nelements, snaptr->twojmax, snaptr->idxu_max, snaptr->idxu_block, snaptr->element
+                     , snaptr->rij, snaptr->rcutij, snaptr->rootpqarray, snaptr->sinnerij, snaptr->dinnerij, snaptr->wj
+                     , snaptr->wselfall_flag, snaptr->switch_flag, snaptr->switch_inner_flag, snaptr->chem_flag
+                     , snaptr->wself, snaptr->rmin0, snaptr->rfac0
+                     , snaptr->ulist_r_ij, snaptr->ulist_i_ij, snaptr->ulisttot_r, snaptr->ulisttot_i
+                     , ninside, chemflag ? ielem : 0);
 
-      if (chemflag) snaptr->compute_ui(ninside, ielem);
-      else          snaptr->compute_ui(ninside, 0);
+      // snaptr->compute_zi();
+      snap_compute_zi( snaptr->nelements, snaptr->idxz_max, snaptr->idxu_max, snaptr->idxu_block, snaptr->idxcg_block
+                     , snaptr->idxz, snaptr->cglist, snaptr->ulisttot_r, snaptr->ulisttot_i
+                     , snaptr->bnorm_flag, snaptr->zlist_r, snaptr->zlist_i );
 
-      snaptr->compute_zi();
-
-      if (chemflag) snaptr->compute_bi(ielem);
-      else          snaptr->compute_bi(0);
+//      if (chemflag) snaptr->compute_bi(ielem);
+//      else          snaptr->compute_bi(0);
+      snap_compute_bi( snaptr->nelements, snaptr->idxz_max, snaptr->idxb_max, snaptr->idxu_max
+                     , snaptr->idxu_block, snaptr->idxz_block
+                     , snaptr->idxz, snaptr->idxb
+                     , snaptr->zlist_r, snaptr->zlist_i
+                     , snaptr->ulisttot_r, snaptr->ulisttot_i
+                     , snaptr->bzero , snaptr->bzero_flag, snaptr->wselfall_flag
+                     , snaptr->blist
+                     , chemflag ? ielem : 0 );
 
       const long bispectrum_ii_offset = ncoeff * ( cell_particle_offset[buf.cell] + buf.part );
       for (int icoeff = 0; icoeff < ncoeff; icoeff++) {
         bispectrum[ bispectrum_ii_offset + icoeff ] /*[ii][icoeff]*/ = snaptr->blist[icoeff];
       }
 
-
+#if 0
       /********** DEBUG ***************/
       if( chosen )
       {
@@ -125,6 +144,7 @@ namespace exaStamp
         printf("\n");
       }
       /*******************************/
+#endif
 
     }
     
