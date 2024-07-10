@@ -5,6 +5,7 @@
 #include "snap_compute_ui.h"
 #include "snap_compute_yi.h"
 #include "snap_compute_duidrj.h"
+#include "snap_compute_deidrj.h"
 
 namespace exaStamp
 {
@@ -223,9 +224,13 @@ namespace exaStamp
         double fij[3];
 	      fij[0]=0.;
 	      fij[1]=0.;
-	      fij[2]=0.;	
+	      fij[2]=0.;
         snaptr->elem_duarray = snaptr->chem_flag ? snaptr->element[jj] : 0 ;
-        snaptr->compute_deidrj(fij);
+        // snaptr->compute_deidrj(fij);
+        snap_compute_deidrj( snaptr->elem_duarray, snaptr->twojmax, snaptr->idxu_max, snaptr->idxu_block
+                           , snaptr->dulist_r, snaptr->dulist_i
+                           , snaptr->ylist_r, snaptr->ylist_i
+                           , fij );
         
 	      //        if( conv_energy_units )
 	      //        {
