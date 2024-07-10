@@ -5,7 +5,7 @@
 #include <onika/cuda/cuda_math.h>
 
 #include "error.h"
-#include "comm.h"
+//#include "comm.h"
 
 #define FLERR __FILE__,__LINE__
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
@@ -21,7 +21,7 @@ namespace LAMMPS_NS
   {
     ErrorLogWrapper* error = nullptr;    
     Memory* memory = nullptr;
-    CommunicatorInfo* comm = nullptr;
+    //CommunicatorInfo* comm = nullptr;
   };
 
 	class Pointers
@@ -31,7 +31,7 @@ namespace LAMMPS_NS
 	    : lmp(ptr)
 	    , error(ptr->error)
 	    , memory(ptr->memory)
-	    , comm(ptr->comm)
+	    //, comm(ptr->comm)
 	  {}
 	    
     virtual ~Pointers() = default;
@@ -45,7 +45,7 @@ namespace LAMMPS_NS
     LAMMPS *lmp = nullptr;
     ErrorLogWrapper* error = nullptr;
     Memory* memory = nullptr;
-    CommunicatorInfo* comm = nullptr;
+    //CommunicatorInfo* comm = nullptr;
 	};
 	
 }

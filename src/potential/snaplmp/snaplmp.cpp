@@ -172,7 +172,7 @@ namespace exaStamp
       {
         snap_ctx->ptr = new LAMMPS_NS::LAMMPS;
         snap_ctx->ptr->error = new LAMMPS_NS::ErrorLogWrapper;
-        snap_ctx->ptr->comm = new LAMMPS_NS::CommunicatorInfo;
+        //snap_ctx->ptr->comm = new LAMMPS_NS::CommunicatorInfo;
         snap_ctx->ptr->memory = new LAMMPS_NS::Memory(snap_ctx->ptr);
       }
           
