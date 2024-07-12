@@ -25,13 +25,13 @@
 #define DINNERIJ(i)     dinnerij[i]
 #define ELEMENT(i)      element[i]
 #define ULIST_IDIM      idxu_max
-#define ULIST_R_IJ(j,i) ulist_r_ij[j][i] // ulist_r_ij[ (j)*ULIST_IDIM + (i) ]
-#define ULIST_I_IJ(j,i) ulist_i_ij[j][i] // ulist_i_ij[ (j)*ULIST_IDIM + (i) ]
+#define ULIST_R_IJ(j,i) ulist_r_ij[ (j)*ULIST_IDIM + (i) ]
+#define ULIST_I_IJ(j,i) ulist_i_ij[ (j)*ULIST_IDIM + (i) ]
 #define ULISTTOT_R(i)   ulisttot_r[i]
 #define ULISTTOT_I(i)   ulisttot_i[i]
 #define DULIST_IDIM     3
-#define DULIST_R(j,i)   dulist_r[j][i] // dulist_r[ (j) * DULIST_IDIM + (i) ]
-#define DULIST_I(j,i)   dulist_i[j][i] // dulist_i[ (j) * DULIST_IDIM + (i) ]
+#define DULIST_R(j,i)   dulist_r[ (j) * DULIST_IDIM + (i) ]
+#define DULIST_I(j,i)   dulist_i[ (j) * DULIST_IDIM + (i) ]
 #define ZLIST_R(i)      zlist_r[i]
 #define ZLIST_I(i)      zlist_i[i]
 #define BLIST(i)        blist[i]
@@ -135,13 +135,13 @@ namespace LAMMPS_NS
 
     double *ulisttot_r = nullptr;
     double *ulisttot_i = nullptr;
-    double **ulist_r_ij = nullptr;
-    double **ulist_i_ij = nullptr;
+    double *ulist_r_ij = nullptr;
+    double *ulist_i_ij = nullptr;
     double *zlist_r = nullptr;
     double *zlist_i = nullptr;
 
-    double **dulist_r = nullptr;
-    double **dulist_i = nullptr;
+    double *dulist_r = nullptr;
+    double *dulist_i = nullptr;
     double *ylist_r = nullptr;
     double *ylist_i = nullptr;
   };

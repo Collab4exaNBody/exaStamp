@@ -150,8 +150,8 @@ void SnapScratchBuffers::create_twojmax_arrays()
 //  int jdimpq = config->twojmax + 2;
   memory->create(ulisttot_r, config->idxu_max * config->nelements, "sna:ulisttot_r");
   memory->create(ulisttot_i, config->idxu_max * config->nelements, "sna:ulisttot_i");
-  memory->create(dulist_r, config->idxu_max, 3, "sna:dulist_r");
-  memory->create(dulist_i, config->idxu_max, 3, "sna:dulist_i");
+  memory->create(dulist_r, config->idxu_max * 3, "sna:dulist_r");
+  memory->create(dulist_i, config->idxu_max * 3, "sna:dulist_i");
   memory->create(zlist_r, config->idxz_max * config->ndoubles, "sna:zlist_r");
   memory->create(zlist_i, config->idxz_max * config->ndoubles, "sna:zlist_i");
   memory->create(blist, config->idxb_max * config->ntriples, "sna:blist");
@@ -197,8 +197,8 @@ void SnapScratchBuffers::grow_rij(int newnmax)
   memory->create(sinnerij, nmax, "pair:sinnerij");
   memory->create(dinnerij, nmax, "pair:dinnerij");
   if (config->chem_flag) memory->create(element, nmax, "sna:element");
-  memory->create(ulist_r_ij, nmax, config->idxu_max, "sna:ulist_r_ij");
-  memory->create(ulist_i_ij, nmax, config->idxu_max, "sna:ulist_i_ij");
+  memory->create(ulist_r_ij, nmax * config->idxu_max, "sna:ulist_r_ij");
+  memory->create(ulist_i_ij, nmax * config->idxu_max, "sna:ulist_i_ij");
 }
 
 

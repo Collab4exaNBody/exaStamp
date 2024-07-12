@@ -54,12 +54,12 @@ namespace exaStamp
   ------------------------------------------------------------------------- */
                         
   static inline void snap_compute_duarray( // READ ONLY
-                             int twojmax, int const * idxu_block
-                           , double const * const * ulist_r_ij, double const * const * ulist_i_ij, double const * const * rootpqarray
+                             int twojmax, int idxu_max, int const * idxu_block
+                           , double const * ulist_r_ij, double const * ulist_i_ij, double const * const * rootpqarray
                            , double const * sinnerij, double const * dinnerij
                            , double rmin0, bool switch_flag, bool switch_inner_flag
                              // WRITE ONLY
-                           , double * const * dulist_r, double * const * dulist_i
+                           , double * dulist_r, double * dulist_i
                              // ORIGINAL PARAMETERS
                            , double x, double y, double z
                            , double z0, double r, double dz0dr
@@ -222,15 +222,15 @@ namespace exaStamp
   ------------------------------------------------------------------------- */
 
   static inline void snap_compute_duidrj( // READ ONLY
-                                         int twojmax, int const * idxu_block
+                                         int twojmax, int idxu_max, int const * idxu_block
 //                                       , int const * element
                                        , double const * drx, double const * dry, double const * drz
                                        , double const * rcutij, double const * wj
-                                       , double const * const * ulist_r_ij, double const * const * ulist_i_ij, double const * const * rootpqarray
+                                       , double const * ulist_r_ij, double const * ulist_i_ij, double const * const * rootpqarray
                                        , double const * sinnerij, double const * dinnerij
                                        , double rmin0, double rfac0, bool switch_flag, bool switch_inner_flag, bool chem_flag                             
                                          // WRITE ONLY
-                                       , double * const * dulist_r, double * const * dulist_i
+                                       , double * dulist_r, double * dulist_i
                                          // ORIGINAL PARAMETERS
                                        , int jj)
   {
@@ -253,7 +253,7 @@ namespace exaStamp
 //    if (chem_flag) elem_duarray = ELEMENT(jj);
 //    else elem_duarray = 0;
 
-    snap_compute_duarray( twojmax, idxu_block, ulist_r_ij, ulist_i_ij, rootpqarray
+    snap_compute_duarray( twojmax, idxu_max, idxu_block, ulist_r_ij, ulist_i_ij, rootpqarray
                         , sinnerij, dinnerij, rmin0, switch_flag, switch_inner_flag
                         , dulist_r, dulist_i
                         , x, y, z, z0, r, dz0dr, WJ(jj), rcut, jj);

@@ -12,7 +12,7 @@ namespace exaStamp
 
   static inline void snap_compute_deidrj( // READ ONLY
                                           int elem_duarray, int twojmax, int idxu_max, int const * idxu_block
-                                        , double const * const * dulist_r, double const * const * dulist_i
+                                        , double const * dulist_r, double const * dulist_i
                                         , double const * ylist_r, double const * ylist_i
                                           // ORIGINAL PARAMETERS
                                         , double* dedr)

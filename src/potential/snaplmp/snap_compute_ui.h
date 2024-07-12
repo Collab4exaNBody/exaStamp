@@ -37,11 +37,11 @@ namespace exaStamp
   }
 
   static inline void snap_compute_uarray( // READ ONLY
-                                          int twojmax
+                                          int twojmax, int idxu_max
                                         , int const * idxu_block
                                         , double const * const * rootpqarray
                                           // WRITE ONLY
-                                        , double * const * ulist_r_ij, double * const * ulist_i_ij
+                                        , double * ulist_r_ij, double * ulist_i_ij
                                           // ORIGINAL PARAMETERS
                                         , double x, double y, double z, double z0, double r, int jj )
   {
@@ -159,7 +159,7 @@ namespace exaStamp
                                        , int twojmax, bool chem_flag, int const * element
                                        , double const * rcutij, double const * sinnerij, double const * dinnerij, double const * wj
                                        , int const * idxu_block , int idxu_max
-                                       , double const * const * ulist_r_ij, double const * const * ulist_i_ij
+                                       , double const * ulist_r_ij, double const * ulist_i_ij
                                          // WRITE ONLY
                                        , double * ulisttot_r, double * ulisttot_i
                                          // ORIGINAL PARAMETERS
@@ -198,9 +198,8 @@ namespace exaStamp
                                     , double const * sinnerij, double const * dinnerij, double const * wj
                                     , bool wselfall_flag, bool switch_flag, bool switch_inner_flag, bool chem_flag
                                     , double wself, double rmin0, double rfac0
-                                      // SCRATCH BUFFER
-                                    , double * const * ulist_r_ij, double * const * ulist_i_ij
                                       // WRITE ONLY
+                                    , double * ulist_r_ij, double * ulist_i_ij
                                     , double * ulisttot_r, double * ulisttot_i
                                       // ORIGINAL PARAMETERS
                                     , int jnum, int ielem)
@@ -224,7 +223,7 @@ namespace exaStamp
       const double theta0 = (r - rmin0) * rfac0 * M_PI / (RCUTIJ(j) - rmin0);
       const double z0 = r / tan(theta0);
 
-      snap_compute_uarray( twojmax, idxu_block, rootpqarray, ulist_r_ij, ulist_i_ij, x, y, z, z0, r, j);
+      snap_compute_uarray( twojmax, idxu_max, idxu_block, rootpqarray, ulist_r_ij, ulist_i_ij, x, y, z, z0, r, j);
       
       snap_add_uarraytot( rmin0, switch_flag, switch_inner_flag, twojmax, chem_flag, element
                         , rcutij, sinnerij, dinnerij, wj

@@ -206,7 +206,7 @@ namespace exaStamp
         //int j = snaptr->inside[jj];
 
         // snaptr->compute_duidrj(jj);
-        snap_compute_duidrj( snaconf->twojmax, snaconf->idxu_block, buf.drx,buf.dry,buf.drz, snaptr->rcutij, snaptr->wj
+        snap_compute_duidrj( snaconf->twojmax, snaconf->idxu_max, snaconf->idxu_block, buf.drx,buf.dry,buf.drz, snaptr->rcutij, snaptr->wj
                            , snaptr->ulist_r_ij, snaptr->ulist_i_ij, snaconf->rootpqarray
                            , snaptr->sinnerij, snaptr->dinnerij
                            , snaconf->rmin0, snaconf->rfac0, snaconf->switch_flag, snaconf->switch_inner_flag, snaconf->chem_flag                             
