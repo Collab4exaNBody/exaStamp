@@ -52,18 +52,18 @@ namespace exaStamp
             double suma1_r = 0.0;
             double suma1_i = 0.0;
 
-            const double *u1_r = &ulisttot_r[elem1*idxu_max+jju1];
-            const double *u1_i = &ulisttot_i[elem1*idxu_max+jju1];
-            const double *u2_r = &ulisttot_r[elem2*idxu_max+jju2];
-            const double *u2_i = &ulisttot_i[elem2*idxu_max+jju2];
+            //const double *u1_r = &ULISTTOT_R(elem1*idxu_max+jju1);
+            //const double *u1_i = &ULISTTOT_I(elem1*idxu_max+jju1);
+            //const double *u2_r = &ULISTTOT_R(elem2*idxu_max+jju2);
+            //const double *u2_i = &ULISTTOT_I(elem2*idxu_max+jju2);
 
             int ma1 = ma1min;
             int ma2 = ma2max;
             int icga = ma1min * (j2 + 1) + ma2max;
 
             for (int ia = 0; ia < na; ia++) {
-              suma1_r += cgblock[icga] * (u1_r[ma1] * u2_r[ma2] - u1_i[ma1] * u2_i[ma2]);
-              suma1_i += cgblock[icga] * (u1_r[ma1] * u2_i[ma2] + u1_i[ma1] * u2_r[ma2]);
+              suma1_r += cgblock[icga] * (ULISTTOT_R(elem1*idxu_max+jju1+ma1) * ULISTTOT_R(elem2*idxu_max+jju2+ma2) - ULISTTOT_I(elem1*idxu_max+jju1+ma1) * ULISTTOT_I(elem2*idxu_max+jju2+ma2));
+              suma1_i += cgblock[icga] * (ULISTTOT_R(elem1*idxu_max+jju1+ma1) * ULISTTOT_I(elem2*idxu_max+jju2+ma2) + ULISTTOT_I(elem1*idxu_max+jju1+ma1) * ULISTTOT_R(elem2*idxu_max+jju2+ma2));
               ma1++;
               ma2--;
               icga += j2;

@@ -23,13 +23,13 @@ namespace exaStamp
       int jju = idxu_block[j];
       for (int mb = 0; mb <= j; mb++) {
         for (int ma = 0; ma <= j; ma++) {
-          ulisttot_r[jelem*idxu_max+jju] = 0.0;
-          ulisttot_i[jelem*idxu_max+jju] = 0.0;
+          ULISTTOT_R(jelem*idxu_max+jju) = 0.0;
+          ULISTTOT_I(jelem*idxu_max+jju) = 0.0;
 
           // utot(j,ma,ma) = wself, sometimes
           if (jelem == ielem || wselfall_flag)
             if (ma==mb)
-            ulisttot_r[jelem*idxu_max+jju] = wself; ///// double check this
+            ULISTTOT_R(jelem*idxu_max+jju) = wself; ///// double check this
           jju++;
         }
       }
@@ -181,9 +181,9 @@ namespace exaStamp
       int jju = idxu_block[j];
       for (int mb = 0; mb <= j; mb++)
         for (int ma = 0; ma <= j; ma++) {
-          ulisttot_r[jelem*idxu_max+jju] +=
+          ULISTTOT_R(jelem*idxu_max+jju) +=
             sfac * ULIST_R_IJ(jj,jju);
-          ulisttot_i[jelem*idxu_max+jju] +=
+          ULISTTOT_I(jelem*idxu_max+jju) +=
             sfac * ULIST_I_IJ(jj,jju);
           jju++;
         }
