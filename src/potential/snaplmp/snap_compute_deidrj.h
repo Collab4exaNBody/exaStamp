@@ -30,8 +30,8 @@ namespace exaStamp
 
           //double const * dudr_r = dulist_r[jju];
           //double const * dudr_i = dulist_i[jju];
-          double jjjmambyarray_r = ylist_r[jelem*idxu_max+jju];
-          double jjjmambyarray_i = ylist_i[jelem*idxu_max+jju];
+          double jjjmambyarray_r = YLIST_R(jelem*idxu_max+jju);
+          double jjjmambyarray_i = YLIST_I(jelem*idxu_max+jju);
 
           for (int k = 0; k < 3; k++)
             dedr[k] +=
@@ -48,8 +48,8 @@ namespace exaStamp
         for (int ma = 0; ma < mb; ma++) {
           //double const * dudr_r = dulist_r[jju];
           //double const * dudr_i = dulist_i[jju];
-          double jjjmambyarray_r = ylist_r[jelem*idxu_max+jju];
-          double jjjmambyarray_i = ylist_i[jelem*idxu_max+jju];
+          double jjjmambyarray_r = YLIST_R(jelem*idxu_max+jju);
+          double jjjmambyarray_i = YLIST_I(jelem*idxu_max+jju);
 
           for (int k = 0; k < 3; k++)
             dedr[k] +=
@@ -60,8 +60,8 @@ namespace exaStamp
 
         //double const * dudr_r = dulist_r[jju];
         //double const * dudr_i = dulist_i[jju];
-        double jjjmambyarray_r = ylist_r[jelem*idxu_max+jju];
-        double jjjmambyarray_i = ylist_i[jelem*idxu_max+jju];
+        double jjjmambyarray_r = YLIST_R(jelem*idxu_max+jju);
+        double jjjmambyarray_i = YLIST_I(jelem*idxu_max+jju);
 
         for (int k = 0; k < 3; k++)
           dedr[k] +=

@@ -25,8 +25,8 @@ namespace exaStamp
         jju = idxu_block[j];
         for (int mb = 0; 2*mb <= j; mb++)
           for (int ma = 0; ma <= j; ma++) {
-            ylist_r[ielem1*idxu_max+jju] = 0.0;
-            ylist_i[ielem1*idxu_max+jju] = 0.0;
+            YLIST_R(ielem1*idxu_max+jju) = 0.0;
+            YLIST_I(ielem1*idxu_max+jju) = 0.0;
             jju++;
           } // end loop over ma, mb
       } // end loop over j
@@ -117,8 +117,8 @@ namespace exaStamp
             if (!bnorm_flag && j1 > j)
               betaj *= (j1 + 1) / (j + 1.0);
 
-            ylist_r[elem3 * idxu_max + jju] += betaj * ztmp_r;
-            ylist_i[elem3 * idxu_max + jju] += betaj * ztmp_i;
+            YLIST_R(elem3 * idxu_max + jju) += betaj * ztmp_r;
+            YLIST_I(elem3 * idxu_max + jju) += betaj * ztmp_i;
           }
         } // end loop over jjz
       }
