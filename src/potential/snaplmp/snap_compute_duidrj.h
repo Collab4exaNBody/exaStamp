@@ -190,8 +190,8 @@ namespace exaStamp
       }
     }
 
-    double sfac  = snap_compute_sfac ( rmin0, switch_flag, switch_inner_flag, r, rcut, sinnerij[jj], dinnerij[jj] );
-    double dsfac = snap_compute_dsfac( rmin0, switch_flag, switch_inner_flag, r, rcut, sinnerij[jj], dinnerij[jj] );
+    double sfac  = snap_compute_sfac ( rmin0, switch_flag, switch_inner_flag, r, rcut, SINNERIJ(jj), DINNERIJ(jj) );
+    double dsfac = snap_compute_dsfac( rmin0, switch_flag, switch_inner_flag, r, rcut, SINNERIJ(jj), DINNERIJ(jj) );
 
     sfac *= wj;
     dsfac *= wj;
@@ -250,7 +250,7 @@ namespace exaStamp
     z0 = r * cs / sn;
     dz0dr = z0 / r - (r*rscale0) * (rsq + z0 * z0) / rsq;
 
-//    if (chem_flag) elem_duarray = element[jj];
+//    if (chem_flag) elem_duarray = ELEMENT(jj);
 //    else elem_duarray = 0;
 
     snap_compute_duarray( twojmax, idxu_block, ulist_r_ij, ulist_i_ij, rootpqarray

@@ -168,10 +168,10 @@ namespace exaStamp
     double sfac;
     int jelem;
 
-    sfac = snap_compute_sfac( rmin0, switch_flag, switch_inner_flag, r, RCUTIJ(jj), sinnerij[jj], dinnerij[jj]);
+    sfac = snap_compute_sfac( rmin0, switch_flag, switch_inner_flag, r, RCUTIJ(jj), SINNERIJ(jj), DINNERIJ(jj));
     sfac *= WJ(jj);
 
-    if (chem_flag) jelem = element[jj];
+    if (chem_flag) jelem = ELEMENT(jj);
     else jelem = 0;
 
     //double const * ulist_r = ulist_r_ij[jj];

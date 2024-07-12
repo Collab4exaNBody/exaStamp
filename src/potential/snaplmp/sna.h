@@ -22,8 +22,8 @@
 
 #define WJ(i)           wj[i]
 #define RCUTIJ(i)       rcutij[i]
-#define SINNER(i)       sinnerij[i]
-#define DINNER(i)       dinnerij[i]
+#define SINNERIJ(i)     sinnerij[i]
+#define DINNERIJ(i)     dinnerij[i]
 #define ELEMENT(i)      element[i]
 #define ULIST_IDIM      idxu_max
 #define ULIST_R_IJ(j,i) ulist_r_ij[j][i] // ulist_r_ij[ (j)*ULIST_IDIM + (i) ]
