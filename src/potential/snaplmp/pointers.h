@@ -5,10 +5,10 @@
 #include <map>
 #include <iostream>
 #include <algorithm>
+#include <exanb/core/log.h>
 #include <onika/cuda/cuda_math.h>
 #include <onika/memory/allocator.h>
 
-#define FLERR __FILE__,__LINE__
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 
@@ -90,7 +90,10 @@ namespace LAMMPS_NS
       const size_t elements = m_idim * m_jdim * m_kdim;
       const size_t data_bytes = ( elements * sizeof(T) + 63ull ) & ( ~ 63ull );
       const size_t pointer_bytes = ( m_kdim * sizeof(T**) ) + ( m_kdim * m_jdim * sizeof(T*) );
-      posix_memalign( reinterpret_cast<void**>(&m_iptr), 64, data_bytes + pointer_bytes );
+      if( posix_memalign( reinterpret_cast<void**>(&m_iptr), 64, data_bytes + pointer_bytes ) != 0)
+      {
+        exanb::fatal_error() << "Allocation failed for "<<name()<<" with "<<elements<<" elements"<<std::endl;
+      }
       m_jptr = reinterpret_cast<T**>( reinterpret_cast<uint8_t*>(m_iptr) + data_bytes );
       m_kptr = reinterpret_cast<T***>( m_jptr + ( m_kdim * m_jdim ) );
 

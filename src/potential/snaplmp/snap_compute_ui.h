@@ -58,11 +58,11 @@ namespace exaStamp
     b_i = -r0inv * x;
 
     // VMK Section 4.8.2
-    double* ulist_r = ulist_r_ij[jj];
-    double* ulist_i = ulist_i_ij[jj];
+    //double* ulist_r = ulist_r_ij[jj];
+    //double* ulist_i = ulist_i_ij[jj];
 
-    ulist_r[0] = 1.0;
-    ulist_i[0] = 0.0;
+    ulist_r_ij[jj][0] = 1.0;
+    ulist_i_ij[jj][0] = 0.0;
 
     for (int j = 1; j <= twojmax; j++) {
       int jju = idxu_block[j];
@@ -71,29 +71,29 @@ namespace exaStamp
       // fill in left side of matrix layer from previous layer
 
       for (int mb = 0; 2*mb <= j; mb++) {
-        ulist_r[jju] = 0.0;
-        ulist_i[jju] = 0.0;
+        ulist_r_ij[jj][jju] = 0.0;
+        ulist_i_ij[jj][jju] = 0.0;
 
         for (int ma = 0; ma < j; ma++) {
           rootpq = rootpqarray[j - ma][j - mb];
-          ulist_r[jju] +=
+          ulist_r_ij[jj][jju] +=
             rootpq *
-            (a_r * ulist_r[jjup] +
-             a_i * ulist_i[jjup]);
-          ulist_i[jju] +=
+            (a_r * ulist_r_ij[jj][jjup] +
+             a_i * ulist_i_ij[jj][jjup]);
+          ulist_i_ij[jj][jju] +=
             rootpq *
-            (a_r * ulist_i[jjup] -
-             a_i * ulist_r[jjup]);
+            (a_r * ulist_i_ij[jj][jjup] -
+             a_i * ulist_r_ij[jj][jjup]);
 
           rootpq = rootpqarray[ma + 1][j - mb];
-          ulist_r[jju+1] =
+          ulist_r_ij[jj][jju+1] =
             -rootpq *
-            (b_r * ulist_r[jjup] +
-             b_i * ulist_i[jjup]);
-          ulist_i[jju+1] =
+            (b_r * ulist_r_ij[jj][jjup] +
+             b_i * ulist_i_ij[jj][jjup]);
+          ulist_i_ij[jj][jju+1] =
             -rootpq *
-            (b_r * ulist_i[jjup] -
-             b_i * ulist_r[jjup]);
+            (b_r * ulist_i_ij[jj][jjup] -
+             b_i * ulist_r_ij[jj][jjup]);
           jju++;
           jjup++;
         }
@@ -110,11 +110,11 @@ namespace exaStamp
         int mapar = mbpar;
         for (int ma = 0; ma <= j; ma++) {
           if (mapar == 1) {
-            ulist_r[jjup] = ulist_r[jju];
-            ulist_i[jjup] = -ulist_i[jju];
+            ulist_r_ij[jj][jjup] = ulist_r_ij[jj][jju];
+            ulist_i_ij[jj][jjup] = -ulist_i_ij[jj][jju];
           } else {
-            ulist_r[jjup] = -ulist_r[jju];
-            ulist_i[jjup] = ulist_i[jju];
+            ulist_r_ij[jj][jjup] = -ulist_r_ij[jj][jju];
+            ulist_i_ij[jj][jjup] = ulist_i_ij[jj][jju];
           }
           mapar = -mapar;
           jju++;
@@ -169,22 +169,22 @@ namespace exaStamp
     int jelem;
 
     sfac = snap_compute_sfac( rmin0, switch_flag, switch_inner_flag, r, rcutij[jj], sinnerij[jj], dinnerij[jj]);
-    sfac *= wj[jj];
+    sfac *= WJ(jj);
 
     if (chem_flag) jelem = element[jj];
     else jelem = 0;
 
-    double const * ulist_r = ulist_r_ij[jj];
-    double const * ulist_i = ulist_i_ij[jj];
+    //double const * ulist_r = ulist_r_ij[jj];
+    //double const * ulist_i = ulist_i_ij[jj];
 
     for (int j = 0; j <= twojmax; j++) {
       int jju = idxu_block[j];
       for (int mb = 0; mb <= j; mb++)
         for (int ma = 0; ma <= j; ma++) {
           ulisttot_r[jelem*idxu_max+jju] +=
-            sfac * ulist_r[jju];
+            sfac * ulist_r_ij[jj][jju];
           ulisttot_i[jelem*idxu_max+jju] +=
-            sfac * ulist_i[jju];
+            sfac * ulist_i_ij[jj][jju];
           jju++;
         }
     }

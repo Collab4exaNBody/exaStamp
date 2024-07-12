@@ -107,8 +107,8 @@ namespace exaStamp
     db_i[0] += -r0inv;
     db_r[1] += r0inv;
 
-    double const * ulist_r = ulist_r_ij[jj];
-    double const * ulist_i = ulist_i_ij[jj];
+    //double const * ulist_r = ulist_r_ij[jj];
+    //double const * ulist_i = ulist_i_ij[jj];
 
     dulist_r[0][0] = 0.0;
     dulist_r[0][1] = 0.0;
@@ -132,13 +132,13 @@ namespace exaStamp
           rootpq = rootpqarray[j - ma][j - mb];
           for (int k = 0; k < 3; k++) {
             dulist_r[jju][k] +=
-              rootpq * (da_r[k] * ulist_r[jjup] +
-                        da_i[k] * ulist_i[jjup] +
+              rootpq * (da_r[k] * ulist_r_ij[jj][jjup] +
+                        da_i[k] * ulist_i_ij[jj][jjup] +
                         a_r * dulist_r[jjup][k] +
                         a_i * dulist_i[jjup][k]);
             dulist_i[jju][k] +=
-              rootpq * (da_r[k] * ulist_i[jjup] -
-                        da_i[k] * ulist_r[jjup] +
+              rootpq * (da_r[k] * ulist_i_ij[jj][jjup] -
+                        da_i[k] * ulist_r_ij[jj][jjup] +
                         a_r * dulist_i[jjup][k] -
                         a_i * dulist_r[jjup][k]);
           }
@@ -146,13 +146,13 @@ namespace exaStamp
           rootpq = rootpqarray[ma + 1][j - mb];
           for (int k = 0; k < 3; k++) {
             dulist_r[jju+1][k] =
-              -rootpq * (db_r[k] * ulist_r[jjup] +
-                         db_i[k] * ulist_i[jjup] +
+              -rootpq * (db_r[k] * ulist_r_ij[jj][jjup] +
+                         db_i[k] * ulist_i_ij[jj][jjup] +
                          b_r * dulist_r[jjup][k] +
                          b_i * dulist_i[jjup][k]);
             dulist_i[jju+1][k] =
-              -rootpq * (db_r[k] * ulist_i[jjup] -
-                         db_i[k] * ulist_r[jjup] +
+              -rootpq * (db_r[k] * ulist_i_ij[jj][jjup] -
+                         db_i[k] * ulist_r_ij[jj][jjup] +
                          b_r * dulist_i[jjup][k] -
                          b_i * dulist_r[jjup][k]);
           }
@@ -199,17 +199,17 @@ namespace exaStamp
       int jju = idxu_block[j];
       for (int mb = 0; 2*mb <= j; mb++)
         for (int ma = 0; ma <= j; ma++) {
-          dulist_r[jju][0] = dsfac * ulist_r[jju] * ux +
+          dulist_r[jju][0] = dsfac * ulist_r_ij[jj][jju] * ux +
                                     sfac * dulist_r[jju][0];
-          dulist_i[jju][0] = dsfac * ulist_i[jju] * ux +
+          dulist_i[jju][0] = dsfac * ulist_i_ij[jj][jju] * ux +
                                     sfac * dulist_i[jju][0];
-          dulist_r[jju][1] = dsfac * ulist_r[jju] * uy +
+          dulist_r[jju][1] = dsfac * ulist_r_ij[jj][jju] * uy +
                                     sfac * dulist_r[jju][1];
-          dulist_i[jju][1] = dsfac * ulist_i[jju] * uy +
+          dulist_i[jju][1] = dsfac * ulist_i_ij[jj][jju] * uy +
                                     sfac * dulist_i[jju][1];
-          dulist_r[jju][2] = dsfac * ulist_r[jju] * uz +
+          dulist_r[jju][2] = dsfac * ulist_r_ij[jj][jju] * uz +
                                     sfac * dulist_r[jju][2];
-          dulist_i[jju][2] = dsfac * ulist_i[jju] * uz +
+          dulist_i[jju][2] = dsfac * ulist_i_ij[jj][jju] * uz +
                                     sfac * dulist_i[jju][2];
           jju++;
         }
@@ -256,7 +256,7 @@ namespace exaStamp
     snap_compute_duarray( twojmax, idxu_block, ulist_r_ij, ulist_i_ij, rootpqarray
                         , sinnerij, dinnerij, rmin0, switch_flag, switch_inner_flag
                         , dulist_r, dulist_i
-                        , x, y, z, z0, r, dz0dr, wj[jj], rcut, jj);
+                        , x, y, z, z0, r, dz0dr, WJ(jj), rcut, jj);
   }
 
 }

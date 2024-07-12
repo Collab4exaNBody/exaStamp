@@ -20,6 +20,25 @@
 
 #include "pointers.h"
 
+#define WJ(i)           wj[i]
+#define RCUTIJ(i)       rcutij[i]
+#define SINNER(i)       sinnerij[i]
+#define DINNER(i)       dinnerij[i]
+#define ELEMENT(i)      element[i]
+#define ULIST_IDIM      idxu_max
+#define ULIST_R_IJ(j,i) ulist_r_ij[ (j)*ULIST_IDIM + (i) ]
+#define ULIST_I_IJ(j,i) ulist_i_ij[ (j)*ULIST_IDIM + (i) ]
+#define ULISTTOT_R(i)   ulisttot_r[i]
+#define ULISTTOT_I(i)   ulisttot_i[i]
+#define DULIST_IDIM     3
+#define DULIST_R(j,i)   dulist_r[ (j) * DULIST_IDIM + (i) ]
+#define DULIST_I(j,i)   dulist_i[ (j) * DULIST_IDIM + (i) ]
+#define ZLIST_R(i)      zlist_r[i]
+#define ZLIST_I(i)      zlist_i[i]
+#define BLIST(i)        blist[i]
+#define YLIST_R(i)      ylist_r[i]
+#define YLIST_I(i)      ylist_i[i]
+
 namespace LAMMPS_NS
 {
 
