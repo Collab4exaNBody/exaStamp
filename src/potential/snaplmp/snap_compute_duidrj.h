@@ -110,51 +110,51 @@ namespace exaStamp
     //double const * ulist_r = ulist_r_ij[jj];
     //double const * ulist_i = ulist_i_ij[jj];
 
-    dulist_r[0][0] = 0.0;
-    dulist_r[0][1] = 0.0;
-    dulist_r[0][2] = 0.0;
-    dulist_i[0][0] = 0.0;
-    dulist_i[0][1] = 0.0;
-    dulist_i[0][2] = 0.0;
+    DULIST_R(0,0) = 0.0;
+    DULIST_R(0,1) = 0.0;
+    DULIST_R(0,2) = 0.0;
+    DULIST_I(0,0) = 0.0;
+    DULIST_I(0,1) = 0.0;
+    DULIST_I(0,2) = 0.0;
 
     for (int j = 1; j <= twojmax; j++) {
       int jju = idxu_block[j];
       int jjup = idxu_block[j-1];
       for (int mb = 0; 2*mb <= j; mb++) {
-        dulist_r[jju][0] = 0.0;
-        dulist_r[jju][1] = 0.0;
-        dulist_r[jju][2] = 0.0;
-        dulist_i[jju][0] = 0.0;
-        dulist_i[jju][1] = 0.0;
-        dulist_i[jju][2] = 0.0;
+        DULIST_R(jju,0) = 0.0;
+        DULIST_R(jju,1) = 0.0;
+        DULIST_R(jju,2) = 0.0;
+        DULIST_I(jju,0) = 0.0;
+        DULIST_I(jju,1) = 0.0;
+        DULIST_I(jju,2) = 0.0;
 
         for (int ma = 0; ma < j; ma++) {
           rootpq = rootpqarray[j - ma][j - mb];
           for (int k = 0; k < 3; k++) {
-            dulist_r[jju][k] +=
+            DULIST_R(jju,k) +=
               rootpq * (da_r[k] * ULIST_R_IJ(jj,jjup) +
                         da_i[k] * ULIST_I_IJ(jj,jjup) +
-                        a_r * dulist_r[jjup][k] +
-                        a_i * dulist_i[jjup][k]);
-            dulist_i[jju][k] +=
+                        a_r * DULIST_R(jjup,k) +
+                        a_i * DULIST_I(jjup,k));
+            DULIST_I(jju,k) +=
               rootpq * (da_r[k] * ULIST_I_IJ(jj,jjup) -
                         da_i[k] * ULIST_R_IJ(jj,jjup) +
-                        a_r * dulist_i[jjup][k] -
-                        a_i * dulist_r[jjup][k]);
+                        a_r * DULIST_I(jjup,k) -
+                        a_i * DULIST_R(jjup,k));
           }
 
           rootpq = rootpqarray[ma + 1][j - mb];
           for (int k = 0; k < 3; k++) {
-            dulist_r[jju+1][k] =
+            DULIST_R(jju+1,k) =
               -rootpq * (db_r[k] * ULIST_R_IJ(jj,jjup) +
                          db_i[k] * ULIST_I_IJ(jj,jjup) +
-                         b_r * dulist_r[jjup][k] +
-                         b_i * dulist_i[jjup][k]);
-            dulist_i[jju+1][k] =
+                         b_r * DULIST_R(jjup,k) +
+                         b_i * DULIST_I(jjup,k));
+            DULIST_I(jju+1,k) =
               -rootpq * (db_r[k] * ULIST_I_IJ(jj,jjup) -
                          db_i[k] * ULIST_R_IJ(jj,jjup) +
-                         b_r * dulist_i[jjup][k] -
-                         b_i * dulist_r[jjup][k]);
+                         b_r * DULIST_I(jjup,k) -
+                         b_i * DULIST_R(jjup,k));
           }
           jju++;
           jjup++;
@@ -173,13 +173,13 @@ namespace exaStamp
         for (int ma = 0; ma <= j; ma++) {
           if (mapar == 1) {
             for (int k = 0; k < 3; k++) {
-              dulist_r[jjup][k] = dulist_r[jju][k];
-              dulist_i[jjup][k] = -dulist_i[jju][k];
+              DULIST_R(jjup,k) = DULIST_R(jju,k);
+              DULIST_I(jjup,k) = -DULIST_I(jju,k);
             }
           } else {
             for (int k = 0; k < 3; k++) {
-              dulist_r[jjup][k] = -dulist_r[jju][k];
-              dulist_i[jjup][k] = dulist_i[jju][k];
+              DULIST_R(jjup,k) = -DULIST_R(jju,k);
+              DULIST_I(jjup,k) = DULIST_I(jju,k);
             }
           }
           mapar = -mapar;
@@ -199,18 +199,18 @@ namespace exaStamp
       int jju = idxu_block[j];
       for (int mb = 0; 2*mb <= j; mb++)
         for (int ma = 0; ma <= j; ma++) {
-          dulist_r[jju][0] = dsfac * ULIST_R_IJ(jj,jju) * ux +
-                                    sfac * dulist_r[jju][0];
-          dulist_i[jju][0] = dsfac * ULIST_I_IJ(jj,jju) * ux +
-                                    sfac * dulist_i[jju][0];
-          dulist_r[jju][1] = dsfac * ULIST_R_IJ(jj,jju) * uy +
-                                    sfac * dulist_r[jju][1];
-          dulist_i[jju][1] = dsfac * ULIST_I_IJ(jj,jju) * uy +
-                                    sfac * dulist_i[jju][1];
-          dulist_r[jju][2] = dsfac * ULIST_R_IJ(jj,jju) * uz +
-                                    sfac * dulist_r[jju][2];
-          dulist_i[jju][2] = dsfac * ULIST_I_IJ(jj,jju) * uz +
-                                    sfac * dulist_i[jju][2];
+          DULIST_R(jju,0) = dsfac * ULIST_R_IJ(jj,jju) * ux +
+                                    sfac * DULIST_R(jju,0);
+          DULIST_I(jju,0) = dsfac * ULIST_I_IJ(jj,jju) * ux +
+                                    sfac * DULIST_I(jju,0);
+          DULIST_R(jju,1) = dsfac * ULIST_R_IJ(jj,jju) * uy +
+                                    sfac * DULIST_R(jju,1);
+          DULIST_I(jju,1) = dsfac * ULIST_I_IJ(jj,jju) * uy +
+                                    sfac * DULIST_I(jju,1);
+          DULIST_R(jju,2) = dsfac * ULIST_R_IJ(jj,jju) * uz +
+                                    sfac * DULIST_R(jju,2);
+          DULIST_I(jju,2) = dsfac * ULIST_I_IJ(jj,jju) * uz +
+                                    sfac * DULIST_I(jju,2);
           jju++;
         }
     }

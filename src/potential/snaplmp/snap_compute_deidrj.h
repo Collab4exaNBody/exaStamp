@@ -28,15 +28,15 @@ namespace exaStamp
       for (int mb = 0; 2*mb < j; mb++)
         for (int ma = 0; ma <= j; ma++) {
 
-          double const * dudr_r = dulist_r[jju];
-          double const * dudr_i = dulist_i[jju];
+          //double const * dudr_r = dulist_r[jju];
+          //double const * dudr_i = dulist_i[jju];
           double jjjmambyarray_r = ylist_r[jelem*idxu_max+jju];
           double jjjmambyarray_i = ylist_i[jelem*idxu_max+jju];
 
           for (int k = 0; k < 3; k++)
             dedr[k] +=
-              dudr_r[k] * jjjmambyarray_r +
-              dudr_i[k] * jjjmambyarray_i;
+              DULIST_R(jju,k) * jjjmambyarray_r +
+              DULIST_I(jju,k) * jjjmambyarray_i;
           jju++;
         } //end loop over ma mb
 
@@ -46,27 +46,27 @@ namespace exaStamp
 
         int mb = j/2;
         for (int ma = 0; ma < mb; ma++) {
-          double const * dudr_r = dulist_r[jju];
-          double const * dudr_i = dulist_i[jju];
+          //double const * dudr_r = dulist_r[jju];
+          //double const * dudr_i = dulist_i[jju];
           double jjjmambyarray_r = ylist_r[jelem*idxu_max+jju];
           double jjjmambyarray_i = ylist_i[jelem*idxu_max+jju];
 
           for (int k = 0; k < 3; k++)
             dedr[k] +=
-              dudr_r[k] * jjjmambyarray_r +
-              dudr_i[k] * jjjmambyarray_i;
+              DULIST_R(jju,k) * jjjmambyarray_r +
+              DULIST_I(jju,k) * jjjmambyarray_i;
           jju++;
         }
 
-        double const * dudr_r = dulist_r[jju];
-        double const * dudr_i = dulist_i[jju];
+        //double const * dudr_r = dulist_r[jju];
+        //double const * dudr_i = dulist_i[jju];
         double jjjmambyarray_r = ylist_r[jelem*idxu_max+jju];
         double jjjmambyarray_i = ylist_i[jelem*idxu_max+jju];
 
         for (int k = 0; k < 3; k++)
           dedr[k] +=
-            (dudr_r[k] * jjjmambyarray_r +
-             dudr_i[k] * jjjmambyarray_i)*0.5;
+            (DULIST_R(jju,k) * jjjmambyarray_r +
+             DULIST_I(jju,k) * jjjmambyarray_i)*0.5;
         // jju++;
 
       } // end if jeven
