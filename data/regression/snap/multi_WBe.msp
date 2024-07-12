@@ -1,6 +1,12 @@
 includes:
   - config_update_symmetric_forces.msp
 
+#configuration:
+#  logging:
+#    debug: true
+#  debug:
+#    filter: [ ".*snaplmp_force" ]
+
 zbl_multi_force:
   rcut: 4.8 ang
   parameters:

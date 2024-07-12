@@ -132,9 +132,6 @@ namespace exaStamp
             {
               const uint64_t* idmol_b = cells[cell_b].field_pointer_or_null(field_idmol);
               const uint64_t* id_b    = cells[cell_b][field::id];
-#             ifndef NDEBUG
-              const uint8_t* type_b   = cells[cell_b][field::type];
-#             endif
 
               // assert( cell_a>=0 && cell_a<n_cells );
               //assert( p_nbh_index == nbh_weight[cell_a].size() );

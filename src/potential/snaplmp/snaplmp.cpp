@@ -167,15 +167,26 @@ namespace exaStamp
         }
 
       }
-      
-      if( snap_ctx->ptr == nullptr )
+
+      if( snap_ctx->sna == nullptr )
       {
-        snap_ctx->ptr = new LAMMPS_NS::LAMMPS;
-        snap_ctx->ptr->error = new LAMMPS_NS::ErrorLogWrapper;
-        //snap_ctx->ptr->comm = new LAMMPS_NS::CommunicatorInfo;
-        snap_ctx->ptr->memory = new LAMMPS_NS::Memory(snap_ctx->ptr);
+        snap_ctx->sna = new LAMMPS_NS::SNA( new LAMMPS_NS::Memory()
+                                          , snap_ctx->m_config.rfac0() 
+                                          , snap_ctx->m_config.twojmax() 
+                                          , snap_ctx->m_config.rmin0()
+                                          , snap_ctx->m_config.switchflag()
+                                          , snap_ctx->m_config.bzeroflag()
+                                          , snap_ctx->m_config.chemflag()
+                                          , snap_ctx->m_config.bnormflag()
+                                          , snap_ctx->m_config.wselfallflag()
+                                          , snap_ctx->m_config.nelements()
+                                          , snap_ctx->m_config.switchinnerflag()
+                                          );
+        snap_ctx->sna->init();
       }
-          
+      ldbg << "Constant config allocation" << std::endl;
+      snap_ctx->sna->memory->print();
+
       size_t nt = omp_get_max_threads();
       if( nt > snap_ctx->m_thread_ctx.size() )
       {
@@ -183,24 +194,18 @@ namespace exaStamp
         snap_ctx->m_thread_ctx.resize( nt );
         for(size_t i=old_nt;i<nt;i++)
         {
-          assert( snap_ctx->m_thread_ctx[i].sna == nullptr );
-          snap_ctx->m_thread_ctx[i].sna =
-            new LAMMPS_NS::SNA( snap_ctx->ptr
-                              , snap_ctx->m_config.rfac0() 
-                              , snap_ctx->m_config.twojmax() 
-                              , snap_ctx->m_config.rmin0()
-                              , snap_ctx->m_config.switchflag()
-                              , snap_ctx->m_config.bzeroflag()
-                              , snap_ctx->m_config.chemflag()
-                              , snap_ctx->m_config.bnormflag()
-                              , snap_ctx->m_config.wselfallflag()
-                              , snap_ctx->m_config.nelements()
-                              , snap_ctx->m_config.switchinnerflag()
-                              );
-          snap_ctx->m_thread_ctx[i].sna->init();
-          snap_ctx->m_thread_ctx[i].sna->grow_rij(1024);
+          assert( snap_ctx->m_thread_ctx[i].scratch == nullptr );
+          snap_ctx->m_thread_ctx[i].scratch = new LAMMPS_NS::SnapScratchBuffers( snap_ctx->sna , new LAMMPS_NS::Memory() );
         }
       }
+
+      ldbg << "Max number of neighbors = "<< chunk_neighbors->m_max_neighbors << std::endl;
+      for(size_t i=0;i<nt;i++)
+      {
+        snap_ctx->m_thread_ctx[i].scratch->grow_rij( chunk_neighbors->m_max_neighbors );
+      }
+      ldbg << "Scratch buffers allocation" << std::endl;
+      if( nt >= 1 ) snap_ctx->m_thread_ctx[0].scratch->memory->print();
 
       bool log_energy = false;
       if( trigger_thermo_state.has_value() )
@@ -216,8 +221,9 @@ namespace exaStamp
       const double cutsq = snap_ctx->m_rcut * snap_ctx->m_rcut;
       const bool eflag = log_energy;
       const bool quadraticflag = snap_ctx->m_config.quadraticflag();
-      const bool switchinnerflag = snap_ctx->m_config.switchinnerflag();
-      const bool chemflag = snap_ctx->m_config.chemflag();
+
+      assert( snap_ctx->m_config.switchinnerflag() == snap_ctx->sna->switch_inner_flag );
+      assert( snap_ctx->m_config.chemflag() == snap_ctx->sna->chem_flag );
 
       // exanb objects to perform computations with neighbors      
       ComputePairNullWeightIterator cp_weight{};
@@ -253,15 +259,14 @@ namespace exaStamp
 
         auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform, ComputePairOptionalLocks<false>{} );
         BispectrumOp bispectrum_op {
+                           snap_ctx->sna,
                            snap_ctx->m_thread_ctx.data(), snap_ctx->m_thread_ctx.size(),
                            grid->cell_particle_offset_data(), snap_ctx->m_beta.data(), snap_ctx->m_bispectrum.data(),
                            snap_ctx->m_coefs.data(), ncoeff,
                            snap_ctx->m_factor.data(), snap_ctx->m_radelem.data(),
                            nullptr, nullptr,
                            snap_ctx->m_rcut, cutsq,
-                           eflag, quadraticflag,
-                           switchinnerflag, chemflag
-                           };
+                           eflag, quadraticflag };
         compute_cell_particle_pairs( *grid, snap_ctx->m_rcut, *ghost, optional, force_buf, bispectrum_op , compute_bispectrum_field_set , parallel_execution_context() );
         // *********************************************
       }
@@ -311,14 +316,13 @@ namespace exaStamp
         
         auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform, cp_locks
                       , ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{}, grid->field_accessors_from_field_set(FieldSet<field::_type>{}) );
-        SnapLMPForceOp force_op { snap_ctx->m_thread_ctx.data(), snap_ctx->m_thread_ctx.size(),
+        SnapLMPForceOp force_op { snap_ctx->sna, snap_ctx->m_thread_ctx.data(), snap_ctx->m_thread_ctx.size(),
                            grid->cell_particle_offset_data(), snap_ctx->m_beta.data(), snap_ctx->m_bispectrum.data(),
                            snap_ctx->m_coefs.data(), static_cast<unsigned int>(snap_ctx->m_coefs.size()), static_cast<unsigned int>(ncoeff),
                            snap_ctx->m_factor.data(), snap_ctx->m_radelem.data(),
                            nullptr, nullptr,
                            snap_ctx->m_rcut, cutsq,
                            eflag, quadraticflag,
-                           switchinnerflag, chemflag,
                            ! (*conv_coef_units) // if coefficients were not converted, then output energy/force must be converted
                            };      
         compute_cell_particle_pairs( *grid, snap_ctx->m_rcut, *ghost, optional, force_buf, force_op , compute_force_field_set , parallel_execution_context() );

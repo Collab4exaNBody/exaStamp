@@ -9,14 +9,15 @@ namespace exaStamp
 
   struct SnapLMPThreadContext
   {
-    LAMMPS_NS::SNA * sna = nullptr;
+    LAMMPS_NS::SnapScratchBuffers * scratch = nullptr;
     double * beta = nullptr;
     double * bispectrum = nullptr;
   };
 
   struct SnapLMPContext
   {
-    LAMMPS_NS::LAMMPS * ptr = nullptr;
+    //LAMMPS_NS::LAMMPS * ptr = nullptr;
+    LAMMPS_NS::SNA * sna = nullptr;
     std::vector<SnapLMPThreadContext> m_thread_ctx;
     SnapExt::SnapConfig m_config;
     std::vector<double> m_coefs;    // size = number of bispectrum coefficients

@@ -14,6 +14,7 @@ namespace exaStamp
   // Force operator
   struct SnapLMPForceOp 
   {
+    const LAMMPS_NS::SNA * snaconf = nullptr;
     SnapLMPThreadContext* m_thread_ctx = nullptr;
     const size_t n_thread_ctx = 0;
     
@@ -33,8 +34,6 @@ namespace exaStamp
     const double cutsq = rcutfac*rcutfac;
     const bool eflag = false;
     const bool quadraticflag = false;
-    const bool switchinnerflag = false;
-    const bool chemflag = false;
     
     // exaStamp conversion specific falgs
     const bool conv_energy_units = true;
@@ -121,7 +120,7 @@ namespace exaStamp
       size_t tid = omp_get_thread_num();
       assert( tid < n_thread_ctx );
       SnapLMPThreadContext & snap_ctx = m_thread_ctx[tid];
-      auto snaptr = snap_ctx.sna;
+      auto snaptr = snap_ctx.scratch;
 
       // energy and force contributions to the particle
       Mat3dT _vir; // default constructor defines all elements to 0
@@ -161,11 +160,11 @@ namespace exaStamp
           snaptr->inside[ninside] = j;
           snaptr->wj[ninside] = wjelem[jelem];
           snaptr->rcutij[ninside] = (radi + radelem[jelem])*rcutfac;
-          if (switchinnerflag) {
+          if (snaconf->switch_inner_flag) {
             snaptr->sinnerij[ninside] = 0.5*(sinnerelem[ielem]+sinnerelem[jelem]);
             snaptr->dinnerij[ninside] = 0.5*(dinnerelem[ielem]+dinnerelem[jelem]);
           }
-          if (chemflag) snaptr->element[ninside] = jelem;
+          if (snaconf->chem_flag) snaptr->element[ninside] = jelem;
           ninside++;
         }
       }
@@ -176,12 +175,12 @@ namespace exaStamp
       //snaptr->set_dbg_chosen(chosen);
 
       // compute Ui, Yi for atom I
-      snap_compute_ui( snaptr->nelements, snaptr->twojmax, snaptr->idxu_max, snaptr->idxu_block, snaptr->element
-                     , snaptr->rij, snaptr->rcutij, snaptr->rootpqarray, snaptr->sinnerij, snaptr->dinnerij, snaptr->wj
-                     , snaptr->wselfall_flag, snaptr->switch_flag, snaptr->switch_inner_flag, snaptr->chem_flag
-                     , snaptr->wself, snaptr->rmin0, snaptr->rfac0
+      snap_compute_ui( snaconf->nelements, snaconf->twojmax, snaconf->idxu_max, snaconf->idxu_block
+                     , snaptr->element, snaptr->rij, snaptr->rcutij, snaconf->rootpqarray, snaptr->sinnerij, snaptr->dinnerij, snaptr->wj
+                     , snaconf->wselfall_flag, snaconf->switch_flag, snaconf->switch_inner_flag, snaconf->chem_flag
+                     , snaconf->wself, snaconf->rmin0, snaconf->rfac0
                      , snaptr->ulist_r_ij, snaptr->ulist_i_ij, snaptr->ulisttot_r, snaptr->ulisttot_i
-                     , ninside, chemflag ? ielem : 0);
+                     , ninside, snaconf->chem_flag ? ielem : 0);
 
       // for neighbors of I within cutoff:
       // compute Fij = dEi/dRj = -dEi/dRi
@@ -202,10 +201,10 @@ namespace exaStamp
 
       //      snaptr->compute_yi( /* beta[ii] ==> */ beta + ( ncoeff * ( cell_particle_offset[buf.cell] + buf.part ) ) );
       //snaptr->compute_yi( betaloc );
-      snap_compute_yi( snaptr->nelements, snaptr->twojmax, snaptr->idxu_max, snaptr->idxu_block
-                     , snaptr->idxz_max, snaptr->idxz, snaptr->idxcg_block, snaptr->cglist
+      snap_compute_yi( snaconf->nelements, snaconf->twojmax, snaconf->idxu_max, snaconf->idxu_block
+                     , snaconf->idxz_max, snaconf->idxz, snaconf->idxcg_block, snaconf->cglist
                      , snaptr->ulisttot_r, snaptr->ulisttot_i
-                     , snaptr->idxb_max, snaptr->idxb_block, snaptr->bnorm_flag
+                     , snaconf->idxb_max, snaconf->idxb_block, snaconf->bnorm_flag
                      , snaptr->ylist_r, snaptr->ylist_i
                      , betaloc );
 
@@ -214,10 +213,10 @@ namespace exaStamp
         int j = snaptr->inside[jj];
 
         // snaptr->compute_duidrj(jj);
-        snap_compute_duidrj( snaptr->twojmax, snaptr->idxu_block, snaptr->rij, snaptr->rcutij, snaptr->wj
-                           , snaptr->ulist_r_ij, snaptr->ulist_i_ij, snaptr->rootpqarray
+        snap_compute_duidrj( snaconf->twojmax, snaconf->idxu_block, snaptr->rij, snaptr->rcutij, snaptr->wj
+                           , snaptr->ulist_r_ij, snaptr->ulist_i_ij, snaconf->rootpqarray
                            , snaptr->sinnerij, snaptr->dinnerij
-                           , snaptr->rmin0, snaptr->rfac0, snaptr->switch_flag, snaptr->switch_inner_flag, snaptr->chem_flag                             
+                           , snaconf->rmin0, snaconf->rfac0, snaconf->switch_flag, snaconf->switch_inner_flag, snaconf->chem_flag                             
                            , snaptr->dulist_r, snaptr->dulist_i
                            , jj);
 
@@ -225,9 +224,9 @@ namespace exaStamp
 	      fij[0]=0.;
 	      fij[1]=0.;
 	      fij[2]=0.;
-        snaptr->elem_duarray = snaptr->chem_flag ? snaptr->element[jj] : 0 ;
+        snaptr->elem_duarray = snaconf->chem_flag ? snaptr->element[jj] : 0 ;
         // snaptr->compute_deidrj(fij);
-        snap_compute_deidrj( snaptr->elem_duarray, snaptr->twojmax, snaptr->idxu_max, snaptr->idxu_block
+        snap_compute_deidrj( snaptr->elem_duarray, snaconf->twojmax, snaconf->idxu_max, snaconf->idxu_block
                            , snaptr->dulist_r, snaptr->dulist_i
                            , snaptr->ylist_r, snaptr->ylist_i
                            , fij );
