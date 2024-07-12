@@ -20,13 +20,13 @@ namespace exaStamp
   {
 
     int idouble = 0;
-    double * zptr_r;
-    double * zptr_i;
+    //double * zptr_r;
+    //double * zptr_i;
     for (int elem1 = 0; elem1 < nelements; elem1++)
       for (int elem2 = 0; elem2 < nelements; elem2++) {
 
-        zptr_r = &zlist_r[idouble*idxz_max];
-        zptr_i = &zlist_i[idouble*idxz_max];
+        //zptr_r = &ZLIST_R(idouble*idxz_max);
+        //zptr_i = &ZLIST_I(idouble*idxz_max);
 
         for (int jjz = 0; jjz < idxz_max; jjz++) {
           const int j1 = idxz[jjz].j1;
@@ -41,8 +41,8 @@ namespace exaStamp
 
           const double *cgblock = cglist + idxcg_block[j1][j2][j];
 
-          zptr_r[jjz] = 0.0;
-          zptr_i[jjz] = 0.0;
+          ZLIST_R(idouble*idxz_max+jjz) = 0.0;
+          ZLIST_I(idouble*idxz_max+jjz) = 0.0;
 
           int jju1 = idxu_block[j1] + (j1 + 1) * mb1min;
           int jju2 = idxu_block[j2] + (j2 + 1) * mb2max;
@@ -69,16 +69,16 @@ namespace exaStamp
               icga += j2;
             } // end loop over ia
 
-            zptr_r[jjz] += cgblock[icgb] * suma1_r;
-            zptr_i[jjz] += cgblock[icgb] * suma1_i;
+            ZLIST_R(idouble*idxz_max+jjz) += cgblock[icgb] * suma1_r;
+            ZLIST_I(idouble*idxz_max+jjz) += cgblock[icgb] * suma1_i;
 
             jju1 += j1 + 1;
             jju2 -= j2 + 1;
             icgb += j2;
           } // end loop over ib
           if (bnorm_flag) {
-            zptr_r[jjz] /= (j+1);
-            zptr_i[jjz] /= (j+1);
+            ZLIST_R(idouble*idxz_max+jjz) /= (j+1);
+            ZLIST_I(idouble*idxz_max+jjz) /= (j+1);
           }
         } // end loop over jjz
         idouble++;
