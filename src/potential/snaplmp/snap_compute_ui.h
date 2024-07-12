@@ -168,7 +168,7 @@ namespace exaStamp
     double sfac;
     int jelem;
 
-    sfac = snap_compute_sfac( rmin0, switch_flag, switch_inner_flag, r, rcutij[jj], sinnerij[jj], dinnerij[jj]);
+    sfac = snap_compute_sfac( rmin0, switch_flag, switch_inner_flag, r, RCUTIJ(jj), sinnerij[jj], dinnerij[jj]);
     sfac *= WJ(jj);
 
     if (chem_flag) jelem = element[jj];
@@ -221,7 +221,7 @@ namespace exaStamp
       const double rsq = x * x + y * y + z * z;
       const double r = sqrt(rsq);
 
-      const double theta0 = (r - rmin0) * rfac0 * M_PI / (rcutij[j] - rmin0);
+      const double theta0 = (r - rmin0) * rfac0 * M_PI / (RCUTIJ(j) - rmin0);
       const double z0 = r / tan(theta0);
 
       snap_compute_uarray( twojmax, idxu_block, rootpqarray, ulist_r_ij, ulist_i_ij, x, y, z, z0, r, j);

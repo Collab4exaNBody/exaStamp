@@ -236,7 +236,7 @@ namespace exaStamp
   {
     double rsq, r, x, y, z, z0, theta0, cs, sn;
     double dz0dr;
-    double rcut = rcutij[jj];
+    double rcut = RCUTIJ(jj);
 
     x = drx[jj];
     y = dry[jj];
