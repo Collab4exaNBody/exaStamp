@@ -71,7 +71,7 @@ namespace exaStamp
                               ULISTTOT_I(elem3*idxu_max+jju) * ZLIST_I(idouble*idxz_max+jjz));
             } // end if jeven
 
-            blist[itriple*idxb_max+jjb] = 2.0 * sumzu;
+            BLIST(itriple*idxb_max+jjb) = 2.0 * sumzu;
 
           }
           itriple++;
@@ -86,7 +86,7 @@ namespace exaStamp
         itriple = (ielem*nelements+ielem)*nelements+ielem;
         for (int jjb = 0; jjb < idxb_max; jjb++) {
           const int j = idxb[jjb].j;
-          blist[itriple*idxb_max+jjb] -= bzero[j];
+          BLIST(itriple*idxb_max+jjb) -= bzero[j];
         } // end loop over JJ
       } else {
         int itriple = 0;
@@ -95,7 +95,7 @@ namespace exaStamp
             for (int elem3 = 0; elem3 < nelements; elem3++) {
               for (int jjb = 0; jjb < idxb_max; jjb++) {
                 const int j = idxb[jjb].j;
-                blist[itriple*idxb_max+jjb] -= bzero[j];
+                BLIST(itriple*idxb_max+jjb) -= bzero[j];
               } // end loop over JJ
               itriple++;
             } // end loop over elem3
