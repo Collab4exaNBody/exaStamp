@@ -137,7 +137,7 @@ namespace exaStamp
       const double radi = radelem[ielem];
 
       //      snaptr->grow_rij(jnum);
-      assert( jnum < 1024 );
+      assert( jnum < snaptr->nmax );
       int ninside = 0;
       for (int jj = 0; jj < jnum; jj++)
       {
@@ -153,7 +153,8 @@ namespace exaStamp
 	      double cut_ij = (radelem[jtype]+radelem[itype])*rcutfac;
 	      double cutsq_ij=cut_ij*cut_ij;
 
-        if (rsq < cutsq_ij/*[itype][jtype]*/&&rsq>1e-20) {
+        if (rsq < cutsq_ij/*[itype][jtype]*/&&rsq>1e-20)
+        {
           snaptr->rij[ninside][0] = delx;
           snaptr->rij[ninside][1] = dely;
           snaptr->rij[ninside][2] = delz;
@@ -187,17 +188,8 @@ namespace exaStamp
       // add to Fi, subtract from Fj
       // scaling is that for type I
 
-      assert( ncoeff < 256 );
-      double betaloc[ncoeff];
-      
-      //      const double * const coeffi = coeffelem /*[ielem]*/;
-      for(unsigned int icoeff=0;icoeff<ncoeff;icoeff++)
-      {
-        unsigned int coeffelem_idx = itype * (ncoeff + 1 ) + icoeff + 1;
-        assert( (coeffelem_idx >= 0) && (coeffelem_idx < coeffelem_size) );
-	      betaloc[ icoeff ] = coeffelem[ coeffelem_idx ];
-	    }
-
+      assert( ncoeff == static_cast<unsigned int>(snaconf->ncoeff) );
+      const double* betaloc = coeffelem + itype * (ncoeff + 1 ) + 1;
 
       //      snaptr->compute_yi( /* beta[ii] ==> */ beta + ( ncoeff * ( cell_particle_offset[buf.cell] + buf.part ) ) );
       //snaptr->compute_yi( betaloc );

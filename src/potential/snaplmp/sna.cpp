@@ -300,7 +300,8 @@ void SNA::build_indexlist()
         if (j >= j1) idxb_count++;
 
   idxb_max = idxb_count;
-  idxb = new SNA_BINDICES[idxb_max];
+//  idxb = new SNA_BINDICES[idxb_max];
+  memory->create( idxb, idxb_max, "sna:idxb" );
 
   idxb_count = 0;
   for (int j1 = 0; j1 <= twojmax; j1++)
@@ -339,7 +340,8 @@ void SNA::build_indexlist()
             idxz_count++;
 
   idxz_max = idxz_count;
-  idxz = new SNA_ZINDICES[idxz_max];
+  //idxz = new SNA_ZINDICES[idxz_max];
+  memory->create(idxz, idxz_max, "sna:idxz" );
 
   memory->create(idxz_block, jdim, jdim, jdim,
                  "sna:idxz_block");
@@ -403,7 +405,9 @@ void SNA::destroy_twojmax_arrays()
   memory->destroy(cglist);
   memory->destroy(idxcg_block);
   memory->destroy(idxu_block);
+  memory->destroy(idxz);
   memory->destroy(idxz_block);
+  memory->destroy(idxb);
   memory->destroy(idxb_block);
   
   if (bzero_flag)

@@ -22,10 +22,31 @@ namespace LAMMPS_NS
   {
   public:
     virtual ~ArrayDescriptor() {}
-    virtual size_t count() const =0;
-    virtual size_t bytes() const =0;
+    virtual size_t element_bytes() const =0;
     virtual Size3 dim() const =0;
-    virtual void print() const =0;
+    virtual const char* name() const =0;
+
+    inline size_t bytes() const
+    {
+      const Size3 sz = this->dim();
+      return element_bytes() * sz.i * sz.j * sz.k;
+    }
+
+    template<class StreamT>
+    inline StreamT& print(StreamT& out) const
+    {
+      const Size3 size = dim();
+      const size_t ebytes = element_bytes();
+      const size_t elements = size.i * size.j * size.k;
+      const size_t data_bytes = ( elements * ebytes + 63ull ) & ( ~ 63ull );
+      const size_t pointer_bytes = ( size.k * sizeof(void**) ) + ( size.k * size.j * sizeof(void*) );
+      out << "alloc "<<name()<<" , size=";
+      if(size.k>1) out<<size.k<<"x";
+      if(size.j>1) out<<size.j<<"x";
+      out << size.i;
+      if( size.k>1 || size.j>1 ) out <<"="<<elements<<" , data_bytes="<<data_bytes<<" , pointer_bytes="<<pointer_bytes <<std::endl;
+      return out;
+    }
   };
 
   template<class T>  
@@ -40,9 +61,9 @@ namespace LAMMPS_NS
     char m_name[32] = { '\0' };
 
   public:
-    inline size_t count() const override final { return m_idim * m_jdim * m_kdim; }
-    inline size_t bytes() const override final { return count() * sizeof(T); }
-    inline Size3 dim() const override final { return {  m_idim , m_jdim , m_kdim }; }
+    inline size_t element_bytes() const override final { return sizeof(T); }
+    inline Size3 dim() const override final { return { m_idim , m_jdim , m_kdim }; }
+    inline const char* name() const override final { return m_name; }
         
     inline T * ptr(size_t i=0, size_t j=0, size_t k=0)
     {
@@ -85,17 +106,6 @@ namespace LAMMPS_NS
       {
         assert( ptr(i,j,k) == & m_kptr[k][j][i] );
       }
-    }
-
-    inline void print() const override final
-    {
-      const size_t elements = m_idim * m_jdim * m_kdim;
-      const size_t data_bytes = ( elements * sizeof(T) + 63ull ) & ( ~ 63ull );
-      const size_t pointer_bytes = ( m_kdim * sizeof(T**) ) + ( m_kdim * m_jdim * sizeof(T*) );
-      std::cout << "alloc "<<m_name<<" , size=";
-      if(m_kdim>1) std::cout<<m_kdim<<"x";
-      if(m_jdim>1) std::cout<<m_jdim<<"x";
-      std::cout <<m_idim<<"="<<count()<<" , data_bytes="<<data_bytes<<" , pointer_bytes="<<pointer_bytes <<std::endl;
     }
     
     inline ~ArrayDescriptorImpl()
@@ -141,12 +151,20 @@ namespace LAMMPS_NS
       m_allocs[p] = array;
     }
     
-    inline void print()
+    template<class StreamT>
+    inline StreamT& print(StreamT& out) const
     {
       std::vector< std::shared_ptr<ArrayDescriptor> > desc;
       for(const auto& ap : m_allocs) { desc.push_back( ap.second ); }
       std::sort( desc.begin() , desc.end() , []( const std::shared_ptr<ArrayDescriptor>& a, const std::shared_ptr<ArrayDescriptor>& b ) -> bool { return a->bytes() > b->bytes(); } );
-      for(const auto& array : desc) array->print();
+      size_t total = 0;
+      for(const auto& array : desc)
+      {
+        total += array->bytes();
+        array->print( out );
+      }
+      out << "Total="<<total<<std::endl;
+      return out;
     }
   };
 

@@ -185,7 +185,7 @@ namespace exaStamp
         snap_ctx->sna->init();
       }
       ldbg << "Constant config allocation" << std::endl;
-      snap_ctx->sna->memory->print();
+      snap_ctx->sna->memory->print( ldbg );
 
       size_t nt = omp_get_max_threads();
       if( nt > snap_ctx->m_thread_ctx.size() )
@@ -205,7 +205,7 @@ namespace exaStamp
         snap_ctx->m_thread_ctx[i].scratch->grow_rij( chunk_neighbors->m_max_neighbors );
       }
       ldbg << "Scratch buffers allocation" << std::endl;
-      if( nt >= 1 ) snap_ctx->m_thread_ctx[0].scratch->memory->print();
+      if( nt >= 1 ) snap_ctx->m_thread_ctx[0].scratch->memory->print( ldbg );
 
       bool log_energy = false;
       if( trigger_thermo_state.has_value() )
