@@ -117,8 +117,8 @@ SnapScratchBuffers::SnapScratchBuffers( const SNA* conf , Memory* mem )
   , memory(mem)
 {
   nmax = 0;
-  rij = nullptr;
-  inside = nullptr;
+//  rij = nullptr;
+//  inside = nullptr;
   wj = nullptr;
   rcutij = nullptr;
   sinnerij = nullptr;
@@ -132,8 +132,8 @@ SnapScratchBuffers::SnapScratchBuffers( const SNA* conf , Memory* mem )
 
 SnapScratchBuffers::~SnapScratchBuffers()
 {
-  memory->destroy(rij);
-  memory->destroy(inside);
+//  memory->destroy(rij);
+//  memory->destroy(inside);
   memory->destroy(wj);
   memory->destroy(rcutij);
   memory->destroy(sinnerij);
@@ -180,8 +180,8 @@ void SnapScratchBuffers::grow_rij(int newnmax)
 
   nmax = newnmax;
 
-  memory->destroy(rij);
-  memory->destroy(inside);
+//  memory->destroy(rij);
+//  memory->destroy(inside);
   memory->destroy(wj);
   memory->destroy(rcutij);
   memory->destroy(sinnerij);
@@ -190,8 +190,8 @@ void SnapScratchBuffers::grow_rij(int newnmax)
   memory->destroy(ulist_r_ij);
   memory->destroy(ulist_i_ij);
   
-  memory->create(rij, nmax, 3, "pair:rij");
-  memory->create(inside, nmax, "pair:inside");
+//  memory->create(rij, nmax, 3, "pair:rij");
+//  memory->create(inside, nmax, "pair:inside");
   memory->create(wj, nmax, "pair:wj");
   memory->create(rcutij, nmax, "pair:rcutij");
   memory->create(sinnerij, nmax, "pair:sinnerij");

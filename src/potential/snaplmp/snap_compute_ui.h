@@ -193,7 +193,8 @@ namespace exaStamp
 
   static inline void snap_compute_ui( // READ ONLY
                                       int nelements, int twojmax, int idxu_max, int const * idxu_block, int const * element
-                                    , double const * const * rij, double const * rcutij, double const * const * rootpqarray
+                                    , double const * drx, double const * dry, double const * drz
+                                    , double const * rcutij, double const * const * rootpqarray
                                     , double const * sinnerij, double const * dinnerij, double const * wj
                                     , bool wselfall_flag, bool switch_flag, bool switch_inner_flag, bool chem_flag
                                     , double wself, double rmin0, double rfac0
@@ -214,9 +215,9 @@ namespace exaStamp
     
     for (int j = 0; j < jnum; j++)
     {
-      const double x = rij[j][0];
-      const double y = rij[j][1];
-      const double z = rij[j][2];
+      const double x = drx[j];
+      const double y = dry[j];
+      const double z = drz[j];
       const double rsq = x * x + y * y + z * z;
       const double r = sqrt(rsq);
 

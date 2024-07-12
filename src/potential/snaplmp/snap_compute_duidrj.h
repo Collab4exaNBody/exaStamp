@@ -224,7 +224,8 @@ namespace exaStamp
   static inline void snap_compute_duidrj( // READ ONLY
                                          int twojmax, int const * idxu_block
 //                                       , int const * element
-                                       , double const * const * rij, double const * rcutij, double const * wj
+                                       , double const * drx, double const * dry, double const * drz
+                                       , double const * rcutij, double const * wj
                                        , double const * const * ulist_r_ij, double const * const * ulist_i_ij, double const * const * rootpqarray
                                        , double const * sinnerij, double const * dinnerij
                                        , double rmin0, double rfac0, bool switch_flag, bool switch_inner_flag, bool chem_flag                             
@@ -237,9 +238,9 @@ namespace exaStamp
     double dz0dr;
     double rcut = rcutij[jj];
 
-    x = rij[jj][0];
-    y = rij[jj][1];
-    z = rij[jj][2];
+    x = drx[jj];
+    y = dry[jj];
+    z = drz[jj];
     rsq = x * x + y * y + z * z;
     r = sqrt(rsq);
     double rscale0 = rfac0 * M_PI / (rcut - rmin0);

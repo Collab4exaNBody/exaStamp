@@ -106,8 +106,8 @@ namespace LAMMPS_NS
 
     int *element = nullptr;    // short element list [0,nmax)
     double *blist = nullptr;
-    double **rij = nullptr;      // short rij list
-    int *inside = nullptr;       // short neighbor list
+//    double **rij = nullptr;      // short rij list
+//    int *inside = nullptr;       // short neighbor list
     double *wj = nullptr;        // short weight list
     double *rcutij = nullptr;    // short cutoff list
 

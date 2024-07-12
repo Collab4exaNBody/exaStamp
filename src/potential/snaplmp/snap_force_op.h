@@ -141,7 +141,7 @@ namespace exaStamp
       int ninside = 0;
       for (int jj = 0; jj < jnum; jj++)
       {
-        const int j = jj;// j = jlist[jj];
+        //const int j = jj;// j = jlist[jj];
         // j &= NEIGHMASK;
         const double delx = buf.drx[jj]; //x[j][0] - xtmp;
         const double dely = buf.dry[jj]; //x[j][1] - ytmp;
@@ -155,10 +155,11 @@ namespace exaStamp
 
         if (rsq < cutsq_ij/*[itype][jtype]*/&&rsq>1e-20)
         {
-          snaptr->rij[ninside][0] = delx;
-          snaptr->rij[ninside][1] = dely;
-          snaptr->rij[ninside][2] = delz;
-          snaptr->inside[ninside] = j;
+//          snaptr->rij[ninside][0] = delx;
+//          snaptr->rij[ninside][1] = dely;
+//          snaptr->rij[ninside][2] = delz;
+          if( ninside != jj ) { buf.copy( jj , ninside ); }
+//          snaptr->inside[ninside] = j;
           snaptr->wj[ninside] = wjelem[jelem];
           snaptr->rcutij[ninside] = (radi + radelem[jelem])*rcutfac;
           if (snaconf->switch_inner_flag) {
@@ -177,7 +178,7 @@ namespace exaStamp
 
       // compute Ui, Yi for atom I
       snap_compute_ui( snaconf->nelements, snaconf->twojmax, snaconf->idxu_max, snaconf->idxu_block
-                     , snaptr->element, snaptr->rij, snaptr->rcutij, snaconf->rootpqarray, snaptr->sinnerij, snaptr->dinnerij, snaptr->wj
+                     , snaptr->element, buf.drx,buf.dry,buf.drz, snaptr->rcutij, snaconf->rootpqarray, snaptr->sinnerij, snaptr->dinnerij, snaptr->wj
                      , snaconf->wselfall_flag, snaconf->switch_flag, snaconf->switch_inner_flag, snaconf->chem_flag
                      , snaconf->wself, snaconf->rmin0, snaconf->rfac0
                      , snaptr->ulist_r_ij, snaptr->ulist_i_ij, snaptr->ulisttot_r, snaptr->ulisttot_i
@@ -202,10 +203,10 @@ namespace exaStamp
 
       for (int jj = 0; jj < ninside; jj++)
       {
-        int j = snaptr->inside[jj];
+        //int j = snaptr->inside[jj];
 
         // snaptr->compute_duidrj(jj);
-        snap_compute_duidrj( snaconf->twojmax, snaconf->idxu_block, snaptr->rij, snaptr->rcutij, snaptr->wj
+        snap_compute_duidrj( snaconf->twojmax, snaconf->idxu_block, buf.drx,buf.dry,buf.drz, snaptr->rcutij, snaptr->wj
                            , snaptr->ulist_r_ij, snaptr->ulist_i_ij, snaconf->rootpqarray
                            , snaptr->sinnerij, snaptr->dinnerij
                            , snaconf->rmin0, snaconf->rfac0, snaconf->switch_flag, snaconf->switch_inner_flag, snaconf->chem_flag                             
@@ -231,7 +232,7 @@ namespace exaStamp
 	      //        }
 
 	      //        [[maybe_unused]] const Mat3dT v_contrib = tensor( Vec3d{ fij[0] , fij[1] , fij[2] }, Vec3d{ snaptr->rij[jj][0] , snaptr->rij[jj][1] , snaptr->rij[jj][2] } );
-	      Mat3d v_contrib = tensor( Vec3d{ fij[0] , fij[1] , fij[2] }, Vec3d{ snaptr->rij[jj][0] , snaptr->rij[jj][1] , snaptr->rij[jj][2] } );
+	      Mat3d v_contrib = tensor( Vec3d{ fij[0] , fij[1] , fij[2] }, Vec3d{ buf.drx[jj],buf.dry[jj],buf.drz[jj] /*snaptr->rij[jj][0] , snaptr->rij[jj][1] , snaptr->rij[jj][2]*/ } );
         if constexpr ( compute_virial ) { _vir += v_contrib * -1.0; }
 
         /*
@@ -250,7 +251,7 @@ namespace exaStamp
         // f[j][2] -= fij[2]*scale[itype][itype];
 
         size_t cell_b=0, p_b=0;
-        buf.nbh.get(j, cell_b, p_b);
+        buf.nbh.get(jj, cell_b, p_b);
         auto& lock_b = locks[cell_b][p_b];
         lock_b.lock();
         cells[cell_b][field::fx][p_b] -= fij[0];//*scale[itype][itype];

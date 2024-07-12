@@ -71,10 +71,12 @@ namespace exaStamp
 	      // std::cout << "custq[" << itype << "][" << jtype << "] = " << cutsq_ij << std::endl;
 
         if (rsq < cutsq_ij/*[itype][jtype]*/&&rsq>1e-20) {
-          snaptr->rij[ninside][0] = delx;
-          snaptr->rij[ninside][1] = dely;
-          snaptr->rij[ninside][2] = delz;
-          snaptr->inside[ninside] = j;
+          //snaptr->rij[ninside][0] = delx;
+          //snaptr->rij[ninside][1] = dely;
+          //snaptr->rij[ninside][2] = delz;
+          //snaptr->inside[ninside] = j;
+          if( ninside != jj ) { buf.copy( jj , ninside ); }
+          
           snaptr->wj[ninside] = wjelem[jelem];
           snaptr->rcutij[ninside] = (radi + radelem[jelem])*rcutfac;
           if (snaconf->switch_inner_flag) {
@@ -105,7 +107,7 @@ namespace exaStamp
 #endif
 
       snap_compute_ui( snaconf->nelements, snaconf->twojmax, snaconf->idxu_max, snaconf->idxu_block
-                     , snaptr->element, snaptr->rij, snaptr->rcutij, snaconf->rootpqarray, snaptr->sinnerij, snaptr->dinnerij, snaptr->wj
+                     , snaptr->element, buf.drx,buf.dry,buf.drz , snaptr->rcutij, snaconf->rootpqarray, snaptr->sinnerij, snaptr->dinnerij, snaptr->wj
                      , snaconf->wselfall_flag, snaconf->switch_flag, snaconf->switch_inner_flag, snaconf->chem_flag
                      , snaconf->wself, snaconf->rmin0, snaconf->rfac0
                      , snaptr->ulist_r_ij, snaptr->ulist_i_ij, snaptr->ulisttot_r, snaptr->ulisttot_i
