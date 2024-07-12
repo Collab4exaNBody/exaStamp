@@ -15,8 +15,7 @@
    Contributing authors: Aidan Thompson, Christian Trott, SNL
 ------------------------------------------------------------------------- */
 
-#ifndef LMP_SNA_H
-#define LMP_SNA_H
+#pragma once
 
 #include "pointers.h"
 
@@ -150,4 +149,3 @@ namespace LAMMPS_NS
 
 }    // namespace LAMMPS_NS
 
-#endif
