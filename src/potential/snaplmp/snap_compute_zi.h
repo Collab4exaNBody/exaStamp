@@ -1,5 +1,7 @@
 #pragma once
 
+#include <onika/cuda/cuda.h>
+#include <onika/cuda/cuda_math.h>
 #include <cmath>
 
 namespace exaStamp
@@ -9,14 +11,19 @@ namespace exaStamp
   /* ----------------------------------------------------------------------
      compute Zi by summing over products of Ui
   ------------------------------------------------------------------------- */
-
+  ONIKA_HOST_DEVICE_FUNC
   static inline void snap_compute_zi( // READ ONLY
-                                      int nelements, int idxz_max, int idxu_max, int const * idxu_block, int const * const * const * idxcg_block
-                                    , LAMMPS_NS::SNA_ZINDICES const * idxz
-                                    , const double * cglist, double const * ulisttot_r, double const * ulisttot_i
+                                      int nelements, int idxz_max, int idxu_max
+                                    , int const * __restrict__ idxu_block
+                                    , int const * __restrict__ const * __restrict__ const * __restrict__ idxcg_block
+                                    , LAMMPS_NS::SNA_ZINDICES const * __restrict__ idxz
+                                    , const double * __restrict__ cglist
+                                    , double const * __restrict__ ulisttot_r
+                                    , double const * __restrict__ ulisttot_i
                                     , bool bnorm_flag
                                     // WRITE ONLY
-                                    , double * zlist_r, double * zlist_i )
+                                    , double * __restrict__ zlist_r
+                                    , double * __restrict__ zlist_i )
   {
 
     int idouble = 0;

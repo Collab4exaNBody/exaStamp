@@ -1,6 +1,5 @@
-//#/* */pragma xstamp_cuda_enable
-
-#pragma xstamp_grid_variant
+// #pragma xstamp_cuda_enable    // DO NOT NOT REMOVE THIS LINE
+// #pragma xstamp_grid_variant   // DO NOT NOT REMOVE THIS LINE
 
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>

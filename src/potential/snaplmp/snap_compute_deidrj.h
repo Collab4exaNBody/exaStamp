@@ -1,5 +1,7 @@
 #pragma once
 
+#include <onika/cuda/cuda.h>
+#include <onika/cuda/cuda_math.h>
 #include <cmath>
 
 namespace exaStamp
@@ -9,13 +11,16 @@ namespace exaStamp
   /* ----------------------------------------------------------------------
      compute dEidRj
   ------------------------------------------------------------------------- */
-
+  ONIKA_HOST_DEVICE_FUNC
   static inline void snap_compute_deidrj( // READ ONLY
-                                          int elem_duarray, int twojmax, int idxu_max, int const * idxu_block
-                                        , double const * dulist_r, double const * dulist_i
-                                        , double const * ylist_r, double const * ylist_i
+                                          int elem_duarray, int twojmax, int idxu_max
+                                        , int const * __restrict__ idxu_block
+                                        , double const * __restrict__ dulist_r
+                                        , double const * __restrict__ dulist_i
+                                        , double const * __restrict__ ylist_r
+                                        , double const * __restrict__ ylist_i
                                           // ORIGINAL PARAMETERS
-                                        , double* dedr)
+                                        , double * __restrict__ dedr)
   {
 
     for (int k = 0; k < 3; k++)

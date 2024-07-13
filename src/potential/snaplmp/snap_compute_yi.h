@@ -1,20 +1,31 @@
 #pragma once
 
+#include <onika/cuda/cuda.h>
+#include <onika/cuda/cuda_math.h>
 #include <cmath>
 
 namespace exaStamp
 {
   using namespace exanb;
 
+  ONIKA_HOST_DEVICE_FUNC
   static inline void snap_compute_yi( // READ ONLY
-                                      int nelements, int twojmax, int idxu_max, int const * idxu_block
-                                    , int idxz_max, LAMMPS_NS::SNA_ZINDICES const * idxz, int const * const * const * idxcg_block, const double * cglist
-                                    , double const * ulisttot_r, double const * ulisttot_i
-                                    , int idxb_max, int const * const * const * idxb_block, bool bnorm_flag
+                                      int nelements, int twojmax, int idxu_max
+                                    , int const * __restrict__ idxu_block
+                                    , int idxz_max
+                                    , LAMMPS_NS::SNA_ZINDICES const * __restrict__ idxz
+                                    , int const * __restrict__ const * __restrict__  const * __restrict__ idxcg_block
+                                    , const double * __restrict__ cglist
+                                    , double const * __restrict__ ulisttot_r
+                                    , double const * __restrict__ ulisttot_i
+                                    , int idxb_max
+                                    , int const * __restrict__ const * __restrict__ const * __restrict__ idxb_block
+                                    , bool bnorm_flag
                                       // WRITE ONLY
-                                    , double * ylist_r, double * ylist_i
+                                    , double * __restrict__ ylist_r
+                                    , double * __restrict__ ylist_i
                                       // ORIGINAL PARAMETERS
-                                    , const double* beta)
+                                    , const double * __restrict__ beta)
   {
     int jju;
     double betaj;

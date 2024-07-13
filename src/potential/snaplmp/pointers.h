@@ -55,7 +55,8 @@ namespace LAMMPS_NS
     size_t m_idim = 0;
     size_t m_jdim = 0;
     size_t m_kdim = 0;
-    T * m_iptr = nullptr; // pointer to flat array valid for ptr[idx] with idx>=0 && idx<(dim[0]*dim[1]*dim[2])
+    //T * m_iptr = nullptr; // pointer to flat array valid for ptr[idx] with idx>=0 && idx<(dim[0]*dim[1]*dim[2])
+    onika::memory::CudaMMVector<uint8_t> m_storage;
     T ** m_jptr = nullptr; // arrays of kdim*jdim pointers to i rows
     T *** m_kptr = nullptr; // array of kdim pointers to jdim pointers
     char m_name[32] = { '\0' };
@@ -68,7 +69,7 @@ namespace LAMMPS_NS
     inline T * ptr(size_t i=0, size_t j=0, size_t k=0)
     {
       assert( i < m_idim && j < m_jdim && k < m_kdim );
-      return m_iptr + ( ( k * m_jdim + j ) * m_idim + i );
+      return reinterpret_cast<T*>(m_storage.data()) + ( ( k * m_jdim + j ) * m_idim + i );
     }
     inline T ** jptr(size_t j=0, size_t k=0)
     {
@@ -90,16 +91,13 @@ namespace LAMMPS_NS
       const size_t elements = m_idim * m_jdim * m_kdim;
       const size_t data_bytes = ( elements * sizeof(T) + 63ull ) & ( ~ 63ull );
       const size_t pointer_bytes = ( m_kdim * sizeof(T**) ) + ( m_kdim * m_jdim * sizeof(T*) );
-      if( posix_memalign( reinterpret_cast<void**>(&m_iptr), 64, data_bytes + pointer_bytes ) != 0)
-      {
-        exanb::fatal_error() << "Allocation failed for "<<name()<<" with "<<elements<<" elements"<<std::endl;
-      }
-      m_jptr = reinterpret_cast<T**>( reinterpret_cast<uint8_t*>(m_iptr) + data_bytes );
+      m_storage.resize( data_bytes + pointer_bytes );
+      m_jptr = reinterpret_cast<T**>( reinterpret_cast<uint8_t*>( ptr() ) + data_bytes );
       m_kptr = reinterpret_cast<T***>( m_jptr + ( m_kdim * m_jdim ) );
 
       for(size_t j=0;j<(m_kdim*m_jdim);j++)
       {
-        m_jptr[j] = m_iptr + j*m_idim;
+        m_jptr[j] = ptr() + j*m_idim;
       }
       for(size_t k=0;k<m_kdim;k++)
       {
@@ -109,12 +107,6 @@ namespace LAMMPS_NS
       {
         assert( ptr(i,j,k) == & m_kptr[k][j][i] );
       }
-    }
-    
-    inline ~ArrayDescriptorImpl()
-    {
-      if( m_iptr != nullptr ) free( m_iptr );
-      m_iptr = nullptr;
     }
   };
 

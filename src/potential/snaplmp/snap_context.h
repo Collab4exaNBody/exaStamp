@@ -1,5 +1,7 @@
 #pragma once
 
+#include <onika/memory/allocator.h>
+
 namespace exaStamp
 {
 
@@ -16,16 +18,14 @@ namespace exaStamp
 
   struct SnapLMPContext
   {
-    //LAMMPS_NS::LAMMPS * ptr = nullptr;
-    LAMMPS_NS::SNA * sna = nullptr;
-    std::vector<SnapLMPThreadContext> m_thread_ctx;
     SnapExt::SnapConfig m_config;
-    std::vector<double> m_coefs;    // size = number of bispectrum coefficients
-    std::vector<double> m_factor;   // size = number of elements
-    std::vector<double> m_radelem;  // size = number of elements
-    
-    std::vector<double> m_beta;       // size = number of particles
-    std::vector<double> m_bispectrum; // size = number of particles
+    LAMMPS_NS::SNA * sna = nullptr;
+    onika::memory::CudaMMVector<SnapLMPThreadContext> m_thread_ctx;
+    onika::memory::CudaMMVector<double> m_coefs;    // size = number of bispectrum coefficients
+    onika::memory::CudaMMVector<double> m_factor;   // size = number of elements
+    onika::memory::CudaMMVector<double> m_radelem;  // size = number of elements
+    onika::memory::CudaMMVector<double> m_beta;       // size = number of particles
+    onika::memory::CudaMMVector<double> m_bispectrum; // size = number of particles
     double m_rcut = 0.0;
   };
 

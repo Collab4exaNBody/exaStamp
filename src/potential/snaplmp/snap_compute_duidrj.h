@@ -1,5 +1,7 @@
 #pragma once
 
+#include <onika/cuda/cuda.h>
+#include <onika/cuda/cuda_math.h>
 #include <cmath>
 #include "snap_compute_ui.h"
 
@@ -7,6 +9,7 @@ namespace exaStamp
 {
   using namespace exanb;
 
+  ONIKA_HOST_DEVICE_FUNC
   static inline double snap_compute_dsfac( // READ ONLY
                                            double rmin0, bool switch_flag, bool switch_inner_flag
                                            // ORIGINAL PARAMETERS
@@ -52,14 +55,18 @@ namespace exaStamp
      Compute derivatives of Wigner U-functions for one neighbor
      see comments in compute_uarray()
   ------------------------------------------------------------------------- */
-                        
+  ONIKA_HOST_DEVICE_FUNC
   static inline void snap_compute_duarray( // READ ONLY
-                             int twojmax, int idxu_max, int const * idxu_block
-                           , double const * ulist_r_ij, double const * ulist_i_ij, double const * const * rootpqarray
-                           , double const * sinnerij, double const * dinnerij
+                             int twojmax, int idxu_max
+                           , int const * __restrict__ idxu_block
+                           , double const * __restrict__ ulist_r_ij
+                           , double const * __restrict__ ulist_i_ij
+                           , double const * __restrict__ const * __restrict__ rootpqarray
+                           , double const * __restrict__ sinnerij
+                           , double const * __restrict__ dinnerij
                            , double rmin0, bool switch_flag, bool switch_inner_flag
                              // WRITE ONLY
-                           , double * dulist_r, double * dulist_i
+                           , double * __restrict__ dulist_r, double * __restrict__ dulist_i
                              // ORIGINAL PARAMETERS
                            , double x, double y, double z
                            , double z0, double r, double dz0dr
@@ -220,17 +227,25 @@ namespace exaStamp
   /* ----------------------------------------------------------------------
      calculate derivative of Ui w.r.t. atom j
   ------------------------------------------------------------------------- */
-
+  ONIKA_HOST_DEVICE_FUNC
   static inline void snap_compute_duidrj( // READ ONLY
-                                         int twojmax, int idxu_max, int const * idxu_block
+                                         int twojmax, int idxu_max
+                                       , int const * __restrict__ idxu_block
 //                                       , int const * element
-                                       , double const * drx, double const * dry, double const * drz
-                                       , double const * rcutij, double const * wj
-                                       , double const * ulist_r_ij, double const * ulist_i_ij, double const * const * rootpqarray
-                                       , double const * sinnerij, double const * dinnerij
+                                       , double const * __restrict__ drx
+                                       , double const * __restrict__ dry
+                                       , double const * __restrict__ drz
+                                       , double const * __restrict__ rcutij
+                                       , double const * __restrict__ wj
+                                       , double const * __restrict__ ulist_r_ij
+                                       , double const * __restrict__ ulist_i_ij
+                                       , double const * __restrict__ const * __restrict__ rootpqarray
+                                       , double const * __restrict__ sinnerij
+                                       , double const * __restrict__ dinnerij
                                        , double rmin0, double rfac0, bool switch_flag, bool switch_inner_flag, bool chem_flag                             
                                          // WRITE ONLY
-                                       , double * dulist_r, double * dulist_i
+                                       , double * __restrict__ dulist_r
+                                       , double * __restrict__ dulist_i
                                          // ORIGINAL PARAMETERS
                                        , int jj)
   {

@@ -1,20 +1,24 @@
 #pragma once
 
+#include <onika/cuda/cuda.h>
+#include <onika/cuda/cuda_math.h>
 #include <cmath>
 
 namespace exaStamp
 {
   using namespace exanb;
 
+  ONIKA_HOST_DEVICE_FUNC
   static inline void snap_zero_uarraytot( // READ ONLY
                                           int nelements
                                         , int twojmax
-                                        , int const * idxu_block
+                                        , int const * __restrict__ idxu_block
                                         , int idxu_max
                                         , double wself
                                         , bool wselfall_flag
                                           // WRITE ONLY
-                                        , double * ulisttot_r, double * ulisttot_i
+                                        , double * __restrict__ ulisttot_r
+                                        , double * __restrict__ ulisttot_i
                                           // ORIGINAL PARAMETERS
                                         , int ielem ) 
   {
@@ -36,12 +40,13 @@ namespace exaStamp
     }
   }
 
+  ONIKA_HOST_DEVICE_FUNC
   static inline void snap_compute_uarray( // READ ONLY
                                           int twojmax, int idxu_max
-                                        , int const * idxu_block
-                                        , double const * const * rootpqarray
+                                        , int const * __restrict__ idxu_block
+                                        , double const * __restrict__ const * __restrict__ rootpqarray
                                           // WRITE ONLY
-                                        , double * ulist_r_ij, double * ulist_i_ij
+                                        , double * __restrict__ ulist_r_ij, double * __restrict__ ulist_i_ij
                                           // ORIGINAL PARAMETERS
                                         , double x, double y, double z, double z0, double r, int jj )
   {
@@ -125,6 +130,7 @@ namespace exaStamp
     }
   }
 
+  ONIKA_HOST_DEVICE_FUNC
   static inline double snap_compute_sfac( // READ ONLY
                                           double rmin0, bool switch_flag, bool switch_inner_flag
                                           // ORIGINAL PARAMTERS
@@ -154,14 +160,22 @@ namespace exaStamp
     return sfac;
   }
 
+  ONIKA_HOST_DEVICE_FUNC
   static inline void snap_add_uarraytot( // READ ONLY
                                          double rmin0, bool switch_flag, bool switch_inner_flag
-                                       , int twojmax, bool chem_flag, int const * element
-                                       , double const * rcutij, double const * sinnerij, double const * dinnerij, double const * wj
-                                       , int const * idxu_block , int idxu_max
-                                       , double const * ulist_r_ij, double const * ulist_i_ij
+                                       , int twojmax, bool chem_flag
+                                       , int const * __restrict__ element
+                                       , double const * __restrict__ rcutij
+                                       , double const * __restrict__ sinnerij
+                                       , double const * __restrict__ dinnerij
+                                       , double const * __restrict__ wj
+                                       , int const * __restrict__ idxu_block
+                                       , int idxu_max
+                                       , double const * __restrict__ ulist_r_ij
+                                       , double const * __restrict__ ulist_i_ij
                                          // WRITE ONLY
-                                       , double * ulisttot_r, double * ulisttot_i
+                                       , double * __restrict__ ulisttot_r
+                                       , double * __restrict__ ulisttot_i
                                          // ORIGINAL PARAMETERS
                                        , double r, int jj)
   {
@@ -190,17 +204,26 @@ namespace exaStamp
     }
   }
 
-
+  ONIKA_HOST_DEVICE_FUNC
   static inline void snap_compute_ui( // READ ONLY
-                                      int nelements, int twojmax, int idxu_max, int const * idxu_block, int const * element
-                                    , double const * drx, double const * dry, double const * drz
-                                    , double const * rcutij, double const * const * rootpqarray
-                                    , double const * sinnerij, double const * dinnerij, double const * wj
+                                      int nelements, int twojmax, int idxu_max
+                                    , int const * __restrict__ idxu_block
+                                    , int const * __restrict__ element
+                                    , double const * __restrict__ drx
+                                    , double const * __restrict__ dry
+                                    , double const * __restrict__ drz
+                                    , double const * __restrict__ rcutij
+                                    , double const * __restrict__ const * __restrict__ rootpqarray
+                                    , double const * __restrict__ sinnerij
+                                    , double const * __restrict__ dinnerij
+                                    , double const * __restrict__ wj
                                     , bool wselfall_flag, bool switch_flag, bool switch_inner_flag, bool chem_flag
                                     , double wself, double rmin0, double rfac0
                                       // WRITE ONLY
-                                    , double * ulist_r_ij, double * ulist_i_ij
-                                    , double * ulisttot_r, double * ulisttot_i
+                                    , double * __restrict__ ulist_r_ij
+                                    , double * __restrict__ ulist_i_ij
+                                    , double * __restrict__ ulisttot_r
+                                    , double * __restrict__ ulisttot_i
                                       // ORIGINAL PARAMETERS
                                     , int jnum, int ielem)
   {

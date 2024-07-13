@@ -1,5 +1,7 @@
 #pragma once
 
+#include <onika/cuda/cuda.h>
+#include <onika/cuda/cuda_math.h>
 #include <cmath>
 
 namespace exaStamp
@@ -9,16 +11,21 @@ namespace exaStamp
   /* ----------------------------------------------------------------------
      compute Bi by summing conj(Ui)*Zi
   ------------------------------------------------------------------------- */
-
+  ONIKA_HOST_DEVICE_FUNC
   static inline void snap_compute_bi( // READ ONLY
                                       int nelements, int idxz_max, int idxb_max, int idxu_max
-                                    , int const * idxu_block, int const * const * const * idxz_block
-                                    , LAMMPS_NS::SNA_ZINDICES const * idxz, LAMMPS_NS::SNA_BINDICES const * idxb
-                                    , double const * zlist_r, double const * zlist_i
-                                    , double const * ulisttot_r, double const * ulisttot_i
-                                    , double const * bzero , bool bzero_flag, bool wselfall_flag
+                                    , int const * __restrict__ idxu_block
+                                    , int const * __restrict__ const * __restrict__ const * __restrict__ idxz_block
+                                    , LAMMPS_NS::SNA_ZINDICES const * __restrict__ idxz
+                                    , LAMMPS_NS::SNA_BINDICES const * __restrict__ idxb
+                                    , double const * __restrict__ zlist_r
+                                    , double const * __restrict__ zlist_i
+                                    , double const * __restrict__ ulisttot_r
+                                    , double const * __restrict__ ulisttot_i
+                                    , double const * __restrict__ bzero
+                                    , bool bzero_flag, bool wselfall_flag
                                       // WRITE ONLY
-                                    , double * blist
+                                    , double * __restrict__ blist
                                       // ORIGINAL PARAMETERS
                                     , int ielem)
   {
