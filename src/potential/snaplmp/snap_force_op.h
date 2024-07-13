@@ -118,11 +118,9 @@ namespace exaStamp
       ) const
     {
       static constexpr bool compute_virial = std::is_same_v< Mat3dT , Mat3d >;
-      //static constexpr double scale[1][1] = { {1.0} };
 
-      size_t tid = omp_get_thread_num();
-      assert( tid < n_thread_ctx );
-      SnapLMPThreadContext & snap_ctx = m_thread_ctx[tid];
+      assert( ONIKA_CU_BLOCK_IDX < n_thread_ctx );
+      SnapLMPThreadContext & snap_ctx = m_thread_ctx[ ONIKA_CU_BLOCK_IDX ];
       auto snaptr = snap_ctx.scratch;
 
       // energy and force contributions to the particle
@@ -134,35 +132,27 @@ namespace exaStamp
 
       // start of SNA
 
-      //      const int itype = 0; //type[i];
       const int itype = type;
-      const int ielem = itype; //map[itype];
+      const int ielem = itype;
       const double radi = radelem[ielem];
 
-      //      snaptr->grow_rij(jnum);
       assert( jnum < snaptr->nmax );
       int ninside = 0;
       for (int jj = 0; jj < jnum; jj++)
       {
-        //const int j = jj;// j = jlist[jj];
-        // j &= NEIGHMASK;
-        const double delx = buf.drx[jj]; //x[j][0] - xtmp;
-        const double dely = buf.dry[jj]; //x[j][1] - ytmp;
-        const double delz = buf.drz[jj]; //x[j][2] - ztmp;
+        const double delx = buf.drx[jj];
+        const double dely = buf.dry[jj];
+        const double delz = buf.drz[jj];
         const double rsq = delx*delx + dely*dely + delz*delz;
-        const int jtype = buf.nbh_pt[jj][field::type];; //buf.ext.type[jj]; 
-        const int jelem = jtype; //map[jtype];
+        const int jtype = buf.nbh_pt[jj][field::type];
+        const int jelem = jtype;
 
 	      double cut_ij = (radelem[jtype]+radelem[itype])*rcutfac;
-	      double cutsq_ij=cut_ij*cut_ij;
+	      double cutsq_ij = cut_ij * cut_ij;
 
-        if (rsq < cutsq_ij/*[itype][jtype]*/&&rsq>1e-20)
+        if( rsq < cutsq_ij && rsq>1e-20 )
         {
-//          snaptr->rij[ninside][0] = delx;
-//          snaptr->rij[ninside][1] = dely;
-//          snaptr->rij[ninside][2] = delz;
           if( ninside != jj ) { buf.copy( jj , ninside ); }
-//          snaptr->inside[ninside] = j;
           snaptr->wj[ninside] = wjelem[jelem];
           snaptr->rcutij[ninside] = (radi + radelem[jelem])*rcutfac;
           if (snaconf.switch_inner_flag) {
@@ -174,11 +164,6 @@ namespace exaStamp
         }
       }
       
-      //snaptr->reorder_rij(ninside);
-      //const double chk_rij = snaptr->chk_rij(ninside);
-      //const bool chosen = fabs(chk_rij-1.862026)<0.00001;
-      //snaptr->set_dbg_chosen(chosen);
-
       // compute Ui, Yi for atom I
       snap_compute_ui( snaconf.nelements, snaconf.twojmax, snaconf.idxu_max, snaconf.idxu_block
                      , snaptr->element, buf.drx,buf.dry,buf.drz, snaptr->rcutij, snaconf.rootpqarray, snaptr->sinnerij, snaptr->dinnerij, snaptr->wj
@@ -206,9 +191,6 @@ namespace exaStamp
 
       for (int jj = 0; jj < ninside; jj++)
       {
-        //int j = snaptr->inside[jj];
-
-        // snaptr->compute_duidrj(jj);
         snap_compute_duidrj( snaconf.twojmax, snaconf.idxu_max, snaconf.idxu_block, buf.drx,buf.dry,buf.drz, snaptr->rcutij, snaptr->wj
                            , snaptr->ulist_r_ij, snaptr->ulist_i_ij, snaconf.rootpqarray
                            , snaptr->sinnerij, snaptr->dinnerij
@@ -221,45 +203,29 @@ namespace exaStamp
 	      fij[1]=0.;
 	      fij[2]=0.;
         snaptr->elem_duarray = snaconf.chem_flag ? snaptr->element[jj] : 0 ;
-        // snaptr->compute_deidrj(fij);
         snap_compute_deidrj( snaptr->elem_duarray, snaconf.twojmax, snaconf.idxu_max, snaconf.idxu_block
                            , snaptr->dulist_r, snaptr->dulist_i
                            , snaptr->ylist_r, snaptr->ylist_i
                            , fij );
         
-	      //        if( conv_energy_units )
-	      //        {
 	      fij[0] *= conv_energy_factor;
 	      fij[1] *= conv_energy_factor;
 	      fij[2] *= conv_energy_factor;
-	      //        }
 
-	      //        [[maybe_unused]] const Mat3dT v_contrib = tensor( Vec3d{ fij[0] , fij[1] , fij[2] }, Vec3d{ snaptr->rij[jj][0] , snaptr->rij[jj][1] , snaptr->rij[jj][2] } );
-	      Mat3d v_contrib = tensor( Vec3d{ fij[0] , fij[1] , fij[2] }, Vec3d{ buf.drx[jj],buf.dry[jj],buf.drz[jj] /*snaptr->rij[jj][0] , snaptr->rij[jj][1] , snaptr->rij[jj][2]*/ } );
+	      Mat3d v_contrib = tensor( Vec3d{ fij[0] , fij[1] , fij[2] }, Vec3d{ buf.drx[jj],buf.dry[jj],buf.drz[jj] } );
         if constexpr ( compute_virial ) { _vir += v_contrib * -1.0; }
 
-        /*
-        if(chosen)
-        {
-          printf("SNAPDBG: rij[%d]: x=% .3e y=% .3e z=% .3e , force: x=% .3e y=% .3e z=% .3e\n",jj,snaptr->rij[jj][0] , snaptr->rij[jj][1] , snaptr->rij[jj][2], fij[0] , fij[1] , fij[2] );
-        }
-        */
-
-        _fx /*f[i][0]*/ += fij[0];//*scale[itype][itype];
-        _fy /*f[i][1]*/ += fij[1];//*scale[itype][itype];
-        _fz /*f[i][2]*/ += fij[2];//*scale[itype][itype];
+        _fx += fij[0];
+        _fy += fij[1];
+        _fz += fij[2];
         
-        // f[j][0] -= fij[0]*scale[itype][itype];
-        // f[j][1] -= fij[1]*scale[itype][itype];
-        // f[j][2] -= fij[2]*scale[itype][itype];
-
         size_t cell_b=0, p_b=0;
         buf.nbh.get(jj, cell_b, p_b);
         auto& lock_b = locks[cell_b][p_b];
         lock_b.lock();
-        cells[cell_b][field::fx][p_b] -= fij[0];//*scale[itype][itype];
-        cells[cell_b][field::fy][p_b] -= fij[1];//*scale[itype][itype];
-        cells[cell_b][field::fz][p_b] -= fij[2];//*scale[itype][itype];
+        cells[cell_b][field::fx][p_b] -= fij[0];
+        cells[cell_b][field::fy][p_b] -= fij[1];
+        cells[cell_b][field::fz][p_b] -= fij[2];
 	      // PL : for virial, no reciprocal contribution apparently.
 	      //        if constexpr ( compute_virial ) { cells[cell_b][field::virial][p_b] += v_contrib * 0.5; }
         lock_b.unlock();
@@ -327,4 +293,17 @@ namespace exaStamp
 
 }
 
+namespace exanb
+{
+
+  template<>
+  struct ComputePairTraits< exaStamp::SnapLMPForceOp >
+  {
+    static inline constexpr bool RequiresBlockSynchronousCall = false;
+    static inline constexpr bool ComputeBufferCompatible      = true;
+    static inline constexpr bool BufferLessCompatible         = false;
+    static inline constexpr bool CudaCompatible               = true;
+  };
+
+}
 

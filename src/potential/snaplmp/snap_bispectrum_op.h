@@ -37,9 +37,8 @@ namespace exaStamp
     template<class ComputeBufferT, class CellParticlesT>
     inline void operator () ( int jnum, ComputeBufferT& buf, int type, CellParticlesT cells ) const
     {
-      size_t tid = omp_get_thread_num();
-      assert( tid < n_thread_ctx );
-      SnapLMPThreadContext & snap_ctx = m_thread_ctx[tid];
+      assert( ONIKA_CU_BLOCK_IDX < n_thread_ctx );
+      SnapLMPThreadContext & snap_ctx = m_thread_ctx[ ONIKA_CU_BLOCK_IDX ];
       auto snaptr = snap_ctx.scratch;
 
       // start of SNA
