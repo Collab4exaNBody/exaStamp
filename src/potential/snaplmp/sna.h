@@ -97,15 +97,79 @@ namespace LAMMPS_NS
     int chem_flag = 0;        // 1 for multi-element bispectrum components
     int wselfall_flag = 0;    // 1 for adding wself to all element labelings
 
-    double *bzero = nullptr;        // array of B values for isolated atoms
-    SNA_ZINDICES *idxz = nullptr;
-    SNA_BINDICES *idxb = nullptr;
-    double **rootpqarray = nullptr;
-    double *cglist = nullptr;
-    int ***idxcg_block = nullptr;
-    int *idxu_block = nullptr;
-    int ***idxz_block = nullptr;
-    int ***idxb_block = nullptr;
+    double * __restrict__ bzero = nullptr;        // array of B values for isolated atoms
+    SNA_ZINDICES * __restrict__ idxz = nullptr;
+    SNA_BINDICES * __restrict__ idxb = nullptr;
+    double * __restrict__ *  __restrict__ rootpqarray = nullptr;
+    double *  __restrict__ cglist = nullptr;
+    int *  __restrict__ *  __restrict__ *  __restrict__ idxcg_block = nullptr;
+    int *  __restrict__ idxu_block = nullptr;
+    int *  __restrict__ *  __restrict__ *  __restrict__ idxz_block = nullptr;
+    int *  __restrict__ *  __restrict__ *  __restrict__ idxb_block = nullptr;
+  };
+
+  struct ReadOnlySnapParameters
+  {
+    inline ReadOnlySnapParameters( const SNA * sna )
+      : bzero ( sna->bzero )
+      , idxz ( sna->idxz )
+      , idxb ( sna->idxb )
+      , rootpqarray ( sna->rootpqarray )
+      , cglist ( sna->cglist )
+      , idxcg_block ( sna->idxcg_block )
+      , idxu_block ( sna->idxu_block )
+      , idxz_block ( sna->idxz_block )
+      , idxb_block ( sna->idxb_block )
+      , rmin0 ( sna->rmin0 )
+      , rfac0 ( sna->rfac0 )
+      , wself ( sna->wself )
+      , nelements ( sna->nelements )
+      , ndoubles ( sna->ndoubles )
+      , ntriples ( sna->ntriples )
+      , ncoeff ( sna->ncoeff )
+      , twojmax ( sna->twojmax )
+      , idxcg_max ( sna->idxcg_max )
+      , idxu_max ( sna->idxu_max )
+      , idxz_max ( sna->idxz_max )
+      , idxb_max ( sna->idxb_max )
+      , switch_flag ( sna->switch_flag )
+      , switch_inner_flag ( sna->switch_inner_flag )
+      , bzero_flag ( sna->bzero_flag )
+      , bnorm_flag ( sna->bnorm_flag )
+      , chem_flag ( sna->chem_flag )
+      , wselfall_flag ( sna->wselfall_flag )
+    {}
+  
+    double const * const __restrict__ bzero = nullptr;
+    SNA_ZINDICES const * const __restrict__ idxz = nullptr;
+    SNA_BINDICES const * const __restrict__ idxb = nullptr;
+    double const * const __restrict__ * const __restrict__ rootpqarray = nullptr;
+    double const * const __restrict__ cglist = nullptr;
+    int const * const __restrict__ * const __restrict__ * const __restrict__ idxcg_block = nullptr;
+    int const * const __restrict__ idxu_block = nullptr;
+    int const * const __restrict__ * const __restrict__ * const __restrict__ idxz_block = nullptr;
+    int const * const __restrict__ * const __restrict__ * const __restrict__ idxb_block = nullptr;
+
+    double const rmin0 = 0.0;
+    double const rfac0 = 0.0;
+    double const wself = 0.0;
+
+    int const nelements = 0;
+    int const ndoubles = 0;
+    int const ntriples = 0;
+    int const ncoeff = 0;
+    int const twojmax = 0;
+    int const idxcg_max = 0;
+    int const idxu_max = 0;
+    int const idxz_max = 0;
+    int const idxb_max = 0;
+
+    bool const switch_flag =false;
+    bool const switch_inner_flag = false;
+    bool const bzero_flag = false; 
+    bool const bnorm_flag = false; 
+    bool const chem_flag = false; 
+    bool const wselfall_flag = false; 
   };
 
   struct SnapScratchBuffers
@@ -122,28 +186,28 @@ namespace LAMMPS_NS
     int nmax = 0;    // allocated size of short lists
     int elem_duarray = 0;    // element of j in derivative
 
-    int *element = nullptr;    // short element list [0,nmax)
-    double *blist = nullptr;
+    int * __restrict__ element = nullptr;    // short element list [0,nmax)
+    double * __restrict__ blist = nullptr;
 //    double **rij = nullptr;      // short rij list
 //    int *inside = nullptr;       // short neighbor list
-    double *wj = nullptr;        // short weight list
-    double *rcutij = nullptr;    // short cutoff list
+    double * __restrict__  wj = nullptr;        // short weight list
+    double * __restrict__ rcutij = nullptr;    // short cutoff list
 
     // only allocated for switch_inner_flag=1
-    double *sinnerij = nullptr;    // short inner cutoff midpoint list
-    double *dinnerij = nullptr;    // short inner half-width list
+    double * __restrict__ sinnerij = nullptr;    // short inner cutoff midpoint list
+    double * __restrict__ dinnerij = nullptr;    // short inner half-width list
 
-    double *ulisttot_r = nullptr;
-    double *ulisttot_i = nullptr;
-    double *ulist_r_ij = nullptr;
-    double *ulist_i_ij = nullptr;
-    double *zlist_r = nullptr;
-    double *zlist_i = nullptr;
+    double * __restrict__ ulisttot_r = nullptr;
+    double * __restrict__ ulisttot_i = nullptr;
+    double * __restrict__ ulist_r_ij = nullptr;
+    double * __restrict__ ulist_i_ij = nullptr;
+    double * __restrict__ zlist_r = nullptr;
+    double * __restrict__ zlist_i = nullptr;
 
-    double *dulist_r = nullptr;
-    double *dulist_i = nullptr;
-    double *ylist_r = nullptr;
-    double *ylist_i = nullptr;
+    double * __restrict__ dulist_r = nullptr;
+    double * __restrict__ dulist_i = nullptr;
+    double * __restrict__ ylist_r = nullptr;
+    double * __restrict__ ylist_i = nullptr;
   };
 
 

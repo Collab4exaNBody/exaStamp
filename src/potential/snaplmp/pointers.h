@@ -56,7 +56,7 @@ namespace LAMMPS_NS
     size_t m_jdim = 0;
     size_t m_kdim = 0;
     //T * m_iptr = nullptr; // pointer to flat array valid for ptr[idx] with idx>=0 && idx<(dim[0]*dim[1]*dim[2])
-    onika::memory::CudaMMVector<uint8_t> m_storage;
+    T * m_iptr = nullptr;
     T ** m_jptr = nullptr; // arrays of kdim*jdim pointers to i rows
     T *** m_kptr = nullptr; // array of kdim pointers to jdim pointers
     char m_name[32] = { '\0' };
@@ -66,17 +66,17 @@ namespace LAMMPS_NS
     inline Size3 dim() const override final { return { m_idim , m_jdim , m_kdim }; }
     inline const char* name() const override final { return m_name; }
         
-    inline T * ptr(size_t i=0, size_t j=0, size_t k=0)
+    inline T* ptr(size_t i=0, size_t j=0, size_t k=0)
     {
       assert( i < m_idim && j < m_jdim && k < m_kdim );
-      return reinterpret_cast<T*>(m_storage.data()) + ( ( k * m_jdim + j ) * m_idim + i );
+      return m_iptr + ( ( k * m_jdim + j ) * m_idim + i );
     }
-    inline T ** jptr(size_t j=0, size_t k=0)
+    inline T** jptr(size_t j=0, size_t k=0)
     {
       assert( j < m_jdim && k < m_kdim );
       return m_jptr + ( k * m_jdim + j );
     }
-    inline T *** kptr(size_t k=0)
+    inline T***  kptr(size_t k=0)
     {
       assert( k < m_kdim );
       return m_kptr + k;
@@ -91,8 +91,10 @@ namespace LAMMPS_NS
       const size_t elements = m_idim * m_jdim * m_kdim;
       const size_t data_bytes = ( elements * sizeof(T) + 63ull ) & ( ~ 63ull );
       const size_t pointer_bytes = ( m_kdim * sizeof(T**) ) + ( m_kdim * m_jdim * sizeof(T*) );
-      m_storage.resize( data_bytes + pointer_bytes );
-      m_jptr = reinterpret_cast<T**>( reinterpret_cast<uint8_t*>( ptr() ) + data_bytes );
+      const size_t alloc_size = ( data_bytes + pointer_bytes + sizeof(T)-1 ) / sizeof(T);      
+      
+      m_iptr = onika::memory::CudaManagedAllocator<T>{}.allocate( alloc_size );
+      m_jptr = reinterpret_cast<T**>( reinterpret_cast<uint8_t*>(m_iptr) + data_bytes );
       m_kptr = reinterpret_cast<T***>( m_jptr + ( m_kdim * m_jdim ) );
 
       for(size_t j=0;j<(m_kdim*m_jdim);j++)
@@ -108,6 +110,21 @@ namespace LAMMPS_NS
         assert( ptr(i,j,k) == & m_kptr[k][j][i] );
       }
     }
+    
+    inline ~ArrayDescriptorImpl()
+    {
+      const size_t elements = m_idim * m_jdim * m_kdim;
+      const size_t data_bytes = ( elements * sizeof(T) + 63ull ) & ( ~ 63ull );
+      const size_t pointer_bytes = ( m_kdim * sizeof(T**) ) + ( m_kdim * m_jdim * sizeof(T*) );
+      const size_t alloc_size = ( data_bytes + pointer_bytes + sizeof(T)-1 ) / sizeof(T);      
+      onika::memory::CudaManagedAllocator<T>{}.deallocate( m_iptr , alloc_size );
+      m_iptr = nullptr;
+      m_jptr = nullptr;
+      m_kptr = nullptr;
+      m_idim = 0;
+      m_jdim = 0;
+      m_kdim = 0;
+    }
   };
 
   struct Memory
@@ -120,7 +137,7 @@ namespace LAMMPS_NS
     }
     
     template<class T>
-    inline void create(T* &p, size_t idim, const char* name )
+    inline void create(T * __restrict__ &p, size_t idim, const char* name )
     {
       m_allocs.erase( p );
       std::shared_ptr< ArrayDescriptorImpl<T> > array = std::make_shared< ArrayDescriptorImpl<T> >( name, idim );
@@ -129,20 +146,20 @@ namespace LAMMPS_NS
     }
 
     template<class T>
-    inline void create(T** &p, size_t jdim, size_t idim, const char* name )
+    inline void create(T *  __restrict__ *  __restrict__ &p, size_t jdim, size_t idim, const char* name )
     {
       m_allocs.erase( p );
       std::shared_ptr< ArrayDescriptorImpl<T> > array = std::make_shared< ArrayDescriptorImpl<T> >( name, idim, jdim );
-      p = array->jptr();
+      p = ( T* __restrict__ * ) array->jptr();
       m_allocs[p] = array;
     }
 
     template<class T>
-    inline void create(T*** &p, size_t kdim, size_t jdim, size_t idim, const char* name )
+    inline void create(T *  __restrict__ *  __restrict__ *  __restrict__ &p, size_t kdim, size_t jdim, size_t idim, const char* name )
     {
       m_allocs.erase( p );
       std::shared_ptr< ArrayDescriptorImpl<T> > array = std::make_shared< ArrayDescriptorImpl<T> >( name, idim, jdim, kdim );
-      p = array->kptr();
+      p = ( T* __restrict__ * __restrict__ * ) array->kptr();
       m_allocs[p] = array;
     }
     

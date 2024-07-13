@@ -14,7 +14,7 @@ namespace exaStamp
   // Force operator
   struct alignas(onika::memory::DEFAULT_ALIGNMENT) BispectrumOp 
   {
-    const LAMMPS_NS::SNA * snaconf = nullptr;
+    const LAMMPS_NS::ReadOnlySnapParameters snaconf;
     SnapLMPThreadContext* m_thread_ctx = nullptr;
     const size_t n_thread_ctx = 0;
     
@@ -79,11 +79,11 @@ namespace exaStamp
           
           snaptr->wj[ninside] = wjelem[jelem];
           snaptr->rcutij[ninside] = (radi + radelem[jelem])*rcutfac;
-          if (snaconf->switch_inner_flag) {
+          if (snaconf.switch_inner_flag) {
             snaptr->sinnerij[ninside] = 0.5*(sinnerelem[ielem]+sinnerelem[jelem]);
             snaptr->dinnerij[ninside] = 0.5*(dinnerelem[ielem]+dinnerelem[jelem]);
           }
-          if (snaconf->chem_flag) snaptr->element[ninside] = jelem;
+          if (snaconf.chem_flag) snaptr->element[ninside] = jelem;
           ninside++;
         }
       }
@@ -106,28 +106,28 @@ namespace exaStamp
       /*******************************/
 #endif
 
-      snap_compute_ui( snaconf->nelements, snaconf->twojmax, snaconf->idxu_max, snaconf->idxu_block
-                     , snaptr->element, buf.drx,buf.dry,buf.drz , snaptr->rcutij, snaconf->rootpqarray, snaptr->sinnerij, snaptr->dinnerij, snaptr->wj
-                     , snaconf->wselfall_flag, snaconf->switch_flag, snaconf->switch_inner_flag, snaconf->chem_flag
-                     , snaconf->wself, snaconf->rmin0, snaconf->rfac0
+      snap_compute_ui( snaconf.nelements, snaconf.twojmax, snaconf.idxu_max, snaconf.idxu_block
+                     , snaptr->element, buf.drx,buf.dry,buf.drz , snaptr->rcutij, snaconf.rootpqarray, snaptr->sinnerij, snaptr->dinnerij, snaptr->wj
+                     , snaconf.wselfall_flag, snaconf.switch_flag, snaconf.switch_inner_flag, snaconf.chem_flag
+                     , snaconf.wself, snaconf.rmin0, snaconf.rfac0
                      , snaptr->ulist_r_ij, snaptr->ulist_i_ij, snaptr->ulisttot_r, snaptr->ulisttot_i
-                     , ninside, snaconf->chem_flag ? ielem : 0);
+                     , ninside, snaconf.chem_flag ? ielem : 0);
 
       // snaptr->compute_zi();
-      snap_compute_zi( snaconf->nelements, snaconf->idxz_max, snaconf->idxu_max, snaconf->idxu_block, snaconf->idxcg_block
-                     , snaconf->idxz, snaconf->cglist, snaptr->ulisttot_r, snaptr->ulisttot_i
-                     , snaconf->bnorm_flag, snaptr->zlist_r, snaptr->zlist_i );
+      snap_compute_zi( snaconf.nelements, snaconf.idxz_max, snaconf.idxu_max, snaconf.idxu_block, snaconf.idxcg_block
+                     , snaconf.idxz, snaconf.cglist, snaptr->ulisttot_r, snaptr->ulisttot_i
+                     , snaconf.bnorm_flag, snaptr->zlist_r, snaptr->zlist_i );
 
 //      if (chemflag) snaptr->compute_bi(ielem);
 //      else          snaptr->compute_bi(0);
-      snap_compute_bi( snaconf->nelements, snaconf->idxz_max, snaconf->idxb_max, snaconf->idxu_max
-                     , snaconf->idxu_block, snaconf->idxz_block
-                     , snaconf->idxz, snaconf->idxb
+      snap_compute_bi( snaconf.nelements, snaconf.idxz_max, snaconf.idxb_max, snaconf.idxu_max
+                     , snaconf.idxu_block, snaconf.idxz_block
+                     , snaconf.idxz, snaconf.idxb
                      , snaptr->zlist_r, snaptr->zlist_i
                      , snaptr->ulisttot_r, snaptr->ulisttot_i
-                     , snaconf->bzero , snaconf->bzero_flag, snaconf->wselfall_flag
+                     , snaconf.bzero , snaconf.bzero_flag, snaconf.wselfall_flag
                      , snaptr->blist
-                     , snaconf->chem_flag ? ielem : 0 );
+                     , snaconf.chem_flag ? ielem : 0 );
 
       const long bispectrum_ii_offset = ncoeff * ( cell_particle_offset[buf.cell] + buf.part );
       for (int icoeff = 0; icoeff < ncoeff; icoeff++) {

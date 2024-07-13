@@ -258,7 +258,7 @@ namespace exaStamp
 
         auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform, ComputePairOptionalLocks<false>{} );
         BispectrumOp bispectrum_op {
-                           snap_ctx->sna,
+                           LAMMPS_NS::ReadOnlySnapParameters(snap_ctx->sna),
                            snap_ctx->m_thread_ctx.data(), snap_ctx->m_thread_ctx.size(),
                            grid->cell_particle_offset_data(), snap_ctx->m_beta.data(), snap_ctx->m_bispectrum.data(),
                            snap_ctx->m_coefs.data(), ncoeff,
@@ -315,7 +315,7 @@ namespace exaStamp
         
         auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform, cp_locks
                       , ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{}, grid->field_accessors_from_field_set(FieldSet<field::_type>{}) );
-        SnapLMPForceOp force_op { snap_ctx->sna, snap_ctx->m_thread_ctx.data(), snap_ctx->m_thread_ctx.size(),
+        SnapLMPForceOp force_op { LAMMPS_NS::ReadOnlySnapParameters(snap_ctx->sna), snap_ctx->m_thread_ctx.data(), snap_ctx->m_thread_ctx.size(),
                            grid->cell_particle_offset_data(), snap_ctx->m_beta.data(), snap_ctx->m_bispectrum.data(),
                            snap_ctx->m_coefs.data(), static_cast<unsigned int>(snap_ctx->m_coefs.size()), static_cast<unsigned int>(ncoeff),
                            snap_ctx->m_factor.data(), snap_ctx->m_radelem.data(),
