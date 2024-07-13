@@ -55,7 +55,7 @@ compute_force:
   - memory_stats
 
 domain:
-  cell_size: 12.0 ang
+  cell_size: 7.0 ang
   periodic: [true,true,true]
 
 global:

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <exanb/core/physics_constants.h>
+#include <exanb/core/concurent_add_contributions.h>
+
 #include <cmath>
 #include "snap_compute_ui.h"
 #include "snap_compute_yi.h"
@@ -118,6 +120,8 @@ namespace exaStamp
       ) const
     {
       static constexpr bool compute_virial = std::is_same_v< Mat3dT , Mat3d >;
+      static constexpr bool CPAA = onika::cuda::gpu_device_execution_t::value;
+      static constexpr bool LOCK = ! onika::cuda::gpu_device_execution_t::value;
 
       assert( ONIKA_CU_BLOCK_IDX < n_thread_ctx );
       SnapLMPThreadContext & snap_ctx = m_thread_ctx[ ONIKA_CU_BLOCK_IDX ];
@@ -125,7 +129,6 @@ namespace exaStamp
 
       // energy and force contributions to the particle
       Mat3dT _vir; // default constructor defines all elements to 0
-      double _en = 0.;
       double _fx = 0.;
       double _fy = 0.;
       double _fz = 0.;
@@ -153,13 +156,13 @@ namespace exaStamp
         if( rsq < cutsq_ij && rsq>1e-20 )
         {
           if( ninside != jj ) { buf.copy( jj , ninside ); }
-          snaptr->wj[ninside] = wjelem[jelem];
-          snaptr->rcutij[ninside] = (radi + radelem[jelem])*rcutfac;
+          SNA_CU_ARRAY(snaptr->wj,ninside) = wjelem[jelem];
+          SNA_CU_ARRAY(snaptr->rcutij,ninside) = (radi + radelem[jelem])*rcutfac;
           if (snaconf.switch_inner_flag) {
-            snaptr->sinnerij[ninside] = 0.5*(sinnerelem[ielem]+sinnerelem[jelem]);
-            snaptr->dinnerij[ninside] = 0.5*(dinnerelem[ielem]+dinnerelem[jelem]);
+            SNA_CU_ARRAY(snaptr->sinnerij,ninside) = 0.5*(sinnerelem[ielem]+sinnerelem[jelem]);
+            SNA_CU_ARRAY(snaptr->dinnerij,ninside) = 0.5*(dinnerelem[ielem]+dinnerelem[jelem]);
           }
-          if (snaconf.chem_flag) snaptr->element[ninside] = jelem;
+          if (snaconf.chem_flag) SNA_CU_ARRAY(snaptr->element,ninside) = jelem;
           ninside++;
         }
       }
@@ -178,10 +181,8 @@ namespace exaStamp
       // scaling is that for type I
 
       assert( ncoeff == static_cast<unsigned int>(snaconf.ncoeff) );
-      const double* betaloc = coeffelem + itype * (ncoeff + 1 ) + 1;
+      const double* __restrict__ betaloc = coeffelem + itype * (ncoeff + 1 ) + 1;
 
-      //      snaptr->compute_yi( /* beta[ii] ==> */ beta + ( ncoeff * ( cell_particle_offset[buf.cell] + buf.part ) ) );
-      //snaptr->compute_yi( betaloc );
       snap_compute_yi( snaconf.nelements, snaconf.twojmax, snaconf.idxu_max, snaconf.idxu_block
                      , snaconf.idxz_max, snaconf.idxz, snaconf.idxcg_block, snaconf.cglist
                      , snaptr->ulisttot_r, snaptr->ulisttot_i
@@ -202,8 +203,8 @@ namespace exaStamp
 	      fij[0]=0.;
 	      fij[1]=0.;
 	      fij[2]=0.;
-        snaptr->elem_duarray = snaconf.chem_flag ? snaptr->element[jj] : 0 ;
-        snap_compute_deidrj( snaptr->elem_duarray, snaconf.twojmax, snaconf.idxu_max, snaconf.idxu_block
+        const int elem_duarray = snaconf.chem_flag ? SNA_CU_ARRAY(snaptr->element,jj) : 0 ;
+        snap_compute_deidrj( elem_duarray, snaconf.twojmax, snaconf.idxu_max, snaconf.idxu_block
                            , snaptr->dulist_r, snaptr->dulist_i
                            , snaptr->ylist_r, snaptr->ylist_i
                            , fij );
@@ -221,18 +222,21 @@ namespace exaStamp
         
         size_t cell_b=0, p_b=0;
         buf.nbh.get(jj, cell_b, p_b);
-        auto& lock_b = locks[cell_b][p_b];
-        lock_b.lock();
-        cells[cell_b][field::fx][p_b] -= fij[0];
-        cells[cell_b][field::fy][p_b] -= fij[1];
-        cells[cell_b][field::fz][p_b] -= fij[2];
-	      // PL : for virial, no reciprocal contribution apparently.
-	      //        if constexpr ( compute_virial ) { cells[cell_b][field::virial][p_b] += v_contrib * 0.5; }
-        lock_b.unlock();
+        concurent_add_contributions<ParticleLockT,CPAA,LOCK,double,double,double> (
+            locks[cell_b][p_b]
+          , cells[cell_b][field::fx][p_b], cells[cell_b][field::fy][p_b], cells[cell_b][field::fz][p_b]
+          , -fij[0]                      , -fij[1]                      , -fij[2] );
       }
+
+      if constexpr ( compute_virial )
+        concurent_add_contributions<ParticleLockT,CPAA,LOCK,double,double,double,Mat3d> ( lock_a, fx, fy, fz, virial, _fx, _fy, _fz, _vir );
+      else
+        concurent_add_contributions<ParticleLockT,CPAA,LOCK,double,double,double> ( lock_a, fx, fy, fz, _fx, _fy, _fz );
 
       if (eflag)
       {
+        double _en = 0.;
+
 	      // assert(ielem==0);
         const long bispectrum_ii_offset = ncoeff * ( cell_particle_offset[buf.cell] + buf.part );
 
@@ -277,17 +281,9 @@ namespace exaStamp
         {
           _en *= conv_energy_factor;
         }
+
+        en += _en;
       }
-
-      // end of central atom calculation, atomically add contribution
-
-      lock_a.lock();
-      en += _en;
-      fx += _fx;
-      fy += _fy;
-      fz += _fz;
-      if constexpr ( compute_virial ) { virial += _vir; }
-      lock_a.unlock();
     }
   };
 

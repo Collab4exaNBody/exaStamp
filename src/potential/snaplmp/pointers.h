@@ -55,6 +55,7 @@ namespace LAMMPS_NS
     size_t m_idim = 0;
     size_t m_jdim = 0;
     size_t m_kdim = 0;
+    size_t m_block_size = 0;
     //T * m_iptr = nullptr; // pointer to flat array valid for ptr[idx] with idx>=0 && idx<(dim[0]*dim[1]*dim[2])
     T * m_iptr = nullptr;
     T ** m_jptr = nullptr; // arrays of kdim*jdim pointers to i rows
@@ -66,10 +67,10 @@ namespace LAMMPS_NS
     inline Size3 dim() const override final { return { m_idim , m_jdim , m_kdim }; }
     inline const char* name() const override final { return m_name; }
         
-    inline T* ptr(size_t i=0, size_t j=0, size_t k=0)
+    inline T* ptr(size_t i=0, size_t j=0, size_t k=0, size_t block_thread_idx=0)
     {
       assert( i < m_idim && j < m_jdim && k < m_kdim );
-      return m_iptr + ( ( k * m_jdim + j ) * m_idim + i );
+      return m_iptr + ( ( k * m_jdim + j ) * m_idim + i ) * m_block_size + block_thread_idx;
     }
     inline T** jptr(size_t j=0, size_t k=0)
     {
@@ -86,10 +87,11 @@ namespace LAMMPS_NS
       : m_idim(idim)
       , m_jdim(jdim)
       , m_kdim(kdim)
+      , m_block_size(1)
     {
       std::strncpy(m_name,s,32); m_name[31]='\0';
       const size_t elements = m_idim * m_jdim * m_kdim;
-      const size_t data_bytes = ( elements * sizeof(T) + 63ull ) & ( ~ 63ull );
+      const size_t data_bytes = ( elements * sizeof(T) * m_block_size + 63ull ) & ( ~ 63ull );
       const size_t pointer_bytes = ( m_kdim * sizeof(T**) ) + ( m_kdim * m_jdim * sizeof(T*) );
       const size_t alloc_size = ( data_bytes + pointer_bytes + sizeof(T)-1 ) / sizeof(T);      
       
@@ -99,11 +101,11 @@ namespace LAMMPS_NS
 
       for(size_t j=0;j<(m_kdim*m_jdim);j++)
       {
-        m_jptr[j] = ptr() + j*m_idim;
+        m_jptr[j] = ptr(0,j,0);
       }
       for(size_t k=0;k<m_kdim;k++)
       {
-        m_kptr[k] = m_jptr + k*m_jdim;
+        m_kptr[k] = m_jptr + ( k * m_jdim );
       }
       for(size_t k=0;k<m_kdim;k++) for(size_t j=0;j<m_jdim;j++) for(size_t i=0;i<m_idim;i++)
       {
@@ -124,6 +126,7 @@ namespace LAMMPS_NS
       m_idim = 0;
       m_jdim = 0;
       m_kdim = 0;
+      m_block_size = 0;
     }
   };
 

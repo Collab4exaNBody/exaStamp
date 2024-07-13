@@ -19,24 +19,26 @@
 
 #include "pointers.h"
 
-#define WJ(i)           wj[i]
-#define RCUTIJ(i)       rcutij[i]
-#define SINNERIJ(i)     sinnerij[i]
-#define DINNERIJ(i)     dinnerij[i]
-#define ELEMENT(i)      element[i]
+#define SNA_CU_ARRAY(a,i) a [ ( (i) * ONIKA_CU_BLOCK_SIZE ) + ONIKA_CU_THREAD_IDX ]
+
+#define WJ(i)           SNA_CU_ARRAY(wj,i)
+#define RCUTIJ(i)       SNA_CU_ARRAY(rcutij,i)
+#define SINNERIJ(i)     SNA_CU_ARRAY(sinnerij,i)
+#define DINNERIJ(i)     SNA_CU_ARRAY(dinnerij,i)
+#define ELEMENT(i)      SNA_CU_ARRAY(element,i)
 #define ULIST_IDIM      idxu_max
-#define ULIST_R_IJ(j,i) ulist_r_ij[ (j)*ULIST_IDIM + (i) ]
-#define ULIST_I_IJ(j,i) ulist_i_ij[ (j)*ULIST_IDIM + (i) ]
-#define ULISTTOT_R(i)   ulisttot_r[i]
-#define ULISTTOT_I(i)   ulisttot_i[i]
+#define ULIST_R_IJ(j,i) SNA_CU_ARRAY(ulist_r_ij, (j) * ULIST_IDIM + (i) )
+#define ULIST_I_IJ(j,i) SNA_CU_ARRAY(ulist_i_ij, (j) * ULIST_IDIM + (i) )
+#define ULISTTOT_R(i)   SNA_CU_ARRAY(ulisttot_r,i)
+#define ULISTTOT_I(i)   SNA_CU_ARRAY(ulisttot_i,i)
 #define DULIST_IDIM     3
-#define DULIST_R(j,i)   dulist_r[ (j) * DULIST_IDIM + (i) ]
-#define DULIST_I(j,i)   dulist_i[ (j) * DULIST_IDIM + (i) ]
-#define ZLIST_R(i)      zlist_r[i]
-#define ZLIST_I(i)      zlist_i[i]
-#define BLIST(i)        blist[i]
-#define YLIST_R(i)      ylist_r[i]
-#define YLIST_I(i)      ylist_i[i]
+#define DULIST_R(j,i)   SNA_CU_ARRAY(dulist_r, (j) * DULIST_IDIM + (i) )
+#define DULIST_I(j,i)   SNA_CU_ARRAY(dulist_i, (j) * DULIST_IDIM + (i) )
+#define ZLIST_R(i)      SNA_CU_ARRAY(zlist_r,i)
+#define ZLIST_I(i)      SNA_CU_ARRAY(zlist_i,i)
+#define BLIST(i)        SNA_CU_ARRAY(blist,i)
+#define YLIST_R(i)      SNA_CU_ARRAY(ylist_r,i)
+#define YLIST_I(i)      SNA_CU_ARRAY(ylist_i,i)
 
 namespace LAMMPS_NS
 {
@@ -184,7 +186,7 @@ namespace LAMMPS_NS
     Memory* memory = nullptr;
     
     int nmax = 0;    // allocated size of short lists
-    int elem_duarray = 0;    // element of j in derivative
+//    int elem_duarray = 0;    // element of j in derivative
 
     int * __restrict__ element = nullptr;    // short element list [0,nmax)
     double * __restrict__ blist = nullptr;
