@@ -290,7 +290,6 @@ namespace exaStamp
 
 namespace exanb
 {
-
   template<>
   struct ComputePairTraits< exaStamp::SnapLMPForceOp >
   {
@@ -299,6 +298,5 @@ namespace exanb
     static inline constexpr bool BufferLessCompatible         = false;
     static inline constexpr bool CudaCompatible               = true;
   };
-
 }
 

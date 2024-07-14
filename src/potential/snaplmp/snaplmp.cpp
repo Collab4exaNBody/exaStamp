@@ -118,8 +118,7 @@ namespace exaStamp
 
       if( snap_ctx->m_coefs.empty() )
       {
-        //snap_ctx->m_cg_nt = parameters->nt;
-        
+        /*
         for( const auto& mat : snap_ctx->m_config.materials() )
         {
           ldbg << '\t' << mat.name() << ": radelem="<<mat.radelem()<<", weight="<<mat.weight()<<", ncoefs="<<mat.number_of_coefficients()<<std::endl;
@@ -128,16 +127,10 @@ namespace exaStamp
             ldbg << "\t\t" << mat.coefficient(i) << std::endl;
           }
         }
+        */
         
-        //double jmax = snap_ctx->m_config.twojmax()*0.5;
         int nmat = snap_ctx->m_config.materials().size();
-	
-        // if( nmat != 1 )
-        // {
-        //   lerr << "Snap: ERROR: only 1 material is allowed" << std::endl;
-	//   //          std::abort();
-        // }
-      
+	      
         // temporay, enable mutiple species if they all have weight=1. modifications needed for true multimaterial
         snap_ctx->m_factor.assign( nmat, 1.0 );
         snap_ctx->m_radelem.assign( nmat, 0.0 );
@@ -150,10 +143,6 @@ namespace exaStamp
           cnt+=1;
         }
 
-        // snap_ctx->m_factor.assign( MAX_PARTICLE_SPECIES, 1.0 );
-        // snap_ctx->m_factor[0] = mat.weight();
-        // snap_ctx->m_radelem.assign( MAX_PARTICLE_SPECIES, 0.0 );
-        // snap_ctx->m_radelem[0] = mat.radelem();
         size_t ncoefs_per_specy = snap_ctx->m_config.materials()[0].number_of_coefficients();
         snap_ctx->m_coefs.resize( nmat * ncoefs_per_specy );
         for(int j=0;j<nmat;j++)
@@ -189,15 +178,17 @@ namespace exaStamp
       size_t gpu_block_size = 1;
       size_t gpu_blocks = 1;
       size_t nt = omp_get_max_threads();
-      if( global_cuda_ctx() != nullptr ) if( global_cuda_ctx()->has_devices() )
+      ldbg << "cuda_ctx = " << global_cuda_ctx() << std::endl;
+      if( global_cuda_ctx() != nullptr ) ldbg << "cuda has devices = " << global_cuda_ctx()->has_devices() << std::endl;
+      if( global_cuda_ctx() != nullptr && global_cuda_ctx()->has_devices() )
       {
-        gpu_block_size = 64;
+        gpu_block_size = onika::parallel::ParallelExecutionContext::gpu_block_size();
         gpu_blocks = global_cuda_ctx()->m_devices[0].m_deviceProp.multiProcessorCount
                                 * onika::parallel::ParallelExecutionContext::gpu_sm_mult()
                                 + onika::parallel::ParallelExecutionContext::gpu_sm_add();
       }
       if( gpu_blocks > nt ) nt = gpu_blocks;
-      ldbg << "Execution buffer scratch: thread blocks = "<<nt<<", block threads = "<<gpu_block_size<<std::endl;
+      ldbg << "Execution buffer scratch: thread blocks = "<<nt<<" , block size = "<<gpu_block_size<<std::endl;
       
       if( nt > snap_ctx->m_scratch.size() )
       {
@@ -275,49 +266,16 @@ namespace exaStamp
                            nullptr, nullptr,
                            snap_ctx->m_rcut, cutsq,
                            eflag, quadraticflag };
-        compute_cell_particle_pairs( *grid, snap_ctx->m_rcut, *ghost, optional, force_buf, bispectrum_op , compute_bispectrum_field_set , parallel_execution_context() );
+
+        auto cp_fields = grid->field_accessors_from_field_set( compute_bispectrum_field_set );
+        onika::parallel::BlockParallelForOptions bpfor_opts = {};
+        bpfor_opts.max_block_size = gpu_block_size;
+        bpfor_opts.fixed_gpu_grid_size = true;
+        compute_cell_particle_pairs2( *grid, snap_ctx->m_rcut, *ghost, optional, force_buf, bispectrum_op , cp_fields
+                                    , DefaultPositionFields{}, parallel_execution_context(), std::false_type{}, bpfor_opts );
+
         // *********************************************
       }
-
-      // // ************ compute_beta(); ****************
-      // {        
-      //   snap_ctx->m_beta.clear();
-      //   snap_ctx->m_beta.resize( total_particles * ncoeff );
-      //   for(size_t ii=0;ii<total_particles;ii++)
-      //   {
-      //     for(int icoeff=0;icoeff<ncoeff;icoeff++)
-      //     {
-      // 	    snap_ctx->m_beta[ ii * ncoeff + icoeff ] = snap_ctx->m_coefs[icoeff+1];
-
-      // 	    // Here we need to know the particle type to get the proper coefficients (ex: ntypes 0 or 1
-      // 	    // We might need to shift the compute_beta into the snap force operator since it is thread dependent.
-      // 	    // const int iitype = type[ii];
-      // 	    // snap_ctx->m_beta[ ii * ncoeff + icoeff ] = snap_ctx->m_coefs[typeii * (ncoeff+1) + icoeff+1];
-
-      //     }
-      //     if (quadraticflag)
-      //     {
-      //       const double * const coeffi = snap_ctx->m_coefs.data();
-
-      //       int k = ncoeff+1;
-      //       for (int icoeff = 0; icoeff < ncoeff; icoeff++) {
-      //         double bveci = snap_ctx->m_bispectrum[ ii * ncoeff + icoeff ]; // bispectrum[ii][icoeff];
-      //         snap_ctx->m_beta[ ii * ncoeff + icoeff ] /*beta[ii][icoeff]*/ += coeffi[k]*bveci;
-      //         k++;
-      //         for (int jcoeff = icoeff+1; jcoeff < ncoeff; jcoeff++) {
-      //           double bvecj = snap_ctx->m_bispectrum[ ii * ncoeff + jcoeff ]; //bispectrum[ii][jcoeff];
-      //           snap_ctx->m_beta[ ii * ncoeff + icoeff ] /*beta[ii][icoeff]*/ += coeffi[k]*bvecj;
-      //           snap_ctx->m_beta[ ii * ncoeff + jcoeff ] /*beta[ii][jcoeff]*/ += coeffi[k]*bveci;
-      //           k++;
-      //         }
-      //       }
-      //     }
-      //     //printf("SNAPDBG: beta[%d]:",int(ii));
-      //     //for(int icoeff=0;icoeff<ncoeff;icoeff++) printf(" % .3e",snap_ctx->m_beta[ ii * ncoeff + icoeff ]);
-      //     //printf("\n");
-      //   }
-      // }
-      // // *********************************************
 
       auto compute_opt_locks = [&](auto cp_locks)
       {
