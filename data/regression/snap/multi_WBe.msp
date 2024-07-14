@@ -2,6 +2,9 @@ includes:
   - config_update_symmetric_forces.msp
 
 configuration:
+  onika:
+    gpu_sm_mult: 1
+    gpu_block_size: 64
   profiling:
     summary: true
   logging:
@@ -34,7 +37,7 @@ grid_flavor: grid_flavor_multimat
 
 chunk_neighbors:
   config:
-    chunk_size: 4
+    chunk_size: 1
 
 replicate_domain:
   repeat: [ 1 , 1 , 1 ]
@@ -55,7 +58,7 @@ compute_force:
   - memory_stats
 
 domain:
-  cell_size: 7.0 ang
+  cell_size: 6.0 ang
   periodic: [true,true,true]
 
 global:

@@ -175,9 +175,10 @@ namespace LAMMPS_NS
   };
 
   struct SnapScratchBuffers
-  {
-    SnapScratchBuffers( const SNA * conf, Memory* mem );
-    ~SnapScratchBuffers();
+  {    
+    void initialize( const SNA * conf, size_t block_size=1 );
+    void finalize();
+    
     void grow_rij(int);
     void create_twojmax_arrays();
     void destroy_twojmax_arrays();
@@ -186,16 +187,11 @@ namespace LAMMPS_NS
     Memory* memory = nullptr;
     
     int nmax = 0;    // allocated size of short lists
-//    int elem_duarray = 0;    // element of j in derivative
 
     int * __restrict__ element = nullptr;    // short element list [0,nmax)
     double * __restrict__ blist = nullptr;
-//    double **rij = nullptr;      // short rij list
-//    int *inside = nullptr;       // short neighbor list
     double * __restrict__  wj = nullptr;        // short weight list
     double * __restrict__ rcutij = nullptr;    // short cutoff list
-
-    // only allocated for switch_inner_flag=1
     double * __restrict__ sinnerij = nullptr;    // short inner cutoff midpoint list
     double * __restrict__ dinnerij = nullptr;    // short inner half-width list
 

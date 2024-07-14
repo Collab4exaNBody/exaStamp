@@ -112,42 +112,48 @@ static inline double factorial(int n)
   return r;
 }
 
-SnapScratchBuffers::SnapScratchBuffers( const SNA* conf , Memory* mem )
-  : config(conf)
-  , memory(mem)
+void SnapScratchBuffers::initialize( const SNA* conf , size_t block_size )
 {
+  config = conf;
+  memory = new Memory{ block_size };
   nmax = 0;
-//  rij = nullptr;
-//  inside = nullptr;
-  wj = nullptr;
-  rcutij = nullptr;
-  sinnerij = nullptr;
-  dinnerij = nullptr;
-  element = nullptr;
-  ulist_r_ij = nullptr;
-  ulist_i_ij = nullptr;
-  
   create_twojmax_arrays();
 }
 
-SnapScratchBuffers::~SnapScratchBuffers()
+void SnapScratchBuffers::finalize()
 {
-//  memory->destroy(rij);
-//  memory->destroy(inside);
-  memory->destroy(wj);
-  memory->destroy(rcutij);
-  memory->destroy(sinnerij);
-  memory->destroy(dinnerij);
-  if (config->chem_flag) memory->destroy(element);
-  memory->destroy(ulist_r_ij);
-  memory->destroy(ulist_i_ij);
-  
-  destroy_twojmax_arrays();
+  if( memory != nullptr )
+  {
+    memory->destroy(wj);
+    memory->destroy(rcutij);
+    memory->destroy(sinnerij);
+    memory->destroy(dinnerij);
+    memory->destroy(element);
+    memory->destroy(ulist_r_ij);
+    memory->destroy(ulist_i_ij);
+
+    wj = nullptr;
+    rcutij = nullptr;
+    sinnerij = nullptr;
+    dinnerij = nullptr;
+    element = nullptr;
+    ulist_r_ij = nullptr;
+    ulist_i_ij = nullptr;
+    
+    destroy_twojmax_arrays();
+
+    delete memory;
+  }
+  nmax = 0;
+  memory = nullptr;
+  config = nullptr;
 }
 
 void SnapScratchBuffers::create_twojmax_arrays()
 {
-//  int jdimpq = config->twojmax + 2;
+  assert( memory != nullptr );
+  assert( config != nullptr );
+
   memory->create(ulisttot_r, config->idxu_max * config->nelements, "sna:ulisttot_r");
   memory->create(ulisttot_i, config->idxu_max * config->nelements, "sna:ulisttot_i");
   memory->create(dulist_r, config->idxu_max * 3, "sna:dulist_r");
@@ -161,7 +167,8 @@ void SnapScratchBuffers::create_twojmax_arrays()
 
 void SnapScratchBuffers::destroy_twojmax_arrays()
 {
-  // scratch buffers
+  assert( memory != nullptr );
+
   memory->destroy(ulisttot_r);
   memory->destroy(ulisttot_i);
   memory->destroy(dulist_r);
@@ -171,6 +178,16 @@ void SnapScratchBuffers::destroy_twojmax_arrays()
   memory->destroy(blist);
   memory->destroy(ylist_r);
   memory->destroy(ylist_i);
+  
+  ulisttot_r = nullptr;
+  ulisttot_i = nullptr;
+  dulist_r = nullptr;
+  dulist_i = nullptr;
+  zlist_r = nullptr;
+  zlist_i = nullptr;
+  blist = nullptr;
+  ylist_r = nullptr;
+  ylist_i = nullptr;
 }
 
 
@@ -180,18 +197,17 @@ void SnapScratchBuffers::grow_rij(int newnmax)
 
   nmax = newnmax;
 
-//  memory->destroy(rij);
-//  memory->destroy(inside);
+  assert( memory != nullptr );
+  assert( config != nullptr );
+
   memory->destroy(wj);
   memory->destroy(rcutij);
   memory->destroy(sinnerij);
   memory->destroy(dinnerij);
-  if (config->chem_flag) memory->destroy(element);
+  memory->destroy(element);
   memory->destroy(ulist_r_ij);
   memory->destroy(ulist_i_ij);
   
-//  memory->create(rij, nmax, 3, "pair:rij");
-//  memory->create(inside, nmax, "pair:inside");
   memory->create(wj, nmax, "pair:wj");
   memory->create(rcutij, nmax, "pair:rcutij");
   memory->create(sinnerij, nmax, "pair:sinnerij");

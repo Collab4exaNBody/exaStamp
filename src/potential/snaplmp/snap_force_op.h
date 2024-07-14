@@ -17,7 +17,7 @@ namespace exaStamp
   struct SnapLMPForceOp 
   {
     const LAMMPS_NS::ReadOnlySnapParameters snaconf;
-    SnapLMPThreadContext* m_thread_ctx = nullptr;
+    LAMMPS_NS::SnapScratchBuffers* m_scratch = nullptr;
     const size_t n_thread_ctx = 0;
     
     const size_t * const cell_particle_offset = nullptr;
@@ -124,8 +124,7 @@ namespace exaStamp
       static constexpr bool LOCK = ! onika::cuda::gpu_device_execution_t::value;
 
       assert( ONIKA_CU_BLOCK_IDX < n_thread_ctx );
-      SnapLMPThreadContext & snap_ctx = m_thread_ctx[ ONIKA_CU_BLOCK_IDX ];
-      auto snaptr = snap_ctx.scratch;
+      auto & snabuf = m_scratch[ ONIKA_CU_BLOCK_IDX ];
 
       // energy and force contributions to the particle
       Mat3dT _vir; // default constructor defines all elements to 0
@@ -139,7 +138,7 @@ namespace exaStamp
       const int ielem = itype;
       const double radi = radelem[ielem];
 
-      assert( jnum < snaptr->nmax );
+      assert( jnum < snabuf.nmax );
       int ninside = 0;
       for (int jj = 0; jj < jnum; jj++)
       {
@@ -156,23 +155,23 @@ namespace exaStamp
         if( rsq < cutsq_ij && rsq>1e-20 )
         {
           if( ninside != jj ) { buf.copy( jj , ninside ); }
-          SNA_CU_ARRAY(snaptr->wj,ninside) = wjelem[jelem];
-          SNA_CU_ARRAY(snaptr->rcutij,ninside) = (radi + radelem[jelem])*rcutfac;
+          SNA_CU_ARRAY(snabuf.wj,ninside) = wjelem[jelem];
+          SNA_CU_ARRAY(snabuf.rcutij,ninside) = (radi + radelem[jelem])*rcutfac;
           if (snaconf.switch_inner_flag) {
-            SNA_CU_ARRAY(snaptr->sinnerij,ninside) = 0.5*(sinnerelem[ielem]+sinnerelem[jelem]);
-            SNA_CU_ARRAY(snaptr->dinnerij,ninside) = 0.5*(dinnerelem[ielem]+dinnerelem[jelem]);
+            SNA_CU_ARRAY(snabuf.sinnerij,ninside) = 0.5*(sinnerelem[ielem]+sinnerelem[jelem]);
+            SNA_CU_ARRAY(snabuf.dinnerij,ninside) = 0.5*(dinnerelem[ielem]+dinnerelem[jelem]);
           }
-          if (snaconf.chem_flag) SNA_CU_ARRAY(snaptr->element,ninside) = jelem;
+          if (snaconf.chem_flag) SNA_CU_ARRAY(snabuf.element,ninside) = jelem;
           ninside++;
         }
       }
       
       // compute Ui, Yi for atom I
       snap_compute_ui( snaconf.nelements, snaconf.twojmax, snaconf.idxu_max, snaconf.idxu_block
-                     , snaptr->element, buf.drx,buf.dry,buf.drz, snaptr->rcutij, snaconf.rootpqarray, snaptr->sinnerij, snaptr->dinnerij, snaptr->wj
+                     , snabuf.element, buf.drx,buf.dry,buf.drz, snabuf.rcutij, snaconf.rootpqarray, snabuf.sinnerij, snabuf.dinnerij, snabuf.wj
                      , snaconf.wselfall_flag, snaconf.switch_flag, snaconf.switch_inner_flag, snaconf.chem_flag
                      , snaconf.wself, snaconf.rmin0, snaconf.rfac0
-                     , snaptr->ulist_r_ij, snaptr->ulist_i_ij, snaptr->ulisttot_r, snaptr->ulisttot_i
+                     , snabuf.ulist_r_ij, snabuf.ulist_i_ij, snabuf.ulisttot_r, snabuf.ulisttot_i
                      , ninside, snaconf.chem_flag ? ielem : 0);
 
       // for neighbors of I within cutoff:
@@ -185,28 +184,28 @@ namespace exaStamp
 
       snap_compute_yi( snaconf.nelements, snaconf.twojmax, snaconf.idxu_max, snaconf.idxu_block
                      , snaconf.idxz_max, snaconf.idxz, snaconf.idxcg_block, snaconf.cglist
-                     , snaptr->ulisttot_r, snaptr->ulisttot_i
+                     , snabuf.ulisttot_r, snabuf.ulisttot_i
                      , snaconf.idxb_max, snaconf.idxb_block, snaconf.bnorm_flag
-                     , snaptr->ylist_r, snaptr->ylist_i
+                     , snabuf.ylist_r, snabuf.ylist_i
                      , betaloc );
 
       for (int jj = 0; jj < ninside; jj++)
       {
-        snap_compute_duidrj( snaconf.twojmax, snaconf.idxu_max, snaconf.idxu_block, buf.drx,buf.dry,buf.drz, snaptr->rcutij, snaptr->wj
-                           , snaptr->ulist_r_ij, snaptr->ulist_i_ij, snaconf.rootpqarray
-                           , snaptr->sinnerij, snaptr->dinnerij
+        snap_compute_duidrj( snaconf.twojmax, snaconf.idxu_max, snaconf.idxu_block, buf.drx,buf.dry,buf.drz, snabuf.rcutij, snabuf.wj
+                           , snabuf.ulist_r_ij, snabuf.ulist_i_ij, snaconf.rootpqarray
+                           , snabuf.sinnerij, snabuf.dinnerij
                            , snaconf.rmin0, snaconf.rfac0, snaconf.switch_flag, snaconf.switch_inner_flag, snaconf.chem_flag                             
-                           , snaptr->dulist_r, snaptr->dulist_i
+                           , snabuf.dulist_r, snabuf.dulist_i
                            , jj);
 
         double fij[3];
 	      fij[0]=0.;
 	      fij[1]=0.;
 	      fij[2]=0.;
-        const int elem_duarray = snaconf.chem_flag ? SNA_CU_ARRAY(snaptr->element,jj) : 0 ;
+        const int elem_duarray = snaconf.chem_flag ? SNA_CU_ARRAY(snabuf.element,jj) : 0 ;
         snap_compute_deidrj( elem_duarray, snaconf.twojmax, snaconf.idxu_max, snaconf.idxu_block
-                           , snaptr->dulist_r, snaptr->dulist_i
-                           , snaptr->ylist_r, snaptr->ylist_i
+                           , snabuf.dulist_r, snabuf.dulist_i
+                           , snabuf.ylist_r, snabuf.ylist_i
                            , fij );
         
 	      fij[0] *= conv_energy_factor;
@@ -246,7 +245,7 @@ namespace exaStamp
 	      double evdwl = coeffi[itype * (ncoeff + 1)];
 	      //	std::cout << "TYpe = " << itype << "e0 = " << evdwl << std::endl;
 
-        // snaptr->copy_bi2bvec();
+        // snabuf.copy_bi2bvec();
 
         // E = beta.B + 0.5*B^t.alpha.B
 

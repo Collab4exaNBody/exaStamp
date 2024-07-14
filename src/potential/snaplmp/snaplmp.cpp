@@ -186,25 +186,34 @@ namespace exaStamp
       ldbg << "Constant config allocation" << std::endl;
       snap_ctx->sna->memory->print( ldbg );
 
+      size_t gpu_block_size = 1;
+      size_t gpu_blocks = 1;
       size_t nt = omp_get_max_threads();
-      if( nt > snap_ctx->m_thread_ctx.size() )
+      if( global_cuda_ctx() != nullptr ) if( global_cuda_ctx()->has_devices() )
       {
-        size_t old_nt = snap_ctx->m_thread_ctx.size();
-        snap_ctx->m_thread_ctx.resize( nt );
-        for(size_t i=old_nt;i<nt;i++)
-        {
-          assert( snap_ctx->m_thread_ctx[i].scratch == nullptr );
-          snap_ctx->m_thread_ctx[i].scratch = new LAMMPS_NS::SnapScratchBuffers( snap_ctx->sna , new LAMMPS_NS::Memory() );
-        }
+        gpu_block_size = 64;
+        gpu_blocks = global_cuda_ctx()->m_devices[0].m_deviceProp.multiProcessorCount
+                                * onika::parallel::ParallelExecutionContext::gpu_sm_mult()
+                                + onika::parallel::ParallelExecutionContext::gpu_sm_add();
+      }
+      if( gpu_blocks > nt ) nt = gpu_blocks;
+      ldbg << "Execution buffer scratch: thread blocks = "<<nt<<", block threads = "<<gpu_block_size<<std::endl;
+      
+      if( nt > snap_ctx->m_scratch.size() )
+      {
+        size_t cursize = snap_ctx->m_scratch.size();
+        ldbg << "grow number of scratch buffers : "<<cursize<<" -> "<<nt<<std::endl;
+        snap_ctx->m_scratch.resize( nt );
+        for(;cursize<nt;cursize++) snap_ctx->m_scratch[cursize].initialize( snap_ctx->sna , gpu_block_size );
       }
 
       ldbg << "Max number of neighbors = "<< chunk_neighbors->m_max_neighbors << std::endl;
       for(size_t i=0;i<nt;i++)
       {
-        snap_ctx->m_thread_ctx[i].scratch->grow_rij( chunk_neighbors->m_max_neighbors );
+        snap_ctx->m_scratch[i].grow_rij( chunk_neighbors->m_max_neighbors );
       }
       ldbg << "Scratch buffers allocation" << std::endl;
-      if( nt >= 1 ) snap_ctx->m_thread_ctx[0].scratch->memory->print( ldbg );
+      if( nt >= 1 ) snap_ctx->m_scratch[0].memory->print( ldbg );
 
       bool log_energy = false;
       if( trigger_thermo_state.has_value() )
@@ -259,7 +268,7 @@ namespace exaStamp
         auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform, ComputePairOptionalLocks<false>{} );
         BispectrumOp bispectrum_op {
                            LAMMPS_NS::ReadOnlySnapParameters(snap_ctx->sna),
-                           snap_ctx->m_thread_ctx.data(), snap_ctx->m_thread_ctx.size(),
+                           snap_ctx->m_scratch.data(), snap_ctx->m_scratch.size(),
                            grid->cell_particle_offset_data(), snap_ctx->m_beta.data(), snap_ctx->m_bispectrum.data(),
                            snap_ctx->m_coefs.data(), ncoeff,
                            snap_ctx->m_factor.data(), snap_ctx->m_radelem.data(),
@@ -312,10 +321,9 @@ namespace exaStamp
 
       auto compute_opt_locks = [&](auto cp_locks)
       {
-        
         auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform, cp_locks
                       , ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{}, grid->field_accessors_from_field_set(FieldSet<field::_type>{}) );
-        SnapLMPForceOp force_op { LAMMPS_NS::ReadOnlySnapParameters(snap_ctx->sna), snap_ctx->m_thread_ctx.data(), snap_ctx->m_thread_ctx.size(),
+        SnapLMPForceOp force_op { LAMMPS_NS::ReadOnlySnapParameters(snap_ctx->sna), snap_ctx->m_scratch.data(), snap_ctx->m_scratch.size(),
                            grid->cell_particle_offset_data(), snap_ctx->m_beta.data(), snap_ctx->m_bispectrum.data(),
                            snap_ctx->m_coefs.data(), static_cast<unsigned int>(snap_ctx->m_coefs.size()), static_cast<unsigned int>(ncoeff),
                            snap_ctx->m_factor.data(), snap_ctx->m_radelem.data(),
@@ -323,13 +331,19 @@ namespace exaStamp
                            snap_ctx->m_rcut, cutsq,
                            eflag, quadraticflag,
                            ! (*conv_coef_units) // if coefficients were not converted, then output energy/force must be converted
-                           };      
-        compute_cell_particle_pairs( *grid, snap_ctx->m_rcut, *ghost, optional, force_buf, force_op , compute_force_field_set , parallel_execution_context() );
+                           };
+        auto cp_fields = grid->field_accessors_from_field_set( compute_force_field_set );
+        onika::parallel::BlockParallelForOptions bpfor_opts = {};
+        bpfor_opts.max_block_size = gpu_block_size;
+        bpfor_opts.fixed_gpu_grid_size = true;
+        compute_cell_particle_pairs2( *grid, snap_ctx->m_rcut, *ghost, optional, force_buf, force_op , cp_fields
+                                    , DefaultPositionFields{}, parallel_execution_context(), std::false_type{}, bpfor_opts );
       };
       ldbg << "snaplmp: nthreads="<< omp_get_max_threads() <<std::endl;
       
-      if( omp_get_max_threads() > 1 ) compute_opt_locks( ComputePairOptionalLocks<true>{ particle_locks->data() } );
-      else                            compute_opt_locks( ComputePairOptionalLocks<false>{} );
+      bool need_locks = ( omp_get_max_threads() > 1 ) && ( gpu_block_size == 1 );
+      if( need_locks ) compute_opt_locks( ComputePairOptionalLocks<true>{ particle_locks->data() } );
+      else             compute_opt_locks( ComputePairOptionalLocks<false>{} );
 
       ldbg << "snaplmp: done"<<std::endl;
     }

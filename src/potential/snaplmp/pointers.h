@@ -67,10 +67,10 @@ namespace LAMMPS_NS
     inline Size3 dim() const override final { return { m_idim , m_jdim , m_kdim }; }
     inline const char* name() const override final { return m_name; }
         
-    inline T* ptr(size_t i=0, size_t j=0, size_t k=0, size_t block_thread_idx=0)
+    inline T* ptr(size_t i=0, size_t j=0, size_t k=0)
     {
       assert( i < m_idim && j < m_jdim && k < m_kdim );
-      return m_iptr + ( ( k * m_jdim + j ) * m_idim + i ) * m_block_size + block_thread_idx;
+      return m_iptr + ( ( ( k * m_jdim + j ) * m_idim + i ) * m_block_size );
     }
     inline T** jptr(size_t j=0, size_t k=0)
     {
@@ -83,11 +83,8 @@ namespace LAMMPS_NS
       return m_kptr + k;
     }
 
-    inline ArrayDescriptorImpl( const char* s , size_t idim=1, size_t jdim=1, size_t kdim=1 )
-      : m_idim(idim)
-      , m_jdim(jdim)
-      , m_kdim(kdim)
-      , m_block_size(1)
+    inline ArrayDescriptorImpl( const char* s, size_t bs, size_t idim, size_t jdim=1, size_t kdim=1 )
+    : m_idim(idim), m_jdim(jdim), m_kdim(kdim), m_block_size(bs)
     {
       std::strncpy(m_name,s,32); m_name[31]='\0';
       const size_t elements = m_idim * m_jdim * m_kdim;
@@ -99,17 +96,21 @@ namespace LAMMPS_NS
       m_jptr = reinterpret_cast<T**>( reinterpret_cast<uint8_t*>(m_iptr) + data_bytes );
       m_kptr = reinterpret_cast<T***>( m_jptr + ( m_kdim * m_jdim ) );
 
-      for(size_t j=0;j<(m_kdim*m_jdim);j++)
+      for(size_t k=0;k<m_kdim;k++)
+      for(size_t j=0;j<m_jdim;j++)
       {
-        m_jptr[j] = ptr(0,j,0);
+        m_jptr[ ( k * m_jdim ) + j ] = ptr(0,j,k);
       }
       for(size_t k=0;k<m_kdim;k++)
       {
         m_kptr[k] = m_jptr + ( k * m_jdim );
       }
-      for(size_t k=0;k<m_kdim;k++) for(size_t j=0;j<m_jdim;j++) for(size_t i=0;i<m_idim;i++)
+      
+      for(size_t k=0;k<m_kdim;k++)
+      for(size_t j=0;j<m_jdim;j++)
+      for(size_t i=0;i<m_idim;i++)
       {
-        assert( ptr(i,j,k) == & m_kptr[k][j][i] );
+        assert( ptr(i,j,k) == & m_kptr[k][j][i* m_block_size] );
       }
     }
     
@@ -132,6 +133,7 @@ namespace LAMMPS_NS
 
   struct Memory
   {
+    size_t m_block_size = 1;
     std::map< void* , std::shared_ptr<ArrayDescriptor> > m_allocs;
 
     inline void destroy(void* p)
@@ -143,7 +145,7 @@ namespace LAMMPS_NS
     inline void create(T * __restrict__ &p, size_t idim, const char* name )
     {
       m_allocs.erase( p );
-      std::shared_ptr< ArrayDescriptorImpl<T> > array = std::make_shared< ArrayDescriptorImpl<T> >( name, idim );
+      std::shared_ptr< ArrayDescriptorImpl<T> > array = std::make_shared< ArrayDescriptorImpl<T> >( name, m_block_size, idim );
       p = array->ptr();
       m_allocs[p] = array;
     }
@@ -152,7 +154,7 @@ namespace LAMMPS_NS
     inline void create(T *  __restrict__ *  __restrict__ &p, size_t jdim, size_t idim, const char* name )
     {
       m_allocs.erase( p );
-      std::shared_ptr< ArrayDescriptorImpl<T> > array = std::make_shared< ArrayDescriptorImpl<T> >( name, idim, jdim );
+      std::shared_ptr< ArrayDescriptorImpl<T> > array = std::make_shared< ArrayDescriptorImpl<T> >( name, m_block_size, idim, jdim );
       p = ( T* __restrict__ * ) array->jptr();
       m_allocs[p] = array;
     }
@@ -161,7 +163,7 @@ namespace LAMMPS_NS
     inline void create(T *  __restrict__ *  __restrict__ *  __restrict__ &p, size_t kdim, size_t jdim, size_t idim, const char* name )
     {
       m_allocs.erase( p );
-      std::shared_ptr< ArrayDescriptorImpl<T> > array = std::make_shared< ArrayDescriptorImpl<T> >( name, idim, jdim, kdim );
+      std::shared_ptr< ArrayDescriptorImpl<T> > array = std::make_shared< ArrayDescriptorImpl<T> >( name, m_block_size, idim, jdim, kdim );
       p = ( T* __restrict__ * __restrict__ * ) array->kptr();
       m_allocs[p] = array;
     }
