@@ -1,0 +1,302 @@
+#pragma once
+
+#include <exanb/core/physics_constants.h>
+#include <exanb/core/concurent_add_contributions.h>
+
+#include <cmath>
+#include "snap_compute_ui.h"
+#include "snap_compute_yi.h"
+#include "snap_compute_duidrj.h"
+#include "snap_compute_deidrj.h"
+
+namespace exaStamp
+{
+  using namespace exanb;
+
+  // Force operator
+  struct SnapLMPForceOp 
+  {
+    const LAMMPS_NS::ReadOnlySnapParameters snaconf;
+    LAMMPS_NS::SnapScratchBuffers* m_scratch = nullptr;
+    const size_t n_thread_ctx = 0;
+    
+    const size_t * const cell_particle_offset = nullptr;
+    const double * const beta = nullptr;
+    const double * const bispectrum = nullptr;
+    
+    const double * const coeffelem = nullptr;
+    const unsigned int coeffelem_size = 0;
+    const unsigned int ncoeff = 0;
+   
+    const double * const wjelem = nullptr; // data of m_factor in snap_ctx
+    const double * const radelem = nullptr;
+    const double * const sinnerelem = nullptr;
+    const double * const dinnerelem = nullptr;
+    const double rcutfac = 0.0;
+    const double cutsq = rcutfac*rcutfac;
+    const bool eflag = false;
+    const bool quadraticflag = false;
+    
+    // exaStamp conversion specific falgs
+    const bool conv_energy_units = true;
+    //    static inline constexpr double conv_energy_factor = 1e-4 * exanb::legacy_constant::elementaryCharge / exanb::legacy_constant::atomicMass;
+    const double conv_energy_factor = UnityConverterHelper::convert(1., "eV");
+
+    template<class ComputeBufferT, class CellParticlesT>
+    ONIKA_HOST_DEVICE_FUNC
+    inline void operator ()
+      (
+      size_t n,
+      ComputeBufferT& buf,
+      double& en,
+      double& fx,
+      double& fy,
+      double& fz,
+      int type,
+      CellParticlesT cells
+      ) const
+    {
+      FakeMat3d virial;
+      ComputePairOptionalLocks<false> locks;
+      FakeParticleLock lock_a;
+      this->operator () ( n,buf,en,fx,fy,fz,type,virial,cells,locks,lock_a);
+    }
+
+    template<class ComputeBufferT, class CellParticlesT>
+    ONIKA_HOST_DEVICE_FUNC
+    inline void operator ()
+      (
+      size_t n,
+      ComputeBufferT& buf,
+      double& en,
+      double& fx,
+      double& fy,
+      double& fz,
+      int type,
+      Mat3d& virial,
+      CellParticlesT cells
+      ) const
+    {
+      ComputePairOptionalLocks<false> locks;
+      FakeParticleLock lock_a;
+      this->operator () ( n,buf,en,fx,fy,fz,type,virial,cells,locks,lock_a);
+    }
+
+    template<class ComputeBufferT, class CellParticlesT, class GridCellLocksT, class ParticleLockT>
+    ONIKA_HOST_DEVICE_FUNC
+    inline void operator ()
+      (
+      size_t n,
+      ComputeBufferT& buf,
+      double& en,
+      double& fx,
+      double& fy,
+      double& fz,
+      int type,
+      CellParticlesT cells,
+      GridCellLocksT locks,
+      ParticleLockT& lock_a
+      ) const
+    {
+      FakeMat3d virial;
+      this->operator () ( n,buf,en,fx,fy,fz,type,virial,cells,locks,lock_a);
+    }
+
+    template<class ComputeBufferT, class CellParticlesT, class Mat3dT,class GridCellLocksT, class ParticleLockT>
+    ONIKA_HOST_DEVICE_FUNC
+    inline void operator ()
+      (
+      int jnum ,
+      ComputeBufferT& buf,
+      double& en,
+      double& fx,
+      double& fy,
+      double& fz,
+      int type,
+      Mat3dT& virial ,
+      CellParticlesT cells,
+      GridCellLocksT locks,
+      ParticleLockT& lock_a
+      ) const
+    {
+      static constexpr bool compute_virial = std::is_same_v< Mat3dT , Mat3d >;
+      static constexpr bool CPAA = onika::cuda::gpu_device_execution_t::value;
+      static constexpr bool LOCK = ! onika::cuda::gpu_device_execution_t::value;
+
+      assert( ONIKA_CU_BLOCK_IDX < n_thread_ctx );
+      auto & snabuf = m_scratch[ ONIKA_CU_BLOCK_IDX ];
+
+      // energy and force contributions to the particle
+      Mat3dT _vir; // default constructor defines all elements to 0
+      double _fx = 0.;
+      double _fy = 0.;
+      double _fz = 0.;
+
+      // start of SNA
+
+      const int itype = type;
+      const int ielem = itype;
+      const double radi = radelem[ielem];
+
+      assert( jnum < snabuf.nmax );
+      int ninside = 0;
+      for (int jj = 0; jj < jnum; jj++)
+      {
+        const double delx = buf.drx[jj];
+        const double dely = buf.dry[jj];
+        const double delz = buf.drz[jj];
+        const double rsq = delx*delx + dely*dely + delz*delz;
+        const int jtype = buf.nbh_pt[jj][field::type];
+        const int jelem = jtype;
+
+	      double cut_ij = (radelem[jtype]+radelem[itype])*rcutfac;
+	      double cutsq_ij = cut_ij * cut_ij;
+
+        if( rsq < cutsq_ij && rsq>1e-20 )
+        {
+          if( ninside != jj ) { buf.copy( jj , ninside ); }
+          SNA_CU_ARRAY(snabuf.wj,ninside) = wjelem[jelem];
+          SNA_CU_ARRAY(snabuf.rcutij,ninside) = (radi + radelem[jelem])*rcutfac;
+          if (snaconf.switch_inner_flag) {
+            SNA_CU_ARRAY(snabuf.sinnerij,ninside) = 0.5*(sinnerelem[ielem]+sinnerelem[jelem]);
+            SNA_CU_ARRAY(snabuf.dinnerij,ninside) = 0.5*(dinnerelem[ielem]+dinnerelem[jelem]);
+          }
+          if (snaconf.chem_flag) SNA_CU_ARRAY(snabuf.element,ninside) = jelem;
+          ninside++;
+        }
+      }
+      
+      // compute Ui, Yi for atom I
+      snap_compute_ui( snaconf.nelements, snaconf.twojmax, snaconf.idxu_max, snaconf.idxu_block
+                     , snabuf.element, buf.drx,buf.dry,buf.drz, snabuf.rcutij, snaconf.rootpqarray, snabuf.sinnerij, snabuf.dinnerij, snabuf.wj
+                     , snaconf.wselfall_flag, snaconf.switch_flag, snaconf.switch_inner_flag, snaconf.chem_flag
+                     , snaconf.wself, snaconf.rmin0, snaconf.rfac0
+                     , snabuf.ulist_r_ij, snabuf.ulist_i_ij, snabuf.ulisttot_r, snabuf.ulisttot_i
+                     , ninside, snaconf.chem_flag ? ielem : 0);
+
+      // for neighbors of I within cutoff:
+      // compute Fij = dEi/dRj = -dEi/dRi
+      // add to Fi, subtract from Fj
+      // scaling is that for type I
+
+      assert( ncoeff == static_cast<unsigned int>(snaconf.ncoeff) );
+      const double* __restrict__ betaloc = coeffelem + itype * (ncoeff + 1 ) + 1;
+
+      snap_compute_yi( snaconf.nelements, snaconf.twojmax, snaconf.idxu_max, snaconf.idxu_block
+                     , snaconf.idxz_max, snaconf.idxz, snaconf.idxcg_block, snaconf.cglist
+                     , snabuf.ulisttot_r, snabuf.ulisttot_i
+                     , snaconf.idxb_max, snaconf.idxb_block, snaconf.bnorm_flag
+                     , snabuf.ylist_r, snabuf.ylist_i
+                     , betaloc );
+
+      for (int jj = 0; jj < ninside; jj++)
+      {
+        snap_compute_duidrj( snaconf.twojmax, snaconf.idxu_max, snaconf.idxu_block, buf.drx,buf.dry,buf.drz, snabuf.rcutij, snabuf.wj
+                           , snabuf.ulist_r_ij, snabuf.ulist_i_ij, snaconf.rootpqarray
+                           , snabuf.sinnerij, snabuf.dinnerij
+                           , snaconf.rmin0, snaconf.rfac0, snaconf.switch_flag, snaconf.switch_inner_flag, snaconf.chem_flag                             
+                           , snabuf.dulist_r, snabuf.dulist_i
+                           , jj);
+
+        double fij[3];
+	      fij[0]=0.;
+	      fij[1]=0.;
+	      fij[2]=0.;
+        const int elem_duarray = snaconf.chem_flag ? SNA_CU_ARRAY(snabuf.element,jj) : 0 ;
+        snap_compute_deidrj( elem_duarray, snaconf.twojmax, snaconf.idxu_max, snaconf.idxu_block
+                           , snabuf.dulist_r, snabuf.dulist_i
+                           , snabuf.ylist_r, snabuf.ylist_i
+                           , fij );
+        
+	      fij[0] *= conv_energy_factor;
+	      fij[1] *= conv_energy_factor;
+	      fij[2] *= conv_energy_factor;
+
+	      Mat3d v_contrib = tensor( Vec3d{ fij[0] , fij[1] , fij[2] }, Vec3d{ buf.drx[jj],buf.dry[jj],buf.drz[jj] } );
+        if constexpr ( compute_virial ) { _vir += v_contrib * -1.0; }
+
+        _fx += fij[0];
+        _fy += fij[1];
+        _fz += fij[2];
+        
+        size_t cell_b=0, p_b=0;
+        buf.nbh.get(jj, cell_b, p_b);
+        concurent_add_contributions<ParticleLockT,CPAA,LOCK,double,double,double> (
+            locks[cell_b][p_b]
+          , cells[cell_b][field::fx][p_b], cells[cell_b][field::fy][p_b], cells[cell_b][field::fz][p_b]
+          , -fij[0]                      , -fij[1]                      , -fij[2] );
+      }
+
+      if constexpr ( compute_virial )
+        concurent_add_contributions<ParticleLockT,CPAA,LOCK,double,double,double,Mat3d> ( lock_a, fx, fy, fz, virial, _fx, _fy, _fz, _vir );
+      else
+        concurent_add_contributions<ParticleLockT,CPAA,LOCK,double,double,double> ( lock_a, fx, fy, fz, _fx, _fy, _fz );
+
+      if (eflag)
+      {
+        double _en = 0.;
+
+	      // assert(ielem==0);
+        const long bispectrum_ii_offset = ncoeff * ( cell_particle_offset[buf.cell] + buf.part );
+
+        // evdwl = energy of atom I, sum over coeffs_k * Bi_k
+        const double * const coeffi = coeffelem /*[ielem]*/;
+	      //	coeffelem[ itype * (ncoeff + 1 ) + icoeff + 1 ]
+	      double evdwl = coeffi[itype * (ncoeff + 1)];
+	      //	std::cout << "TYpe = " << itype << "e0 = " << evdwl << std::endl;
+
+        // snabuf.copy_bi2bvec();
+
+        // E = beta.B + 0.5*B^t.alpha.B
+
+        // linear contributions
+
+        for (unsigned int icoeff = 0; icoeff < ncoeff; icoeff++)
+        {
+          evdwl += betaloc[icoeff] * bispectrum[ bispectrum_ii_offset + icoeff ] /*bispectrum[ii][icoeff]*/ ;
+	      // evdwl += coeffi[itype * (ncoeff + 1) + icoeff+1] * bispectrum[ bispectrum_ii_offset + icoeff ] /*bispectrum[ii][icoeff]*/ ;
+        }
+
+        // quadratic contributions
+
+        if (quadraticflag)
+        {
+          int k = ncoeff+1;
+          for (unsigned int icoeff = 0; icoeff < ncoeff; icoeff++) 
+          {
+            double bveci = bispectrum[ bispectrum_ii_offset + icoeff ] /*bispectrum[ii][icoeff]*/ ;
+            evdwl += 0.5*coeffi[k++]*bveci*bveci;
+            for (unsigned int jcoeff = icoeff+1; jcoeff < ncoeff; jcoeff++) 
+            {
+              double bvecj = bispectrum[ bispectrum_ii_offset + jcoeff ] /*bispectrum[ii][jcoeff]*/ ;
+              evdwl += coeffi[k++]*bveci*bvecj;
+            }
+          }
+        }
+        evdwl *= 1.;//scale[itype][itype];
+        _en = evdwl; // ev_tally_full(i,2.0*evdwl,0.0,0.0,0.0,0.0,0.0);
+        
+        if( conv_energy_units )
+        {
+          _en *= conv_energy_factor;
+        }
+
+        en += _en;
+      }
+    }
+  };
+
+}
+
+namespace exanb
+{
+  template<>
+  struct ComputePairTraits< exaStamp::SnapLMPForceOp >
+  {
+    static inline constexpr bool RequiresBlockSynchronousCall = false;
+    static inline constexpr bool ComputeBufferCompatible      = true;
+    static inline constexpr bool BufferLessCompatible         = false;
+    static inline constexpr bool CudaCompatible               = true;
+  };
+}
+
