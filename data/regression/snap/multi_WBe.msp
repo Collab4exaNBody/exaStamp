@@ -8,7 +8,7 @@ configuration:
   profiling:
     summary: true
   logging:
-    debug: true
+    debug: false
   debug:
     filter: [ ".*snaplmp_force" ]
 
@@ -58,7 +58,7 @@ compute_force:
   - memory_stats
 
 domain:
-  cell_size: 8.0 ang
+  cell_size: 10.0 ang
   periodic: [true,true,true]
 
 global:
