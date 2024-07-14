@@ -148,36 +148,37 @@ namespace LAMMPS_NS
     size_t m_block_size = 1;
     std::map< void* , std::shared_ptr<ArrayDescriptor> > m_allocs;
 
-    inline void destroy(void* p)
+    template<class T>
+    inline void destroy(T* p)
     {
-      m_allocs.erase( p );
+      m_allocs.erase( (void*) p );
     }
     
     template<class T>
     inline void create(T * __restrict__ &p, size_t idim, const char* name )
     {
-      m_allocs.erase( p );
+      m_allocs.erase( (void*) p );
       std::shared_ptr< ArrayDescriptorImpl<T> > array = std::make_shared< ArrayDescriptorImpl<T> >( name, m_block_size, idim );
       p = array->ptr();
-      m_allocs[p] = array;
+      m_allocs[(void*)p] = array;
     }
 
     template<class T>
     inline void create(T *  __restrict__ *  __restrict__ &p, size_t jdim, size_t idim, const char* name )
     {
-      m_allocs.erase( p );
+      m_allocs.erase( (void*) p );
       std::shared_ptr< ArrayDescriptorImpl<T> > array = std::make_shared< ArrayDescriptorImpl<T> >( name, m_block_size, idim, jdim );
       p = ( T* __restrict__ * ) array->jptr();
-      m_allocs[p] = array;
+      m_allocs[(void*)p] = array;
     }
 
     template<class T>
     inline void create(T *  __restrict__ *  __restrict__ *  __restrict__ &p, size_t kdim, size_t jdim, size_t idim, const char* name )
     {
-      m_allocs.erase( p );
+      m_allocs.erase( (void*) p );
       std::shared_ptr< ArrayDescriptorImpl<T> > array = std::make_shared< ArrayDescriptorImpl<T> >( name, m_block_size, idim, jdim, kdim );
       p = ( T* __restrict__ * __restrict__ * ) array->kptr();
-      m_allocs[p] = array;
+      m_allocs[(void*)p] = array;
     }
     
     template<class StreamT>
