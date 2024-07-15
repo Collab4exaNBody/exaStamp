@@ -44,7 +44,7 @@ namespace exaStamp
 
     template<class ComputeBufferT, class CellParticlesT>
     ONIKA_HOST_DEVICE_FUNC
-    inline void operator ()snap_force_op.h
+    inline void operator ()
       (
       size_t n,
       ComputeBufferT& buf,
