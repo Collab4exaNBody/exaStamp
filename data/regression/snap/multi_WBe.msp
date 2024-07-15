@@ -8,7 +8,7 @@ configuration:
   profiling:
     summary: true
   logging:
-    debug: false
+    debug: true
   debug:
     filter: [ ".*snaplmp_force" ]
 
@@ -52,8 +52,8 @@ input_data:
 
 compute_force:
   - zbl_multi_force
-#  - snap_force
-  - snaplmp_force
+  - snap_force
+#  - snaplmp_force
 
 +first_iteration:
   - grid_stats

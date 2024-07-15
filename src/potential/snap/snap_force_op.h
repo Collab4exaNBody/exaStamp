@@ -44,7 +44,7 @@ namespace exaStamp
 
     template<class ComputeBufferT, class CellParticlesT>
     ONIKA_HOST_DEVICE_FUNC
-    inline void operator ()
+    inline void operator ()snap_force_op.h
       (
       size_t n,
       ComputeBufferT& buf,
@@ -167,11 +167,13 @@ namespace exaStamp
       }
       
       // compute Ui, Yi for atom I
+      // reads sinner, dinner, wj
+      // writes ulist and ulisttot
       snap_compute_ui( snaconf.nelements, snaconf.twojmax, snaconf.idxu_max, snaconf.idxu_block
                      , snabuf.element, buf.drx,buf.dry,buf.drz, snabuf.rcutij, snaconf.rootpqarray, snabuf.sinnerij, snabuf.dinnerij, snabuf.wj
                      , snaconf.wselfall_flag, snaconf.switch_flag, snaconf.switch_inner_flag, snaconf.chem_flag
                      , snaconf.wself, snaconf.rmin0, snaconf.rfac0
-                     , snabuf.ulist_r_ij, snabuf.ulist_i_ij, snabuf.ulisttot_r, snabuf.ulisttot_i
+                     , snabuf.ulist_r_ij, snabuf.ulist_i_ij, snabuf.ulisttot_r, snabuf.ulisttot_i // OUTPUTS
                      , ninside, snaconf.chem_flag ? ielem : 0);
 
       // for neighbors of I within cutoff:
@@ -182,20 +184,24 @@ namespace exaStamp
       assert( ncoeff == static_cast<unsigned int>(snaconf.ncoeff) );
       const double* __restrict__ betaloc = coeffelem + itype * (ncoeff + 1 ) + 1;
 
+      // reads ulisttot
+      // writes ylist
       snap_compute_yi( snaconf.nelements, snaconf.twojmax, snaconf.idxu_max, snaconf.idxu_block
                      , snaconf.idxz_max, snaconf.idxz, snaconf.idxcg_block, snaconf.cglist
                      , snabuf.ulisttot_r, snabuf.ulisttot_i
                      , snaconf.idxb_max, snaconf.idxb_block, snaconf.bnorm_flag
-                     , snabuf.ylist_r, snabuf.ylist_i
+                     , snabuf.ylist_r, snabuf.ylist_i // OUTPUTS
                      , betaloc );
 
       for (int jj = 0; jj < ninside; jj++)
       {
+        // reads ulist, sinner and dinner
+        // writes dulist
         snap_compute_duidrj( snaconf.twojmax, snaconf.idxu_max, snaconf.idxu_block, buf.drx,buf.dry,buf.drz, snabuf.rcutij, snabuf.wj
                            , snabuf.ulist_r_ij, snabuf.ulist_i_ij, snaconf.rootpqarray
                            , snabuf.sinnerij, snabuf.dinnerij
                            , snaconf.rmin0, snaconf.rfac0, snaconf.switch_flag, snaconf.switch_inner_flag, snaconf.chem_flag                             
-                           , snabuf.dulist_r, snabuf.dulist_i
+                           , snabuf.dulist_r, snabuf.dulist_i // OUTPUTS
                            , jj);
 
         double fij[3];
@@ -203,6 +209,8 @@ namespace exaStamp
 	      fij[1]=0.;
 	      fij[2]=0.;
         const int elem_duarray = snaconf.chem_flag ? SNA_CU_ARRAY(snabuf.element,jj) : 0 ;
+        // reads dulist and ylist
+        // writes final force
         snap_compute_deidrj( elem_duarray, snaconf.twojmax, snaconf.idxu_max, snaconf.idxu_block
                            , snabuf.dulist_r, snabuf.dulist_i
                            , snabuf.ylist_r, snabuf.ylist_i
