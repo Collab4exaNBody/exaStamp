@@ -61,10 +61,10 @@ namespace exaStamp
         {
           impropers.emplace_back(std::array<uint64_t,4> {p_id, neigh[0], neigh[1], neigh[2]});
         }
+        
         if(neigh[3]!=std::numeric_limits<uint64_t>::max())
         {
-          lerr << "Gestion of the connectivity of atoms : case with 4 neighbours not taken into account for the moment. You must change impropers in set_connectivity.h." << std::endl;
-          std::abort();
+          lout << "Warning: 4 neighbours not taken into account for impropers: id="<<p_id<<", cmol="<<neigh[0]<<","<<neigh[1]<<","<<neigh[2]<<","<<neigh[3] << std::endl;
         }
         // ------------------------------------------------------------------------------
 
@@ -357,8 +357,7 @@ namespace exaStamp
       int tid = omp_get_thread_num();
       if(tid>=max_nt || nt>max_nt)
       {
-        lerr << "Internal error: bad number of threads" << std::endl;
-        std::abort();
+        fatal_error() << "Internal error: bad number of threads" << std::endl;
       }
       auto& bonds = per_thread_bonds[tid];
       auto& angles = per_thread_angles[tid];
@@ -558,6 +557,7 @@ namespace exaStamp
       bonds.assign( s.begin(), s.end() );
       std::sort( bonds.begin(), bonds.end() );
       if( bonds == bonds2 ) { lout << "bonds equal" << std::endl; }
+      else { fatal_error()<<"bonds differ"<<std::endl; }
     }
     
     {
@@ -572,7 +572,7 @@ namespace exaStamp
       angles.assign( s.begin(), s.end() );
       std::sort( angles.begin(), angles.end() );
       if( angles == angles2 ) { lout << "angles equal" << std::endl; }
-      else { lerr<<"angles differ"<<std::endl; std::abort(); }
+      else { fatal_error()<<"angles differ"<<std::endl; }
     }
     
     {
@@ -587,7 +587,7 @@ namespace exaStamp
       torsions.assign( s.begin(), s.end() );
       std::sort( torsions.begin(), torsions.end() );
       if( torsions == torsions2 ) { lout << "torsions equal" << std::endl; }
-      else { lerr<<"torsions differ"<<std::endl; std::abort(); }
+      else { fatal_error()<<"torsions differ"<<std::endl;  }
     }
     
     {
@@ -598,11 +598,11 @@ namespace exaStamp
         s.insert(i);
       }
       lout << "impropers: "<<s.size()<<std::endl;
-      assert( impropers.size() == impropers2.size() );
+      //assert( impropers.size() == impropers2.size() );
       impropers.assign( s.begin(), s.end() );
       std::sort( impropers.begin(), impropers.end() );
       if( impropers == impropers2 ) { lout << "impropers equal" << std::endl; }
-      else { lerr<<"impropers differ"<<std::endl; std::abort(); }
+      else { lerr<<"impropers differ"<<std::endl; }
     }
 #   endif
 

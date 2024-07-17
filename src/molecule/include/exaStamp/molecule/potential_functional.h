@@ -31,54 +31,49 @@ namespace exaStamp
   };
 
   ONIKA_HOST_DEVICE_FUNC
-  inline ScalarForceEnergy intramolecular_quar( const MoleculeGenericFuncParam& m , double t)
-  {
-    const auto k2 = m.p0;
-    const auto k3 = m.p1;
-    const auto k4 = m.p2;
-    const auto t0 = m.x0;
-    // const auto energy_scale = m.coeff;
-    const double tmp = t - t0;
-    return { 2 * k2 *      tmp
-           + 3 * k3 *  pow(tmp,2)
-           + 4 * k4 *  pow(tmp,3)
-           ,
-           ( k2 * pow(tmp,2)
-           + k3 * pow(tmp,3)
-           + k4 * pow(tmp,4) ) //* energy_scale
-           };  
-  }
-
-  ONIKA_HOST_DEVICE_FUNC
-  inline ScalarForceEnergy intramolecular_cos( const MoleculeGenericFuncParam& m , double _phi )
+  inline ScalarForceEnergy intramolecular_func( const MoleculeGenericFuncParam& m , double x)
   {
     const auto k1 = m.p0;
     const auto k2 = m.p1;
     const auto k3 = m.p2;
-    const auto phi0 = m.x0;
-    const auto opls_fac = m.coeff;
+    x = x - m.x0;
 
-    const double phi = _phi - phi0;
-    const double sin_phi = sin(phi);
-    const double sin_2phi = sin(2*phi);
-    const double sin_3phi = sin(3*phi);
-    const double cos_phi = cos(phi);
-    const double cos_2phi = cos(2*phi);
-    const double cos_3phi = cos(3*phi);
-    
-    return {
-       opls_fac *     k1 * sin_phi
-     +            2 * k2 * sin_2phi
-     + opls_fac * 3 * k3 * sin_3phi
-     ,
-       k1 * ( 1 - opls_fac * cos_phi )
-     + k2 * ( 1 -            cos_2phi )
-     + k3 * ( 1 - opls_fac * cos_3phi )
-     };
+    if( m.coeff == 0.0 ) // this is the signal for a linear form of the functional
+    {
+      const double x2 = pow(x,2);
+      const double x3 = pow(x,3);
+      const double x4 = pow(x,4);
+      return { 2 * k1 *  x
+             + 3 * k2 *  x2
+             + 4 * k3 *  x3
+             ,
+             ( k1 * x2
+             + k2 * x3
+             + k3 * x4 ) 
+             };  
+    }
+    else // coeff=1 or coeff=-1 in case of an angular form of the functional
+    {
+      const auto opls_fac = m.coeff;
+      const double sin_1phi = sin(x);
+      const double sin_2phi = sin(2*x);
+      const double sin_3phi = sin(3*x);
+      const double cos_1phi = cos(x);
+      const double cos_2phi = cos(2*x);
+      const double cos_3phi = cos(3*x);
+      return {
+               opls_fac *     k1 * sin_1phi
+             +            2 * k2 * sin_2phi
+             + opls_fac * 3 * k3 * sin_3phi
+             ,
+               k1 * ( 1 - opls_fac * cos_1phi )
+             + k2 * ( 1 -            cos_2phi )
+             + k3 * ( 1 - opls_fac * cos_3phi )
+             };
+    }
   }
 
-
-  // base definition for an intra molecular ptoential. might also be used as a null potential
+  // base definition for an intra molecular potential. might also be used as a null potential
   class IntraMolecularPotentialFunctional
   {
   public:
@@ -88,7 +83,7 @@ namespace exaStamp
     }
     virtual inline MoleculeGenericFuncParam generic_parameters() const
     {
-      return {0.,0.,0.,0.};
+      return {0.,0.,0.,0.0f,0.0f};
     }
     virtual ~IntraMolecularPotentialFunctional() = default;
   };
@@ -100,13 +95,13 @@ namespace exaStamp
     inline IntraMolecularHarmFunctional(double _k, double _t0) : k(_k), t0(_t0) {}
     inline ScalarForceEnergy force_energy(double t) const override final
     {
-      return intramolecular_quar( generic_parameters() , t );
+      return intramolecular_func( generic_parameters() , t );
 /*      return {       k *     (t - t0)
              , 0.5 * k * pow((t - t0),2) }; */
     }
     inline MoleculeGenericFuncParam generic_parameters() const override final
     {
-      return {k,0.,0.,t0,1.0f};
+      return {k,0.,0.,t0,0.0f};
     }
   private:
     double k = 0.0;
@@ -120,13 +115,13 @@ namespace exaStamp
     inline IntraMolecularBondOPLSFunctional(double _k, double _t0) : k(_k), t0(_t0) {}
     inline ScalarForceEnergy force_energy(double t) const override final
     {
-      return intramolecular_quar( generic_parameters() , t );
+      return intramolecular_func( generic_parameters() , t );
 /*      return { 2.0 * k *     (t - t0)
              ,       k * pow((t - t0),2) }; */
     }
     inline MoleculeGenericFuncParam generic_parameters() const override final
     {
-      return {k,0.,0.,t0,1.0f};
+      return {k,0.,0.,t0,0.0f};
     }
   private:
     double k = 0.0;
@@ -140,7 +135,7 @@ namespace exaStamp
     inline IntraMolecularQuarFunctional(double _k2, double _k3, double _k4, double _t0) : k2(_k2), k3(_k3), k4(_k4), t0(_t0) {}
     inline ScalarForceEnergy force_energy(double t) const override final
     {
-      return intramolecular_quar( generic_parameters() , t );
+      return intramolecular_func( generic_parameters() , t );
 /*      double tmp = t-t0;
       return { 2 * k2 *      tmp
              + 3 * k3 *  pow(tmp,2)
@@ -153,7 +148,7 @@ namespace exaStamp
     }
     inline MoleculeGenericFuncParam generic_parameters() const override final
     {
-      return {k2,k3,k4,t0,1.0f};
+      return {k2,k3,k4,t0,0.0f};
     }
   private:
     double k2 = 0.0;
@@ -169,7 +164,7 @@ namespace exaStamp
     inline IntraMolecularCompassFunctional(double _k1, double _k2, double _k3) : k1(_k1), k2(_k2), k3(_k3) {}
     inline ScalarForceEnergy force_energy(double phi) const override final
     {
-      return intramolecular_cos( generic_parameters() , phi );
+      return intramolecular_func( generic_parameters() , phi );
 /*      return {
              k1 * sin(  phi)
        + 2 * k2 * sin(2*phi)
@@ -197,7 +192,7 @@ namespace exaStamp
     inline IntraMolecularHalfCompassFunctional(double _k1, double _k2, double _k3) : k1(_k1), k2(_k2), k3(_k3) {}
     inline ScalarForceEnergy force_energy(double phi) const override final
     {
-      return intramolecular_cos( generic_parameters() , phi );
+      return intramolecular_func( generic_parameters() , phi );
 /*      return {
            0.5 * k1 * sin(  phi)
          +       k2 * sin(2*phi)
@@ -225,7 +220,7 @@ namespace exaStamp
     inline IntraMolecularCosOPLSFunctional(double _k1, double _k2, double _k3) : k1(_k1), k2(_k2), k3(_k3) {}
     inline ScalarForceEnergy force_energy(double phi) const override final
     {
-      return intramolecular_cos( generic_parameters() , phi );
+      return intramolecular_func( generic_parameters() , phi );
 /*      return {
          - 0.5 * k1 * sin(  phi)
          +       k2 * sin(2*phi)
@@ -253,7 +248,7 @@ namespace exaStamp
     inline IntraMolecularCosTwoFunctional(double _k, double _phi0) : k(_k), phi0(_phi0) {}
     inline ScalarForceEnergy force_energy(double phi) const override final
     {
-      return intramolecular_cos( generic_parameters() , phi );
+      return intramolecular_func( generic_parameters() , phi );
 /*
       double tmp = phi - phi0;
       return {       k * sin(2*tmp)

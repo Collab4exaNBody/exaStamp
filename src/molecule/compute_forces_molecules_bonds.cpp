@@ -179,7 +179,7 @@ namespace exaStamp
 
 #if 0
           // Debug Th. C.
-#         pragma omp critical(dbgèmesg)
+#         pragma omp critical(dbg_mesg)
           {
             const uint64_t atid1 = cells[cell[0]][field::id][pos[0]];
             const uint64_t atid2 = cells[cell[1]][field::id][pos[1]];

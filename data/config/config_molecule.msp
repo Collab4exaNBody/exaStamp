@@ -2,7 +2,6 @@
 +parallel_update_particles:
   - id_map
   - mol_extract_connectivity
-  - reorganize_molecule_improper
   - intramolecular_pair_weight
   - mol_optimize_connectivity
 
