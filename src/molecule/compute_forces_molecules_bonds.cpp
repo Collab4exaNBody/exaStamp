@@ -19,8 +19,7 @@
 
 #include <exaStamp/molecule/bonds_potentials_parameters.h>
 #include <exaStamp/molecule/periodic_r_delta.h>
-#include <exaStamp/compute/virial_add_contribution.h>
-
+#include <exanb/core/concurent_add_contributions.h>
 
 #include <string>
 #include <iostream>
@@ -39,19 +38,19 @@ namespace exaStamp
     // -----------------------------------------------
     // Operator slots
     // -----------------------------------------------
-    ADD_SLOT( GridT                   , grid                  , INPUT_OUTPUT );
     ADD_SLOT( Domain                  , domain                , INPUT );
     ADD_SLOT( ChemicalBonds           , chemical_bonds        , INPUT, OPTIONAL );
-    ADD_SLOT( GridAtomsToChemicalChain, atoms_to_bonds        , INPUT, OPTIONAL );
-    ADD_SLOT( BondComputeBuffer       , chemical_bonds_force_buffer , INPUT_OUTPUT );
-    ADD_SLOT( BondsPotentialParameters, potentials_for_bonds  , INPUT_OUTPUT, REQUIRED );
     ADD_SLOT( ParticleSpecies         , species               , INPUT, REQUIRED );
+    ADD_SLOT( BondsPotentialParameters, potentials_for_bonds  , INPUT_OUTPUT, REQUIRED );
+    ADD_SLOT( GridT                   , grid                  , INPUT_OUTPUT );
+    ADD_SLOT( GridParticleLocks       , particle_locks        , INPUT_OUTPUT);
 
   public:
     inline void execute() override final
     {    
       // compile time constant indicating if grid has virial field
       static constexpr bool has_virial_field = GridHasField<GridT,field::_virial>::value;
+      using CellLockT = decltype( (*particle_locks)[0][0] );
 
       if( ! grid.has_value() || grid->number_of_cells()==0 )
       {
@@ -64,12 +63,6 @@ namespace exaStamp
         std::abort();
       }
       
-      if( ! atoms_to_bonds.has_value() )
-      {
-        lerr << "atoms_to_bonds input missing" << std::endl;
-        std::abort();        
-      }
-
       ChemicalBonds&            bonds_list    = *chemical_bonds;
 
       Mat3d xform = domain->xform();
@@ -121,15 +114,7 @@ namespace exaStamp
 #     endif
 
       size_t n_bonds = bonds_list.size();
-      
-      auto& force_buf = *chemical_bonds_force_buffer;
-      force_buf.m_force_enegery.resize( n_bonds );
-      if( has_virial_field )
-      {
-        force_buf.m_virial.resize( n_bonds );
-      }
-      
-      // std::cout<<"n_bonds = "<<n_bonds<<std::endl;
+      ldbg<<"n_bonds = "<<n_bonds<<std::endl;
       
 #     pragma omp parallel //for shared(map_bonds_potential, cells) private(cell,pos,type)
       {
@@ -196,58 +181,39 @@ namespace exaStamp
           /*******************/
 #endif
           
+/*
           force_buf.m_force_enegery[i].m_force = F;
           force_buf.m_force_enegery[i].m_energy = e * 0.5;
           if( has_virial_field )
           {
             force_buf.m_virial[i] = tensor(F,r) * 0.5;
           }
-
-        }
-      }
-
-      size_t n_cells = grid->number_of_cells();
-
-#     pragma omp parallel for schedule(dynamic)
-      for(size_t i=0;i<n_cells;i++)
-      {
-        size_t n_particles = cells[i].size();
-        auto* __restrict__ cell_ep = cells[i][field::ep];
-        auto* __restrict__ cell_ax = cells[i][field::ax];
-        auto* __restrict__ cell_ay = cells[i][field::ay];
-        auto* __restrict__ cell_az = cells[i][field::az];
-        auto& cell_ab = (*atoms_to_bonds)[i];
-        size_t k = 0;
-        for(size_t j=0;j<n_particles;j++)
-        {
-
-#         ifndef NDEBUG
-          if( cell_ab[k] != j ) { lerr<<"Bad particle index : found "<<cell_ab[k]<<", expected "<<j<<std::endl; std::abort(); }
-          ++k;
-#         endif
-
-          double ep = 0.0;
-          Vec3d F {0.,0.,0.};
-          Mat3d virial; // initialized to all 0
-          int count = cell_ab[k++];
-          for(int b=0;b<count;b++)
+*/
+          if constexpr ( has_virial_field )
           {
-            uint64_t eb = cell_ab[k++];
-            size_t bi = eb / 4;
-            double fs = 1.0 - ( ( eb % 4 )*2 ) ; // force sign
-            assert( fs==-1.0 || fs==1.0 );
-            ep += force_buf.m_force_enegery[bi].m_energy ;
-            F += force_buf.m_force_enegery[bi].m_force * fs;
-            if( has_virial_field )
-            {
-              virial += force_buf.m_virial[bi];
-            }
+            auto virial = tensor(F,r) * 0.5;
+            concurent_add_contributions<CellLockT,false,true,double,double,double,double,Mat3d> (
+                (*particle_locks)[cell[0]][pos[0]]
+              , cells[cell[0]][field::fx][pos[0]], cells[cell[0]][field::fy][pos[0]], cells[cell[0]][field::fz][pos[0]], cells[cell[0]][field::ep][pos[0]], cells[cell[0]][field::virial][pos[0]]
+              , F.x, F.y, F.z, e*0.5, virial );
+
+            concurent_add_contributions<CellLockT,false,true,double,double,double,double,Mat3d> (
+                (*particle_locks)[cell[1]][pos[1]]
+              , cells[cell[1]][field::fx][pos[1]], cells[cell[1]][field::fy][pos[1]], cells[cell[1]][field::fz][pos[1]], cells[cell[1]][field::ep][pos[1]], cells[cell[1]][field::virial][pos[1]]
+              , -F.x, -F.y, -F.z, e*0.5, virial );
           }
-          cell_ep[j] += ep;
-          cell_ax[j] += F.x;
-          cell_ay[j] += F.y;
-          cell_az[j] += F.z;
-          virial_add_contribution(cells[i],j,virial);
+          else
+          {
+            concurent_add_contributions<CellLockT,false,true,double,double,double,double> (
+                (*particle_locks)[cell[0]][pos[0]]
+              , cells[cell[0]][field::fx][pos[0]], cells[cell[0]][field::fy][pos[0]], cells[cell[0]][field::fz][pos[0]], cells[cell[0]][field::ep][pos[0]]
+              , F.x, F.y, F.z, e*0.5 );
+
+            concurent_add_contributions<CellLockT,false,true,double,double,double,double> (
+                (*particle_locks)[cell[1]][pos[1]]
+              , cells[cell[1]][field::fx][pos[1]], cells[cell[1]][field::fy][pos[1]], cells[cell[1]][field::fz][pos[1]], cells[cell[1]][field::ep][pos[1]]
+              , -F.x, -F.y, -F.z, e*0.5 );
+          }
         }
       }
 

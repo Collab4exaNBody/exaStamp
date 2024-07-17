@@ -19,7 +19,6 @@
 
 #include <exaStamp/molecule/bends_potentials_parameters.h>
 #include <exaStamp/molecule/periodic_r_delta.h>
-#include <exaStamp/compute/virial_add_contribution.h>
 
 namespace exaStamp
 {
@@ -38,18 +37,13 @@ namespace exaStamp
     ADD_SLOT( ChemicalAngles           , chemical_angles       , INPUT, OPTIONAL );
     ADD_SLOT( BendsPotentialParameters , potentials_for_angles , INPUT, REQUIRED );
     ADD_SLOT( ParticleSpecies          , species               , INPUT, REQUIRED );
-
-#   ifdef XSTAMP_USE_BEND_FORCE_BUFFER
-    ADD_SLOT( GridAtomsToChemicalChain , atoms_to_angles       , INPUT, OPTIONAL );
-    ADD_SLOT( BendComputeBuffer        , chemical_angles_force_buffer , INPUT_OUTPUT );
-#   else
     ADD_SLOT( GridParticleLocks        , particle_locks        , INPUT_OUTPUT);
-#   endif
 
   public:
     inline void execute ()  override final
     {
-      // static constexpr bool has_virial_field = GridHasField<GridT,field::_virial>::value;
+      static constexpr bool has_virial_field = GridHasField<GridT,field::_virial>::value;
+      // using CellLockT = decltype( (*particle_locks)[0][0] );
 
       if( ! grid.has_value() || grid->number_of_cells()==0 )
       {
@@ -62,14 +56,6 @@ namespace exaStamp
         std::abort();
       }
       
-#     ifdef XSTAMP_USE_BEND_FORCE_BUFFER
-      if( ! atoms_to_angles.has_value() )
-      {
-        lerr << "atoms_to_angles input missing" << std::endl;
-        std::abort();        
-      }
-#     endif
-
       ChemicalAngles&           bends_list  = *chemical_angles;
 
       Mat3d xform = domain->xform();
@@ -120,16 +106,6 @@ namespace exaStamp
           lerr<<"xform="<<xform<<", size_box="<<size_box<<", tmp="<<tmp<<std::endl;
           std::abort();
         }
-      }
-#     endif
-
-
-#     ifdef XSTAMP_USE_BEND_FORCE_BUFFER
-      auto& force_buf = *chemical_angles_force_buffer;
-      force_buf.m_force_enegery.resize( n_bends );
-      if( has_virial_field )
-      {
-        force_buf.m_virial.resize( n_bends );
       }
 #     endif
 
@@ -251,11 +227,6 @@ namespace exaStamp
 //          compute_bend_interaction(r1, r2, e, F1, F2, * (it->second) );
           // add force, energy and virial contributions to 3 corresponding atoms
 
-#         ifdef XSTAMP_USE_BEND_FORCE_BUFFER
-          force_buf.m_force_enegery[i].m_force = { F1 , F2 };
-          force_buf.m_force_enegery[i].m_energy = e / 3.;
-          if( has_virial_field ) { force_buf.m_virial[i] = { virial1 , virial2 }; }
-#         else
           const Vec3d Fo = - ( F1 + F2 );
           const Mat3d virialo = virial1 + virial2;
 
@@ -264,7 +235,7 @@ namespace exaStamp
           cells[cell[0]][field::fx][pos[0]] += F1.x; 
           cells[cell[0]][field::fy][pos[0]] += F1.y;
           cells[cell[0]][field::fz][pos[0]] += F1.z; 
-          virial_add_contribution( cells[cell[0]] , pos[0] , virial1 );
+          if constexpr (has_virial_field) cells[cell[0]][field::virial][pos[0]] += virial1;
           (*particle_locks)[cell[0]][pos[0]].unlock();
 
           (*particle_locks)[cell[1]][pos[1]].lock();
@@ -272,7 +243,7 @@ namespace exaStamp
           cells[cell[1]][field::fx][pos[1]] += Fo.x;
           cells[cell[1]][field::fy][pos[1]] += Fo.y;
           cells[cell[1]][field::fz][pos[1]] += Fo.z;
-          virial_add_contribution( cells[cell[1]] , pos[1] , virialo );
+          if constexpr (has_virial_field) cells[cell[1]][field::virial][pos[1]] += virialo;
           (*particle_locks)[cell[1]][pos[1]].unlock();
 
           (*particle_locks)[cell[2]][pos[2]].lock();
@@ -280,69 +251,11 @@ namespace exaStamp
           cells[cell[2]][field::fx][pos[2]] += F2.x;
           cells[cell[2]][field::fy][pos[2]] += F2.y;
           cells[cell[2]][field::fz][pos[2]] += F2.z;
-          virial_add_contribution( cells[cell[2]] , pos[2] , virial2 );
+          if constexpr (has_virial_field) cells[cell[2]][field::virial][pos[2]] += virial2;
           (*particle_locks)[cell[2]][pos[2]].unlock();
-#       endif
-
         }
       }
 
-#     ifdef XSTAMP_USE_BEND_FORCE_BUFFER
-      size_t n_cells = grid->number_of_cells();
-#     pragma omp parallel for schedule(dynamic)
-      for(size_t i=0;i<n_cells;i++)
-      {
-        size_t n_particles = cells[i].size();
-        auto* __restrict__ cell_ep = cells[i][field::ep];
-        auto* __restrict__ cell_fx = cells[i][field::fx];
-        auto* __restrict__ cell_fy = cells[i][field::fy];
-        auto* __restrict__ cell_fz = cells[i][field::fz];
-        auto& cell_aa = (*atoms_to_angles)[i];
-        size_t k = 0;
-        for(size_t j=0;j<n_particles;j++)
-        {
-
-#         ifndef NDEBUG
-          if( cell_aa[k] != j ) { lerr<<"Bad particle index : found "<<cell_aa[k]<<", expected "<<j<<std::endl; std::abort(); }
-          ++k;
-#         endif
-
-          double ep = 0.0;
-          Vec3d F {0.,0.,0.};
-          Mat3d virial; // initialized to all 0
-          
-          int count = cell_aa[k++];
-          for(int b=0;b<count;b++)
-          {
-            uint64_t eb = cell_aa[k++];
-            size_t bi = eb / 4;
-            assert( bi < n_bends );
-            unsigned int p = eb % 4;
-            assert( p < 3 );
-            const Vec3d F1 = force_buf.m_force_enegery[bi].m_force[0];
-            const Vec3d F2 = force_buf.m_force_enegery[bi].m_force[1];
-            const Vec3d force[3] = { F1 , -(F1+F2) , F2 };
-            ep += force_buf.m_force_enegery[bi].m_energy ;
-            F += force[p];
-            if( has_virial_field )
-            {
-              const Mat3d vir1 = force_buf.m_virial[bi][0];
-              const Mat3d vir2 = force_buf.m_virial[bi][1];
-              const Mat3d vir[3] = { vir1 , vir1+vir2 , vir2 };
-              virial += vir[p];
-            }
-          }
-          
-          cell_ep[j] += ep;
-          cell_fx[j] += F.x;
-          cell_fy[j] += F.y;
-          cell_fz[j] += F.z;
-          virial_add_contribution(cells[i],j,virial);
-        }
-        assert( k == cell_aa.size() );
-      }
-#     endif      
-     
     }
 
   };

@@ -18,7 +18,6 @@
 
 #include <exaStamp/molecule/torsions_potentials_parameters.h>
 #include <exaStamp/molecule/periodic_r_delta.h>
-#include <exaStamp/compute/virial_add_contribution.h>
 
 namespace exaStamp
 {
@@ -58,6 +57,8 @@ namespace exaStamp
 
     inline void execute ()  override final
     {
+      static constexpr bool has_virial_field = GridHasField<GridT,field::_virial>::value;
+      // using CellLockT = decltype( (*particle_locks)[0][0] );
 
       if( ! grid.has_value() || grid->number_of_cells()==0 )
       {
@@ -260,7 +261,7 @@ namespace exaStamp
           cells[cell[0]][field::fx][pos[0]] += Fa.x; 
           cells[cell[0]][field::fy][pos[0]] += Fa.y;
           cells[cell[0]][field::fz][pos[0]] += Fa.z; 
-          virial_add_contribution( cells[cell[0]] , pos[0] , vira );
+          if constexpr (has_virial_field) cells[cell[0]][field::virial][pos[0]] += vira;
           (*particle_locks)[cell[0]][pos[0]].unlock();
 
           (*particle_locks)[cell[1]][pos[1]].lock();
@@ -268,7 +269,7 @@ namespace exaStamp
           cells[cell[1]][field::fx][pos[1]] += Fo.x; 
           cells[cell[1]][field::fy][pos[1]] += Fo.y;
           cells[cell[1]][field::fz][pos[1]] += Fo.z; 
-          virial_add_contribution( cells[cell[1]] , pos[1] , virac);
+          if constexpr (has_virial_field) cells[cell[1]][field::virial][pos[1]] += virac;
           (*particle_locks)[cell[1]][pos[1]].unlock();
 
 
@@ -277,7 +278,7 @@ namespace exaStamp
           cells[cell[2]][field::fx][pos[2]] += Fc.x; 
           cells[cell[2]][field::fy][pos[2]] += Fc.y;
           cells[cell[2]][field::fz][pos[2]] += Fc.z; 
-          virial_add_contribution( cells[cell[2]] , pos[2] , vircd);
+          if constexpr (has_virial_field) cells[cell[2]][field::virial][pos[2]] += vircd;
           (*particle_locks)[cell[2]][pos[2]].unlock();
 
           (*particle_locks)[cell[3]][pos[3]].lock();
@@ -285,7 +286,7 @@ namespace exaStamp
           cells[cell[3]][field::fx][pos[3]] += Fd.x; 
           cells[cell[3]][field::fy][pos[3]] += Fd.y;
           cells[cell[3]][field::fz][pos[3]] += Fd.z; 
-          virial_add_contribution( cells[cell[3]] , pos[3] , vird);
+          if constexpr (has_virial_field) cells[cell[3]][field::virial][pos[3]] += vird;
           (*particle_locks)[cell[3]][pos[3]].unlock();
 //          }
         }
