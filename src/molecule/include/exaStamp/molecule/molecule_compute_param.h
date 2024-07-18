@@ -3,7 +3,7 @@
 #include <exaStamp/molecule/molecule_species.h>
 #include <exanb/core/basic_types_def.h>
 #include <onika/oarray.h>
-#include <exaStamp/molecule/pair_potential_parameters.h>
+#include <exaStamp/potential/ljexp6rf/ljexp6rf.h>
 
 #include <onika/memory/allocator.h>
 #include <onika/cuda/ro_shallow_copy.h>
@@ -39,35 +39,23 @@ namespace exaStamp
     }
   };
 
-  struct MoleculeComputeParams
+  inline std::ostream& operator << ( std::ostream& out , const MoleculeGenericFuncParam& m )
   {
-    unsigned int m_nb_pairs = 0;
-    unsigned int m_nb_bonds = 0;
-    unsigned int m_nb_bends = 0;
-    unsigned int m_nb_torsions = 0;
-    unsigned int m_nb_impropers = 0;
+    return out<<"("<<m.p0<<","<<m.p1<<","<<m.p2<<","<<m.x0<<","<<m.coeff<<")";
+  }
 
-    uint64_t m_pairs[MAX_MOLECULE_PAIRS];
-    uint64_t m_torsions[MAX_MOLECULE_TORSIONS]; // contains atom places and func parameter index
-    uint64_t m_impropers[MAX_MOLECULE_IMPROPERS];
-    uint32_t m_bonds[MAX_MOLECULE_BONDS];
-    uint32_t m_bends[MAX_MOLECULE_BENDS];
-  };
   
   struct MoleculeSetComputeParams
   {
-    onika::memory::CudaMMVector<MoleculeComputeParams> m_molecules;
     onika::memory::CudaMMVector<MoleculeGenericFuncParam> m_func_params;
-    onika::memory::CudaMMVector<IntramolecularRFParam> m_rf_params;
-    onika::memory::CudaMMVector<IntramolecularLJExp6Param> m_ljexp6_params;
+    std::map< onika::oarray_t<int,4> , int > m_intramol_param_map;
+    onika::memory::CudaMMVector<LJExp6RFParms> m_pair_params;
   };
 
   struct MoleculeSetComputeParamsRO
   {
-    const MoleculeComputeParams * __restrict__ m_molecules = nullptr;
     const MoleculeGenericFuncParam * __restrict__ m_func_params = nullptr;
-    const IntramolecularRFParam * __restrict__ m_rf_params = nullptr;
-    const IntramolecularLJExp6Param * __restrict__ m_ljexp6_params = nullptr;
+    const LJExp6RFParms * __restrict__ m_pair_params = nullptr;
     
     MoleculeSetComputeParamsRO() = default;
     MoleculeSetComputeParamsRO(const MoleculeSetComputeParamsRO&) = default;
@@ -76,20 +64,19 @@ namespace exaStamp
     MoleculeSetComputeParamsRO& operator = (MoleculeSetComputeParamsRO&&) = default;
 
     inline MoleculeSetComputeParamsRO( const MoleculeSetComputeParams& ml )
-      : m_molecules( ml.m_molecules.data() )
-      , m_func_params( ml.m_func_params.data() )
-      , m_rf_params( ml.m_rf_params.data() )
-      , m_ljexp6_params( ml.m_ljexp6_params.data() )
+      : m_func_params( ml.m_func_params.data() )
+      , m_pair_params( ml.m_pair_params.data() )
       {}
 
   };
 
 }
-
+/*
 inline exanb::LogStreamWrapper& operator << ( exanb::LogStreamWrapper& out , const exaStamp::MoleculeGenericFuncParam& m )
 {
   return out<<"("<<m.p0<<","<<m.p1<<","<<m.p2<<","<<m.x0<<","<<m.coeff<<")";
 }
+*/
 
 // specialize ReadOnlyShallowCopyType so MoleculeListsRO is the read only type for MoleculeLists
 namespace onika { namespace cuda { template<> struct ReadOnlyShallowCopyType< exaStamp::MoleculeSetComputeParams > { using type = exaStamp::MoleculeSetComputeParamsRO; }; } }
