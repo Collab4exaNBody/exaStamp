@@ -27,7 +27,7 @@ jobs:
       run: git clone https://github.com/Collab4exaNBody/exaNBody.git
       
     - name: Configure CMake
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DXSTAMP_ENABLE_SLIPLINK=OFF -DexaNBody_DIR=${{github.workspace}}/exaNBody
+      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DXSTAMP_ENABLE_SLIPLINK=OFF -DXSTAMP_BUILD_exaStampSliplink=OFF -DXSTAMP_BUILD_exaStampLCHBOP=OFF -DexaNBody_DIR=${{github.workspace}}/exaNBody
 #      run: cmake -DCMAKE_CXX_FLAGS="--coverage -g" -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DXSTAMP_ENABLE_SLIPLINK=OFF -DexaNBody_DIR=${{github.workspace}}/exaNBody
 
     - name: Build
