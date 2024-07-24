@@ -2,9 +2,9 @@ includes: [ config_molecule_stampv4.msp ]
 
 configuration:
   logging:
-    debug: false
+    debug: true
   debug:
-    filter: [ ".*read_fatomes_mol" , ".*ljexp6rf_pc" ]
+    filter: [ ".*read_fatomes_mol" , ".*ljexp6rf_pc" , ".*intramolecular_setup" ]
   profiling:
     summary: false
 
@@ -12,7 +12,9 @@ input_data:
   - read_fatomes_mol:
       filename: molecule_polymere.FAtomes
       stampinput: molecule_polymere.init
-      
+  - species: { verbose: true }
+  - intramolecular_setup
+
 # user-specified global values
 global:
   dt: 1.0e-16 s
@@ -46,18 +48,4 @@ simulation_epilog:
       acc_threshold: 1.e-8
       pos_threshold: 1.e-12
 
-# surcharge fichier config_molecule_stampv4.msp
-#compute_intramolecular_forces:
-#  - compute_force_bond
-#  - compute_force_bend
-#  - compute_force_torsion
-#  - compute_force_improper
-
-#compute_extramolecular_forces:
-#  rebind: { parameters: potentials_for_pairs }
-#  body: [ ljexp6rf_pc ]
-
-#compute_force:
-#  - compute_extramolecular_forces
-#  - compute_intramolecular_forces
 

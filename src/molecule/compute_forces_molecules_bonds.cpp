@@ -28,6 +28,10 @@
 namespace exaStamp
 {
 
+  struct BondForceOp
+  {
+  };
+
   template<
     class GridT,
     class = AssertGridHasFields< GridT, field::_ep, field::_fx, field::_fy, field::_fz >

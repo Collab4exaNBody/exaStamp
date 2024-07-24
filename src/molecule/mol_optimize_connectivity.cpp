@@ -6,6 +6,7 @@
 #include <exanb/core/particle_id_codec.h>
 
 #include <exaStamp/molecule/mol_connectivity.h>
+#include <exaStamp/molecule/molecule_compute_param.h>
 
 #include <mpi.h>
 
@@ -22,6 +23,9 @@ namespace exaStamp
     ADD_SLOT( ChemicalTorsions  , chemical_torsions  , INPUT_OUTPUT );
     ADD_SLOT( ChemicalImpropers , chemical_impropers , INPUT_OUTPUT );
 
+    ADD_SLOT( MoleculeComputeParameterSet     , molecule_compute_parameters , INPUT, DocString{"Intramolecular functionals' parameters"} );
+    ADD_SLOT( IntramolecularParameterIndexLists, intramolecular_parameters , INPUT_OUTPUT, DocString{"Intramolecular functional parmater index lists"} );
+
   public:
     inline void execute () override final
     {
@@ -30,14 +34,25 @@ namespace exaStamp
       const size_t n_torsions = chemical_torsions->size();
       const size_t n_impropers = chemical_impropers->size();
       
+      intramolecular_parameters->m_bond_param_idx.assign( n_bonds , -1 );
+      intramolecular_parameters->m_angle_param_idx.assign( n_bends , -1 );
+      intramolecular_parameters->m_torsion_param_idx.assign( n_torsions , -1 );
+      intramolecular_parameters->m_improper_param_idx.assign( n_impropers , -1 );
+      
 #     pragma omp parallel
       {
+        size_t c,p; // unused
+        unsigned int ta, tb, tc, td;
+
 #       pragma omp for schedule(static) nowait
         for(size_t i=0;i<n_bonds;i++)
         {
           auto& b = (*chemical_bonds)[i];
           b[0] = atom_from_idmap( b[0] , *id_map , *id_map_ghosts );
           b[1] = atom_from_idmap( b[1] , *id_map , *id_map_ghosts );
+          decode_cell_particle( b[0], c,p, ta );
+          decode_cell_particle( b[1], c,p, tb );
+          intramolecular_parameters->m_bond_param_idx[i] = molecule_compute_parameters->m_intramol_param_map[ { int(ta),int(tb),-1,-1 } ];
         }
 
 #       pragma omp for schedule(static) nowait
@@ -47,6 +62,10 @@ namespace exaStamp
           b[0] = atom_from_idmap( b[0] , *id_map , *id_map_ghosts );
           b[1] = atom_from_idmap( b[1] , *id_map , *id_map_ghosts );
           b[2] = atom_from_idmap( b[2] , *id_map , *id_map_ghosts );
+          decode_cell_particle( b[0], c,p, ta );
+          decode_cell_particle( b[1], c,p, tb );
+          decode_cell_particle( b[2], c,p, tc );
+          intramolecular_parameters->m_angle_param_idx[i] = molecule_compute_parameters->m_intramol_param_map[ { int(ta),int(tb),int(tc),-1 } ];
         }
 
 #       pragma omp for schedule(static) nowait
@@ -57,6 +76,11 @@ namespace exaStamp
           t[1] = atom_from_idmap( t[1] , *id_map , *id_map_ghosts );
           t[2] = atom_from_idmap( t[2] , *id_map , *id_map_ghosts );
           t[3] = atom_from_idmap( t[3] , *id_map , *id_map_ghosts );
+          decode_cell_particle( t[0], c,p, ta );
+          decode_cell_particle( t[1], c,p, tb );
+          decode_cell_particle( t[2], c,p, tc );
+          decode_cell_particle( t[3], c,p, td );
+          intramolecular_parameters->m_torsion_param_idx[i] = molecule_compute_parameters->m_intramol_param_map[ { int(ta),int(tb),int(tc),int(td) } ];
         }
 
 #       pragma omp for schedule(static) nowait
@@ -67,6 +91,11 @@ namespace exaStamp
           t[1] = atom_from_idmap( t[1] , *id_map , *id_map_ghosts );
           t[2] = atom_from_idmap( t[2] , *id_map , *id_map_ghosts );
           t[3] = atom_from_idmap( t[3] , *id_map , *id_map_ghosts );
+          decode_cell_particle( t[0], c,p, ta );
+          decode_cell_particle( t[1], c,p, tb );
+          decode_cell_particle( t[2], c,p, tc );
+          decode_cell_particle( t[3], c,p, td );
+          intramolecular_parameters->m_improper_param_idx[i] = molecule_compute_parameters->m_intramol_param_map[ { int(ta),int(tb),int(tc),int(td) } ];
         }
       }
 

@@ -43,41 +43,59 @@ namespace exaStamp
   {
     return out<<"("<<m.p0<<","<<m.p1<<","<<m.p2<<","<<m.x0<<","<<m.coeff<<")";
   }
-
   
-  struct MoleculeSetComputeParams
+  struct MoleculeComputeParameterSet
   {
     onika::memory::CudaMMVector<MoleculeGenericFuncParam> m_func_params;
-    std::map< onika::oarray_t<int,4> , int > m_intramol_param_map;
     onika::memory::CudaMMVector<LJExp6RFParms> m_pair_params;
+    std::map< onika::oarray_t<int,4> , int > m_intramol_param_map;
   };
 
-  struct MoleculeSetComputeParamsRO
+  struct MoleculeComputeParameterSetRO
   {
     const MoleculeGenericFuncParam * __restrict__ m_func_params = nullptr;
     const LJExp6RFParms * __restrict__ m_pair_params = nullptr;
     
-    MoleculeSetComputeParamsRO() = default;
-    MoleculeSetComputeParamsRO(const MoleculeSetComputeParamsRO&) = default;
-    MoleculeSetComputeParamsRO(MoleculeSetComputeParamsRO&&) = default;
-    MoleculeSetComputeParamsRO& operator = (const MoleculeSetComputeParamsRO&) = default;
-    MoleculeSetComputeParamsRO& operator = (MoleculeSetComputeParamsRO&&) = default;
+    MoleculeComputeParameterSetRO() = default;
+    MoleculeComputeParameterSetRO(const MoleculeComputeParameterSetRO&) = default;
+    MoleculeComputeParameterSetRO(MoleculeComputeParameterSetRO&&) = default;
+    MoleculeComputeParameterSetRO& operator = (const MoleculeComputeParameterSetRO&) = default;
+    MoleculeComputeParameterSetRO& operator = (MoleculeComputeParameterSetRO&&) = default;
 
-    inline MoleculeSetComputeParamsRO( const MoleculeSetComputeParams& ml )
+    inline MoleculeComputeParameterSetRO( const MoleculeComputeParameterSet& ml )
       : m_func_params( ml.m_func_params.data() )
       , m_pair_params( ml.m_pair_params.data() )
       {}
+  };
 
+  struct IntramolecularParameterIndexLists
+  {
+    onika::memory::CudaMMVector<int> m_bond_param_idx;
+    onika::memory::CudaMMVector<int> m_angle_param_idx;
+    onika::memory::CudaMMVector<int> m_torsion_param_idx;
+    onika::memory::CudaMMVector<int> m_improper_param_idx;
+  };
+
+  struct IntramolecularParameterIndexListsRO
+  {
+    const int * const __restrict__ m_bond_param_idx = nullptr;
+    const int * const __restrict__ m_angle_param_idx = nullptr;
+    const int * const __restrict__ m_torsion_param_idx = nullptr;
+    const int * const __restrict__ m_improper_param_idx = nullptr;
+    
+    IntramolecularParameterIndexListsRO() = default;
+    IntramolecularParameterIndexListsRO(const IntramolecularParameterIndexListsRO&) = default;
+    IntramolecularParameterIndexListsRO(IntramolecularParameterIndexListsRO&&) = default;
+    IntramolecularParameterIndexListsRO& operator = (const IntramolecularParameterIndexListsRO&) = default;
+    IntramolecularParameterIndexListsRO& operator = (IntramolecularParameterIndexListsRO&&) = default;
+
+    inline IntramolecularParameterIndexListsRO( const IntramolecularParameterIndexLists& ipil )
+      : m_bond_param_idx( ipil.m_bond_param_idx.data() )
+      , m_angle_param_idx( ipil.m_angle_param_idx.data() )
+      , m_torsion_param_idx( ipil.m_torsion_param_idx.data() )
+      , m_improper_param_idx( ipil.m_improper_param_idx.data() )
+      {}
   };
 
 }
-/*
-inline exanb::LogStreamWrapper& operator << ( exanb::LogStreamWrapper& out , const exaStamp::MoleculeGenericFuncParam& m )
-{
-  return out<<"("<<m.p0<<","<<m.p1<<","<<m.p2<<","<<m.x0<<","<<m.coeff<<")";
-}
-*/
-
-// specialize ReadOnlyShallowCopyType so MoleculeListsRO is the read only type for MoleculeLists
-namespace onika { namespace cuda { template<> struct ReadOnlyShallowCopyType< exaStamp::MoleculeSetComputeParams > { using type = exaStamp::MoleculeSetComputeParamsRO; }; } }
 

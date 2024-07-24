@@ -403,6 +403,7 @@ namespace exaStamp
           }
           r = inv_H * r; // reduced coordinates in [0;1]
 
+          if( typeMol.empty() ) typeMol="MOL";
           auto it = molecule_name_map.find( typeMol );
           int itypeMol = -1;
           if( it != molecule_name_map.end() )
@@ -565,6 +566,7 @@ namespace exaStamp
               }
               else
               {
+                ldbg << "Add intramolecular weights for molecule '"<<p.first<<"'"<<std::endl;
                 mol_pair_weights->m_molecule_weight[ p.first ] = w;
               }
             }
