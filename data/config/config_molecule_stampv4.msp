@@ -26,6 +26,11 @@ compute_force:
 
 preinit_rcut_max: nop
 
+init_epilog:
+  - intramolecular_setup
+
+compute_force_prolog: zero_force_energy_with_correction
+
 domain:
   cell_size: 8 ang
   periodic: [true, true, true]

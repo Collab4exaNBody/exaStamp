@@ -89,6 +89,7 @@ namespace exaStamp
     }
     
   };
+#include <exaStamp/particle_species/particle_specie.h>
 
   
   template< class GridT >
@@ -144,8 +145,9 @@ namespace exaStamp
 
 
       /********* global energy and virial correction ***************/
+      molecule_compute_parameters->m_energy_correction.assign( species->size() , 0.0 );
+      molecule_compute_parameters->m_virial_correction.assign( species->size() , Mat3d{0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0} );
       const size_t n_cells = grid->number_of_cells();
-      const unsigned int n_type_pairs = unique_pair_count( species->size() );      
       // count number of atoms of each type
       std::vector<long> type_count( species->size() , 0 );
       for(size_t ci=0;ci<n_cells;ci++)
@@ -167,16 +169,12 @@ namespace exaStamp
       // compute global energy correction term
       bool all_lj = true;
       bool all_exp6 = true;
-      std::vector<double> energy_correction( species->size() , 0.0 );
-      std::vector<Mat3d> virial_correction( species->size() , Mat3d{} );
-
       for(const auto& potelem : potentials_for_pairs->m_potentials)
       {
         const auto & pot = potelem.m_params;
         all_lj = all_lj && pot.is_lj();
         all_exp6 = all_exp6 && pot.is_exp6();
       }
-      
       for(const auto& potelem : potentials_for_pairs->m_potentials)
       {
         const auto & pot = potelem.m_params;
@@ -191,8 +189,8 @@ namespace exaStamp
           const double rcut = pot.m_rcut;
           const double epsilon = pot.m_C_EPSILON;
           const double sigma = pot.m_D_SIGMA;
-          energy_correction[ta] += 0.0; // so something here ...
-          virial_correction[ta] += Mat3d{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 }; // so something here ...
+          molecule_compute_parameters->m_energy_correction[ta] += 0.0; // so something here ...
+          molecule_compute_parameters->m_virial_correction[ta] += Mat3d{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 }; // so something here ...
         }
         else if( all_exp6 )
         {
@@ -201,10 +199,17 @@ namespace exaStamp
           const double B = pot.m_B_ISEXP6;
           const double C = pot.m_C_EPSILON;
           const double D = pot.m_D_SIGMA;
-          energy_correction[ta] += 0.0; // so something here ...
-          virial_correction[ta] += Mat3d{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 }; // so something here ...
+          molecule_compute_parameters->m_energy_correction[ta] += 0.0; // so something here ...
+          molecule_compute_parameters->m_virial_correction[ta] += Mat3d{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 }; // so something here ...
         }
-        else fatal_error() << "pair potentials must be all LJ or all Exp6" << std::endl;
+        else
+        {
+          fatal_error() << "pair potentials must be all LJ or all Exp6" << std::endl;
+        }
+        for(size_t t=0;t<species->size();t++)
+        {
+          ldbg << "Correction for type "<<species->at(t).name()<<" : energy="<<molecule_compute_parameters->m_energy_correction[t]<<" , virial="<<molecule_compute_parameters->m_virial_correction[t]<<std::endl;
+        }
       }
       /************************************************************/        
 

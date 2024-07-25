@@ -12,8 +12,6 @@ input_data:
   - read_fatomes_mol:
       filename: molecule_polymere.FAtomes
       stampinput: molecule_polymere.init
-  - species: { verbose: true }
-  - intramolecular_setup
 
 # user-specified global values
 global:
