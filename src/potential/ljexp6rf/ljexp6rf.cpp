@@ -19,8 +19,6 @@
 #include <exanb/particle_neighbors/chunk_neighbors.h>
 #include <exanb/core/concurent_add_contributions.h>
 
-#include <mpi.h>
-
 namespace exaStamp
 {
   using namespace exanb;
@@ -200,7 +198,6 @@ namespace exaStamp
   class LJExp6RFParticleCharge : public OperatorNode
   {
     // ========= I/O slots =======================
-    ADD_SLOT( MPI_Comm           , mpi                 , INPUT , MPI_COMM_WORLD);
     ADD_SLOT( LJExp6RFMultiParms        , parameters          , INPUT , REQUIRED );
     ADD_SLOT( exanb::GridChunkNeighbors , chunk_neighbors     , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
     ADD_SLOT( CompactGridPairWeights    , compact_nbh_weight  , INPUT , OPTIONAL );
@@ -292,59 +289,6 @@ namespace exaStamp
           unsigned int pair_id = unique_pair_id(ta,tb);
           scratch->m_potentials[pair_id] = pot.m_params;
           ldbg<<"found parameters for "<<pot.m_type_a<<" / "<<pot.m_type_b <<std::endl;
-        }
-        std::vector<long> type_count( species->size() , 0 );
-        for(size_t ci=0;ci<n_cells;ci++)
-        {
-          if( ! grid->is_ghost_cell(ci) )
-          {
-            const auto& cell = grid->cell(ci);
-            size_t n_particles = cell.size();
-            for(size_t pi=0;pi<n_particles;pi++)
-            {
-              int t = cell[field::type][pi];
-              ++ type_count[t];
-            }
-          }
-        }
-        MPI_Allreduce(MPI_IN_PLACE,type_count.data(), type_count.size(), MPI_LONG, MPI_SUM, *mpi );
-        for(size_t t=0;t<species->size();t++) ldbg << "Type "<<species->at(t).name()<<" has "<<type_count[t]<<" atoms"<<std::endl;
-        // compute global energy correction term
-        bool all_lj = true;
-        bool all_exp6 = true;
-        std::vector<double> energy_correction( species->size() , 0.0 );
-        std::vector<Mat3d> virial_correction( species->size() , Mat3d{} );
-        for(const auto& pot : scratch->m_potentials)
-        {
-          all_lj = all_lj && pot.is_lj();
-          all_exp6 = all_exp6 && pot.is_exp6();
-        }
-        for(size_t pair_id=0;pair_id<n_type_pairs;pair_id++)
-        {
-          unsigned int ta=0, tb=0;
-          pair_id_to_type_pair(pair_id,ta,tb);
-          const size_t na = type_count[ta]; // number of atom of type A
-          const size_t nb = type_count[tb]; // number of atom of type B
-          const auto & pot = scratch->m_potentials[pair_id];
-          if( all_lj )
-          {
-            const double rcut = pot.m_rcut;
-            const double epsilon = pot.m_C_EPSILON;
-            const double sigma = pot.m_D_SIGMA;
-            energy_correction[ta] += 0.0; // so something here ...
-            virial_correction[ta] += Mat3d{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 }; // so something here ...
-          }
-          else if( all_exp6 )
-          {
-            const double rc = pot.m_rf.rc;
-            const double A = pot.m_A;
-            const double B = pot.m_B_ISEXP6;
-            const double C = pot.m_C_EPSILON;
-            const double D = pot.m_D_SIGMA;
-            energy_correction[ta] += 0.0; // so something here ...
-            virial_correction[ta] += Mat3d{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 }; // so something here ...
-          }
-          else fatal_error() << "pair potentials must be all LJ or all Exp6" << std::endl;
         }
       }
 

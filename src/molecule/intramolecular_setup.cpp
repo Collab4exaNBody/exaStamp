@@ -29,6 +29,7 @@
 
 #include <unordered_set>
 #include <vector>
+#include <mpi.h>
 
 namespace exaStamp
 {
@@ -94,6 +95,8 @@ namespace exaStamp
   class IntramolecularSetup : public OperatorNode
   {
 
+    ADD_SLOT( MPI_Comm           , mpi                 , INPUT , MPI_COMM_WORLD);
+
     ADD_SLOT( ParticleSpecies              , species           , INPUT , REQUIRED );
     ADD_SLOT( ParticleTypeMap              , particle_type_map , INPUT , REQUIRED );
     
@@ -130,8 +133,7 @@ namespace exaStamp
         }
       }
 
-//      molecule_compute_parameters->m_molecules.assign( nmol , MoleculeComputeParams{} );
-      
+//      molecule_compute_parameters->m_molecules.assign( nmol , MoleculeComputeParams{} );   
       const auto & tmap = *particle_type_map;
       auto str2type = [&tmap]( const std::string& s ) -> int
         {
@@ -139,7 +141,74 @@ namespace exaStamp
           if(it!=tmap.end()) return it->second;
           else return -1;
         };
+
+
+      /********* global energy and virial correction ***************/
+      const size_t n_cells = grid->number_of_cells();
+      const unsigned int n_type_pairs = unique_pair_count( species->size() );      
+      // count number of atoms of each type
+      std::vector<long> type_count( species->size() , 0 );
+      for(size_t ci=0;ci<n_cells;ci++)
+      {
+        if( ! grid->is_ghost_cell(ci) )
+        {
+          const auto& cell = grid->cell(ci);
+          size_t n_particles = cell.size();
+          for(size_t pi=0;pi<n_particles;pi++)
+          {
+            int t = cell[field::type][pi];
+            ++ type_count[t];
+          }
+        }
+      }
+      MPI_Allreduce(MPI_IN_PLACE,type_count.data(), type_count.size(), MPI_LONG, MPI_SUM, *mpi );
+      for(size_t t=0;t<species->size();t++) ldbg << "Type "<<species->at(t).name()<<" has "<<type_count[t]<<" atoms"<<std::endl;
+
+      // compute global energy correction term
+      bool all_lj = true;
+      bool all_exp6 = true;
+      std::vector<double> energy_correction( species->size() , 0.0 );
+      std::vector<Mat3d> virial_correction( species->size() , Mat3d{} );
+
+      for(const auto& potelem : potentials_for_pairs->m_potentials)
+      {
+        const auto & pot = potelem.m_params;
+        all_lj = all_lj && pot.is_lj();
+        all_exp6 = all_exp6 && pot.is_exp6();
+      }
       
+      for(const auto& potelem : potentials_for_pairs->m_potentials)
+      {
+        const auto & pot = potelem.m_params;
+        if( str2type(potelem.m_type_a)==-1 ) { fatal_error()<<"unknown type "<<potelem.m_type_a<<" in potential description"<<std::endl; }
+        if( str2type(potelem.m_type_b)==-1 ) { fatal_error()<<"unknown type "<<potelem.m_type_b<<" in potential description"<<std::endl; }
+        const unsigned int ta = str2type(potelem.m_type_a);
+        const unsigned int tb = str2type(potelem.m_type_b); 
+        const size_t na = type_count[ta]; // number of atom of type A
+        const size_t nb = type_count[tb]; // number of atom of type B
+        if( all_lj )
+        {
+          const double rcut = pot.m_rcut;
+          const double epsilon = pot.m_C_EPSILON;
+          const double sigma = pot.m_D_SIGMA;
+          energy_correction[ta] += 0.0; // so something here ...
+          virial_correction[ta] += Mat3d{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 }; // so something here ...
+        }
+        else if( all_exp6 )
+        {
+          const double rc = pot.m_rf.rc;
+          const double A = pot.m_A;
+          const double B = pot.m_B_ISEXP6;
+          const double C = pot.m_C_EPSILON;
+          const double D = pot.m_D_SIGMA;
+          energy_correction[ta] += 0.0; // so something here ...
+          virial_correction[ta] += Mat3d{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 }; // so something here ...
+        }
+        else fatal_error() << "pair potentials must be all LJ or all Exp6" << std::endl;
+      }
+      /************************************************************/        
+
+     
       auto& intramol_param_map = molecule_compute_parameters->m_intramol_param_map; // types to functional parameters index
       intramol_param_map.clear();      
       std::map< MoleculeGenericFuncParam , int > intramol_param_id_map ; // functional parameters to its index
