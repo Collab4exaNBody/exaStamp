@@ -7,9 +7,6 @@ includes:
   - config_rigidmol.msp
 
 configuration:
-  onika:
-    gpu_sm_mult: 6
-    gpu_block_size: 256
   profiling:
     summary: true
   logging:
@@ -17,30 +14,6 @@ configuration:
     debug: false
   debug:
     filter: [ ".*grid_particle_slicing" , ".*print_plot1d" ]
-
-ghost_update_rq:
-  gpu_buffer_pack: true
-  async_buffer_pack: true
-  staging_buffer: true
-  serialize_pack_send: true
-  wait_all: false
-
-ghost_update_all_no_fv:
-  gpu_buffer_pack: true
-  async_buffer_pack: true
-  staging_buffer: true
-  serialize_pack_send: true
-  wait_all: false
-
-compute_force_ljrf:
-  - compute_force_pair_rigidmol:
-      potentials:
-        - { type_a: O , type_b: O , potential: ljrf , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } , lj_rcut: 8 ang , lj: { epsilon: 1.286776984E-21 J , sigma: 0.31589E-09 m } } }
-        - { type_a: O , type_b: M , potential: ljrf , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
-        - { type_a: O , type_b: H , potential: ljrf , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
-        - { type_a: H , type_b: M , potential: ljrf , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
-        - { type_a: M , type_b: M , potential: ljrf , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
-        - { type_a: H , type_b: H , potential: ljrf , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
 
 ljrf_rigidmol_force:
   type: H2O
@@ -71,22 +44,6 @@ grid_flavor: grid_flavor_rigidmol
   - grid_stats
   - memory_stats
 
-dump_analysis:
-  - message: "--- Analysis ---"
-  - timestep_file: "rigidmol_%09d.xyz"
-  - write_xyz:
-      fields: [ velocity , force , mv2 , processor_id ]
-      units: { velocity: "m/s" , force: "Kg/m/s" }
-#  - dump_data_vtk
-#  - grid_particle_slicing:
-#      thickness: 1.0 ang
-#      direction: [ 1.0 , 1.0 , 1.0 ]
-#      fields: [ ep , id ]
-#      average: [ id ]
-#      caption: { ep: "Potential Energy" , id: "Particle Id" }
-#  - timestep_file: "plot_%06d.csv"
-#  - write_plot1d: [ ep , id ]
-
 global:
   dt: 5.0e-4 ps
   simulation_end_iteration: 10
@@ -95,18 +52,13 @@ global:
   simulation_dump_frequency: 1000
   rcut_inc: 1.5 ang
 
-grid_cell_particle_splatting:
-  splat_size: 4.0 ang
-  grid_subdiv: 3
-
-dump_data: dump_data_grid_vtk
-#dump_data:
-
 thermostat:
   - langevin_rigidmol:
       T: 320 K
       friction : 5.0e1
       friction_ratio : 1.
+
+###########################################
 
 replicate_domain:
   repeat: [ 1 , 1 , 1 ]
@@ -156,23 +108,27 @@ input_data:
                     - M: [  0.00000000 ang ,  0.15460000 ang ,  0.00000000 ang ]
 #     *** Domain configuration ***
         - domain:
-            cell_size: 30.0 ang
+            cell_size: 25.0 ang
+            grid_dims: [ 40 , 40 , 40 ] # grid dimensions multiplied by cell_size must match bounds' size
+            bounds: [ [ 0.0 ang , 0.0 ang , 0.0 ang ] , [ 1000.0 ang , 1000.0 ang , 1000.0 ang ] ]
             periodic: [true,true,true]
-#            expandable: true
+            expandable: false
+            xform: [ [ 1 , 0, 0 ] , [ 0 , 1 , 0 ] , [ 0 , 0 , 1 ] ] # Identity, unless domain sides' lengths are not multiple of cell_size
+        - init_rcb_grid
+
 #     *** Generate lattice with geometrical constraints ***
         - lattice:
             structure: SC
             types: [ H2O ]
             size: [ 3.103 ang , 3.103 ang , 3.103 ang ]
-            noise: 0.0 ang
-            noise_cutoff: 0.0 ang
-            repeats: [ 120 , 120 , 120 ]
+            noise: 0.1 ang
+            noise_cutoff: 0.2 ang
             region: SPHERE
-            user_function:
-              wavefront:
-                plane: [ 1 , 0 , 0 , -186.18 ang ]
-                wave: [ 0 , 0.1 , 0 , 0 ]
-                amplitude: 30.0 ang
+#            user_function:
+#              wavefront:
+#                plane: [ 1 , 0 , 0 , -186.18 ang ]
+#                wave: [ 0 , 0.1 , 0 , 0 ]
+#                amplitude: 30.0 ang
 #     *** Initialize temperature ***
         - random_orient
 #
@@ -185,5 +141,5 @@ input_data:
         - message: "Restart from last dump ..."
         - read_dump_rigidmol:
             filename: lastLegacyDump
-  - replicate_domain
+  - replicate_domain # defaults to 1x1x1, may be overriden by --set-replicate_domain-repeat "[2,1,4]"
 

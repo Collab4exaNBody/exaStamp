@@ -1,5 +1,3 @@
-#pragma xstamp_cuda_enable
-
 #pragma xstamp_grid_variant
 
 #include <exanb/core/grid.h>

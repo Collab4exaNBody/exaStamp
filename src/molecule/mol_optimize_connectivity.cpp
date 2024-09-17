@@ -7,6 +7,7 @@
 
 #include <exaStamp/molecule/mol_connectivity.h>
 #include <exaStamp/molecule/molecule_compute_param.h>
+#include <exaStamp/molecule/intramolecular_pair_weight.h>
 
 #include <mpi.h>
 
@@ -15,15 +16,17 @@ namespace exaStamp
 
   class MolOptimizeConnectivity : public OperatorNode
   {
-    ADD_SLOT( IdMap             , id_map             , INPUT  );
-    ADD_SLOT( IdMapGhosts       , id_map_ghosts      , INPUT  );
+    ADD_SLOT( ParticleSpecies             , species       , INPUT , REQUIRED );
+    ADD_SLOT( IdMap                       , id_map        , INPUT  );
+    ADD_SLOT( IdMapGhosts                 , id_map_ghosts , INPUT  );
+    ADD_SLOT( IntramolecularPairWeighting , weight        , INPUT , IntramolecularPairWeighting{} );
 
     ADD_SLOT( ChemicalBonds     , chemical_bonds     , INPUT_OUTPUT );
     ADD_SLOT( ChemicalAngles    , chemical_angles    , INPUT_OUTPUT );    
     ADD_SLOT( ChemicalTorsions  , chemical_torsions  , INPUT_OUTPUT );
     ADD_SLOT( ChemicalImpropers , chemical_impropers , INPUT_OUTPUT );
 
-    ADD_SLOT( MoleculeComputeParameterSet     , molecule_compute_parameters , INPUT, DocString{"Intramolecular functionals' parameters"} );
+    ADD_SLOT( MoleculeComputeParameterSet      , molecule_compute_parameters , INPUT, DocString{"Intramolecular functionals' parameters"} );
     ADD_SLOT( IntramolecularParameterIndexLists, intramolecular_parameters , INPUT_OUTPUT, DocString{"Intramolecular functional parmater index lists"} );
 
   public:
@@ -52,7 +55,8 @@ namespace exaStamp
           b[1] = atom_from_idmap( b[1] , *id_map , *id_map_ghosts );
           decode_cell_particle( b[0], c,p, ta );
           decode_cell_particle( b[1], c,p, tb );
-          intramolecular_parameters->m_bond_param_idx[i] = molecule_compute_parameters->m_intramol_param_map[ { int(ta),int(tb),-1,-1 } ];
+          const auto it = molecule_compute_parameters->m_intramol_param_map.find( bond_key(ta,tb) );
+          intramolecular_parameters->m_bond_param_idx[i] = ( it != molecule_compute_parameters->m_intramol_param_map.end() ) ? it->second : -1;
         }
 
 #       pragma omp for schedule(static) nowait
@@ -65,7 +69,8 @@ namespace exaStamp
           decode_cell_particle( b[0], c,p, ta );
           decode_cell_particle( b[1], c,p, tb );
           decode_cell_particle( b[2], c,p, tc );
-          intramolecular_parameters->m_angle_param_idx[i] = molecule_compute_parameters->m_intramol_param_map[ { int(ta),int(tb),int(tc),-1 } ];
+          const auto it = molecule_compute_parameters->m_intramol_param_map.find( angle_key(ta,tb,tc) );
+          intramolecular_parameters->m_angle_param_idx[i] = ( it != molecule_compute_parameters->m_intramol_param_map.end() ) ? it->second : -1;
         }
 
 #       pragma omp for schedule(static) nowait
@@ -80,7 +85,8 @@ namespace exaStamp
           decode_cell_particle( t[1], c,p, tb );
           decode_cell_particle( t[2], c,p, tc );
           decode_cell_particle( t[3], c,p, td );
-          intramolecular_parameters->m_torsion_param_idx[i] = molecule_compute_parameters->m_intramol_param_map[ { int(ta),int(tb),int(tc),int(td) } ];
+          const auto it = molecule_compute_parameters->m_intramol_param_map.find( torsion_key(ta,tb,tc,td) );
+          intramolecular_parameters->m_torsion_param_idx[i] = ( it != molecule_compute_parameters->m_intramol_param_map.end() ) ? it->second : -1;
         }
 
 #       pragma omp for schedule(static) nowait
@@ -95,7 +101,8 @@ namespace exaStamp
           decode_cell_particle( t[1], c,p, tb );
           decode_cell_particle( t[2], c,p, tc );
           decode_cell_particle( t[3], c,p, td );
-          intramolecular_parameters->m_improper_param_idx[i] = molecule_compute_parameters->m_intramol_param_map[ { int(ta),int(tb),int(tc),int(td) } ];
+          const auto it = molecule_compute_parameters->m_intramol_param_map.find( improper_key(ta,tb,tc,td) );
+          intramolecular_parameters->m_improper_param_idx[i] = ( it != molecule_compute_parameters->m_intramol_param_map.end() ) ? it->second : -1;
         }
       }
 

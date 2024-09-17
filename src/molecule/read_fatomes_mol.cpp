@@ -57,13 +57,18 @@ namespace exaStamp
 {
   using namespace exanb;
 
-  // Read XYZ files.
+  // Read FAtomes files.
   // This files must be ASCII files
-  // first line : number of particles
-  // second line : xform of simulation domain
-  // next lines : typeFF X Y Z molid moltype connectivity[5]
-  // example : Cno2 5.3 9.23 -3.5 1 0 6 2 7 -1 -1
-  // Note : the typeFF have to match a specie name
+  // ATTENTION : we make many assumptions (not made in Stamp but valid for our test case so far) in this  function.
+  // We assume that the order of the sections is
+  // 1. atom types (also true in Stamp)
+  // 2. "Potentiel"
+  // 3. PositionDesAtomes
+  // 4. Vitesses
+  // 5. ModificationDesCharges
+  // 6. ChampDeForce (intra)
+  // 7. Zmatrice
+  // 8. ContribDispRepIntra
 
   template<typename GridT>
   class ReadFAtomesMolecules : public OperatorNode
@@ -75,18 +80,16 @@ namespace exaStamp
     ADD_SLOT( GridT           , grid         , INPUT_OUTPUT );
 
     ADD_SLOT( ParticleSpecies , species      , INPUT_OUTPUT ); 
-
     ADD_SLOT( MoleculeSpeciesVector , molecules , INPUT_OUTPUT, MoleculeSpeciesVector{} , DocString{"Molecule descriptions"} );
 
     ADD_SLOT( BondsPotentialParameters         , potentials_for_bonds     , INPUT_OUTPUT, BondsPotentialParameters{} );
     ADD_SLOT( BendsPotentialParameters         , potentials_for_angles    , INPUT_OUTPUT, BendsPotentialParameters{} );
     ADD_SLOT( TorsionsPotentialParameters      , potentials_for_torsions  , INPUT_OUTPUT, TorsionsPotentialParameters{} );
-    ADD_SLOT( ImpropersPotentialParameters     , potentials_for_impropers , INPUT_OUTPUT, ImpropersPotentialParameters{} );
-    
+    ADD_SLOT( ImpropersPotentialParameters     , potentials_for_impropers , INPUT_OUTPUT, ImpropersPotentialParameters{} );    
     ADD_SLOT( LJExp6RFMultiParms               , potentials_for_pairs     , INPUT_OUTPUT , LJExp6RFMultiParms{} );
-    ADD_SLOT( double                           , rcut_max                 , INPUT_OUTPUT , 0.0 );
-
     ADD_SLOT( IntramolecularPairWeighting      , mol_pair_weights         , INPUT_OUTPUT , IntramolecularPairWeighting{} );
+
+    ADD_SLOT( double                           , rcut_max                 , INPUT_OUTPUT , 0.0 );
 
   public:
     inline void execute () override final
@@ -135,6 +138,7 @@ namespace exaStamp
       std::string atom_speed_unit;
       std::string atom_charge_unit;
       std::string atom_pos_unit;
+      std::string mixingRule = "0";
       bool force_field_description = false;
       bool atom_bonds_description = false;
       bool intramol_weight_description = false;
@@ -148,6 +152,7 @@ namespace exaStamp
           fatal_error() << "FAtomes file "<< file_name << " not found !" << std::endl;
         }
 
+        // lambda function to get the next line of FAtomes file
         int64_t lineno = -1;
         auto next_line = [&file,&lineno]() -> std::istringstream
         {
@@ -165,9 +170,10 @@ namespace exaStamp
           return std::istringstream(line);
         };
 
+        // lambda function to read units
         auto read_unit = [this] ( std::string u ) -> std::string
         {
-          const std::map<std::string,std::string> replace = { {"J/mol.m6","J*m^6   "} , {"ang2","ang^2"} , {"deg","degree"} , {"m6","m^6"} , {"m-1","m^-1"} };
+          const std::map<std::string,std::string> replace = { {"J/mol.m6","J*m^6   "} , {"ang2","ang^2"} , {"deg","degree"} , {"m6","m^6"} , {"m-1","m^-1"} , {"kcal/mol", "kcal"}};
           for(const auto& r : replace)
           {
             auto p = u.find(r.first);
@@ -181,6 +187,7 @@ namespace exaStamp
           return u;
         };
 
+        // lambda function to read all keywords of FAtomes file, save right away what can be saved 
         auto process_kw_line = [&] ( std::istringstream && iss ) 
         {
           std::string kw;
@@ -282,17 +289,7 @@ namespace exaStamp
           }
           else if( kw == "Regle_melange" )
           {
-            iss >> tmp; ldbg << "Regle_melange = "<<tmp<<std::endl;
-            int ita = 0;
-            int itb = 1;
-            LJExp6RFParms* params_for_pair = potentials_for_pairs->params_for_pair( species->at(ita).name(), species->at(itb).name() );
-            if( params_for_pair == nullptr )
-            {
-              LJExp6RFMultiParmsPair pot = { species->at(ita).name(), species->at(itb).name() };
-              double A=0.0,B=0.0,C=0.0,D=0.0,rc=1.0;
-              pot.m_params.set_exp6_parameters( A, B, C, D, rc );
-              potentials_for_pairs->m_potentials.push_back(pot);
-            }
+            iss >> mixingRule; ldbg << "Regle_melange = "<< mixingRule <<std::endl;
           }
           else if( kw == "PositionDesAtomesCart" ) { iss >> atom_pos_unit; ldbg << "PositionDesAtomesCart = "<<atom_pos_unit<<std::endl; }
           else if( kw == "VitesseDesAtomes" ) { iss >> atom_speed_unit; ldbg << "VitesseDesAtomes = "<<atom_speed_unit<<std::endl; }
@@ -306,6 +303,7 @@ namespace exaStamp
           }
         };        
 
+        // to make sure that the number of atom types is read
         while( nb_atom_types == 0 )
         {
           process_kw_line( next_line() );
@@ -314,6 +312,7 @@ namespace exaStamp
         species->clear();
         species->resize(nb_atom_types);
 
+        // to save the info (charge, mass, name, type,...) of each atom type
         int atom_type_count = 0;
         std::map<std::string,size_t> atom_type_index;
         while( atom_type_count < nb_atom_types )
@@ -337,14 +336,136 @@ namespace exaStamp
           }
         }
 
+        // read file until section "PositionDesAtomes" and fill all variables corresponding to the sections "TypeAtomes" and "Potentiel" read before
         while( atom_pos_unit.empty() )
         {
           process_kw_line( next_line() );
+        }
+
+        // Take into account the mixing rule
+        int ita, itb;
+        // Loop on all "cross" pairs
+        for (ita = 0; ita < atom_type_count - 1; ita++) {
+          for (itb = ita+1 ; itb < atom_type_count; itb++) {
+             LJExp6RFParms* params_for_pair = potentials_for_pairs->params_for_pair( species->at(ita).name(), species->at(itb).name() );
+             // if this pair is not yet defined
+             if( params_for_pair == nullptr )
+             {
+               // initialize the potential for the cross term
+               LJExp6RFMultiParmsPair pot = { species->at(ita).name(), species->at(itb).name() };
+               //LJExp6RFMultiParmsPair pot = { species->at(itb).name(), species->at(ita).name() };
+
+               // get the parameters of the interactions (ita, ita) and (itb, itb)
+               LJExp6RFParms* params_ita = potentials_for_pairs->params_for_pair( species->at(ita).name(), species->at(ita).name() );
+               LJExp6RFParms* params_itb = potentials_for_pairs->params_for_pair( species->at(itb).name(), species->at(itb).name() );
+
+               // check that ita and itb have the same potential type (LJ ou exp6v1)
+               if (params_ita->m_B_ISEXP6 == 0. && params_itb->m_B_ISEXP6 == 0. ) {
+                 // LJ potential
+
+                 double epsilon_a, epsilon_b, epsilon_ab;
+                 double sigma_a, sigma_b, sigma_ab;
+                 double rcut_a, rcut_b, rcut_ab;
+
+                 epsilon_a = params_ita->m_C_EPSILON;
+                 sigma_a   = params_ita->m_D_SIGMA;
+                 rcut_a    = params_ita->m_rcut;
+
+                 epsilon_b = params_itb->m_C_EPSILON;
+                 sigma_b   = params_itb->m_D_SIGMA;
+                 rcut_b    = params_itb->m_rcut;
+
+                 epsilon_ab = 0.; sigma_ab = 0.; rcut_ab = 0.;
+
+                 // definition of a default mixing rule if undefined
+                 if (mixingRule == "0") mixingRule = "Lorentz-Berthelot";
+
+                 if (mixingRule == "geometrique") {
+                   epsilon_ab = sqrt(epsilon_a*epsilon_b);
+                   sigma_ab   = sqrt(sigma_a*sigma_b);
+                   rcut_ab    = sqrt(rcut_a*rcut_b);
+
+                 } else if (mixingRule == "Lorentz-Berthelot" || mixingRule == "LB") {
+                   epsilon_ab = sqrt(epsilon_a*epsilon_b);
+                   sigma_ab   = 0.5*(sigma_a+sigma_b);
+                   rcut_ab    = 0.5*(rcut_a*rcut_b);
+
+                 } else {
+                   fatal_error() << "Unexpected mixing rule (" << mixingRule << ") for LJ potential for cross term (" << species->at(ita).name() << ", " << species->at(itb).name() << ")" << std::endl;
+                 }
+
+                 pot.m_params.set_lj_parameters( sigma_ab, epsilon_ab, rcut_ab );
+
+               } else if (params_ita->m_B_ISEXP6 != 0. && params_ita->m_B_ISEXP6 != 0.) {
+                 // exp6v1 potential
+                 double A_a, A_b, A_ab;
+                 double B_a, B_b, B_ab;
+                 double C_a, C_b, C_ab;
+                 double D_a, D_b, D_ab;
+                 double rcut_a, rcut_b, rcut_ab;
+
+                 A_a    = params_ita->m_A;
+                 B_a    = params_ita->m_B_ISEXP6;
+                 C_a    = params_ita->m_C_EPSILON;
+                 D_a    = params_ita->m_D_SIGMA;
+                 rcut_a = params_ita->m_rcut;
+
+                 A_b    = params_itb->m_A;
+                 B_b    = params_itb->m_B_ISEXP6;
+                 C_b    = params_itb->m_C_EPSILON;
+                 D_b    = params_itb->m_D_SIGMA;
+                 rcut_b = params_itb->m_rcut;
+
+                 A_ab = 0.; B_ab = 0.; C_ab = 0.; D_ab = 0.; rcut_ab= 0.;
+
+                 // definition of a default mixing rule if undefined
+                 if (mixingRule == "0") mixingRule = "Waldman-Hagler";
+
+                 if (mixingRule == "geometrique") {
+                   A_ab = sqrt(A_a*A_b);
+                   B_ab = sqrt(B_a*B_b);
+                   C_ab = sqrt(C_a*C_b);
+                   D_ab = sqrt(D_a*D_b);
+                   rcut_ab    = sqrt(rcut_a*rcut_b);
+
+                 } else if (mixingRule == "Waldman-Hagler") {
+
+                   // B parameter
+                   B_ab = pow(B_a, -6) + pow(B_b, -6);
+                   B_ab = 2. / B_ab;
+                   B_ab = pow(B_ab, 1./6.);
+
+                   // A parameter
+                   A_ab  = sqrt(A_a*A_b);
+                   A_ab *= pow(B_ab, 6);
+                   A_ab /= pow(B_a, 3); 
+                   A_ab /= pow(B_b, 3); 
+
+                   // C, D and rcut parameters
+                   C_ab = sqrt(C_a*C_b);
+                   D_ab = sqrt(D_a*D_b);
+                   rcut_ab    = sqrt(rcut_a*rcut_b);
+
+                 } else {
+                   fatal_error() << "Unexpected mixing rule (" << mixingRule << ") for Exp-6 potential for cross term (" << species->at(ita).name() << ", " << species->at(itb).name() << ")" << std::endl;
+                 }
+
+                 pot.m_params.set_exp6_parameters( A_ab, B_ab, C_ab, D_ab, rcut_ab );
+
+               } else {
+                 fatal_error() << "Atom type " << species->at(ita).name() << " and atom type " << species->at(itb).name() << " do not have the same potential. The cross term cannot be defined." << std::endl;
+               }
+               pot.m_params.update_ecut();
+               potentials_for_pairs->m_potentials.push_back(pot);
+             }
+            
+          }
         }
         
         next_line() >> count;
         ldbg << "Number of atoms = "<<count<<std::endl;        
 
+        // Save box shape and dimensions
         Mat3d H = make_identity_matrix();        
         if( angle_a_b!=90 && angle_a_c!=90 && angle_b_c!=90 )
         {
@@ -427,7 +548,7 @@ namespace exaStamp
         }
         ldbg << "file bbox = " << file_bbox << " , size = " << ( file_bbox.bmax - file_bbox.bmin ) << std::endl;       
        
-        // read atom speeds
+        // read atom velocity
         if( atom_speed_unit.empty() ) process_kw_line( next_line() );
         if( atom_speed_unit.empty() )
         {
@@ -443,6 +564,7 @@ namespace exaStamp
           atom_data[cnt][field::vz] = exanb::make_quantity( vz , atom_speed_unit ).convert();
         }
         
+        // Read charges
         process_kw_line( next_line() );
         if( ! atom_charge_unit.empty() )
         {
@@ -464,6 +586,7 @@ namespace exaStamp
           process_kw_line( next_line() );
         }
         
+        // Read intramolecular force field
         if( force_field_description )
         {
           uint64_t nb_force_fields = 0;
@@ -520,6 +643,7 @@ namespace exaStamp
           process_kw_line( next_line() );
         }
         
+        // Read intramolecular connectivity
         if( atom_bonds_description )
         {
           uint64_t nb_con = 0;
@@ -537,6 +661,7 @@ namespace exaStamp
           }
         }
              
+        // read intramolecular weight for non-bonding potentials
         while( !intramol_weight_description && !file.eof() )
         {
           process_kw_line( next_line() );
@@ -725,7 +850,7 @@ namespace exaStamp
         }
       }
 
-      // broadcast molecule specuies names
+      // broadcast molecule species names
       int nmol = molecules->m_molecules.size();
       MPI_Bcast(&nmol, 1, MPI_INT, 0, *mpi);
       molecules->m_bridge_molecules.clear();

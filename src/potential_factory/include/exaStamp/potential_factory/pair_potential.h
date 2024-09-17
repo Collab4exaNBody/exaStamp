@@ -6,6 +6,7 @@
 #include <exanb/field_sets.h>
 #include <exanb/core/log.h>
 #include <exanb/core/particle_type_pair.h>
+#include <onika/flat_tuple.h>
 
 #include <map>
 
@@ -205,7 +206,7 @@ namespace exaStamp
   inline std::vector<char> serialize_pair_potential(double rcut, const PotentialParamT& pot_params, const PairPotExtractT& pair_params)
   {
     static_assert(sizeof(char)==1,"Assumption that sizeof(char) is 1 failed");
-    auto pp = std::make_pair( rcut , pair_params );
+    auto pp = onika::make_flat_tuple( rcut , pair_params );
 
     std::vector<char> signature_buffer;
     signature_buffer.reserve( sizeof(pot_params) + sizeof(pp) );

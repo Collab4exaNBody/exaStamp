@@ -1,0 +1,27 @@
+
+########################### Load balance auto tuning ############################
+# automatic fitting of cost model parameters
+cost_model_fitting_prolog:
+  - trigger_cost_model_fitting:
+      condition: enable_load_balance
+      rebind: { result: trigger_cost_model_fitting , freq: simulation_load_balance_frequency }
+      body:
+        - nth_timestep: { first: false , delayed: true }
+  - do_cost_model_fitting_prolog:
+      condition: trigger_cost_model_fitting
+      rebind: { rcut: nbh_dist_lab }
+      body:
+        - message: "Start load balance auto tuning"
+        - start_grid_cell_profiling # starting profiling befor prefetchng also prefetch cell profiling data array
+        - zero_compute_force: { type: ignore } # data prefetching for more accurate measure
+        - start_grid_cell_profiling # prepare for real profiling during compute_force block
+
+cost_model_fitting_epilog:
+  condition: trigger_cost_model_fitting
+  body:
+    - cost_model_fit: { order: 2 , samples: 256 }
+
+load_balance_auto_tune_start: cost_model_fitting_prolog
+
+load_balance_auto_tune_end: cost_model_fitting_epilog
+

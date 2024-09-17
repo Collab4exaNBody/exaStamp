@@ -4,7 +4,6 @@
 
 
 add_subdirectory(saru)
-add_subdirectory(genDropletMolRigid)
 
 if(XSTAMP_ENABLE_SLIPLINK)
   option(XSTAMP_BUILD_SLIPLINK_REFAPP "Build SLink (slip-link model sample implementation)" OFF)

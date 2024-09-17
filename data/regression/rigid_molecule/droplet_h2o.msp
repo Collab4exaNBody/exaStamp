@@ -19,34 +19,15 @@ configuration:
     filter: [".*wall"]
 #    filter: [".*write_stamp_v4",".*read_stamp_v4",".*species"]
 
+ghost_update_rq:
+  gpu_buffer_pack: true
+  async_buffer_pack: true
+  staging_buffer: true
+  serialize_pack_send: true
+
 # define potential we'll reuse later
-compute_force_rf:
-  - compute_force_pair_rigidmol:
-      potentials:
-        - { type_a: O , type_b: O , potential: reaction_field , rcut: 8 ang , parameters: { epsilon: 100 , rc: 8 ang } }
-        - { type_a: O , type_b: M , potential: reaction_field , rcut: 8 ang , parameters: { epsilon: 100 , rc: 8 ang } }
-        - { type_a: O , type_b: H , potential: reaction_field , rcut: 8 ang , parameters: { epsilon: 100 , rc: 8 ang } }
-        - { type_a: H , type_b: M , potential: reaction_field , rcut: 8 ang , parameters: { epsilon: 100 , rc: 8 ang } }
-        - { type_a: M , type_b: M , potential: reaction_field , rcut: 8 ang , parameters: { epsilon: 100 , rc: 8 ang } }
-        - { type_a: H , type_b: H , potential: reaction_field , rcut: 8 ang , parameters: { epsilon: 100 , rc: 8 ang } }
-
-compute_force_lj:
-  - compute_force_pair_rigidmol:
-      potentials:
-        - { type_a: O , type_b: O , potential: lj , rcut: 8.0 ang , parameters: { epsilon: 1.286776984E-21 J , sigma: 0.31589E-09 m } }
-
-compute_force_ljrf:
-  - compute_force_pair_rigidmol:
-      potentials:
-        - { type_a: O , type_b: O , potential: ljrf , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } , lj_rcut: 8 ang , lj: { epsilon: 1.286776984E-21 J , sigma: 0.31589E-09 m } } }
-        - { type_a: O , type_b: M , potential: ljrf , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
-        - { type_a: O , type_b: H , potential: ljrf , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
-        - { type_a: H , type_b: M , potential: ljrf , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
-        - { type_a: M , type_b: M , potential: ljrf , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
-        - { type_a: H , type_b: H , potential: ljrf , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
-
 ljrf_rigidmol_force:
-  type: H2O
+  type: TIP4P
   rcut: 8 ang
   parameters:
     - { type_a: O , type_b: O , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } , lj_rcut: 8 ang , lj: { epsilon: 1.286776984E-21 J , sigma: 0.31589E-09 m } } }
@@ -71,11 +52,15 @@ compute_force:
 
 grid_flavor: grid_flavor_rigidmol
 
+replicate_domain:
+  repeat: [ 1 , 1 , 1 ]
+
 input_data:
   - read_stamp_v4:
       file: dropletH2O.StampV4
       bounds_mode: FILE
       enable_xform_scale: true
+  - replicate_domain
 #  - shift_v: [ 900 m/s , 0 , 0 ]
 
 #+first_iteration:
@@ -85,10 +70,6 @@ domain:
   periodic: [false,false,false]
   cell_size: 30 ang
   expandable: true
-
-chunk_neighbors:
-  config: { free_scratch_memory: false , shrink_stream_to_fit: false , build_particle_offset: true }
-  chunk_size: 8
 
 global:
   dt: 5.0e-4 ps
@@ -116,9 +97,4 @@ dump_data:
       compressionLevel: 9
 
 final_dump: nop
-
-xxx_simulation_epilog:
-  - check_values:
-      file: mydroplet.dat
-      threshold: 4.e-10
 

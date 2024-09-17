@@ -9,6 +9,7 @@
 #include <exanb/core/physics_constants.h>
 
 #include <onika/cuda/cuda.h>
+#include <onika/flat_tuple.h>
 
 namespace exaStamp
 {
@@ -299,7 +300,7 @@ ONIKA_HOST_DEVICE_FUNC inline void zbl_compute_energy(const ZBLParms& p, const P
 #define USTAMP_POTENTIAL_COMPUTE  zbl_compute_energy
 
 // only atom z are meaningful for zbl
-#define USTAMP_POTENTIAL_PAIR_PARAMS_EXTRACT(p) std::make_pair(p.m_atom_a.m_z,p.m_atom_b.m_z)
+#define USTAMP_POTENTIAL_PAIR_PARAMS_EXTRACT(p) onika::make_flat_tuple(p.m_atom_a.m_z,p.m_atom_b.m_z)
 
 #define USTAMP_POTENTIAL_ENABLE_CUDA 1
 

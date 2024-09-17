@@ -13,10 +13,10 @@ namespace exaStamp
   ------------------------------------------------------------------------- */
   ONIKA_HOST_DEVICE_FUNC
   static inline void snap_compute_zi( // READ ONLY
-                                      int nelements, int idxz_max, int idxu_max
-                                    , int const * __restrict__ idxu_block
-                                    , int const * __restrict__ const * __restrict__ const * __restrict__ idxcg_block
-                                    , LAMMPS_NS::SNA_ZINDICES const * __restrict__ idxz
+                                      int nelements, int idxz_max, int idxu_max, int twojmax
+//                                    , int const * __restrict__ idxu_block
+                                    , int const * __restrict__ const idxcg_block
+                                    , SnapInternal::SNA_ZINDICES const * __restrict__ idxz
                                     , const double * __restrict__ cglist
                                     , double const * __restrict__ ulisttot_r
                                     , double const * __restrict__ ulisttot_i
@@ -36,23 +36,23 @@ namespace exaStamp
         //zptr_i = &ZLIST_I(idouble*idxz_max);
 
         for (int jjz = 0; jjz < idxz_max; jjz++) {
-          const int j1 = idxz[jjz].j1;
-          const int j2 = idxz[jjz].j2;
-          const int j = idxz[jjz].j;
-          const int ma1min = idxz[jjz].ma1min;
-          const int ma2max = idxz[jjz].ma2max;
-          const int na = idxz[jjz].na;
-          const int mb1min = idxz[jjz].mb1min;
-          const int mb2max = idxz[jjz].mb2max;
-          const int nb = idxz[jjz].nb;
+          const int j1 = IDXZ(jjz).j1;
+          const int j2 = IDXZ(jjz).j2;
+          const int j = IDXZ(jjz).j;
+          const int ma1min = IDXZ(jjz).ma1min;
+          const int ma2max = IDXZ(jjz).ma2max;
+          const int na = IDXZ(jjz).na;
+          const int mb1min = IDXZ(jjz).mb1min;
+          const int mb2max = IDXZ(jjz).mb2max;
+          const int nb = IDXZ(jjz).nb;
 
-          const double *cgblock = cglist + idxcg_block[j1][j2][j];
+          const double * const __restrict__ cgblock = cglist + IDXCG_BLOCK(j1,j2,j);
 
           ZLIST_R(idouble*idxz_max+jjz) = 0.0;
           ZLIST_I(idouble*idxz_max+jjz) = 0.0;
 
-          int jju1 = idxu_block[j1] + (j1 + 1) * mb1min;
-          int jju2 = idxu_block[j2] + (j2 + 1) * mb2max;
+          int jju1 = IDXU_BLOCK(j1) + (j1 + 1) * mb1min;
+          int jju2 = IDXU_BLOCK(j2) + (j2 + 1) * mb2max;
           int icgb = mb1min * (j2 + 1) + mb2max;
           for (int ib = 0; ib < nb; ib++) {
 

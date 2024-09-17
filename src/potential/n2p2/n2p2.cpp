@@ -22,10 +22,7 @@
 #include "InterfaceExastamp.h"
 #include <exanb/core/physics_constants.h>
 
-#ifdef XNB_CUDA_VERSION
 #include <onika/cuda/cuda_context.h>
-#include <exanb/core/cpu_gpu_partition.h>
-#endif
 
 #include <vector>
 #include <memory>

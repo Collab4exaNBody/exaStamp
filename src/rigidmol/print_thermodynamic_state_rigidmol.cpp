@@ -36,7 +36,7 @@ namespace exaStamp
       double conv_energy = 1.e4 * legacy_constant::atomicMass / legacy_constant::elementaryCharge;
       double conv_pressure = legacy_constant::atomicMass * 1e20;
       
-      static const std::string header = "     Step     Time (ps)     Particles   Mv/Ext/Imb.  Tot. E. (eV/part)  Kin. E. (eV/part)  Rot. E. (eV/part)  Pot. E. (eV/part)  Temperature   Pressure     sMises     Volume       Mass";
+      static const std::string header = "     Step     Time (ps)     Particles   Mv/Ext/Imb.  Tot. E. (eV/part)  Kin. E. (eV/part)  Rot. E. (eV/part)  Pot. E. (eV/part)      T. (K)     Tkin (K)    Trot (K) Pressure    sMises    Volume       Mass";
       
       
       if( *internal_units )
@@ -102,8 +102,7 @@ namespace exaStamp
         lout << std::endl;
       }
 
-//      lout<<format_string("%9ld % .6e %13ld  %c %c %8s  % .10e  % .10e  % .10e  % 11.3f % .3e % .3e % .3e % .3e",
-      lout<<format_string("%9ld % .6e %13ld  %c %c %8s  % .10e  %  .10e  % .10e  % .10e  % 11.3f % .3e % .3e % .3e % .3e",
+      lout<<format_string("%9ld % .6e %13ld  %c %c %8s  %.10e  %  .10e  % .10e  % .10e  % 11.3f % 11.3f % 11.3f % .3e % .3e % .3e % .3e",
         *timestep,
 	      *physical_time,
         sim_info.particle_count(),
@@ -113,6 +112,8 @@ namespace exaStamp
         sim_info.rotational_energy_scal() * conv_energy / sim_info.particle_count(),
         sim_info.potential_energy() * conv_energy / sim_info.particle_count(),
         sim_info.temperature_rigidmol_scal() * conv_temperature,
+        sim_info.kinetic_temperature_scal() * conv_temperature,
+        sim_info.rotational_temperature_scal() * conv_temperature,
         sim_info.pressure_scal() * conv_pressure,
         sim_info.vonmises_scal() * conv_pressure,
         sim_info.volume(),
@@ -124,6 +125,7 @@ namespace exaStamp
       }
       lout << std::endl;
     }
+
 
   };
     

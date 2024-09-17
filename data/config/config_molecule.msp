@@ -1,18 +1,5 @@
-# specific operations needed for molecules when particles move from cell to cell (and processor to processor)
-+parallel_update_particles:
-  - id_map
-  - mol_extract_connectivity
-  - intramolecular_pair_weight
-  - mol_optimize_connectivity
 
-# if user doesn't overload molecule_pair_weight, does nothing
-intramolecular_pair_weight: nop
-
-chunk_neighbors:
-  config:
-    chunk_size: 1
-
-# Native ExaNB dump format for rigid molecules
+# Native exaNBody dump format for flexible molecules
 dump_data_molecule:
   - timestep_file: "molecule_%09d.MpiIO"
   - message: { mesg: "Write dump " , endl: false }
@@ -23,4 +10,59 @@ dump_data_molecule:
   - write_dump_molecule
 
 dump_data: dump_data_molecule
+
+extramolecular_neighbors:
+  config:
+    free_scratch_memory: false
+    build_particle_offset: false
+    subcell_compaction: true
+    scratch_mem_per_cell: 1048576
+    stream_prealloc_factor: 1.05 # standard value to avoid most of dynamic allocations
+    chunk_size: 1
+
+chunk_neighbors_impl: extramolecular_neighbors
+
+parallel_update_particles:
+  - migrate_cell_particles
+  - rebuild_amr
+  - backup_r
+  - ghost_full_update
+  - grid_post_processing
+  - id_map
+  - mol_extract_connectivity
+  - intramolecular_pair_list
+  - mol_optimize_connectivity
+  - update_particle_neighbors
+
+ljexp6rf_pc:
+  enable_pair_weights: false
+  per_atom_charge: true
+  use_symmetry: false
+  compute_virial: false
+
+compute_intramolecular_forces:
+  - compute_force_bond
+  - compute_force_bend
+  - compute_force_torsion
+  - compute_force_improper
+  - intramolecular_pair_force
+
+compute_extramolecular_forces:
+  rebind: { parameters: potentials_for_pairs }
+  body: [ ljexp6rf_pc ]
+
+compute_force:
+  - compute_extramolecular_forces
+  - compute_intramolecular_forces
+
+preinit_rcut_max: nop
+
+init_epilog:
+  - intramolecular_setup
+
+compute_force_prolog: zero_force_energy_with_correction
+
+domain:
+  cell_size: 8 ang
+  periodic: [true, true, true]
 

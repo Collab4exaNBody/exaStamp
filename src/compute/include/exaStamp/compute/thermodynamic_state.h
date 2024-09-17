@@ -79,12 +79,14 @@ namespace exaStamp
     inline double kinetic_temperature_x() const { return m_kinetic_temperature.x ; }
     inline double kinetic_temperature_y() const { return m_kinetic_temperature.y ; }
     inline double kinetic_temperature_z() const { return m_kinetic_temperature.z ; }
+    inline double kinetic_temperature_scal() const { return ( m_kinetic_temperature.x + m_kinetic_temperature.y + m_kinetic_temperature.z ) / (3. + ndof_scal() / particle_count()) ; }
 
     inline void set_rotational_temperature(const Vec3d& x) { m_rotational_temperature = x; }
     inline const Vec3d& rotational_temperature() const { return m_rotational_temperature; }
     inline double rotational_temperature_x() const { return m_rotational_temperature.x ; }
     inline double rotational_temperature_y() const { return m_rotational_temperature.y ; }
     inline double rotational_temperature_z() const { return m_rotational_temperature.z ; }
+    inline double rotational_temperature_scal() const { return ( m_rotational_temperature.x + m_rotational_temperature.y + m_rotational_temperature.z ) / (3. + ndof_scal() / particle_count()) ; }
 
     inline void set_kinetic_momentum(const Vec3d& x) { m_kinetic_momentum = x; }
     inline const Vec3d& kinetic_momentum() const { return m_kinetic_momentum; }

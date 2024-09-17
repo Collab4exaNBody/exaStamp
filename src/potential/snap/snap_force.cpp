@@ -19,12 +19,15 @@
 #include <exaStamp/potential/snap/snap_params.h>
 #include <exaStamp/potential/snap/snap_read_lammps.h>
 #include <exaStamp/potential/snap/snap_config.h>
+#include <exaStamp/potential/snap/snap_check_bispectrum.h>
 
 #include <exanb/particle_neighbors/chunk_neighbors.h>
 
 #include <vector>
 #include <memory>
 #include <iostream>
+
+#include <mpi.h>
 
 //#include "sna.h"
 //#include "memory.h"
@@ -40,7 +43,6 @@ namespace exaStamp
   using onika::memory::DEFAULT_ALIGNMENT;
 //  using namespace SnapExt;
 
-
   template<
     class GridT,
     class = AssertGridHasFields< GridT, field::_ep ,field::_fx ,field::_fy ,field::_fz >
@@ -48,6 +50,7 @@ namespace exaStamp
   class SnapNewForce : public OperatorNode
   {
     // ========= I/O slots =======================
+    ADD_SLOT( MPI_Comm              , mpi               , INPUT , REQUIRED);
     ADD_SLOT( SnapParms             , parameters        , INPUT , REQUIRED );
     ADD_SLOT( double                , rcut_max          , INPUT_OUTPUT , 0.0 );
     ADD_SLOT( exanb::GridChunkNeighbors , chunk_neighbors   , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
@@ -58,15 +61,24 @@ namespace exaStamp
     ADD_SLOT( Domain                , domain            , INPUT , REQUIRED );
     ADD_SLOT( GridParticleLocks     , particle_locks    , INPUT , OPTIONAL , DocString{"particle spin locks"} );
 
-    ADD_SLOT( SnapLMPContext        , snap_ctx          , PRIVATE );
+    ADD_SLOT( long                  , timestep          , INPUT , REQUIRED , DocString{"Iteration number"} );
+    ADD_SLOT( std::string           , bispectrumchkfile , INPUT , OPTIONAL , DocString{"file with reference values to check bispectrum correctness"} );
+    
+    ADD_SLOT( SnapXSContext        , snap_ctx          , PRIVATE );
 
     // shortcut to the Compute buffer used (and passed to functor) by compute_cell_particle_pairs
     static constexpr bool UseWeights = false;
     static constexpr bool UseNeighbors = true;
 
-//    using ComputeBuffer = ComputePairBuffer2<UseWeights,UseNeighbors,SnapComputeBuffer,CopyParticleType>; // original
+    template<class SnapConfParamT>
     using ComputeBuffer = ComputePairBuffer2< UseWeights, UseNeighbors
-                                            , NoExtraStorage, DefaultComputePairBufferAppendFunc
+                                            , SnapXSForceExtStorage<SnapConfParamT>, DefaultComputePairBufferAppendFunc
+                                            , exanb::MAX_PARTICLE_NEIGHBORS, ComputePairBuffer2Weights
+                                            , FieldSet<field::_type> >;
+
+    template<class SnapConfParamT>
+    using ComputeBufferBS = ComputePairBuffer2< UseWeights, UseNeighbors
+                                            , SnapBSExtStorage<SnapConfParamT>, DefaultComputePairBufferAppendFunc
                                             , exanb::MAX_PARTICLE_NEIGHBORS, ComputePairBuffer2Weights
                                             , FieldSet<field::_type> >;
 
@@ -99,7 +111,8 @@ namespace exaStamp
         ldbg << "Snap: read lammps files "<<lammps_param<<" and "<<lammps_coef<<std::endl << std::flush;
         SnapExt::snap_read_lammps(lammps_param, lammps_coef, snap_ctx->m_config, *conv_coef_units );
         ldbg <<"rfac0="<<snap_ctx->m_config.rfac0() <<", rmin0="<<snap_ctx->m_config.rmin0() <<", rcutfac="<<snap_ctx->m_config.rcutfac() 
-             <<", twojmax="<<snap_ctx->m_config.twojmax()<<", bzeroflag="<<snap_ctx->m_config.bzeroflag()<<", nmat="<<snap_ctx->m_config.materials().size() <<std::endl;
+             <<", twojmax="<<snap_ctx->m_config.twojmax()<<", bzeroflag="<<snap_ctx->m_config.bzeroflag()<<", nmat="<<snap_ctx->m_config.materials().size()
+             <<", chemflag="<<snap_ctx->m_config.chemflag() <<std::endl;
         snap_ctx->m_rcut = snap_ctx->m_config.rcutfac(); // because LAMMPS uses angstrom while exastamp uses nm
       }
 
@@ -158,7 +171,7 @@ namespace exaStamp
 
       if( snap_ctx->sna == nullptr )
       {
-        snap_ctx->sna = new LAMMPS_NS::SNA( new LAMMPS_NS::Memory()
+        snap_ctx->sna = new SnapInternal::SNA( new SnapInternal::Memory()
                                           , snap_ctx->m_config.rfac0() 
                                           , snap_ctx->m_config.twojmax() 
                                           , snap_ctx->m_config.rmin0()
@@ -170,41 +183,12 @@ namespace exaStamp
                                           , snap_ctx->m_config.nelements()
                                           , snap_ctx->m_config.switchinnerflag()
                                           );
-        snap_ctx->sna->init();
+        snap_ctx->sna->init();        
       }
-      ldbg << "Constant config allocation" << std::endl;
+      ldbg << "*** Constant config allocation ***" << std::endl;
       snap_ctx->sna->memory->print( ldbg );
 
-      size_t gpu_block_size = 1;
-      size_t gpu_blocks = 1;
-      size_t nt = omp_get_max_threads();
-      ldbg << "cuda_ctx = " << global_cuda_ctx() << std::endl;
-      if( global_cuda_ctx() != nullptr ) ldbg << "cuda has devices = " << global_cuda_ctx()->has_devices() << std::endl;
-      if( global_cuda_ctx() != nullptr && global_cuda_ctx()->has_devices() )
-      {
-        gpu_block_size = onika::parallel::ParallelExecutionContext::gpu_block_size();
-        gpu_blocks = global_cuda_ctx()->m_devices[0].m_deviceProp.multiProcessorCount
-                                * onika::parallel::ParallelExecutionContext::gpu_sm_mult()
-                                + onika::parallel::ParallelExecutionContext::gpu_sm_add();
-      }
-      if( gpu_blocks > nt ) nt = gpu_blocks;
-      ldbg << "Execution buffer scratch: thread blocks = "<<nt<<" , block size = "<<gpu_block_size<<std::endl;
-      
-      if( nt > snap_ctx->m_scratch.size() )
-      {
-        size_t cursize = snap_ctx->m_scratch.size();
-        ldbg << "grow number of scratch buffers : "<<cursize<<" -> "<<nt<<std::endl;
-        snap_ctx->m_scratch.resize( nt );
-        for(;cursize<nt;cursize++) snap_ctx->m_scratch[cursize].initialize( snap_ctx->sna , gpu_block_size );
-      }
-
       ldbg << "Max number of neighbors = "<< chunk_neighbors->m_max_neighbors << std::endl;
-      for(size_t i=0;i<nt;i++)
-      {
-        snap_ctx->m_scratch[i].grow_rij( chunk_neighbors->m_max_neighbors );
-      }
-      ldbg << "Scratch buffers allocation" << std::endl;
-      if( nt >= 1 ) snap_ctx->m_scratch[0].memory->print( ldbg );
 
       bool log_energy = false;
       if( trigger_thermo_state.has_value() )
@@ -217,8 +201,8 @@ namespace exaStamp
         ldbg << "trigger_thermo_state missing " << std::endl;
       }
 
-      const double cutsq = snap_ctx->m_rcut * snap_ctx->m_rcut;
-      const bool eflag = log_energy;
+//      const double cutsq = snap_ctx->m_rcut * snap_ctx->m_rcut;
+      const bool eflag = log_energy || bispectrumchkfile.has_value();
       const bool quadraticflag = snap_ctx->m_config.quadraticflag();
 
       assert( snap_ctx->m_config.switchinnerflag() == snap_ctx->sna->switch_inner_flag );
@@ -227,7 +211,6 @@ namespace exaStamp
       // exanb objects to perform computations with neighbors      
       ComputePairNullWeightIterator cp_weight{};
       exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
-      auto force_buf = make_compute_pair_buffer<ComputeBuffer>(); // make_compute_pair_buffer< SimpleNbhComputeBuffer< FieldSet<field::_type> > >();
       LinearXForm cp_xform { domain->xform() };
 
       // constants to resize bispectrum and beta intermediate terms
@@ -250,60 +233,80 @@ namespace exaStamp
 
       ldbg << "snap: quadratic="<<quadraticflag<<", eflag="<<eflag<<", ncoeff="<<ncoeff<<", ncoeffall="<<ncoeffall<<std::endl;
 
-      if (quadraticflag || eflag)
+      auto snap_compute_specialized_snapconf = [&]( const auto & snapconf )
       {
-        // ************ compute_bispectrum(); ****************
-        snap_ctx->m_bispectrum.clear();
-        snap_ctx->m_bispectrum.resize( total_particles * ncoeff );
-
-        auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform, ComputePairOptionalLocks<false>{} );
-        BispectrumOp bispectrum_op {
-                           LAMMPS_NS::ReadOnlySnapParameters(snap_ctx->sna),
-                           snap_ctx->m_scratch.data(), snap_ctx->m_scratch.size(),
-                           grid->cell_particle_offset_data(), snap_ctx->m_beta.data(), snap_ctx->m_bispectrum.data(),
-                           snap_ctx->m_coefs.data(), ncoeff,
-                           snap_ctx->m_factor.data(), snap_ctx->m_radelem.data(),
-                           nullptr, nullptr,
-                           snap_ctx->m_rcut, cutsq,
-                           eflag, quadraticflag };
-
-        auto cp_fields = grid->field_accessors_from_field_set( compute_bispectrum_field_set );
-        onika::parallel::BlockParallelForOptions bpfor_opts = {};
-        bpfor_opts.max_block_size = gpu_block_size;
-        bpfor_opts.fixed_gpu_grid_size = true;
-        compute_cell_particle_pairs2( *grid, snap_ctx->m_rcut, *ghost, optional, force_buf, bispectrum_op , cp_fields
-                                    , DefaultPositionFields{}, parallel_execution_context(), std::false_type{}, bpfor_opts );
-
-        // *********************************************
-      }
-
-      auto compute_opt_locks = [&](auto cp_locks)
-      {
+        using SnapConfParamsT = std::remove_cv_t< std::remove_reference_t< decltype( snapconf ) > >;
+        //snapconf.to_stream( ldbg );
+      
+        ComputePairOptionalLocks<true> cp_locks = { particle_locks->data() };
         auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform, cp_locks
                       , ComputePairTrivialCellFiltering{}, ComputePairTrivialParticleFiltering{}, grid->field_accessors_from_field_set(FieldSet<field::_type>{}) );
-        SnapLMPForceOp force_op { LAMMPS_NS::ReadOnlySnapParameters(snap_ctx->sna), snap_ctx->m_scratch.data(), snap_ctx->m_scratch.size(),
+
+        if (quadraticflag || eflag)
+        {
+          // ************ compute_bispectrum(); ****************
+          snap_ctx->m_bispectrum.clear();
+          snap_ctx->m_bispectrum.resize( total_particles * ncoeff );
+
+          BispectrumOp<SnapConfParamsT> bispectrum_op {
+                             snapconf,
+                             grid->cell_particle_offset_data(), snap_ctx->m_beta.data(), snap_ctx->m_bispectrum.data(),
+                             snap_ctx->m_coefs.data(), ncoeff,
+                             snap_ctx->m_factor.data(), snap_ctx->m_radelem.data(),
+                             nullptr, nullptr,
+                             snap_ctx->m_rcut, eflag, quadraticflag };
+
+          auto bs_buf = make_compute_pair_buffer< ComputeBufferBS<SnapConfParamsT> >();
+          auto cp_fields = grid->field_accessors_from_field_set( compute_bispectrum_field_set );
+          compute_cell_particle_pairs2( *grid, snap_ctx->m_rcut, *ghost, optional, bs_buf, bispectrum_op , cp_fields
+                                      , DefaultPositionFields{}, parallel_execution_context() );
+
+          // *********************************************        
+          if( bispectrumchkfile.has_value() )
+          {
+            std::ostringstream oss; oss << *bispectrumchkfile << "." << *timestep;
+            std::string file_name = data_file_path( oss.str() );
+            ldbg << "bispectrumchkfile is set, checking bispectrum from file "<< file_name << std::endl;
+            snap_check_bispectrum(*mpi, *grid, file_name, ncoeff, snap_ctx->m_bispectrum.data() );
+          }
+        }
+        
+        SnapXSForceOp<SnapConfParamsT> force_op {
+                           snapconf,
                            grid->cell_particle_offset_data(), snap_ctx->m_beta.data(), snap_ctx->m_bispectrum.data(),
                            snap_ctx->m_coefs.data(), static_cast<unsigned int>(snap_ctx->m_coefs.size()), static_cast<unsigned int>(ncoeff),
                            snap_ctx->m_factor.data(), snap_ctx->m_radelem.data(),
                            nullptr, nullptr,
-                           snap_ctx->m_rcut, cutsq,
-                           eflag, quadraticflag,
+                           snap_ctx->m_rcut, eflag, quadraticflag,
                            ! (*conv_coef_units) // if coefficients were not converted, then output energy/force must be converted
                            };
+                           
+        auto force_buf = make_compute_pair_buffer< ComputeBuffer<SnapConfParamsT> >();
         auto cp_fields = grid->field_accessors_from_field_set( compute_force_field_set );
-        onika::parallel::BlockParallelForOptions bpfor_opts = {};
-        bpfor_opts.max_block_size = gpu_block_size;
-        bpfor_opts.fixed_gpu_grid_size = true;
         compute_cell_particle_pairs2( *grid, snap_ctx->m_rcut, *ghost, optional, force_buf, force_op , cp_fields
-                                    , DefaultPositionFields{}, parallel_execution_context(), std::false_type{}, bpfor_opts );
+                                    , DefaultPositionFields{}, parallel_execution_context() );
       };
-      ldbg << "snap: nthreads="<< omp_get_max_threads() <<std::endl;
       
-      bool need_locks = ( omp_get_max_threads() > 1 ) && ( gpu_block_size == 1 );
-      if( need_locks ) compute_opt_locks( ComputePairOptionalLocks<true>{ particle_locks->data() } );
-      else             compute_opt_locks( ComputePairOptionalLocks<false>{} );
-
-      ldbg << "snap: done"<<std::endl;
+      bool fallback_to_generic = false;
+      const int JMax = snap_ctx->sna->twojmax / 2;
+      if( snap_ctx->sna->nelements == 1 )
+      {
+             if( JMax == 2 ) snap_compute_specialized_snapconf( SnapInternal::ReadOnlySnapParameters< onika::IntConst<2>, onika::IntConst<1> >(snap_ctx->sna) );
+        else if( JMax == 3 ) snap_compute_specialized_snapconf( SnapInternal::ReadOnlySnapParameters< onika::IntConst<3>, onika::IntConst<1> >(snap_ctx->sna) );
+        else if( JMax == 4 ) snap_compute_specialized_snapconf( SnapInternal::ReadOnlySnapParameters< onika::IntConst<4>, onika::IntConst<1> >(snap_ctx->sna) );
+        else fallback_to_generic = true;
+      }
+      else
+      {
+        fallback_to_generic = true;
+      }
+      
+      if( fallback_to_generic )
+      {
+        snap_compute_specialized_snapconf( SnapInternal::ReadOnlySnapParameters<int,int>( snap_ctx->sna ) );
+      }
+      
+      ldbg << "Snap DONE (JMax="<<JMax<<",generic="<<std::boolalpha<<fallback_to_generic<<")"<<std::endl; 
     }
 
   };

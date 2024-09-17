@@ -1,0 +1,142 @@
+#
+# Test lattice generation using user defined function
+#
+
+configuration:
+  profiling:
+    summary: true
+
+ghost_update_r:
+  gpu_buffer_pack: true
+  async_buffer_pack: true
+  staging_buffer: true
+  serialize_pack_send: true
+  wait_all: false
+
+ghost_update_all_no_fv:
+  gpu_buffer_pack: true
+  async_buffer_pack: true
+  staging_buffer: true
+  serialize_pack_send: true
+  wait_all: false
+
+meam_force:
+  rcut: 3.69 ang
+  parameters:
+    rmax: 3.69 ang
+    rmin: 0.0
+    Ecoh: 4.93474273599999995322e-19 J
+    E0: 4.93474273599999995322e-19 J
+    A: 1.000E+00
+    r0: 3.44 ang
+    alpha: 6.200E+00
+    delta: 0.000E+00
+    beta0: 6.200E+00
+    beta1: 6.000E+00
+    beta2: 6.000E+00
+    beta3: 6.000E+00
+    t0: 1.000E+00
+    t1: 4.500E+00
+    t2: 6.500E+00
+    t3: -0.183E+00
+    s0: 1.440E+02
+    s1: 0.000E+00
+    s2: 0.000E+00
+    s3: 0.000E+00
+    Cmin: 0.800E+00
+    Cmax: 2.800E+00
+    Z: 1.200E+01 
+    rc: 4.0 ang
+    rp: 0.1 ang
+
+compute_force: 
+  - meam_force
+  - wall_v2:
+      normal: [ 1.0, 0.0, 0.0 ]
+      offset: 00.0 ang
+      cutoff: 2.4 ang
+      epsilon: 1.0e-19 J
+      exponent: 2
+#      collective_stats: true
+
+grid_flavor: grid_flavor_multimat
+
++first_iteration:
+  - print_domain
+  - chunk_neighbors_stats
+  - grid_stats
+  - memory_stats
+
+dump_data: dump_data_paraview
+
+global:
+  dt: 5.0e-4 ps
+  simulation_end_iteration: 10
+  simulation_log_frequency: 10
+  analysis_dump_frequency: 1000
+  simulation_dump_frequency: 10000
+  rcut_inc: 1.5 ang
+
+# allow for domain replication using command line options
+# to replicate domain, use --set-replicate_domain-repeat [1,2,2]
+replicate_domain:
+  repeat: [ 1 , 1 , 1 ]
+
+input_data:
+#
+###################################
+#  Common part needed both
+#  for initial setup and restart
+###################################
+#
+  - has_dump_file:
+      rebind: { result: has_dump_file }
+      body: [ file_exists: { filename: lastLegacyDump } ]
+#
+################################
+#   Initial system setup
+# ##############################
+  - generate_initial_grid:
+      condition: not has_dump_file
+      body:
+        - message: "Initial run, building system ..."
+#     *** Species configuration ***
+        - species:
+            verbose: false
+            species:
+              - Tin:
+                  mass: 197.1508269E-27 kg
+                  z: 50
+                  charge: 0 e-
+#     *** Domain configuration ***
+        - domain:
+            cell_size: 30.0 ang
+            periodic: [false,true,true]
+#           expandable: true
+#     *** Generate lattice with geometrical constraints ***
+        - lattice:
+            structure: SC
+            types: [ Tin ]
+            size: [ 3.103 ang , 3.103 ang , 3.103 ang ]
+            noise: 0.1 ang
+            noise_cutoff: 0.2 ang
+            repeats: [ 500 , 100 , 100 ]
+            user_function:
+              wavefront:
+                plane: [ -1 , 0 , 0 , 1500.0 ang ] # first 3 values are interface plane (Pi)'s normal vector (X,Y,Z) , last one is plane offset (position of origin relative to the plane).
+                wave: [ 0 , 0.1 , 0 , 0 ] # wave plane (normal and offset). Oriented distance to the plane, Pw(r), is used to add a sinusoid function sin(P(r))*amplitude to the plane function above
+                amplitude: 30.0 ang       # User function is F(r) = Pi(r)+sin(Pw(r))*amplitude , interface is implicit surface F(r)=0, atoms are placed everywhere where F(r)>=0
+        - gaussian_noise_v
+        - init_temperature: 300 K
+#
+###################################
+#  Restart from dump file
+###################################
+  - read_from_last_dump:
+      condition: has_dump_file
+      body:
+        - message: "Restart from last dump ..."
+        - read_dump_atoms:
+            filename: lastLegacyDump
+  - replicate_domain
+

@@ -122,7 +122,7 @@ namespace exaStamp
           using ForceCPBuf = SimpleNbhComputeBuffer< FieldSet<field::_rho_dEmb> >; /* we want extra neighbor storage space to store these fields */
           ComputePairBufferFactory< ForceCPBuf > force_buf;  
           ForceOp force_op { *parameters };
-          const double * c_emb_ptr = eam_extra_fields->m_rho_emb.data();
+          //const double * c_emb_ptr = eam_extra_fields->m_rho_emb.data();
           auto c_emb_field = grid->field_const_accessor( field::rho_dEmb );
 
           // force computation will access, for each central atom, fields defined in ComputeFields plus external constant field c_emb_field

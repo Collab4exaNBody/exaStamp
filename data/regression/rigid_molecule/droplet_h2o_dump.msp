@@ -7,9 +7,9 @@ includes:
   - config_rigidmol.msp
 
 configuration:
-#  onika:
-#    gpu_sm_mult: 8
-#    gpu_block_size: 256
+  onika:
+    gpu_sm_mult: 8
+    gpu_block_size: 256
   profiling:
     summary: true
   logging:

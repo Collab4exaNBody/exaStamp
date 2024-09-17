@@ -15,6 +15,7 @@
 #include <exanb/io/sim_dump_writer.h>
 #include <exaStamp/io/atom_dump_filter.h>
 #include <exaStamp/molecule/molecule_species.h>
+#include <exaStamp/molecule/molecule_optional_header_io.h>
 
 namespace exaStamp
 {
@@ -34,8 +35,15 @@ namespace exaStamp
     ADD_SLOT( double      , physical_time , INPUT , DocString{"Physical time"} );
     ADD_SLOT( long        , compression_level , INPUT , 6 , DocString{"Zlib compression level"} );
     ADD_SLOT( long        , max_part_size , INPUT , -1 , DocString{"Maximum file partition size. set -1 for system default value"} );
-    ADD_SLOT( ParticleSpecies , species , INPUT , REQUIRED );
-    ADD_SLOT( MoleculeSpeciesVector , molecules , INPUT, OPTIONAL , DocString{"Molecule descriptions"} );
+
+    ADD_SLOT( ParticleSpecies                  , species                  , INPUT, REQUIRED );
+    ADD_SLOT( MoleculeSpeciesVector            , molecules                , INPUT, OPTIONAL , DocString{"Molecule descriptions"} );
+    ADD_SLOT( BondsPotentialParameters         , potentials_for_bonds     , INPUT, OPTIONAL );
+    ADD_SLOT( BendsPotentialParameters         , potentials_for_angles    , INPUT, OPTIONAL );
+    ADD_SLOT( TorsionsPotentialParameters      , potentials_for_torsions  , INPUT, OPTIONAL );
+    ADD_SLOT( ImpropersPotentialParameters     , potentials_for_impropers , INPUT, OPTIONAL );    
+    ADD_SLOT( LJExp6RFMultiParms               , potentials_for_pairs     , INPUT, OPTIONAL );
+    ADD_SLOT( IntramolecularPairWeighting      , mol_pair_weights         , INPUT, OPTIONAL );
 
     ADD_SLOT(double , bond_max_dist     , INPUT , 0.0 , DocString{"molecule bond max distance, in physical space"} );
     ADD_SLOT(double , bond_max_stretch  , INPUT , 0.0 , DocString{"fraction of bond_max_dist."} );
@@ -44,11 +52,26 @@ namespace exaStamp
     inline void execute () override final
     {
       using DumpFieldSet = FieldSet< field::_rx,field::_ry,field::_rz, field::_vx,field::_vy,field::_vz, field::_charge, field::_virial, field::_id, field::_idmol, field::_cmol, field::_type >; 
+      using MolIOExt = MoleculeOptionalHeaderIO<decltype(ldbg)>;
       size_t mps = MpiIO::DEFAULT_MAX_FILE_SIZE;
       if( *max_part_size > 0 ) mps = *max_part_size;
 
       lout << "writing bond_max_stretch = "<< *bond_max_stretch << std::endl;
-      AtomDumpFilter<GridT,DumpFieldSet,decltype(ldbg),MoleculeOptionalHeaderIO> dump_filter = { *species, ldbg , { *bond_max_dist , *bond_max_stretch , nullptr } };
+
+      MolIOExt molecule_io = {
+        *bond_max_dist ,
+        *bond_max_stretch ,
+        molecules.get_pointer() ,
+        ldbg,
+        potentials_for_bonds.get_pointer() ,
+        potentials_for_angles.get_pointer() ,
+        potentials_for_torsions.get_pointer() ,
+        potentials_for_impropers.get_pointer() ,
+        potentials_for_pairs.get_pointer() ,
+        mol_pair_weights.get_pointer() };
+
+      AtomDumpFilter<GridT,DumpFieldSet,decltype(ldbg),MolIOExt> dump_filter = { *species, ldbg , molecule_io };
+      
       if( molecules.has_value() ) dump_filter.optional_header_io.m_molecules = molecules.get_pointer();
       
       exanb::write_dump( *mpi, ldbg, *grid, *domain, *physical_time, *timestep, *filename, *compression_level, DumpFieldSet{} , dump_filter , mps );

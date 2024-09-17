@@ -20,12 +20,15 @@
 #include <exaStamp/potential/snap/snap_params.h>
 #include <exaStamp/potential/snap/snap_read_lammps.h>
 #include <exaStamp/potential/snap/snap_config.h>
+#include <exaStamp/potential/snap/snap_check_bispectrum.h>
 
 #include <exanb/particle_neighbors/chunk_neighbors.h>
 
 #include <vector>
 #include <memory>
 #include <iostream>
+
+#include <mpi.h>
 
 #include "sna.h"
 #include "memory.h"
@@ -49,6 +52,7 @@ namespace exaStamp
   class SnapLMPForce : public OperatorNode
   {
     // ========= I/O slots =======================
+    ADD_SLOT( MPI_Comm              , mpi               , INPUT , REQUIRED);
     ADD_SLOT( SnapParms             , parameters        , INPUT , REQUIRED );
     ADD_SLOT( double                , rcut_max          , INPUT_OUTPUT , 0.0 );
     ADD_SLOT( exanb::GridChunkNeighbors , chunk_neighbors   , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
@@ -58,6 +62,9 @@ namespace exaStamp
     ADD_SLOT( GridT                 , grid              , INPUT_OUTPUT );
     ADD_SLOT( Domain                , domain            , INPUT , REQUIRED );
     ADD_SLOT( GridParticleLocks     , particle_locks    , INPUT , OPTIONAL , DocString{"particle spin locks"} );
+
+    ADD_SLOT( long                  , timestep          , INPUT , REQUIRED , DocString{"Iteration number"} );
+    ADD_SLOT( std::string           , bispectrumchkfile , INPUT , OPTIONAL , DocString{"file with reference values to check bispectrum correctness"} );
 
     ADD_SLOT( SnapLMPContext        , snap_ctx          , PRIVATE );
 
@@ -211,7 +218,7 @@ namespace exaStamp
       }
 
       const double cutsq = snap_ctx->m_rcut * snap_ctx->m_rcut;
-      const bool eflag = log_energy;
+      const bool eflag = log_energy || bispectrumchkfile.has_value();
       const bool quadraticflag = snap_ctx->m_config.quadraticflag();
       const bool switchinnerflag = snap_ctx->m_config.switchinnerflag();
       const bool chemflag = snap_ctx->m_config.chemflag();
@@ -261,6 +268,13 @@ namespace exaStamp
                            };
         compute_cell_particle_pairs( *grid, snap_ctx->m_rcut, *ghost, optional, force_buf, bispectrum_op , compute_bispectrum_field_set , parallel_execution_context() );
         // *********************************************
+        if( bispectrumchkfile.has_value() )
+        {
+          std::ostringstream oss; oss << *bispectrumchkfile << "." << *timestep;
+          std::string file_name = data_file_path( oss.str() );
+          ldbg << "bispectrumchkfile is set, check bispectrum from file "<< file_name << std::endl;
+          snap_check_bispectrum(*mpi, *grid, file_name, ncoeff, snap_ctx->m_bispectrum.data() );
+        }
       }
 
       // // ************ compute_beta(); ****************
@@ -308,7 +322,7 @@ namespace exaStamp
         auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform, cp_locks );
         ForceOp force_op { snap_ctx->m_thread_ctx.data(), snap_ctx->m_thread_ctx.size(),
                            grid->cell_particle_offset_data(), snap_ctx->m_beta.data(), snap_ctx->m_bispectrum.data(),
-                           snap_ctx->m_coefs.data(), snap_ctx->m_coefs.size(), ncoeff,
+                           snap_ctx->m_coefs.data(), static_cast<long>(snap_ctx->m_coefs.size()), ncoeff,
                            snap_ctx->m_factor.data(), snap_ctx->m_radelem.data(),
                            nullptr, nullptr,
                            snap_ctx->m_rcut, cutsq,

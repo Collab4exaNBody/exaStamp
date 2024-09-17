@@ -12,7 +12,7 @@
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 
-namespace LAMMPS_NS
+namespace SnapInternal
 {
   using bigint = long long;
 
@@ -104,6 +104,8 @@ namespace LAMMPS_NS
       assert( alloc_elements*sizeof(T) == allocation_bytes() );
       
       m_iptr = onika::memory::CudaManagedAllocator<T>{}.allocate( alloc_elements );
+      std::memset( m_iptr, 0, alloc_elements * sizeof(T) );
+      
       m_jptr = reinterpret_cast<T**>( reinterpret_cast<uint8_t*>(m_iptr) + data_bytes );
       m_kptr = reinterpret_cast<T***>( m_jptr + ( m_kdim * m_jdim ) );
 

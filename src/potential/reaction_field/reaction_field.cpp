@@ -95,8 +95,8 @@ namespace exaStamp
     ONIKA_HOST_DEVICE_FUNC
     inline void operator () (ComputeBufferT& ctx, CellParticlesT cells, size_t cell_a, size_t p_a, exanb::ComputePairParticleContextStop ) const
     {
-      static constexpr bool CPAA = UseSymetry &&   onika::cuda::gpu_device_execution_t::value;
-      static constexpr bool LOCK = UseSymetry && ! onika::cuda::gpu_device_execution_t::value;
+      static constexpr bool CPAA = UseSymetry &&   gpu_device_execution();
+      static constexpr bool LOCK = UseSymetry && ! gpu_device_execution();
 
       if constexpr ( ComputeEnergy && ComputeVirial )
       {
@@ -127,8 +127,8 @@ namespace exaStamp
       ComputeBufferT& ctx, Vec3d dr,double d2,
       CellParticlesT cells,size_t cell_b,size_t p_b, double weight ) const
     {
-      static constexpr bool CPAA = UseSymetry &&   onika::cuda::gpu_device_execution_t::value;
-      static constexpr bool LOCK = UseSymetry && ! onika::cuda::gpu_device_execution_t::value;
+      static constexpr bool CPAA = UseSymetry &&   gpu_device_execution();
+      static constexpr bool LOCK = UseSymetry && ! gpu_device_execution();
 
       double charge_b = 0.0;
       if constexpr (  PerAtomCharge ) charge_b = cells[cell_b][m_charge_field][p_b];

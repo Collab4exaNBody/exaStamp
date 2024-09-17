@@ -3,6 +3,7 @@
 # trigger load balance whenever domain size changed, whatever freq has been requested
 # extend_domain has an input named enable_domain_extension to control if domain extesion is allowed
 # enable_domain_extension is defined as false in 'global'
+
 trigger_load_balance:
   - trigger_lb_tmp:
       condition: enable_load_balance
@@ -48,4 +49,9 @@ load_balancing_if_triggered:
   body:
     - load_balance
 #######################################################################
+
+# auto tuning of cost model, siabled by default, enabled with inclusion of config_load_balance_auto_tune.msp
+load_balance_auto_tune_start: nop
+
+load_balance_auto_tune_end: nop
 

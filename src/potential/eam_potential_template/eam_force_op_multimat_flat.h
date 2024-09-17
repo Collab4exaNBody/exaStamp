@@ -50,8 +50,8 @@ namespace exaStamp
 
       ONIKA_HOST_DEVICE_FUNC inline void operator () (size_t i) const
       {
-        static constexpr bool CPAA = NewtonSym &&   onika::cuda::gpu_device_execution_t::value;
-        static constexpr bool LOCK = NewtonSym && ! onika::cuda::gpu_device_execution_t::value;
+        static constexpr bool CPAA = NewtonSym &&   gpu_device_execution();
+        static constexpr bool LOCK = NewtonSym && ! gpu_device_execution();
 
         if ( m_ghost_flag != nullptr && ( m_ghost_flag[i/64] & ( 1ull << (i%64) ) ) != 0 ) return;
 
@@ -178,8 +178,8 @@ namespace exaStamp
 
       ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE void operator () ( size_t i ) const
       {
-        static constexpr bool CPAA = NewtonSym &&   onika::cuda::gpu_device_execution_t::value;
-        static constexpr bool LOCK = NewtonSym && ! onika::cuda::gpu_device_execution_t::value;
+        static constexpr bool CPAA = NewtonSym &&   gpu_device_execution();
+        static constexpr bool LOCK = NewtonSym && ! gpu_device_execution();
 
         if ( m_ghost_flag != nullptr && ( m_ghost_flag[i/64] & ( 1ull << (i%64) ) ) != 0 ) return;
 

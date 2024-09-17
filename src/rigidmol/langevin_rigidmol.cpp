@@ -37,6 +37,9 @@ namespace exaStamp
     ADD_SLOT( double          , T              , INPUT , REQUIRED );
     ADD_SLOT( double          , friction       , INPUT , 1.0 );
     ADD_SLOT( double          , friction_ratio , INPUT , 1.e-2 );
+    ADD_SLOT( double          , time_nve,        INPUT , 1e30 );    
+    ADD_SLOT( int64_t         , timestep       , INPUT , REQUIRED );
+
   public:
     inline void execute () override final
     {
@@ -51,8 +54,14 @@ namespace exaStamp
       const double xsi       = *(this->friction);
       const double friction_ratio       = *(this->friction_ratio);
       const double xsir = xsi * friction_ratio;
-
+      const double nvetime           = *(this->time_nve);
       const auto * __restrict__ species_ptr = species->data();
+
+      double curtime           = dt * (*timestep);
+
+      if(curtime < nvetime) {
+
+        ldbg<<" ###### Langevin #######"<<std::endl<<std::flush;
 
       // partie 1
 #     pragma omp parallel
@@ -157,7 +166,11 @@ namespace exaStamp
         }
         GRID_OMP_FOR_END
       }
+       
+     } else {
+        ldbg<<" ###### NVE #######"<<std::endl<<std::flush;
 
+     }
     }
     
   };

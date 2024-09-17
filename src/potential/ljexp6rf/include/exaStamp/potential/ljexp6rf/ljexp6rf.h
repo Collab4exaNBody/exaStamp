@@ -28,6 +28,16 @@ namespace exaStamp
 
     ReactionFieldParms m_rf = {};
     
+    ONIKA_HOST_DEVICE_FUNC inline bool pair_is_null() const
+    {
+      return m_A==0.0 && m_C_EPSILON==0.0 && m_D_SIGMA==0.0 && m_ecut==0.0;
+    }
+
+    ONIKA_HOST_DEVICE_FUNC inline bool is_null() const
+    {
+      return pair_is_null() && m_rf.is_null();
+    }
+
     ONIKA_HOST_DEVICE_FUNC inline bool is_lj() const
     {
       return m_B_ISEXP6==0.0;
@@ -64,6 +74,31 @@ namespace exaStamp
       init_rf( m_rf , rc , epsilon );
     }
 
+    inline LJExp6RFParms scale(double pair_weight, double rf_weight) const
+    {
+      // LJ linearly scales with epsilon
+      // Exp6 linearly scales with A,C and D terms (not B)
+      // Reaction Field linearly scales with RF0, RF1, RF2 and ecut (ecut optional, can be recomputed from RF0, RF1 and RF2 as well)
+      LJExp6RFParms p = *this;
+      if( p.is_lj() )
+      {
+        p.m_C_EPSILON *= pair_weight;
+      }
+      else
+      {
+        p.m_A         *= pair_weight;
+        p.m_C_EPSILON *= pair_weight;
+        p.m_D_SIGMA   *= pair_weight;
+      }
+      p.m_ecut        *= pair_weight;
+      
+      p.m_rf.RF0      *= rf_weight;
+      p.m_rf.RF1      *= rf_weight;
+      p.m_rf.RF2      *= rf_weight;
+      p.m_rf.ecut     *= rf_weight;
+      
+      return p;
+    }
 
     inline bool operator < ( const LJExp6RFParms& r ) const
     {
@@ -72,8 +107,13 @@ namespace exaStamp
       const std::array<double,11> B = { r.m_A, r.m_B_ISEXP6, r.m_C_EPSILON, r.m_D_SIGMA, r.m_rcut, r.m_ecut, r.m_rf.rc, r.m_rf.RF0, r.m_rf.RF1, r.m_rf.RF2, r.m_rf.ecut };
       return A < B;
     }
+    inline bool operator == ( const LJExp6RFParms& r ) const
+    {
+      return ! ( *this < r )
+          && ! ( r < *this );
+    }
 
-    ONIKA_HOST_DEVICE_FUNC ForceEnergy compute_force_energy(double r, double charge_product ) const
+    ONIKA_HOST_DEVICE_FUNC ForceEnergy compute_force_energy(double r, double charge_product , double pair_weight=1.0, double rf_weight=1.0 ) const
     {
       // pair potential part
       double pair_e = 0.0;
@@ -89,11 +129,15 @@ namespace exaStamp
       }
       // energy shift at cutoff for pair potential
       pair_e -= m_ecut;
+      pair_e *= pair_weight;
+      pair_de *= pair_weight;
 
       // reaction field part
       double rf_e = 0.0;
       double rf_de = 0.0;
       reaction_field_compute_energy( m_rf,  charge_product, r, rf_e, rf_de );
+      rf_e *= rf_weight;
+      rf_de *= rf_weight;
       //printf("r=%.5e pair_de=%.5e rf_de=%.5e\n",r,pair_de,rf_de);
 
       return { pair_de + rf_de , pair_e + rf_e };

@@ -89,6 +89,25 @@ namespace exaStamp
   };
 
   // Harm potential
+  class IntraMolecularDumpFunctional : public IntraMolecularPotentialFunctional
+  {
+  public:
+    inline IntraMolecularDumpFunctional(const MoleculeGenericFuncParam& p) : m_generic_parameters(p) {}
+    inline ScalarForceEnergy force_energy(double t) const override final
+    {
+      return intramolecular_func( generic_parameters() , t );
+/*      return {       k *     (t - t0)
+             , 0.5 * k * pow((t - t0),2) }; */
+    }
+    inline MoleculeGenericFuncParam generic_parameters() const override final
+    {
+      return m_generic_parameters;
+    }
+  private:
+    MoleculeGenericFuncParam m_generic_parameters;
+  };
+
+  // Harm potential
   class IntraMolecularHarmFunctional : public IntraMolecularPotentialFunctional
   {
   public:
@@ -101,7 +120,7 @@ namespace exaStamp
     }
     inline MoleculeGenericFuncParam generic_parameters() const override final
     {
-      return {k,0.,0.,t0,0.0f};
+      return {0.5*k,0.,0.,t0,0.0f};
     }
   private:
     double k = 0.0;

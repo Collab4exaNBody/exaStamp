@@ -216,7 +216,7 @@ namespace exaStamp
 
     {
       std::unordered_set< std::array<uint64_t,2> > s;
-      for (auto i : bonds) { s.insert(i); }
+      for( std::array<uint64_t,2> i : bonds) { s.insert(i); }
       lout << "bonds(L): "<<s.size()<<std::endl;
       bonds.assign( s.begin(), s.end() );
       std::sort( bonds.begin(), bonds.end() );
@@ -224,7 +224,7 @@ namespace exaStamp
     
     {
       std::unordered_set< std::array<uint64_t,3> > s;
-      for (std::array<uint64_t,3> i : angles) { s.insert(i); }
+      for( std::array<uint64_t,3> i : angles) { s.insert(i); }
       angles.assign( s.begin(), s.end() );
       std::sort( angles.begin(), angles.end() );
       lout << "angles(L): "<<s.size()<<std::endl;
@@ -232,7 +232,7 @@ namespace exaStamp
     
     {
       std::unordered_set< std::array<uint64_t,4> > s;
-      for (std::array<uint64_t,4> i : torsions) { s.insert(i); }
+      for( std::array<uint64_t,4> i : torsions) { s.insert(i); }
       torsions.assign( s.begin(), s.end() );
       std::sort( torsions.begin(), torsions.end() );
       lout << "torsions(L): "<<s.size()<<std::endl;
@@ -240,7 +240,7 @@ namespace exaStamp
     
     {
       std::unordered_set< std::array<uint64_t,4> > s;
-      for (std::array<uint64_t,4> i : impropers) { s.insert(i); }
+      for( std::array<uint64_t,4> i : impropers) { s.insert(i); }
       impropers.assign( s.begin(), s.end() );
       std::sort( impropers.begin(), impropers.end() );
       lout << "impropers(L): "<<s.size()<<std::endl;

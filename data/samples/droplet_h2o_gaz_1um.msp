@@ -1,0 +1,330 @@
+#
+# Potentiel TIP4P/2005 - J.L.F. Abascal and C. Vega, J. Chem. Phys. 123, 234505 (2005)
+#
+
+# enable-if-XSTAMP_BUILD_PAIR_zero enable-if-XSTAMP_BUILD_PAIR_lennard_jones
+includes:
+  - config_rigidmol.msp
+
+configuration:
+  profiling:
+    summary: true
+  logging:
+    parallel: false
+    debug: false
+  debug:
+    graph: true
+    filter: [ ".*write_dump_rigidmol" , ".*read_dump_rigidmol" , ".*extend_domain" , ".*init_rcb_grid" ]
+
+chunk_neighbors:
+  config:
+    build_particle_offset: false
+    chunk_size: 4
+
+ljrf_rigidmol_force:
+  rcut: 8 ang
+  parameters:
+    - { type_a: O , type_b: O , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } , lj_rcut: 8 ang , lj: { epsilon: 1.286776984E-21 J , sigma: 0.31589E-09 m } } }
+    - { type_a: O , type_b: M , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: O , type_b: H , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: H , type_b: M , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: M , type_b: M , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: H , type_b: H , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: Air , type_b: Air , rcut: 8 ang , parameters: { lj_rcut: 8 ang , lj: { epsilon: 1.08468E-21 J , sigma: 0.3711-09 m } } }
+    - { type_a: Air , type_b: O   , rcut: 8 ang , parameters: { lj_rcut: 8 ang , lj: { epsilon: 1.0e-22 J , sigma: 0.7127E-09 m } } }
+
+compute_force: 
+  - ljrf_rigidmol_force
+#  - wall_v2:
+#      normal: [ 1.0, 0.0, 0.0 ]
+#      offset: 0.0 ang
+#      cutoff: 2.4 ang
+#      epsilon: 1.0e-19 J
+#      exponent: 2
+#      collective_stats: true
+
+grid_flavor: grid_flavor_rigidmol
+
++first_iteration:
+  - print_domain
+  - chunk_neighbors_stats: { min_pair_dist: 0.1 ang }
+  - grid_stats
+  - memory_stats
+
+global:
+  dt: 5.0e-4 ps
+  simulation_end_iteration: 5
+  simulation_log_frequency: 1
+#  analysis_dump_frequency: 10
+  simulation_dump_frequency: 1000
+  rcut_inc: 0.25 ang
+
+grid_cell_particle_splatting:
+  splat_size: 4.0 ang
+  grid_subdiv: 3
+
+#dump_data: dump_data_grid_vtk
+
+xx_thermostat:
+  - langevin_rigidmol:
+      T: 320 K
+      friction : 5.0e1
+      friction_ratio : 1.
+
+replicate_domain:
+  repeat: [ 1 , 1 , 1 ]
+
+repartition_domain:
+  - grid_stats
+  - message: "Load balancing ..."
+  - move_particles
+  - extend_domain
+  - simple_cost_model
+  - load_balance_rcb
+  - migrate_cell_particles
+  - grid_stats
+
+input_data:
+#
+###################################
+#  Common part needed both
+#  for initial setup and restart
+###################################
+  - particle_regions:
+      - HOLE1:
+          quadric:
+            shape: sphere
+            transform:
+              - scale: [ 0.501 um , 0.501 um , 0.501 um ] 
+              - translate: [ 5.0 um , 1.0 um , 1.0 um ]
+      - FILL1:
+          quadric:
+            shape: sphere
+            transform:
+              - scale: [ 0.5 um , 0.5 um , 0.5 um ] 
+              - translate: [ 5.0 um , 1.0 um , 1.0 um ]
+      - HOLE2:
+          quadric:
+            shape: sphere
+            transform:
+              - scale: [ 0.4701 um , 0.4701 um , 0.4701 um ]
+              - translate: [ 5.0 um , 1.0 um , 1.0 um ]
+      - FILL2:
+          quadric:
+            shape: sphere
+            transform:
+              - scale: [ 0.47 um , 0.47 um , 0.47 um ]
+              - translate: [ 5.0 um , 1.0 um , 1.0 um ]
+      - HOLE3:
+          quadric:
+            shape: sphere
+            transform:
+              - scale: [ 0.4101 um , 0.4101 um , 0.4101 um ]
+              - translate: [ 5.0 um , 1.0 um , 1.0 um ]
+      - FILL3:
+          quadric:
+            shape: sphere
+            transform:
+              - scale: [ 0.41 um , 0.41 um , 0.41 um ]
+              - translate: [ 5.0 um , 1.0 um , 1.0 um ]
+      - HOLE4:
+          quadric:
+            shape: sphere
+            transform:
+              - scale: [ 0.3501 um , 0.3501 um , 0.3501 um ]
+              - translate: [ 5.0 um , 1.0 um , 1.0 um ]
+      - FILL4:
+          quadric:
+            shape: sphere
+            transform:
+              - scale: [ 0.35 um , 0.35 um , 0.35 um ]
+              - translate: [ 5.0 um , 1.0 um , 1.0 um ]
+      - HOLE5:
+          quadric:
+            shape: sphere
+            transform:
+              - scale: [ 0.3001 um , 0.3001 um , 0.3001 um ]
+              - translate: [ 5.0 um , 1.0 um , 1.0 um ]
+      - FILL5:
+          quadric:
+            shape: sphere
+            transform:
+              - scale: [ 0.3 um , 0.3 um , 0.3 um ]
+              - translate: [ 5.0 um , 1.0 um , 1.0 um ]
+      - HOLE6:
+          quadric:
+            shape: sphere
+            transform:
+              - scale: [ 0.2001 um , 0.2001 um , 0.2001 um ]
+              - translate: [ 5.0 um , 1.0 um , 1.0 um ]
+      - FILL6:
+          quadric:
+            shape: sphere
+            transform:
+              - scale: [ 0.2 um , 0.2 um , 0.2 um ]
+              - translate: [ 5.0 um , 1.0 um , 1.0 um ]
+      - HOLE7:
+          quadric:
+            shape: sphere
+            transform:
+              - scale: [ 0.1001 um , 0.1001 um , 0.1001 um ]
+              - translate: [ 5.0 um , 1.0 um , 1.0 um ]
+      - FILL7:
+          quadric:
+            shape: sphere
+            transform:
+              - scale: [ 0.1 um , 0.1 um , 0.1 um ]
+              - translate: [ 5.0 um , 1.0 um , 1.0 um ]
+#
+#
+#
+#
+  - has_dump_file:
+      rebind: { result: has_dump_file }
+      body: [ file_exists: { filename: lastLegacyDump } ]
+#
+################################
+#   Initial system setup
+# ##############################
+  - generate_initial_grid:
+      condition: not has_dump_file
+      body:
+        - message: "Initial run, building system ..."
+#     *** Species configuration ***
+        - species:
+            verbose: false
+            species:
+              - H:   { mass: 1.007 Da , z: 1 , charge: 0.5564 e-  , molecule: H2O }
+              - O:   { mass: 16 Da    , z: 8 , charge: 0.0 e-     , molecule: H2O }
+              - M:   { mass: 0.000 Da , z: 0 , charge: -1.1128 e- , molecule: H2O }
+              - Air: { mass: 28.8 Da    , z: 8 , charge: 0.0 e- }
+              - H2O:
+                  charge: 0.0 e-
+                  z: 0
+                  mass: 0.0 Da
+                  rigid_molecule:
+                    - O: [  0.00000000 ang ,  0.00000000 ang ,  0.00000000 ang ]
+                    - H: [  0.75695033 ang ,  0.58588228 ang ,  0.00000000 ang ]
+                    - H: [ -0.75695033 ang ,  0.58588228 ang ,  0.00000000 ang ]
+                    - M: [  0.00000000 ang ,  0.15460000 ang ,  0.00000000 ang ]
+#     *** Domain configuration ***
+        - domain:
+            cell_size: 50.0 ang
+            grid_dims: [ 2000 , 400 , 400 ]
+            bounds: [ [ 0.0 um , 0.0 um , 0.0 um ] , [ 10.0 um , 2.0 um , 2.0 um ] ]
+            periodic: [ false , true , true ]
+            expandable: true
+            xform: [ [ 1 , 0 , 0 ] , [ 0 , 1 , 0 ] , [ 0 , 0 , 1 ] ]
+        - init_rcb_grid
+#
+#     *** Generate lattice for gaz ***
+        - message: "Generate gaz ..."
+        - lattice:
+            structure: SC
+            types: [ Air ]
+            size: [ 34 ang , 34 ang , 34 ang ]
+            noise: 0.1 ang
+            noise_cutoff: 0.2 ang
+            region: not HOLE1
+        - grid_stats
+#
+#     *** Generate lattice for droplet shell ***
+        - message: "Generate droplet shell 1 ..."
+        - lattice:
+            structure: SC
+            types: [ H2O ]
+            size: [ 3.104 ang , 3.104 ang , 3.104 ang ]
+            noise: 0.1 ang
+            noise_cutoff: 0.2 ang
+            region: FILL1 and ( not HOLE2 )
+        - repartition_domain
+#
+#     *** Generate lattice for droplet shell ***
+        - message: "Generate droplet shell 2 ..."
+        - lattice:
+            structure: SC
+            types: [ H2O ]
+            size: [ 3.104 ang , 3.104 ang , 3.104 ang ]
+            noise: 0.1 ang
+            noise_cutoff: 0.2 ang
+            region: FILL2 and ( not HOLE3 )
+        - repartition_domain
+#
+#     *** Generate lattice for droplet shell ***
+        - message: "Generate droplet shell 3 ..."
+        - lattice:
+            structure: SC
+            types: [ H2O ]
+            size: [ 3.104 ang , 3.104 ang , 3.104 ang ]
+            noise: 0.1 ang
+            noise_cutoff: 0.2 ang
+            region: FILL3 and ( not HOLE4 )
+        - repartition_domain
+#
+#     *** Generate lattice for droplet shell ***
+        - message: "Generate droplet shell 4 ..."
+        - lattice:
+            structure: SC
+            types: [ H2O ]
+            size: [ 3.104 ang , 3.104 ang , 3.104 ang ]
+            noise: 0.1 ang
+            noise_cutoff: 0.2 ang
+            region: FILL4 and ( not HOLE5 )
+        - repartition_domain
+#
+#     *** Generate lattice for droplet shell ***
+        - message: "Generate droplet shell 5 ..."
+        - lattice:
+            structure: SC
+            types: [ H2O ]
+            size: [ 3.104 ang , 3.104 ang , 3.104 ang ]
+            noise: 0.1 ang
+            noise_cutoff: 0.2 ang
+            region: FILL5 and ( not HOLE6 )
+        - repartition_domain
+#
+#     *** Generate lattice for droplet shell ***
+        - message: "Generate droplet shell 6 ..."
+        - lattice:
+            structure: SC
+            types: [ H2O ]
+            size: [ 3.104 ang , 3.104 ang , 3.104 ang ]
+            noise: 0.1 ang
+            noise_cutoff: 0.2 ang
+            region: FILL6 and ( not HOLE7 )
+        - repartition_domain
+#
+#     *** Generate lattice for droplet shell ***
+        - message: "Generate droplet core ..."
+        - lattice:
+            structure: SC
+            types: [ H2O ]
+            size: [ 3.104 ang , 3.104 ang , 3.104 ang ]
+            noise: 0.1 ang
+            noise_cutoff: 0.2 ang
+            region: FILL7
+        - repartition_domain
+#
+#
+#     *** initialize random orientation to avoid numerical errors
+        - message: "Initialize temperature ..."
+        - global: { init_temperature: 300 K }
+        - do_init_temperature
+        - grid_stats
+        - memory_stats
+        - message: "Write initial data ..."
+        - dump_data
+#
+###################################
+#  Restart from dump file
+###################################
+  - read_from_last_dump:
+      condition: has_dump_file
+      body:
+        - message: "Restart from last dump ..."
+        - read_dump_rigidmol:
+            filename: lastLegacyDump
+  - replicate_domain
+  - grid_stats
+  - memory_stats
+

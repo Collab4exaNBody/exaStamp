@@ -20,7 +20,10 @@ namespace exaStamp
     double RF0 = 0.0;
     double RF1 = 0.0;
     double RF2 = 0.0;
-    double ecut = 0.0;    
+    double ecut = 0.0;
+    
+    ONIKA_HOST_DEVICE_FUNC
+    inline bool is_null() const { return RF0==0.0 && RF1==0.0 && RF2==0.0 && ecut==0.0; }    
   };
 
   // core computation kernel for reaction field potential

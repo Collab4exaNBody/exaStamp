@@ -19,7 +19,6 @@
 /// @brief Shorcut to swap to variables
 #define SWAP(a,b) {temp=(a);(a)=(b);(b)=temp;}
 
-
 using exanb::Vec3d;
 
 
@@ -255,7 +254,7 @@ struct MeamPotential
     , const double* __restrict__ dry_
     , const double* __restrict__ drz_
     , double* S_
-    , const size_t n) const
+    , const int n) const
   {
     using onika::cuda::min;
     
@@ -267,7 +266,109 @@ struct MeamPotential
     /* assumption : the number of neighbors are less than 10 000 */
     assert( n <= MeamParameters::MAX_PARTICLE_NEIGHBORS );
 
-    for ( size_t j=0; j<n; j++)
+    if( n == 1 )
+    {
+      S_[0] = 1.0;
+      return;
+    }
+
+    int j = 0;
+    int k = 1;
+    double C = 0.0;
+    bool UnderCmin = false;
+    double drxj=drx_[j];  //rx(i,j)
+    double dryj=dry_[j];  //ry(i,j)
+    double drzj=drz_[j];  //rz(i,j)
+    double tmprij2    = drxj*drxj + dryj*dryj + drzj*drzj;    // compute rij  square  distance
+    double invtmprij2 = 1./tmprij2;        
+  
+    // double loop over j and k has been merged into a single loop
+    const int nnm1 = n*(n-1);
+    for( int COUNT=0; COUNT<nnm1 ; ++COUNT )
+    {
+      const double drxk = drx_[k];  //rx(i,k)
+      const double dryk = dry_[k];  //ry(i,k)
+      const double drzk = drz_[k];  //rz(i,k)
+      
+      const double tmprik2   = drxk*drxk + dryk*dryk + drzk*drzk;  // compute ik distance (squared)
+
+      /* compute kj distance by vector formula kj = ki + ij= ij - ki */
+      const double tmprkj2 = (drxj-drxk)*(drxj-drxk) +
+                             (dryj-dryk)*(dryj-dryk) +
+                             (drzj-drzk)*(drzj-drzk);  
+
+      if(tmprkj2 < p.Rcut*p.Rcut)
+      {
+        assert(tmprkj2 != 0);            
+        
+        /* Compute tmp2=(xik-xij)^2  */
+        const double tmp5  = (tmprik2-tmprkj2)*invtmprij2;          // tmpd0=Xik-Xij    
+        double tmp2   = tmp5*tmp5;             
+
+        /* tmp0=2(Xik+Xij)-(xik-xij)^2-1 numerator */
+        double tmp0   = 2.*(tmprik2+tmprkj2)*invtmprij2-tmp2-1.;  
+        
+        /*  tmp1=-(xik-xij)^2+1 denominator */
+        double tmp1   = 1.-tmp2;                               
+        
+        const double tmp4   = tmp1;
+        
+        /* tmp2 = Cijk = ( 2(Xik+Xij)-(xik-xij)^2-1  )  / (  1-(xik-xij)^2  ) */
+        tmp2   = tmp0/tmp1;                      
+        
+        /* We keep the minimum between Cikj and Cmax to avoid (C<Cmax) condition */
+        /* Indeed, if Cikj >= Cmax -> Sikj = 1                                   */
+        tmp0   = min<double>(tmp2,p.Cmax);                
+        double tmp3   = (tmp0-p.Cmin);
+
+        /* In this case, Cikj < Cmin -> Sijk = 0 -> Sij =0 */
+        if(tmp3*tmp3<1e-15)
+        { 
+          UnderCmin = true;
+        }
+        else
+        {
+          tmp3   = 1./tmp3;
+          tmp1   = (p.Cmax-tmp0)*tmp3;  // (Cmax-C)/(C-Cmin)
+
+          /* Exceptions */
+          tmp1 = (tmp2> 1.e-5 && tmp4>=1.e-5? tmp1 : 0.);                     
+          
+          C += -tmp1*tmp1; // C is only incremeted here. tmp1*tmp1>=0, thus final C<=0.
+        }
+      }
+
+      ++k;
+      if( k == j ) ++k;
+      if( k >= n )
+      {
+        if(UnderCmin) S_[j] = 1.; // a value of 1 will be converted to 0 in the post-process part;
+        else          S_[j] = C; //exp(C); // exp is computed afterward. recall : C<=0
+        ++j;
+        if( j < n )
+        {
+          k = 0;
+          C = 0.0;
+          UnderCmin = false;
+          drxj=drx_[j];  //rx(i,j)
+          dryj=dry_[j];  //ry(i,j)
+          drzj=drz_[j];  //rz(i,j)
+          tmprij2    = drxj*drxj + dryj*dryj + drzj*drzj;    // compute rij  square  distance
+          invtmprij2 = 1./tmprij2;
+        }
+      }
+      
+    }
+
+#   pragma omp simd
+    for ( int j=0; j<n; j++)
+    {
+      S_[j] = ( S_[j] <= 0.0 ) ? exp(S_[j]) : 0.0;
+    }
+
+#if 0
+
+    for ( int j=0; j<n; j++)
     {
       //alignas(onika::memory::DEFAULT_ALIGNMENT) double CoeffC[ MeamParameters::MAX_PARTICLE_NEIGHBORS ];
       
@@ -375,6 +476,9 @@ struct MeamPotential
 #     endif
 
     }
+    
+#endif
+    
   }
   
   /// @brief Calculate term of derivative of screenterm
@@ -618,7 +722,8 @@ struct MeamPotential
       alignas(onika::memory::DEFAULT_ALIGNMENT) double stockSy[MeamParameters::MAX_PARTICLE_NEIGHBORS];
       alignas(onika::memory::DEFAULT_ALIGNMENT) double stockSz[MeamParameters::MAX_PARTICLE_NEIGHBORS];
 */
-      alignas(onika::memory::DEFAULT_ALIGNMENT) uint16_t inter_nbh[MeamParameters::MAX_PARTICLE_NEIGHBORS];
+      using NbhIndexType = std::conditional_t< (MeamParameters::MAX_PARTICLE_NEIGHBORS < 255 ) , uint8_t , uint16_t >;
+      alignas(onika::memory::DEFAULT_ALIGNMENT) NbhIndexType inter_nbh[MeamParameters::MAX_PARTICLE_NEIGHBORS];
 
       drx=drx_[j];  //rx(i,j)
       dry=dry_[j];  //ry(i,j)
@@ -939,7 +1044,7 @@ struct MeamPotential
 		double* __restrict__ rho3_y_,  
 		double* __restrict__ rho3_z_, 
 		Vec3d &rhod3,
-		const size_t n) const
+		const int n) const
   {
     using onika::cuda::max;
   
@@ -960,154 +1065,175 @@ struct MeamPotential
     ONIKA_ASSUME_ALIGNED( rho3_y_ );
     ONIKA_ASSUME_ALIGNED( rho3_z_ );    
 
-    double tmp0,tmp1,tmp2,tmp3,drx,dry,drz,S,Rho0ij;
-          //, v0(0.), smoothing;
-    //int j;
-
-    double x,y,z,coeff,rho1I,rho2I,rho3I;
-
     /* to store rho1, rho2, rho3 terms */
-    double  Ta[3],Tab[7],Tabc[13];                         
+#   ifdef XSTAMP_MEAM_USE_SHARED_MEM
+    ONIKA_CU_BLOCK_SHARED double tmp_Ta  [ ONIKA_CU_VALUE_IF_CUDA( ONIKA_CU_MAX_THREADS_PER_BLOCK , 1 ) *  3 ];
+    ONIKA_CU_BLOCK_SHARED double tmp_Tab [ ONIKA_CU_VALUE_IF_CUDA( ONIKA_CU_MAX_THREADS_PER_BLOCK , 1 ) *  7 ];
+    ONIKA_CU_BLOCK_SHARED double tmp_Tabc[ ONIKA_CU_VALUE_IF_CUDA( ONIKA_CU_MAX_THREADS_PER_BLOCK , 1 ) * 13 ]; 
+#   define Ta(i)   tmp_Ta  [ ONIKA_CU_VALUE_IF_CUDA( ONIKA_CU_MAX_THREADS_PER_BLOCK * i + ONIKA_CU_THREAD_IDX , i ) ]
+#   define Tab(i)  tmp_Tab [ ONIKA_CU_VALUE_IF_CUDA( ONIKA_CU_MAX_THREADS_PER_BLOCK * i + ONIKA_CU_THREAD_IDX , i ) ]
+#   define Tabc(i) tmp_Tabc[ ONIKA_CU_VALUE_IF_CUDA( ONIKA_CU_MAX_THREADS_PER_BLOCK * i + ONIKA_CU_THREAD_IDX , i ) ]
+#   else
+    double tmp_Ta  [ 3 ];
+    double tmp_Tab [ 7 ];
+    double tmp_Tabc[ 13 ]; 
+#   define Ta(i)   tmp_Ta  [ i ]
+#   define Tab(i)  tmp_Tab [ i ]
+#   define Tabc(i) tmp_Tabc[ i ]
+#   endif
 
-    for(int a=0;a<3;a++)   Ta[a]=0.;
-    for(int a=0;a<7;a++)   Tab[a]=0.;
-    for(int a=0;a<13;a++)  Tabc[a]=0.;
-
-    double /*Vecrho0,*/ xVec,yVec,zVec,rI;
+    for(int a=0;a<3;a++)   Ta(a)   = 0.;
+    for(int a=0;a<7;a++)   Tab(a)  = 0.;
+    for(int a=0;a<13;a++)  Tabc(a) = 0.;
 
     /* estimated potential speedup: 3.080 -mavx */
-    #pragma omp simd
-    for (size_t j=0; j<n; j++)
+//    #pragma omp simd /* SIMD disabled because it seems inconsistent with Ta[j]+=... kind of statements*/
+    for (int j=0; j<n; j++)
     {   
-      drx = drx_[j];  //rx(i,j)
-      dry = dry_[j];  //ry(i,j)
-      drz = drz_[j];  //rz(i,j)
-      S   = S_[j];    //Sij
+      const double drx = drx_[j];  //rx(i,j)
+      const double dry = dry_[j];  //ry(i,j)
+      const double drz = drz_[j];  //rz(i,j)
+      const double S   = S_[j];    //Sij
 
       /* Comute r(i,j) */
-      tmp3 = sqrt(drx*drx + dry*dry + drz*drz);	
+      const double tmp3 = sqrt(drx*drx + dry*dry + drz*drz);	
       
       assert(tmp3 !=0);
       
       /* rI = 1/r */
-      rI = 1./tmp3; 
+      const double rI = 1./tmp3; 
       
       /* r/r0-1 */                        
-      tmp1 = tmp3*p.r0-1;		  
+      const double tmp1 = tmp3*p.r0-1;		  
 
       /* r(i,j)_{x,y,z}/r */
-      xVec=drx*rI;
-      yVec=dry*rI;
-      zVec=drz*rI;
+      const double xVec=drx*rI;
+      const double yVec=dry*rI;
+      const double zVec=drz*rI;
 
       /* Sij*rho_1_ij */
-      tmp2=S*rhoi(-p.beta1*tmp1,tmp3,1);  
+      double tmp2=S*rhoi(-p.beta1*tmp1,tmp3,1);  
 
-      Ta[0]  += xVec*tmp2;
-      Ta[1]  += yVec*tmp2;
-      Ta[2]  += zVec*tmp2;
+      Ta(0)  += xVec*tmp2;
+      Ta(1)  += yVec*tmp2;
+      Ta(2)  += zVec*tmp2;
 
       /* Sij*rho_2_ij */
       tmp2=S*rhoi(-p.beta2*tmp1,tmp3,2);  
    
-      Tab[0] += xVec*xVec*tmp2;
-      Tab[1] += xVec*yVec*tmp2;
-      Tab[2] += xVec*zVec*tmp2;
-      Tab[3] += yVec*yVec*tmp2;
-      Tab[4] += yVec*zVec*tmp2;
-      Tab[5] += zVec*zVec*tmp2;
+      Tab(0) += xVec*xVec*tmp2;
+      Tab(1) += xVec*yVec*tmp2;
+      Tab(2) += xVec*zVec*tmp2;
+      Tab(3) += yVec*yVec*tmp2;
+      Tab(4) += yVec*zVec*tmp2;
+      Tab(5) += zVec*zVec*tmp2;
 
       /* correction term rho_2 */
-      Tab[6] += tmp2;
+      Tab(6) += tmp2;
 
       /* Sij*rho_3_ij */  
       tmp2=S*rhoi(-p.beta3*tmp1,tmp3,3); 
 
-      Tabc[0]  += xVec*xVec*xVec*tmp2;
-      Tabc[1]  += xVec*xVec*yVec*tmp2;
-      Tabc[2]  += xVec*xVec*zVec*tmp2;
-      Tabc[3]  += xVec*yVec*yVec*tmp2;
-      Tabc[4]  += xVec*yVec*zVec*tmp2;
-      Tabc[5]  += xVec*zVec*zVec*tmp2;
-      Tabc[6]  += yVec*yVec*yVec*tmp2;
-      Tabc[7]  += yVec*yVec*zVec*tmp2;
-      Tabc[8]  += yVec*zVec*zVec*tmp2;
-      Tabc[9]  += zVec*zVec*zVec*tmp2;
+      Tabc(0)  += xVec*xVec*xVec*tmp2;
+      Tabc(1)  += xVec*xVec*yVec*tmp2;
+      Tabc(2)  += xVec*xVec*zVec*tmp2;
+      Tabc(3)  += xVec*yVec*yVec*tmp2;
+      Tabc(4)  += xVec*yVec*zVec*tmp2;
+      Tabc(5)  += xVec*zVec*zVec*tmp2;
+      Tabc(6)  += yVec*yVec*yVec*tmp2;
+      Tabc(7)  += yVec*yVec*zVec*tmp2;
+      Tabc(8)  += yVec*zVec*zVec*tmp2;
+      Tabc(9)  += zVec*zVec*zVec*tmp2;
 
       /* correction term rho_3 */
-      Tabc[10] += xVec*tmp2;
-      Tabc[11] += yVec*tmp2;
-      Tabc[12] += zVec*tmp2;
-
+      Tabc(10) += xVec*tmp2;
+      Tabc(11) += yVec*tmp2;
+      Tabc(12) += zVec*tmp2;
     }
 
     /* compute rho_1, rho_2, rho_3 thank to previous compute */
-    rho1 = Ta[0]*Ta[0]+Ta[1]*Ta[1]+Ta[2]*Ta[2];
+    rho1 = Ta(0)*Ta(0)+Ta(1)*Ta(1)+Ta(2)*Ta(2);
 
-    rho2 = Tab[0]*Tab[0]+2.*Tab[1]*Tab[1] +2.*Tab[2]*Tab[2]   
-          +Tab[3]*Tab[3]+2.*Tab[4]*Tab[4 ]+   Tab[5]*Tab[5]   
-          -Tab[6]*Tab[6]/3.;
+    rho2 = Tab(0)*Tab(0)+2.*Tab(1)*Tab(1) +2.*Tab(2)*Tab(2)   
+          +Tab(3)*Tab(3)+2.*Tab(4)*Tab(4)+   Tab(5)*Tab(5)   
+          -Tab(6)*Tab(6)/3.;
 
-    rho3 = Tabc[0]*Tabc[0]+Tabc[6]*Tabc[6]+Tabc[9]*Tabc[9]
-         +3.*(Tabc[1]*Tabc[1]+Tabc[2]*Tabc[2]+Tabc[3]*Tabc[3]
-         +  Tabc[5]*Tabc[5]+Tabc[7]*Tabc[7]+Tabc[8]*Tabc[8])
-         +6.* Tabc[4]*Tabc[4]-3.*(Tabc[10]*Tabc[10]+Tabc[11]*Tabc[11]+Tabc[12]*Tabc[12])/5.;
+    rho3 = Tabc(0)*Tabc(0)+Tabc(6)*Tabc(6)+Tabc(9)*Tabc(9)
+         +3.*(Tabc(1)*Tabc(1)+Tabc(2)*Tabc(2)+Tabc(3)*Tabc(3)
+         +  Tabc(5)*Tabc(5)+Tabc(7)*Tabc(7)+Tabc(8)*Tabc(8))
+         +6.* Tabc(4)*Tabc(4)-3.*(Tabc(10)*Tabc(10)+Tabc(11)*Tabc(11)+Tabc(12)*Tabc(12))/5.;
 
     /* Stamp condition because if rho=0, ln(rho) = bug */
     rho1=max(rho1,1e-30);
     rho2=max(rho2,1e-30);
     rho3=max(rho3,1e-30);
 
-    rho1I=1./sqrt(rho1);
-    rho2I=1./sqrt(rho2);
-    rho3I=1./sqrt(rho3);
+    const double rho1I=1./sqrt(rho1);
+    const double rho2I=1./sqrt(rho2);
+    const double rho3I=1./sqrt(rho3);
 
     /* We obtain _Tbeta,gamma=sum_j!=i ( Sij T_ij^(3betagammamu) ) with mu,gamma,beta=x,y,z */
     #pragma omp simd
-    for(int a=0;a<3;a++)   Ta[a]*=rho1I;
+    for(int a=0;a<3;a++)   Ta(a)*=rho1I;
     
     #pragma omp simd
-    for(int a=0;a<7;a++)   Tab[a]*=rho2I;
+    for(int a=0;a<7;a++)   Tab(a)*=rho2I;
     
     #pragma omp simd
-    for(int a=0;a<13;a++)  Tabc[a]*=rho3I;
+    for(int a=0;a<13;a++)  Tabc(a)*=rho3I;
 
     /* Will be used during the sum of Sij T^(3betagammamu)ij */
-    double CoeffXXX(-Tabc[0]),CoeffXXY(-3.*Tabc[1]),CoeffXXZ(-3.*Tabc[2]),CoeffXYY(-3.*Tabc[3])
-           ,CoeffXYZ(-6.*Tabc[4]),CoeffXZZ(-3.*Tabc[5]),CoeffYYY(-Tabc[6]),CoeffYYZ(-3.*Tabc[7])
-           ,CoeffYZZ(-3.*Tabc[8]),CoeffZZZ(-Tabc[9]),CoeffX1(Tabc[10]*0.6),CoeffY1(Tabc[11]*0.6)
-           ,CoeffZ1(Tabc[12]*0.6);       
+#   define CoeffXXX (-Tabc(0))
+#   define CoeffXXY (-3.*Tabc(1))
+#   define CoeffXXZ (-3.*Tabc(2))
+#   define CoeffXYY (-3.*Tabc(3))
+#   define CoeffXYZ (-6.*Tabc(4))
+#   define CoeffXZZ (-3.*Tabc(5))
+#   define CoeffYYY (-Tabc(6))
+#   define CoeffYYZ (-3.*Tabc(7))
+#   define CoeffYZZ (-3.*Tabc(8))
+#   define CoeffZZZ (-Tabc(9))
+#   define CoeffX1 (Tabc(10)*0.6)
+#   define CoeffY1 (Tabc(11)*0.6)
+#   define CoeffZ1 (Tabc(12)*0.6)    
 
     /* sum Sij T^(2betagamma)ij */
-    double CoeffXX(-Tab[0]),CoeffXY(-2.*Tab[1]),CoeffXZ(-2.*Tab[2]),CoeffYY(-Tab[3])
-           ,CoeffYZ(-2.*Tab[4]),CoeffZZ(-Tab[5]),CoeffunTier(-1.*Tab[6]/3.);  
+#   define CoeffXX (-Tab(0))
+#   define CoeffXY (-2.*Tab(1))
+#   define CoeffXZ (-2.*Tab(2))
+#   define CoeffYY (-Tab(3))
+#   define CoeffYZ (-2.*Tab(4))
+#   define CoeffZZ (-Tab(5))
+#   define CoeffunTier (-1.*Tab(6)/3.)
 
     /* sum Sij T^(1beta)ij */
-    double CoeffX(-Ta[0]),CoeffY(-Ta[1]),CoeffZ(-Ta[2]);     
+#   define CoeffX (-Ta(0))
+#   define CoeffY (-Ta(1))
+#   define CoeffZ (-Ta(2))
 
-    double tmpx,tmpy,tmpz,Rij,Coeff;
+    //double tmpx,tmpy,tmpz,Rij,Coeff;
 
     /* estimated potential speedup: 3.610 -mavx */
-    #pragma omp simd
-    for (size_t i=0; i<n; i++)
+//    #pragma omp simd /* SIMD disabled because of concurrent access to external temporary variables */
+    for (int i=0; i<n; i++)
     {
-      drx = drx_[i];	//rx(i,j)
-      dry = dry_[i];	//ry(i,j)
-      drz = drz_[i];	//rz(i,j)
-      S   = S_[i];	 //Sij
+      double drx = drx_[i];	//rx(i,j)
+      double dry = dry_[i];	//ry(i,j)
+      double drz = drz_[i];	//rz(i,j)
+      const double S   = S_[i];	 //Sij
 
       /* compute r(i,j) */
-      Rij=sqrt(drx*drx+dry*dry+drz*drz);  
+      const double Rij=sqrt(drx*drx+dry*dry+drz*drz);  
       
       /* r/r0 - 1 */
-      Coeff=p.r0*Rij -1.;      // Coeff 
+      const double Coeff=p.r0*Rij -1.;      // Coeff 
       
       /* 1/r */
-      tmp0=1./Rij;                 
+      const double tmp0=1./Rij;                 
 
       /* Begin by first derivative of rho0 */
       /* drhoij/drij * 1/rij */
-      Rho0ij = S*tmp0*Drhoi(Coeff,-p.beta0,Rij,0);    
+      const double Rho0ij = S*tmp0*Drhoi(Coeff,-p.beta0,Rij,0);    
 
       /* store -comp_rin[j] * drhoa0  * Screening term[i][n] == r^alpha/rij* drho0_ij*Sij */
       rho0_x_[i] = drx*Rho0ij; 
@@ -1121,17 +1247,17 @@ struct MeamPotential
       
       /* derivative of rho1 */
       /* rho_1/r */
-      tmp2=rhoi(-p.beta1*Coeff,Rij,1)*tmp0 ;       
+      double tmp2=rhoi(-p.beta1*Coeff,Rij,1)*tmp0 ;       
 
       /* rho1ij/rij - d(rho)/drin -> -beta1/r0*exp(-beta1 (rij/r0-1) */
-      tmp1=tmp2-Drhoi(Coeff,-p.beta1,Rij,1); 
+      double tmp1=tmp2-Drhoi(Coeff,-p.beta1,Rij,1); 
 
       /* warning d(r^beta(in))/dr^alpha_i == (comp_rin[j]*comp_rin[k] - 1)* distance_inI; */
       /* if alpha=beta, else comp_rin[j]*comp_rin[k]* distance_inI */
       
-      tmpx=CoeffX*S*(drx*drx*tmp1-tmp2);
-      tmpy=CoeffX*S*dry*drx*tmp1;
-      tmpz=CoeffX*S*drz*drx*tmp1;
+      double tmpx=CoeffX*S*(drx*drx*tmp1-tmp2);
+      double tmpy=CoeffX*S*dry*drx*tmp1;
+      double tmpz=CoeffX*S*drz*drx*tmp1;
 
       tmpx+=CoeffY*S*drx*dry*tmp1;
       tmpy+=CoeffY*S*(dry*dry*tmp1-tmp2);
@@ -1151,7 +1277,7 @@ struct MeamPotential
       tmp2=rhoi(-p.beta2*Coeff,Rij,2)*tmp0;    
       
       /*    d(rho_2_ij)/drin */
-      tmp3=Drhoi(Coeff,-p.beta2,Rij,2); 
+      double tmp3=Drhoi(Coeff,-p.beta2,Rij,2); 
       
       /* 2*rho_2_ij - d(rho_2_ij)/drin*/
       tmp1=2.*tmp2 - tmp3;                   
@@ -1265,7 +1391,7 @@ struct MeamPotential
       rho3_z_[i]=S*tmpz;
     }
 
-    for (size_t j=0; j<n; j++)
+    for (int j=0; j<n; j++)
     {
       rhod0.x+=rho0_x_[j];
       rhod0.y+=rho0_y_[j];
@@ -1283,35 +1409,6 @@ struct MeamPotential
       rhod3.y+=rho3_y_[j];
       rhod3.z+=rho3_z_[j];
     }
-
-    double drxk, dryk, drzk, xk, yk, zk, temp;
-    double drxj, dryj, drzj, xj, yj, zj;
-    double rij,rik,rkj,rij2,rik2,rkj2/*,rijI*/,rkiI, rkjI;
-    double rho0ij,rho1ij,rho2ij,rho3ij;
-    double rho0ik,rho1ik,rho2ik,rho3ik;
-    double Sk,Sij, Sik, Skj,v3(3.),v6(6.),v3inv5(0.6); //-> dS x,y,z 
-    double dSx,dSy,dSz;
-    double rij_seq,rij2_seq,rijI_seq;;
-
-    alignas(onika::memory::DEFAULT_ALIGNMENT) uint16_t indx_bis[MeamParameters::MAX_PARTICLE_NEIGHBORS];
-/*
-    alignas(onika::memory::DEFAULT_ALIGNMENT) double drzk_bis[MeamParameters::MAX_PARTICLE_NEIGHBORS];
-    alignas(onika::memory::DEFAULT_ALIGNMENT) double drxk_bis[MeamParameters::MAX_PARTICLE_NEIGHBORS];
-    alignas(onika::memory::DEFAULT_ALIGNMENT) double dryk_bis[MeamParameters::MAX_PARTICLE_NEIGHBORS]; 
-    alignas(onika::memory::DEFAULT_ALIGNMENT) double S_bis[MeamParameters::MAX_PARTICLE_NEIGHBORS];
-*/    
-    /*alignas(onika::memory::DEFAULT_ALIGNMENT)*/ double stock_rho_0_0; //[MeamParameters::MAX_PARTICLE_NEIGHBORS];
-    /*alignas(onika::memory::DEFAULT_ALIGNMENT)*/ double stock_rho_0_1; //[MeamParameters::MAX_PARTICLE_NEIGHBORS];
-    /*alignas(onika::memory::DEFAULT_ALIGNMENT)*/ double stock_rho_0_2; //[MeamParameters::MAX_PARTICLE_NEIGHBORS];
-    /*alignas(onika::memory::DEFAULT_ALIGNMENT)*/ double stock_rho_1_0; //[MeamParameters::MAX_PARTICLE_NEIGHBORS]; 
-    /*alignas(onika::memory::DEFAULT_ALIGNMENT)*/ double stock_rho_1_1; //[MeamParameters::MAX_PARTICLE_NEIGHBORS];
-    /*alignas(onika::memory::DEFAULT_ALIGNMENT)*/ double stock_rho_1_2; //[MeamParameters::MAX_PARTICLE_NEIGHBORS];
-    /*alignas(onika::memory::DEFAULT_ALIGNMENT)*/ double stock_rho_2_0; //[MeamParameters::MAX_PARTICLE_NEIGHBORS]; 
-    /*alignas(onika::memory::DEFAULT_ALIGNMENT)*/ double stock_rho_2_1; //[MeamParameters::MAX_PARTICLE_NEIGHBORS];
-    /*alignas(onika::memory::DEFAULT_ALIGNMENT)*/ double stock_rho_2_2; //[MeamParameters::MAX_PARTICLE_NEIGHBORS];
-    /*alignas(onika::memory::DEFAULT_ALIGNMENT)*/ double stock_rho_3_0; //[MeamParameters::MAX_PARTICLE_NEIGHBORS]; 
-    /*alignas(onika::memory::DEFAULT_ALIGNMENT)*/ double stock_rho_3_1; //[MeamParameters::MAX_PARTICLE_NEIGHBORS];
-    /*alignas(onika::memory::DEFAULT_ALIGNMENT)*/ double stock_rho_3_2; //[MeamParameters::MAX_PARTICLE_NEIGHBORS];
     
     double tmpr0x(0.), tmpr0y(0.), tmpr0z(0.), 
            tmpr1x(0.), tmpr1y(0.), tmpr1z(0.), 
@@ -1319,140 +1416,145 @@ struct MeamPotential
            tmpr3x(0.), tmpr3y(0.), tmpr3z(0.); 
            
     /* Compute derivative of screening function part */
-    for (size_t j=0; j<n; j++)
+    for (int j=0; j<n; j++)
     {    
+      static constexpr double v3 = 3.;
+      static constexpr double v6 = 6.;
+      static constexpr double v3inv5 = 0.6;
+    
+      using NbhIndexType = std::conditional_t< (MeamParameters::MAX_PARTICLE_NEIGHBORS < 255) , uint8_t , uint16_t >;
+      alignas(onika::memory::DEFAULT_ALIGNMENT) NbhIndexType indx_bis[MeamParameters::MAX_PARTICLE_NEIGHBORS];
+
       /* rij */
-      rij2_seq= drx_[j]*drx_[j]
+      const double rij2_seq= drx_[j]*drx_[j]
                +dry_[j]*dry_[j]
                +drz_[j]*drz_[j];   
       
       assert(rij2_seq!=0);
       
-      rij_seq=sqrt(rij2_seq);
-      coeff=rij_seq*p.r0-1;
+      const double rij_seq=sqrt(rij2_seq);
+      const double coeff=rij_seq*p.r0-1;
       
-      rijI_seq=1./rij_seq;
+      const double rijI_seq=1./rij_seq;
 
-      rij=rij_seq;
-      rij2=rij2_seq;
+      const double rij=rij_seq;
+      const double rij2=rij2_seq;
       //rijI=rijI_seq;
 
       /* r(i,j)_{x,y,z}/rij */
-      x=drx_[j]*rijI_seq;
-      y=dry_[j]*rijI_seq;
-      z=drz_[j]*rijI_seq;
+      const double x=drx_[j]*rijI_seq;
+      const double y=dry_[j]*rijI_seq;
+      const double z=drz_[j]*rijI_seq;
 
-      rho0ij=rhoi(-p.beta0*coeff,rij,0);          //rho0_ij
+      double rho0ij=rhoi(-p.beta0*coeff,rij,0);          //rho0_ij
       rho0ij=rho0ij*S_[j];
 
-      temp=(Ta[0]*x+Ta[1]*y+Ta[2]*z);
-      rho1ij=temp*rhoi(-p.beta1*coeff,rij,1)*S_[j]; //rho1_ij/rho1
+      double temp=(Ta(0)*x+Ta(1)*y+Ta(2)*z);
+      const double rho1ij=temp*rhoi(-p.beta1*coeff,rij,1)*S_[j]; //rho1_ij/rho1
 
-      temp=Tab[0]*x*x+2.*Tab[1]*x*y+2.*Tab[2]*x*z
-        +Tab[3]*y*y+2.*Tab[4]*y*z
-        +Tab[5]*z*z-Tab[6]/3.; 
+      temp=Tab(0)*x*x+2.*Tab(1)*x*y+2.*Tab(2)*x*z
+        +Tab(3)*y*y+2.*Tab(4)*y*z
+        +Tab(5)*z*z-Tab(6)/3.; 
 
-      rho2ij=temp*rhoi(-p.beta2*coeff,rij,2)*S_[j]; //rho2_ij/rho2
+      const double rho2ij=temp*rhoi(-p.beta2*coeff,rij,2)*S_[j]; //rho2_ij/rho2
 
-      temp=Tabc[0]*x*x*x+3.*Tabc[1]*x*x*y+3.*Tabc[2]*x*x*z
-        +3.*Tabc[3]*x*y*y+6.*Tabc[4]*x*y*z+3.*Tabc[5]*x*z*z+Tabc[6]*y*y*y
-        +3.*Tabc[7]*y*y*z+3.*Tabc[8]*y*z*z+Tabc[9]*z*z*z
-        -0.6*(Tabc[10]*x+Tabc[11]*y+Tabc[12]*z);
+      temp=Tabc(0)*x*x*x+3.*Tabc(1)*x*x*y+3.*Tabc(2)*x*x*z
+        +3.*Tabc(3)*x*y*y+6.*Tabc(4)*x*y*z+3.*Tabc(5)*x*z*z+Tabc(6)*y*y*y
+        +3.*Tabc(7)*y*y*z+3.*Tabc(8)*y*z*z+Tabc(9)*z*z*z
+        -0.6*(Tabc(10)*x+Tabc(11)*y+Tabc(12)*z);
 
-      rho3ij=temp*rhoi(-p.beta3*coeff,rij,3)*S_[j];           //rho3_ij/rho3
+      const double rho3ij=temp*rhoi(-p.beta3*coeff,rij,3)*S_[j];           //rho3_ij/rho3
 
-      xj=x;
-      yj=y;
-      zj=z;
+      const double xj=x;
+      const double yj=y;
+      const double zj=z;
 
-      drxj=drx_[j];
-      dryj=dry_[j];
-      drzj=drz_[j];
-
-      size_t indx=0;
-
-
+      const double drxj=drx_[j];
+      const double dryj=dry_[j];
+      const double drzj=drz_[j];
+      
       double tmpr0jx(0.), tmpr0jy(0.), tmpr0jz(0.), 
              tmpr1jx(0.), tmpr1jy(0.), tmpr1jz(0.), 
              tmpr2jx(0.), tmpr2jy(0.), tmpr2jz(0.), 
              tmpr3jx(0.), tmpr3jy(0.), tmpr3jz(0.);        
 
       //sort of neighbors. 
-      for (size_t k=j+1; k<n; k++)
+      int indx=0;
+      for (int k=j+1; k<n; k++)
       {
         if(  (  (drx_[j]-drx_[k])*(drx_[j]-drx_[k])+(dry_[j]-dry_[k])*(dry_[j]-dry_[k])+(drz_[j]-drz_[k])*(drz_[j]-drz_[k]))  <= p.Rcut*p.Rcut)
         {
-          //drxk_bis[indx]=drx_[k];
-          //dryk_bis[indx]=dry_[k];
-          //drzk_bis[indx]=drz_[k];
           indx_bis[indx]=k;
-          //S_bis[indx]= S_[k];
           indx++;
         }
 
       }
 
       /* estimated potential speedup: 3.280 -mavx */
+/*
       #pragma omp simd reduction(+:tmpr0jx, tmpr0jy, tmpr0jz, tmpr1jx, tmpr1jy, tmpr1jz, tmpr2jx, tmpr2jy, tmpr2jz, tmpr3jx, tmpr3jy, tmpr3jz,  \
            tmpr0x, tmpr0y, tmpr0z, tmpr1x, tmpr1y, tmpr1z, tmpr2x, tmpr2y, tmpr2z, tmpr3x, tmpr3y, tmpr3z)     
-      for (size_t k=0; k<indx; k++)
+*/
+      for (int k=0; k<indx; k++)
       {   
         /* load data about atom k */
-        drxk = drx_[indx_bis[k]]; //drxk_bis[k];	
-        dryk = dry_[indx_bis[k]]; //dryk_bis[k];	
-        drzk = drz_[indx_bis[k]]; //drzk_bis[k];
-        Sk = S_[indx_bis[k]]; //S_bis[k];
+        const int indxk = indx_bis[k];
+        const double drxk = drx_[indxk]; //drxk_bis[k];	
+        const double dryk = dry_[indxk]; //dryk_bis[k];	
+        const double drzk = drz_[indxk]; //drzk_bis[k];
+        const double Sk = S_[indxk]; //S_bis[k];
 
         /* compute distances r(i,k),r(i,k)²,1./r(i,k) */
-        rik2=drxk*drxk+dryk*dryk+drzk*drzk;
+        const double rik2=drxk*drxk+dryk*dryk+drzk*drzk;
         
         assert(rik2 != 0);
         
-        rik=sqrt(rik2);
-        rkiI=1./rik;
+        const double rik=sqrt(rik2);
+        const double rkiI=1./rik;
 
-        Coeff=rik*p.r0-1.;
+        const double Coeff=rik*p.r0-1.;
 
-        rkj2=(drxj-drxk)*(drxj-drxk)+(dryj-dryk)*(dryj-dryk)+(drzj-drzk)*(drzj-drzk); 
+        const double rkj2=(drxj-drxk)*(drxj-drxk)+(dryj-dryk)*(dryj-dryk)+(drzj-drzk)*(drzj-drzk); 
         
         assert(rkj2 != 0);
         
-        rkj=sqrt(rkj2); 
-        rkjI=1./rkj;
+        const double rkj=sqrt(rkj2); 
+        const double rkjI=1./rkj;
 
-        xk=drxk*rkiI;
-        yk=dryk*rkiI;
-        zk=drzk*rkiI;
+        const double xk=drxk*rkiI;
+        const double yk=dryk*rkiI;
+        const double zk=drzk*rkiI;
 
         /* Compute rhoik, k=0,1,2,3 */
 
         /* rho0_ik */
-        rho0ik=rhoi(-p.beta0*Coeff,rik,0)*Sk;                            
+        const double rho0ik=rhoi(-p.beta0*Coeff,rik,0)*Sk;                            
 
         //rho1_ik
-        rho1ik= (Ta[0]*xk+Ta[1]*yk+Ta[2]*zk) *rhoi(-p.beta1*Coeff,rik,1)*Sk; 
+        const double rho1ik= (Ta(0)*xk+Ta(1)*yk+Ta(2)*zk) *rhoi(-p.beta1*Coeff,rik,1)*Sk; 
         
         //rho2_ik/rho2 
-        rho2ik=Tab[0]*xk*xk+2.*Tab[1]*xk*yk+2.*Tab[2]*xk*zk
-            +Tab[3]*yk*yk+2.*Tab[4]*yk*zk+Tab[5]*zk*zk-(1./3.)*Tab[6];      
+        double rho2ik=Tab(0)*xk*xk+2.*Tab(1)*xk*yk+2.*Tab(2)*xk*zk
+            +Tab(3)*yk*yk+2.*Tab(4)*yk*zk+Tab(5)*zk*zk-(1./3.)*Tab(6);      
 
         rho2ik=rho2ik*rhoi(-p.beta2*Coeff,rik,2)*Sk;
 
         /* rho3_ik/rho3 */ 
-        rho3ik=Tabc[0]*xk*xk*xk+v3*Tabc[1]*xk*xk*yk
-            +v3*Tabc[2]*xk*xk*zk+v3*Tabc[3]*xk*yk*yk
-            +v6*Tabc[4]*xk*yk*zk+v3*Tabc[5]*xk*zk*zk
-            +Tabc[6]*yk*yk*yk+v3*Tabc[7]*yk*yk*zk+v3*Tabc[8]*yk*zk*zk
-            +Tabc[9]*zk*zk*zk-v3inv5*(Tabc[10]*xk+Tabc[11]*yk+Tabc[12]*zk);
+        double rho3ik=Tabc(0)*xk*xk*xk+v3*Tabc(1)*xk*xk*yk
+            +v3*Tabc(2)*xk*xk*zk+v3*Tabc(3)*xk*yk*yk
+            +v6*Tabc(4)*xk*yk*zk+v3*Tabc(5)*xk*zk*zk
+            +Tabc(6)*yk*yk*yk+v3*Tabc(7)*yk*yk*zk+v3*Tabc(8)*yk*zk*zk
+            +Tabc(9)*zk*zk*zk-v3inv5*(Tabc(10)*xk+Tabc(11)*yk+Tabc(12)*zk);
 
         rho3ik=rho3ik*rhoi(-p.beta3*Coeff,rik,3)*Sk;
 
         /* this function use distance² */
+        double Sij=0.0, Sik=0.0, Skj=0.0; //-> dS x,y,z 
         screeningDerived(rij2,rik2,rkj2, Sij, Sik, Skj);			
 
-        dSx=( xj * Sij + xk  * Sik );
-        dSy=( yj * Sij + yk  * Sik );
-        dSz=( zj * Sij + zk  * Sik );
+        double dSx=( xj * Sij + xk  * Sik );
+        double dSy=( yj * Sij + yk  * Sik );
+        double dSz=( zj * Sij + zk  * Sik );
 
         tmpr0x -= rho0ij * dSx;
         tmpr0y -= rho0ij * dSy;
@@ -1496,20 +1598,20 @@ struct MeamPotential
         dSy= ( yk * Sik + (dryk-dryj)  * Skj);
         dSz= ( zk * Sik + (drzk-drzj)  * Skj);
 
-        stock_rho_0_0/*[k]*/=rho0ij * dSx;
-        stock_rho_1_0/*[k]*/=rho1ij * dSx;
-        stock_rho_2_0/*[k]*/=rho2ij * dSx;
-        stock_rho_3_0/*[k]*/=rho3ij * dSx;
+        double stock_rho_0_0/*[k]*/=rho0ij * dSx;
+        double stock_rho_1_0/*[k]*/=rho1ij * dSx;
+        double stock_rho_2_0/*[k]*/=rho2ij * dSx;
+        double stock_rho_3_0/*[k]*/=rho3ij * dSx;
         
-        stock_rho_0_1/*[k]*/=rho0ij * dSy;
-        stock_rho_1_1/*[k]*/=rho1ij * dSy;
-        stock_rho_2_1/*[k]*/=rho2ij * dSy;
-        stock_rho_3_1/*[k]*/=rho3ij * dSy;
+        double stock_rho_0_1/*[k]*/=rho0ij * dSy;
+        double stock_rho_1_1/*[k]*/=rho1ij * dSy;
+        double stock_rho_2_1/*[k]*/=rho2ij * dSy;
+        double stock_rho_3_1/*[k]*/=rho3ij * dSy;
         
-        stock_rho_0_2/*[k]*/=rho0ij * dSz;
-        stock_rho_1_2/*[k]*/=rho1ij * dSz;
-        stock_rho_2_2/*[k]*/=rho2ij * dSz;
-        stock_rho_3_2/*[k]*/=rho3ij * dSz;
+        double stock_rho_0_2/*[k]*/=rho0ij * dSz;
+        double stock_rho_1_2/*[k]*/=rho1ij * dSz;
+        double stock_rho_2_2/*[k]*/=rho2ij * dSz;
+        double stock_rho_3_2/*[k]*/=rho3ij * dSz;
  
         /* this function use with distance² */
         screeningDerived(rik2,rij2,rkj2, Sik, Sij, Skj);			              
@@ -1579,7 +1681,6 @@ struct MeamPotential
       for (size_t k=0; k<indx; k++)
       {
 */
-        const int indxk = indx_bis[k];
         rho0_x_[indxk]-=stock_rho_0_0; //[k];
         rho0_y_[indxk]-=stock_rho_0_1; //[k];
         rho0_z_[indxk]-=stock_rho_0_2; //[k];
@@ -1600,10 +1701,10 @@ struct MeamPotential
      rho3_x_[j] += tmpr3jx; rho3_y_[j]+= tmpr3jy; rho3_z_[j] += tmpr3jz;       
     }
     
-     rhod0.x += tmpr0x; rhod0.y+= tmpr0y; rhod0.z += tmpr0z; 
-     rhod1.x += tmpr1x; rhod1.y+= tmpr1y; rhod1.z += tmpr1z; 
-     rhod2.x += tmpr2x; rhod2.y+= tmpr2y; rhod2.z += tmpr2z; 
-     rhod3.x += tmpr3x; rhod3.y+= tmpr3y; rhod3.z += tmpr3z; 
+    rhod0.x += tmpr0x; rhod0.y+= tmpr0y; rhod0.z += tmpr0z; 
+    rhod1.x += tmpr1x; rhod1.y+= tmpr1y; rhod1.z += tmpr1z; 
+    rhod2.x += tmpr2x; rhod2.y+= tmpr2y; rhod2.z += tmpr2z; 
+    rhod3.x += tmpr3x; rhod3.y+= tmpr3y; rhod3.z += tmpr3z; 
   }
 
   /// @brief Compute derived function of rho_i=0..3 and Gamma

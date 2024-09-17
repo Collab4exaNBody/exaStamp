@@ -3,14 +3,13 @@ includes:
 
 configuration:
   onika:
-    gpu_sm_mult: 1
     gpu_block_size: 64
   profiling:
     summary: true
   logging:
-    debug: true
+    debug: false
   debug:
-    filter: [ ".*snaplmp_force" ]
+    filter: [ ".*snap_force" , ".*snaplmp_force" ]
 
 zbl_multi_force:
   rcut: 4.8 ang
@@ -20,6 +19,7 @@ zbl_multi_force:
     - { type_a: Be , type_b: Be , rcut: 4.8 ang , parameters: { r1: 4.0 ang , rc: 4.8 ang } }
   
 snaplmp_force: &snapconfig
+  bispectrumchkfile: "snap_multi_WBe.bs"
   parameters:
     nt: 2
     param: "WBe_Wood_PRB2019.snapparam"
@@ -39,6 +39,7 @@ grid_flavor: grid_flavor_multimat
 
 chunk_neighbors:
   config:
+    build_particle_offset: false
     chunk_size: 1
 
 replicate_domain:
@@ -54,6 +55,7 @@ compute_force:
   - zbl_multi_force
   - snap_force
 #  - snaplmp_force
+#  - langevin_thermostat: { T: 300 K , gamma: 0.1 ps^-1 }
 
 +first_iteration:
   - grid_stats
@@ -61,11 +63,11 @@ compute_force:
   - memory_stats
 
 domain:
-  cell_size: 10.0 ang
+  cell_size: 15.0 ang
   periodic: [true,true,true]
 
 global:
-  simulation_end_iteration: 30
+  simulation_end_iteration: 3
   simulation_log_frequency: 10
   rcut_inc: 2.0 ang
   dt: 1.0e-3 ps
@@ -76,6 +78,6 @@ final_dump: nop
 
 simulation_epilog:
   - check_values:
-      file: snap_multi_WBe.dat
+      file: snap_multi_WBe_3it.dat
       threshold: 1.e-9
- 
+

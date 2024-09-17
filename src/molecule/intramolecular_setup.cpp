@@ -7,6 +7,7 @@
 #include <exanb/core/particle_id_codec.h>
 #include <exanb/core/log.h>
 #include <exanb/core/particle_type_id.h>
+#include <exanb/core/domain.h>
 
 #include <exaStamp/particle_species/particle_specie.h>
 
@@ -24,7 +25,6 @@
 #include <exaStamp/molecule/intramolecular_pair_weight.h>
 #include <exaStamp/potential/ljexp6rf/ljexp6rf.h>
 
-
 #include <onika/oarray_stream.h>
 
 #include <unordered_set>
@@ -34,70 +34,13 @@
 namespace exaStamp
 {
   using namespace exanb;
-
-  struct AtomNode
-  {
-    int64_t id[5] = { -1 , -1 , -1 , -1 , -1 };
-    uint64_t cell_particle = 0;
-    int type = -1;
-    inline bool operator < (const AtomNode & other) const
-    {
-      for(int i=0;i<5;i++)
-      {
-        if( id[i]<other.id[i] ) return true;
-        else if( id[i]>other.id[i] ) return false;
-      }
-      return false;
-    }
-  };
-
-  struct MoleculeAtoms
-  {
-    std::vector<AtomNode> atoms;
-    int moltype = -1;
-    inline bool operator < (const MoleculeAtoms & other) const
-    {
-      return atoms < other.atoms;
-    }
-  };
-
-  template<class CellT, class FieldIdT, class FieldTypeT>
-  struct MoleculeParser
-  {
-    CellT m_cells = {};
-    FieldIdT m_field_cmol = {};
-    FieldTypeT m_field_type = {};
-    const IdMap& id_map;
-    std::unordered_set< uint64_t > m_visited_atoms;
-    
-    inline void explore_molecule ( std::vector<AtomNode>& molecule_atoms , int64_t id )
-    {
-      if( m_visited_atoms.find(id) != m_visited_atoms.end() ) return;
-      auto it = id_map.find(id);
-      if( it != id_map.end() )
-      {
-        m_visited_atoms.insert( id );
-        size_t cell_i=0, p_i=0;
-        decode_cell_particle( it->second , cell_i , p_i );
-        auto cmol = m_cells[cell_i][m_field_cmol][p_i];
-        molecule_atoms.push_back( { { id , int64_t(cmol[0]) , int64_t(cmol[1]) , int64_t(cmol[2]) , int64_t(cmol[3]) } , encode_cell_particle(cell_i,p_i) , m_cells[cell_i][m_field_type][p_i] } );
-        for(auto c : cmol)
-        {
-          if( c != std::numeric_limits<uint64_t>::max() ) explore_molecule( molecule_atoms , c );
-        }
-      }
-    }
-    
-  };
-#include <exaStamp/particle_species/particle_specie.h>
-
   
   template< class GridT >
   class IntramolecularSetup : public OperatorNode
   {
+    ADD_SLOT( MPI_Comm                     , mpi               , INPUT , MPI_COMM_WORLD);
 
-    ADD_SLOT( MPI_Comm           , mpi                 , INPUT , MPI_COMM_WORLD);
-
+    ADD_SLOT( Domain                       , domain            , INPUT , REQUIRED );
     ADD_SLOT( ParticleSpecies              , species           , INPUT , REQUIRED );
     ADD_SLOT( ParticleTypeMap              , particle_type_map , INPUT , REQUIRED );
     
@@ -172,9 +115,36 @@ namespace exaStamp
       for(const auto& potelem : potentials_for_pairs->m_potentials)
       {
         const auto & pot = potelem.m_params;
-        all_lj = all_lj && pot.is_lj();
-        all_exp6 = all_exp6 && pot.is_exp6();
+        ldbg << "pot "<<potelem.m_type_a<<"/"<<potelem.m_type_b<<" : PAIR : A="<<pot.m_A<<", B="<<pot.m_B_ISEXP6<<", C="<<pot.m_C_EPSILON<<", D="<<pot.m_D_SIGMA<<", ecut="<<pot.m_ecut
+             << ", RF : RF0="<<pot.m_rf.RF0<<", RF1="<<pot.m_rf.RF1<<", RF2="<<pot.m_rf.RF2<<", ecut="<<pot.m_rf.ecut<<std::endl;
+        if( ! pot.pair_is_null() )
+        {
+          ldbg << "pot "<<potelem.m_type_a<<"/"<<potelem.m_type_b<<" is "<< ( pot.is_lj()?"LJ":"Exp6" ) << std::endl;
+          all_lj = all_lj && pot.is_lj();
+          all_exp6 = all_exp6 && pot.is_exp6();
+        }
+        else
+        {
+          ldbg << "pot "<<potelem.m_type_a<<"/"<<potelem.m_type_b<<" is empty"<<std::endl;
+        }
       }
+
+      float torsion_pair_weight=1.0f, torsion_rf_weight=1.0f, angle_pair_weight=1.0f, angle_rf_weight=1.0f, bond_pair_weight=1.0f, bond_rf_weight=1.0f;
+      for( const auto & p : mol_pair_weights->m_molecule_weight )
+      {
+        ldbg << p.first << " : bond="<<p.second.m_bond_weight<<" , bond_rf="<<p.second.m_rf_bond_weight
+                        <<" , bend="<<p.second.m_bend_weight<<" , bend_rf="<<p.second.m_rf_bend_weight
+                        <<" , torsion="<<p.second.m_torsion_weight<<" , torsion_rf="<<p.second.m_rf_torsion_weight<<std::endl;
+        bond_pair_weight = p.second.m_bond_weight;
+        bond_rf_weight = p.second.m_rf_bond_weight;
+        angle_pair_weight = p.second.m_bend_weight;
+        angle_rf_weight = p.second.m_rf_bend_weight;
+        torsion_pair_weight = p.second.m_torsion_weight;
+        torsion_rf_weight = p.second.m_rf_torsion_weight;
+      }
+
+      const unsigned int n_type_pairs = unique_pair_count( species->size() );
+      molecule_compute_parameters->m_pair_params.assign( n_type_pairs * 3 , IntramolecularPairParams{ LJExp6RFParms{}, 0.0f, 0.0f } );
       for(const auto& potelem : potentials_for_pairs->m_potentials)
       {
         const auto & pot = potelem.m_params;
@@ -182,15 +152,47 @@ namespace exaStamp
         if( str2type(potelem.m_type_b)==-1 ) { fatal_error()<<"unknown type "<<potelem.m_type_b<<" in potential description"<<std::endl; }
         const unsigned int ta = str2type(potelem.m_type_a);
         const unsigned int tb = str2type(potelem.m_type_b); 
+
+        const unsigned int pair_id = unique_pair_id(ta,tb);
+        molecule_compute_parameters->m_pair_params[ n_type_pairs * 0 + pair_id ] = IntramolecularPairParams{ pot , bond_pair_weight, bond_rf_weight };
+        molecule_compute_parameters->m_pair_params[ n_type_pairs * 1 + pair_id ] = IntramolecularPairParams{ pot , angle_pair_weight, angle_rf_weight };
+        molecule_compute_parameters->m_pair_params[ n_type_pairs * 2 + pair_id ] = IntramolecularPairParams{ pot , torsion_pair_weight, torsion_rf_weight };
+        
         const size_t na = type_count[ta]; // number of atom of type A
         const size_t nb = type_count[tb]; // number of atom of type B
+        double Vtot = 1. ; // total volume of the simulation box
+        double ecorr = 0.; // basis for the energy correction per atom 
+	      // global formula for the long range energy correction due to the couple (ta, tb) for EACH atom of type ta:
+	      // ecorr = int_rc^(+inf) r^2 * U(r) 4 pi/Vtot 1/2 Nb
+	      double vcorr = 0.; //virial correction
+        // global formula for the long range correction to EACH term of the diagonal component of the virial tensor due to the couple (ta, tb) for EACH atom of type ta:
+        // vcorr = - int_rc^(+inf) r^3 * dU/dr 4 pi/Vtot 1/6 Nb
+
+        // total volume calculation
+	      if( ! domain->xform_is_identity() )
+        {
+          Mat3d mat = domain->xform();
+          Vec3d a { mat.m11, mat.m21, mat.m31 };
+          Vec3d b { mat.m12, mat.m22, mat.m32 };
+          Vec3d c { mat.m13, mat.m23, mat.m33 };
+          Vtot = dot( cross(a,b) , c );
+        }
+        Vtot *= bounds_volume( domain->bounds() );
+
+
+	      ldbg << "Compute correction for pair "<<potelem.m_type_a<<" , "<<potelem.m_type_b<<std::endl;
         if( all_lj )
         {
           const double rcut = pot.m_rcut;
           const double epsilon = pot.m_C_EPSILON;
           const double sigma = pot.m_D_SIGMA;
-          molecule_compute_parameters->m_energy_correction[ta] += 0.0; // so something here ...
-          molecule_compute_parameters->m_virial_correction[ta] += Mat3d{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 }; // so something here ...
+          //molecule_compute_parameters->m_energy_correction[ta] += 0.0; // so something here ...
+	        // U(r) = 4*epsilon ( (sigma/r)^12 - (sigma/r)^6)
+	        // int_rc^(+inf) r^2 * U(r)  = 4 * epsilon (1/9 sigma^12/rc^9 - 1/3 sigma^6/rc^3)
+	        ecorr = 4.*epsilon * (1./9. *pow(sigma, 12)/pow(rcut, 9) - 1./3.* pow(sigma, 6)/pow(rcut, 3));
+          //molecule_compute_parameters->m_virial_correction[ta] += Mat3d{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 }; // so something here ...
+      	  // - int_rc^(+inf) r^3 * dU/dr = 4 * epsilon (4/3 sigma^12/rc^9 -2 sigma^6/rc^3)
+          vcorr =  4.*epsilon * (4./3.*pow(sigma, 12)/pow(rcut, 9) - 2.*pow(sigma, 6)/pow(rcut, 3));
         }
         else if( all_exp6 )
         {
@@ -199,13 +201,41 @@ namespace exaStamp
           const double B = pot.m_B_ISEXP6;
           const double C = pot.m_C_EPSILON;
           const double D = pot.m_D_SIGMA;
-          molecule_compute_parameters->m_energy_correction[ta] += 0.0; // so something here ...
-          molecule_compute_parameters->m_virial_correction[ta] += Mat3d{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 }; // so something here ...
+          // U(r) = A exp(-B*r) - C/r^6 + D (12/(B*r))^12
+          // int_rc^(+inf) r^2 * U(r) = A/B  exp(-B*rc) (rc^2 + 2 rc/B + 2/B^2) 
+          //                           -C/3 1/rc^3
+	        //                           +D (12/B)^12 1/9 1/rc^9
+	        ecorr = A/B * exp(-B*rc)* (pow(rc, 2) + 2.* rc/B + 2./pow(B, 2)) -C/3. *pow(rc, -3) + D*pow(12./B, 12) *1./9. *pow(rc, -9);
+          // - int_rc^(+inf) r^3 * dU/dr = - (A exp(-B*rc) * (rc^3 + 3 rc^2/B + 6 rc/B^2 + 6/B^3)
+          //                                  + 2 C / rc^3
+	        //                                  - 4/3 D (12/B)^12 1/rc^9)
+          vcorr = - (A* exp(-B*rc) * (pow(rc, 3) + 3.*pow(rc, 2)/B + 6.*rc/pow(B, 2) + 6./pow(B,3))
+		     + 2.*C / pow(rc, 3)
+		     - 4./3. *D *pow(12./B, 12) * pow(rc,-9));
+          //molecule_compute_parameters->m_energy_correction[ta] += 0.0; // so something here ...
+          //molecule_compute_parameters->m_virial_correction[ta] += Mat3d{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 }; // so something here ...
         }
         else
         {
           fatal_error() << "pair potentials must be all LJ or all Exp6" << std::endl;
         }
+
+        //multiplication of the energy and virial corrections by factors common to the different potentials
+	      ecorr *= 4. * M_PI / Vtot * 1./2. ;
+	      vcorr *= 4. * M_PI / Vtot * 1./6. ;
+
+	      // addition of the corrections due to the couple [ta, tb] to the corrections of atoms of type ta
+	      molecule_compute_parameters->m_energy_correction[ta] += ecorr *nb;
+	      molecule_compute_parameters->m_virial_correction[ta] += Mat3d{ vcorr*nb, 0.0, 0.0, 0.0, vcorr*nb, 0.0, 0.0, 0.0, vcorr*nb };
+
+	      //In the case where ta is different from tb, addition of the corrections to atoms of type tb
+	      // the couple (ta, tb) is encountered only once
+        if (ta != tb) {
+	        molecule_compute_parameters->m_energy_correction[tb] += ecorr *na;
+          molecule_compute_parameters->m_virial_correction[tb] += Mat3d{ vcorr*na, 0.0, 0.0, 0.0, vcorr*na, 0.0, 0.0, 0.0, vcorr*na };
+        }
+
+
         for(size_t t=0;t<species->size();t++)
         {
           ldbg << "Correction for type "<<species->at(t).name()<<" : energy="<<molecule_compute_parameters->m_energy_correction[t]<<" , virial="<<molecule_compute_parameters->m_virial_correction[t]<<std::endl;
@@ -225,15 +255,14 @@ namespace exaStamp
       {
         int a = str2type( bond.species[0] );
         int b = str2type( bond.species[1] );
-        if( a > b ) std::swap( a , b );        
-        onika::oarray_t<int,4> types = {a,b,-1,-1};
-        ldbg << "read bond "<<bond.species[0]<<","<<bond.species[1]<<" -> "<<types[0]<<","<<types[1]<<std::endl;
+        const auto types = bond_key(a,b);
+        ldbg << "read bond "<<bond.species[0]<<","<<bond.species[1]<<" -> "<<(const void*)types<<std::endl;
         auto param = bond.potential->generic_parameters();
         if( ! param.is_null() )
         {
           if( intramol_param_id_map.find(param)==intramol_param_id_map.end() )
           {
-            ldbg<<"bond: add parameter pack "<<param<<" -> "<<parameter_id<<" , for key ("<<types[0]<<","<<types[1]<<","<<types[2]<<","<<types[3]<<")"<<std::endl;
+            ldbg<<"bond: add parameter pack "<<param<<" -> "<<parameter_id<<" , for key "<<(const void*)types<<std::endl;
             intramol_param_id_map[param] = parameter_id++;
           }
           intramol_param_map[ types ] = intramol_param_id_map[param];
@@ -246,15 +275,14 @@ namespace exaStamp
         int a = str2type( angle.species[0] );
         int b = str2type( angle.species[1] );
         int c = str2type( angle.species[2] );
-        if( a > c ) std::swap( a , c );
-        onika::oarray_t<int,4> types = {a,b,c,-1};
-        ldbg << "read angle "<<angle.species[0]<<","<<angle.species[1]<<","<<angle.species[2]<<" -> "<<types[0]<<","<<types[1]<<","<<types[2]<<std::endl;
+        const auto types = angle_key(a,b,c);
+        ldbg << "read angle "<<angle.species[0]<<","<<angle.species[1]<<","<<angle.species[2]<<" -> "<<(const void*)types<<std::endl;
         auto param = angle.m_potential_function->generic_parameters();
         if( ! param.is_null() )
         {
           if( intramol_param_id_map.find(param)==intramol_param_id_map.end() )
           {
-            ldbg<<"angle: add parameter pack "<<param<<" -> "<<parameter_id<<" , for key ("<<types[0]<<","<<types[1]<<","<<types[2]<<","<<types[3]<<")"<<std::endl;
+            ldbg<<"angle: add parameter pack "<<param<<" -> "<<parameter_id<<" , for key "<<(const void*)types<<std::endl;
             intramol_param_id_map[param] = parameter_id++;
           }
           intramol_param_map[ types ] = intramol_param_id_map[param];
@@ -268,15 +296,14 @@ namespace exaStamp
         int b = str2type( torsion.species[1] );
         int c = str2type( torsion.species[2] );
         int d = str2type( torsion.species[3] );
-        if( a > d ) { std::swap( a , d ); std::swap( b , c ); }
-        onika::oarray_t<int,4> types = {a,b,c,d};
-        ldbg << "read torsion "<<torsion.species[0]<<","<<torsion.species[1]<<","<<torsion.species[2]<<","<<torsion.species[3]<<" -> "<<types[0]<<","<<types[1]<<","<<types[2]<<","<<types[3]<<std::endl;
+        const auto types = torsion_key(a,b,c,d);
+        ldbg << "read torsion "<<torsion.species[0]<<","<<torsion.species[1]<<","<<torsion.species[2]<<","<<torsion.species[3]<<" -> "<<(const void*)types<<std::endl;
         auto param = torsion.m_potential_function->generic_parameters();
         if( ! param.is_null() )
         {
           if( intramol_param_id_map.find(param)==intramol_param_id_map.end() )
           {
-            ldbg<<"torsion: add parameter pack "<<param<<" -> "<<parameter_id<<" , for key ("<<types[0]<<","<<types[1]<<","<<types[2]<<","<<types[3]<<")"<<std::endl;
+            ldbg<<"torsion: add parameter pack "<<param<<" -> "<<parameter_id<<" , for key "<<(const void*)types<<std::endl;
             intramol_param_id_map[param] = parameter_id++;
           }
           intramol_param_map[ types ] = intramol_param_id_map[param];
@@ -290,17 +317,14 @@ namespace exaStamp
         int b = str2type( improper.species[1] );
         int c = str2type( improper.species[2] );
         int d = str2type( improper.species[3] );
-        if( b > c ) { std::swap( b , c ); }
-        if( c > d ) { std::swap( c , d ); }
-        if( b > c ) { std::swap( b , c ); }
-        onika::oarray_t<int,4> types = {a,b,c,d};
-        ldbg << "read improper "<<improper.species[0]<<","<<improper.species[1]<<","<<improper.species[2]<<","<<improper.species[3]<<" -> "<<types[0]<<","<<types[1]<<","<<types[2]<<","<<types[3]<<std::endl;
+        const auto types = improper_key(a,b,c,d);
+        ldbg << "read improper "<<improper.species[0]<<","<<improper.species[1]<<","<<improper.species[2]<<","<<improper.species[3]<<" -> "<<(const void*)types<<std::endl;
         auto param = improper.m_potential_function->generic_parameters();
         if( ! param.is_null() )
         {
           if( intramol_param_id_map.find(param)==intramol_param_id_map.end() )
           {
-            ldbg<<"improper: add parameter pack "<<param<<" -> "<<parameter_id<<" , for key ("<<types[0]<<","<<types[1]<<","<<types[2]<<","<<types[3]<<")"<<std::endl;
+            ldbg<<"improper: add parameter pack "<<param<<" -> "<<parameter_id<<" , for key "<<(const void*)types<<std::endl;
             intramol_param_id_map[param] = parameter_id++;
           }
           intramol_param_map[ types ] = intramol_param_id_map[param];

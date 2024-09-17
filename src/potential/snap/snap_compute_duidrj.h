@@ -58,20 +58,24 @@ namespace exaStamp
   ONIKA_HOST_DEVICE_FUNC
   static inline void snap_compute_duarray( // READ ONLY
                              int twojmax, int idxu_max
-                           , int const * __restrict__ idxu_block
-                           , double const * __restrict__ ulist_r_ij
-                           , double const * __restrict__ ulist_i_ij
-                           , double const * __restrict__ const * __restrict__ rootpqarray
-                           , double const * __restrict__ sinnerij
-                           , double const * __restrict__ dinnerij
+                           , double const * __restrict__ ulist_r_ij_jj
+                           , double const * __restrict__ ulist_i_ij_jj
+                           , double const * __restrict__ rootpqarray
+                           , double sinnerij
+                           , double dinnerij
                            , double rmin0, bool switch_flag, bool switch_inner_flag
                              // WRITE ONLY
                            , double * __restrict__ dulist_r, double * __restrict__ dulist_i
                              // ORIGINAL PARAMETERS
                            , double x, double y, double z
                            , double z0, double r, double dz0dr
-                           , double wj, double rcut, int jj )
+                           , double wj, double rcut )
   {
+    const double sfac_wj  = wj * snap_compute_sfac ( rmin0, switch_flag, switch_inner_flag, r, rcut, sinnerij, dinnerij );
+    const double dsfac_wj = wj * snap_compute_dsfac( rmin0, switch_flag, switch_inner_flag, r, rcut, sinnerij, dinnerij );
+//    sfac *= wj;
+//    dsfac *= wj;
+
     double r0inv;
     double a_r, a_i, b_r, b_i;
     double da_r[3], da_i[3], db_r[3], db_i[3];
@@ -125,8 +129,8 @@ namespace exaStamp
     DULIST_I(0,2) = 0.0;
 
     for (int j = 1; j <= twojmax; j++) {
-      int jju = idxu_block[j];
-      int jjup = idxu_block[j-1];
+      int jju = IDXU_BLOCK(j);
+      int jjup = IDXU_BLOCK(j-1);
       for (int mb = 0; 2*mb <= j; mb++) {
         DULIST_R(jju,0) = 0.0;
         DULIST_R(jju,1) = 0.0;
@@ -136,32 +140,16 @@ namespace exaStamp
         DULIST_I(jju,2) = 0.0;
 
         for (int ma = 0; ma < j; ma++) {
-          rootpq = rootpqarray[j - ma][j - mb];
+          rootpq = ROOTPQARRAY(j - ma,j - mb);
           for (int k = 0; k < 3; k++) {
-            DULIST_R(jju,k) +=
-              rootpq * (da_r[k] * ULIST_R_IJ(jj,jjup) +
-                        da_i[k] * ULIST_I_IJ(jj,jjup) +
-                        a_r * DULIST_R(jjup,k) +
-                        a_i * DULIST_I(jjup,k));
-            DULIST_I(jju,k) +=
-              rootpq * (da_r[k] * ULIST_I_IJ(jj,jjup) -
-                        da_i[k] * ULIST_R_IJ(jj,jjup) +
-                        a_r * DULIST_I(jjup,k) -
-                        a_i * DULIST_R(jjup,k));
+            DULIST_R(jju,k) += rootpq * (da_r[k] * ULIST_R_JJ(jjup) + da_i[k] * ULIST_I_JJ(jjup) + a_r * DULIST_R(jjup,k) + a_i * DULIST_I(jjup,k));
+            DULIST_I(jju,k) += rootpq * (da_r[k] * ULIST_I_JJ(jjup) - da_i[k] * ULIST_R_JJ(jjup) + a_r * DULIST_I(jjup,k) - a_i * DULIST_R(jjup,k));
           }
 
-          rootpq = rootpqarray[ma + 1][j - mb];
+          rootpq = ROOTPQARRAY(ma + 1,j - mb);
           for (int k = 0; k < 3; k++) {
-            DULIST_R(jju+1,k) =
-              -rootpq * (db_r[k] * ULIST_R_IJ(jj,jjup) +
-                         db_i[k] * ULIST_I_IJ(jj,jjup) +
-                         b_r * DULIST_R(jjup,k) +
-                         b_i * DULIST_I(jjup,k));
-            DULIST_I(jju+1,k) =
-              -rootpq * (db_r[k] * ULIST_I_IJ(jj,jjup) -
-                         db_i[k] * ULIST_R_IJ(jj,jjup) +
-                         b_r * DULIST_I(jjup,k) -
-                         b_i * DULIST_R(jjup,k));
+            DULIST_R(jju+1,k) = -rootpq * (db_r[k] * ULIST_R_JJ(jjup) + db_i[k] * ULIST_I_JJ(jjup) + b_r * DULIST_R(jjup,k) + b_i * DULIST_I(jjup,k));
+            DULIST_I(jju+1,k) = -rootpq * (db_r[k] * ULIST_I_JJ(jjup) - db_i[k] * ULIST_R_JJ(jjup) + b_r * DULIST_I(jjup,k) - b_i * DULIST_R(jjup,k));
           }
           jju++;
           jjup++;
@@ -172,7 +160,7 @@ namespace exaStamp
       // copy left side to right side with inversion symmetry VMK 4.4(2)
       // u[ma-j][mb-j] = (-1)^(ma-mb)*Conj([u[ma][mb])
 
-      jju = idxu_block[j];
+      jju = IDXU_BLOCK(j);
       jjup = jju+(j+1)*(j+1)-1;
       int mbpar = 1;
       for (int mb = 0; 2*mb <= j; mb++) {
@@ -197,27 +185,16 @@ namespace exaStamp
       }
     }
 
-    double sfac  = snap_compute_sfac ( rmin0, switch_flag, switch_inner_flag, r, rcut, SINNERIJ(jj), DINNERIJ(jj) );
-    double dsfac = snap_compute_dsfac( rmin0, switch_flag, switch_inner_flag, r, rcut, SINNERIJ(jj), DINNERIJ(jj) );
-
-    sfac *= wj;
-    dsfac *= wj;
     for (int j = 0; j <= twojmax; j++) {
-      int jju = idxu_block[j];
+      int jju = IDXU_BLOCK(j);
       for (int mb = 0; 2*mb <= j; mb++)
         for (int ma = 0; ma <= j; ma++) {
-          DULIST_R(jju,0) = dsfac * ULIST_R_IJ(jj,jju) * ux +
-                                    sfac * DULIST_R(jju,0);
-          DULIST_I(jju,0) = dsfac * ULIST_I_IJ(jj,jju) * ux +
-                                    sfac * DULIST_I(jju,0);
-          DULIST_R(jju,1) = dsfac * ULIST_R_IJ(jj,jju) * uy +
-                                    sfac * DULIST_R(jju,1);
-          DULIST_I(jju,1) = dsfac * ULIST_I_IJ(jj,jju) * uy +
-                                    sfac * DULIST_I(jju,1);
-          DULIST_R(jju,2) = dsfac * ULIST_R_IJ(jj,jju) * uz +
-                                    sfac * DULIST_R(jju,2);
-          DULIST_I(jju,2) = dsfac * ULIST_I_IJ(jj,jju) * uz +
-                                    sfac * DULIST_I(jju,2);
+          DULIST_R(jju,0) = dsfac_wj * ULIST_R_JJ(jju) * ux + sfac_wj * DULIST_R(jju,0);
+          DULIST_I(jju,0) = dsfac_wj * ULIST_I_JJ(jju) * ux + sfac_wj * DULIST_I(jju,0);
+          DULIST_R(jju,1) = dsfac_wj * ULIST_R_JJ(jju) * uy + sfac_wj * DULIST_R(jju,1);
+          DULIST_I(jju,1) = dsfac_wj * ULIST_I_JJ(jju) * uy + sfac_wj * DULIST_I(jju,1);
+          DULIST_R(jju,2) = dsfac_wj * ULIST_R_JJ(jju) * uz + sfac_wj * DULIST_R(jju,2);
+          DULIST_I(jju,2) = dsfac_wj * ULIST_I_JJ(jju) * uz + sfac_wj * DULIST_I(jju,2);
           jju++;
         }
     }
@@ -230,32 +207,27 @@ namespace exaStamp
   ONIKA_HOST_DEVICE_FUNC
   static inline void snap_compute_duidrj( // READ ONLY
                                          int twojmax, int idxu_max
-                                       , int const * __restrict__ idxu_block
+//                                       , int const * __restrict__ idxu_block
 //                                       , int const * element
-                                       , double const * __restrict__ drx
-                                       , double const * __restrict__ dry
-                                       , double const * __restrict__ drz
-                                       , double const * __restrict__ rcutij
-                                       , double const * __restrict__ wj
-                                       , double const * __restrict__ ulist_r_ij
-                                       , double const * __restrict__ ulist_i_ij
-                                       , double const * __restrict__ const * __restrict__ rootpqarray
-                                       , double const * __restrict__ sinnerij
-                                       , double const * __restrict__ dinnerij
+                                       , double x
+                                       , double y
+                                       , double z
+                                       , double rcut
+                                       , double wj
+                                       , double const * __restrict__ ulist_r_ij_jj
+                                       , double const * __restrict__ ulist_i_ij_jj
+                                       , double const * __restrict__ rootpqarray
+                                       , double sinnerij
+                                       , double dinnerij
                                        , double rmin0, double rfac0, bool switch_flag, bool switch_inner_flag, bool chem_flag                             
                                          // WRITE ONLY
                                        , double * __restrict__ dulist_r
                                        , double * __restrict__ dulist_i
-                                         // ORIGINAL PARAMETERS
-                                       , int jj)
+                                       )
   {
-    double rsq, r, x, y, z, z0, theta0, cs, sn;
+    double rsq, r, /*x, y, z,*/ z0, theta0, cs, sn;
     double dz0dr;
-    double rcut = RCUTIJ(jj);
 
-    x = drx[jj];
-    y = dry[jj];
-    z = drz[jj];
     rsq = x * x + y * y + z * z;
     r = sqrt(rsq);
     double rscale0 = rfac0 * M_PI / (rcut - rmin0);
@@ -265,13 +237,10 @@ namespace exaStamp
     z0 = r * cs / sn;
     dz0dr = z0 / r - (r*rscale0) * (rsq + z0 * z0) / rsq;
 
-//    if (chem_flag) elem_duarray = ELEMENT(jj);
-//    else elem_duarray = 0;
-
-    snap_compute_duarray( twojmax, idxu_max, idxu_block, ulist_r_ij, ulist_i_ij, rootpqarray
+    snap_compute_duarray( twojmax, idxu_max, ulist_r_ij_jj, ulist_i_ij_jj, rootpqarray
                         , sinnerij, dinnerij, rmin0, switch_flag, switch_inner_flag
                         , dulist_r, dulist_i
-                        , x, y, z, z0, r, dz0dr, WJ(jj), rcut, jj);
+                        , x, y, z, z0, r, dz0dr, wj, rcut );
   }
 
 }

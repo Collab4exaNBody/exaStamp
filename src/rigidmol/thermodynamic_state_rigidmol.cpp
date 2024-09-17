@@ -75,12 +75,12 @@ namespace exaStamp
       Vec3d rotational_energy = {0., 0., 0.};  // constructs itself with 0s
       Vec3d ndof = {0., 0., 0.}; //number of rotational degrees of freedom;
       double potential_energy = 0.;
-      double mass = 0.;
+      double masstotale = 0.;
       size_t total_particles = 0;
       
 #     pragma omp parallel
       {
-        GRID_OMP_FOR_BEGIN(dims_no_ghost,_,loc_no_ghosts, reduction(+:mass,momentum,potential_energy,kinetic_energy,rotational_energy,ndof,virial,total_particles) )
+        GRID_OMP_FOR_BEGIN(dims_no_ghost,_,loc_no_ghosts, reduction(+:masstotale,momentum,potential_energy,kinetic_energy,rotational_energy,ndof,virial,total_particles) )
         {
           IJK loc = loc_no_ghosts + ghost_layers;
           size_t cell_i = grid_ijk_to_index(dims,loc);
@@ -114,6 +114,7 @@ namespace exaStamp
             local_mass += mass;
             local_momentum += v * mass;
             local_kinetic_ernergy += v * v * mass; // * 0.5 later
+
             //calcul du moment angulaire dans repere mobile
             Mat3d mat_lab_bf;
             mat_lab_bf.m11 = orient[j].w*orient[j].w + orient[j].x*orient[j].x - orient[j].y*orient[j].y - orient[j].z*orient[j].z;
@@ -125,6 +126,7 @@ namespace exaStamp
             mat_lab_bf.m31 = 2.0 * (orient[j].x*orient[j].z + orient[j].w*orient[j].y );
             mat_lab_bf.m23 = 2.0 * (orient[j].y*orient[j].z + orient[j].w*orient[j].x );
             mat_lab_bf.m32 = 2.0 * (orient[j].y*orient[j].z - orient[j].w*orient[j].x );
+
             Vec3d angmom_m = mat_lab_bf * angmom[j]; 
             if (minert.x > 0.) {local_rotational_energy.x += angmom_m.x*angmom_m.x/minert.x; local_ndof.x += 1.;}
             if (minert.y > 0.) {local_rotational_energy.y += angmom_m.y*angmom_m.y/minert.y; local_ndof.y += 1.;}
@@ -134,7 +136,7 @@ namespace exaStamp
             if constexpr (has_virial_field) { local_virial += vir[j]; }
           }
 
-          mass += local_mass;
+          masstotale += local_mass;
           momentum += local_momentum;
           potential_energy += local_potential_energy;
           kinetic_energy += local_kinetic_ernergy;
@@ -159,9 +161,10 @@ namespace exaStamp
           kinetic_energy.x, kinetic_energy.y, kinetic_energy.z,
           rotational_energy.x, rotational_energy.y, rotational_energy.z,
           potential_energy,
-          mass,
+          masstotale,
           static_cast<double>(total_particles),
           ndof.x, ndof.y, ndof.z };
+
         assert( tmp[20] == total_particles );
         MPI_Allreduce(MPI_IN_PLACE,tmp,24,MPI_DOUBLE,MPI_SUM,comm);
         virial.m11 = tmp[0];
@@ -183,24 +186,33 @@ namespace exaStamp
         rotational_energy.y = tmp[16];
         rotational_energy.z = tmp[17];
         potential_energy = tmp[18];
-        mass = tmp[19];
+        masstotale = tmp[19];
         total_particles = tmp[20];
         ndof.x = tmp[21];
         ndof.y = tmp[22];
         ndof.z = tmp[23];
       }
 
-      Vec3d kinetic_temperature = 2. * ( kinetic_energy - 0.5 * momentum * momentum / mass) / total_particles ;
+      double conv_temperature = 1.e4 * legacy_constant::atomicMass / legacy_constant::boltzmann ;
+      Vec3d kinetic_temperature = 2. * ( kinetic_energy - 0.5 * momentum * momentum / masstotale) / total_particles ;
 
       Vec3d rotational_temperature = {0., 0., 0.};
       if (ndof.x > 0) { rotational_temperature.x = 2. * rotational_energy.x / ndof.x ;}
       if (ndof.y > 0) { rotational_temperature.y = 2. * rotational_energy.y / ndof.y ;}
       if (ndof.z > 0) { rotational_temperature.z = 2. * rotational_energy.z / ndof.z ;}
 
-//      Vec3d temperature = 2. * ( (kinetic_energy - 0.5 * momentum * momentum / mass) / total_particles  + rotational_energy / ndof);
-      Vec3d temperature = kinetic_temperature + rotational_temperature ;
+      Vec3d kinetic_energy_totale = kinetic_energy - 0.5 * momentum * momentum / masstotale + rotational_energy;
+
+      Vec3d temperature = {0.,0.,0.};
+      temperature.x = 2. * kinetic_energy_totale.x / ( total_particles + ndof.x);
+      temperature.y = 2. * kinetic_energy_totale.y / ( total_particles + ndof.y);
+      temperature.z = 2. * kinetic_energy_totale.z / ( total_particles + ndof.z);
+
+      //lout<<"conv_temperature="<<conv_temperature<<" total_particles="<<total_particles<<" ndof="<<ndof<<std::endl;
+      //lout<<" kinetic_temperature="<<kinetic_temperature*conv_temperature<<" rotational_energy="<<rotational_energy<<" rotational_temperature="<<rotational_temperature*conv_temperature<<" temperature="<<temperature*conv_temperature<<std::endl;
 
       Vec3d virdiag = { virial.m11 , virial.m22, virial.m33 };
+
 
       // Volume
       double volume = 1.0;
@@ -228,7 +240,7 @@ namespace exaStamp
       sim_info.set_potential_energy( potential_energy + (*potential_energy_shift) );
       sim_info.set_internal_energy( 0. );
       sim_info.set_chemical_energy( 0. );
-      sim_info.set_mass( mass );
+      sim_info.set_mass( masstotale );
       sim_info.set_ndof( ndof );
       sim_info.set_volume( volume );
       sim_info.set_particle_count( total_particles );

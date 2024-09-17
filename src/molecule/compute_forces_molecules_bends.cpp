@@ -1,3 +1,5 @@
+// #pragma xstamp_cuda_enable // DO NOT REMOVE THIS LINE
+
 #include <yaml-cpp/yaml.h>
 #include <memory>
 #include <utility>// std::pair
@@ -19,6 +21,7 @@
 
 #include <exaStamp/molecule/bends_potentials_parameters.h>
 #include <exaStamp/molecule/periodic_r_delta.h>
+#include <exaStamp/molecule/angles_force_functor.h>
 
 namespace exaStamp
 {
@@ -39,12 +42,15 @@ namespace exaStamp
     ADD_SLOT( ParticleSpecies          , species               , INPUT, REQUIRED );
     ADD_SLOT( GridParticleLocks        , particle_locks        , INPUT_OUTPUT);
 
+    ADD_SLOT( MoleculeComputeParameterSet  , molecule_compute_parameters , INPUT_OUTPUT, DocString{"Intramolecular functionals' parameters"} );
+    ADD_SLOT( IntramolecularParameterIndexLists, intramolecular_parameters , INPUT_OUTPUT, DocString{"Intramolecular functional parmater index lists"} );
+
+    ADD_SLOT( bool                      , trigger_thermo_state, INPUT , OPTIONAL );
+    ADD_SLOT( bool                      , compute_virial      , INPUT , false );
+
   public:
     inline void execute ()  override final
     {
-      static constexpr bool has_virial_field = GridHasField<GridT,field::_virial>::value;
-      // using CellLockT = decltype( (*particle_locks)[0][0] );
-
       if( ! grid.has_value() || grid->number_of_cells()==0 )
       {
         return;
@@ -55,207 +61,62 @@ namespace exaStamp
         lerr << "chemical_angles input missing" << std::endl;
         std::abort();
       }
-      
-      ChemicalAngles&           bends_list  = *chemical_angles;
 
-      Mat3d xform = domain->xform();
-      bool xform_is_identity = domain->xform_is_identity();
-
-      // build type pair to bend potential map if needed
-      if( potentials_for_angles->m_type_to_potential.empty() )
+      // do we need to compute energy and virial
+      bool log_energy = false;
+      if( trigger_thermo_state.has_value() )
       {
-        std::unordered_map<std::string, unsigned int> map_species_name_id;
-        for(size_t i=0;i<species->size(); ++i)
-        {
-          map_species_name_id[species->at(i).m_name] = i;
-        }        
-        for(const auto& b_type : potentials_for_angles->m_potentials)
-        {          
-          uint64_t type_a = map_species_name_id.at(b_type.species.at(0));
-          uint64_t type_b = map_species_name_id.at(b_type.species.at(1));
-          uint64_t type_c = map_species_name_id.at(b_type.species.at(2));
-          if( type_a > type_c ) std::swap( type_a, type_c );
-          assert( type_a < 65536 );
-          assert( type_b < 65536 );
-          assert( type_c < 65536 );
-          uint64_t key = (type_a<<32) | (type_b<<16) | type_c ;
-          assert( potentials_for_angles->m_type_to_potential.find(key) == potentials_for_angles->m_type_to_potential.end() );
-          potentials_for_angles->m_type_to_potential[key] = b_type.m_potential_function;
-          const auto gp = b_type.m_potential_function->generic_parameters();
-          ldbg << "Angle potential for "<<b_type.species.at(0)<<"/"<<b_type.species.at(1)<<"/"<<b_type.species.at(2)<< " : p0="<<gp.p0<<", p1="<<gp.p1<<", p2="<<gp.p2<<", x0="<<gp.x0<<", coeff="<<gp.coeff<<std::endl;
-        }
+        log_energy = *trigger_thermo_state ;
       }
-      const auto& map_bends_potential = potentials_for_angles->m_type_to_potential;
+      else
+      {
+        ldbg << "trigger_thermo_state missing " << std::endl;
+      }
+      const bool need_virial = log_energy && *compute_virial;
+      using VirialFieldT = decltype( grid->field_accessor( field::virial ) );
+      VirialFieldT virial_field = {};
+      if( need_virial ) virial_field = grid->field_accessor( field::virial );
 
-      auto cells = grid->cells();
+      ldbg<<"n_angles = "<<chemical_angles->size()<<std::endl;
 
       const Vec3d size_box {std::abs(domain->extent().x - domain->origin().x),
                       std::abs(domain->extent().y - domain->origin().y),
                       std::abs(domain->extent().z - domain->origin().z)};
       const double half_min_size_box = std::min( std::min(size_box.x,size_box.y) , size_box.z) / 2.0; 
 
-      const size_t n_bends = bends_list.size();
-      //std::cout<<"n_bends = "<<n_bends<<std::endl;
-
 #     ifndef NDEBUG
-      if( ! xform_is_identity )
+      if( ! domain->xform_is_identity() )
       {
-        Vec3d tmp = xform * size_box;
+        Vec3d tmp = domain->xform() * size_box;
         if( fabs(tmp.x) <= 1.5 || fabs(tmp.y) <= 1.5 || fabs(tmp.z) <= 1.5 )
         {
-          lerr<<"xform="<<xform<<", size_box="<<size_box<<", tmp="<<tmp<<std::endl;
+          lerr<<"xform="<<domain->xform()<<", size_box="<<size_box<<", tmp="<<tmp<<std::endl;
           std::abort();
         }
       }
 #     endif
 
-#     pragma omp parallel
+      auto compute_angles_force_opt_virial = [&]( auto cpvir )
       {
-        size_t cell[3];
-        size_t pos[3];
-        unsigned int type[3];
+        auto cells = grid->cells_accessor();
+        AngleForceOp<decltype(cells),VirialFieldT,cpvir.value> angle_force_op =
+          { cells
+          , particle_locks->data()
+          , molecule_compute_parameters->m_func_params.data()
+          , intramolecular_parameters->m_angle_param_idx.data()
+          , chemical_angles->data()
+          , size_box , half_min_size_box
+          , domain->xform() , domain->xform_is_identity()
+          , virial_field };
 
-#       pragma omp for schedule(dynamic)
-        for(size_t i=0; i<n_bends; ++i)
-        {
-          //-----------------------------DECODE----------------------------------------------------
-          uint64_t atom_to_decode_a = bends_list[i][0]; // atom_from_idmap(bends_list[i][0],id_map,id_map_ghosts); 
-          uint64_t atom_to_decode_b = bends_list[i][1]; // atom_from_idmap(bends_list[i][1],id_map,id_map_ghosts); 
-          uint64_t atom_to_decode_c = bends_list[i][2]; // atom_from_idmap(bends_list[i][2],id_map,id_map_ghosts); 
-          assert(atom_to_decode_a != std::numeric_limits<uint64_t>::max());
-          assert(atom_to_decode_b != std::numeric_limits<uint64_t>::max());
-          assert(atom_to_decode_c != std::numeric_limits<uint64_t>::max());
+        /* auto parallel_op = */ parallel_for( chemical_angles->size(), angle_force_op, parallel_execution_context("angle_force") );
+        // auto exec_ctrl_obj = parallel_execution_stream() << std::move(parallel_op) ;
+      };
 
-          decode_cell_particle(atom_to_decode_a, cell[0], pos[0], type[0]);
-          decode_cell_particle(atom_to_decode_b, cell[1], pos[1], type[1]);
-          decode_cell_particle(atom_to_decode_c, cell[2], pos[2], type[2]);
+      if( need_virial ) compute_angles_force_opt_virial( onika::TrueType{} );
+      else              compute_angles_force_opt_virial( onika::FalseType{} );
 
-          // bend atoms
-          const Vec3d ra = Vec3d { cells[cell[0]][field::rx][pos[0]] , cells[cell[0]][field::ry][pos[0]] , cells[cell[0]][field::rz][pos[0]] };
-          const Vec3d rb = Vec3d { cells[cell[1]][field::rx][pos[1]] , cells[cell[1]][field::ry][pos[1]] , cells[cell[1]][field::rz][pos[1]] };
-          const Vec3d rc = Vec3d { cells[cell[2]][field::rx][pos[2]] , cells[cell[2]][field::ry][pos[2]] , cells[cell[2]][field::rz][pos[2]] };
-          
-          // first harm
-          Vec3d r1 = periodic_r_delta( rb , ra , size_box , half_min_size_box );
-
-          // second harm
-          Vec3d r2 = periodic_r_delta( rb , rc , size_box , half_min_size_box ); // rc - rb;
-          
-          //ldbg << "r1 avant : " << r1 << std::endl;
-          if( ! xform_is_identity )
-          {
-            r1 = xform * r1;
-            r2 = xform * r2;
-          }
-          //ldbg << "r1 après : " << r1 << std::endl;
-
-          //---------------------------------------------------------------------------------------
-
-
-          //-----------------------------READ POTENTIAL--------------------------------------------
-          // Get potential type from species of atoms pair
-          uint64_t type_a = type[0];
-          uint64_t type_b = type[1];
-          uint64_t type_c = type[2];
-          if( type_a > type_c ) std::swap( type_a, type_c );
-          assert( type_a < 65536 );
-          assert( type_b < 65536 );
-          assert( type_c < 65536 );
-          uint64_t key = (type_a<<32) | (type_b<<16) | type_c ;
-          auto it = map_bends_potential.find( key );
-          assert( it != map_bends_potential.end() );
-          //---------------------------------------------------------------------------------------
-
-
-          //-----------------------------COMPUTE ENERGY AND FORCE----------------------------------
-          const double norm_r1 = norm(r1);
-          const double norm_r2 = norm(r2);
-          assert(norm_r1>0);
-          assert(norm_r2>0);
-
-          //---------------------------------------------------------------------------------------------
-          // Compute directions of Fa and Fb
-          Vec3d tmp = cross(r1, r2);
-          assert( tmp.x!=0. || tmp.y!=0. || tmp.z!=0. );
-          const Vec3d p_a = cross(r1 , tmp);
-          const Vec3d p_b = cross(tmp, r2 );
-          const double norm_pa = norm(p_a);
-          const Vec3d pa_r1 = p_a / norm_pa / norm_r1;
-          const double norm_pb = norm(p_b);
-          const Vec3d pb_r2 = p_b / norm_pb / norm_r2;
-          //---------------------------------------------------------------------------------------------
-
-          //---------------------------------------------------------------------------------------------
-          // Compute energy
-          const double theta = angle(r1,r2);
-          const auto fe = it->second->force_energy( theta );
-          const double e = fe.second; //b.f_energy(theta);
-          //---------------------------------------------------------------------------------------------
-
-          //---------------------------------------------------------------------------------------------
-          // Compute forces
-          // F = - grad(Ep)
-          const double dep_on_dtheta = fe.first; //b.f_forces(theta);
-
-          const Vec3d F1 = pa_r1 * (-dep_on_dtheta);
-          const Vec3d F2 = pb_r2 * (-dep_on_dtheta);
-
-          const Mat3d virial1 = tensor (F1,r1) * 0.5;
-          const Mat3d virial2 = tensor (F2,r2) * 0.5;
-
-#if 0
-          // Debug Th. C.
-#         pragma omp critical(dbgèmesg)
-          {
-            const uint64_t atid1 = cells[cell[0]][field::id][pos[0]];
-            const uint64_t atid2 = cells[cell[1]][field::id][pos[1]];
-            const uint64_t atid3 = cells[cell[2]][field::id][pos[2]];
-            if( atid1==846 || atid1==3004 || atid1==11323 )
-            {
-              printf("ANGLE %05ld - %05ld - %05ld : x1=(% .5e,% .5e,% .5e) x2=(% .5e,% .5e,% .5e) x3=(% .5e,% .5e,% .5e) teta=% .5e f=(% .5e,% .5e,% .5e)\n"
-                    , atid1 , atid2 , atid3
-                    , ra.x , ra.y , ra.z
-                    , rb.x , rb.y , rb.z
-                    , rc.x , rc.y , rc.z
-                    , theta * 180. / acos(-1.)
-                    , F1.x , F1.y , F1.z );
-            }
-          }
-          /*******************/
-#endif
-
-//          compute_bend_interaction(r1, r2, e, F1, F2, * (it->second) );
-          // add force, energy and virial contributions to 3 corresponding atoms
-
-          const Vec3d Fo = - ( F1 + F2 );
-          const Mat3d virialo = virial1 + virial2;
-
-          (*particle_locks)[cell[0]][pos[0]].lock();
-          cells[cell[0]][field::ep][pos[0]] += e/3;
-          cells[cell[0]][field::fx][pos[0]] += F1.x; 
-          cells[cell[0]][field::fy][pos[0]] += F1.y;
-          cells[cell[0]][field::fz][pos[0]] += F1.z; 
-          if constexpr (has_virial_field) cells[cell[0]][field::virial][pos[0]] += virial1;
-          (*particle_locks)[cell[0]][pos[0]].unlock();
-
-          (*particle_locks)[cell[1]][pos[1]].lock();
-          cells[cell[1]][field::ep][pos[1]] += e/3;
-          cells[cell[1]][field::fx][pos[1]] += Fo.x;
-          cells[cell[1]][field::fy][pos[1]] += Fo.y;
-          cells[cell[1]][field::fz][pos[1]] += Fo.z;
-          if constexpr (has_virial_field) cells[cell[1]][field::virial][pos[1]] += virialo;
-          (*particle_locks)[cell[1]][pos[1]].unlock();
-
-          (*particle_locks)[cell[2]][pos[2]].lock();
-          cells[cell[2]][field::ep][pos[2]] += e/3;
-          cells[cell[2]][field::fx][pos[2]] += F2.x;
-          cells[cell[2]][field::fy][pos[2]] += F2.y;
-          cells[cell[2]][field::fz][pos[2]] += F2.z;
-          if constexpr (has_virial_field) cells[cell[2]][field::virial][pos[2]] += virial2;
-          (*particle_locks)[cell[2]][pos[2]].unlock();
-        }
-      }
-
+      ldbg<<"compute_force_bend done"<<std::endl;
     }
 
   };

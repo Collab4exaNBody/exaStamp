@@ -1,17 +1,47 @@
-includes: [ config_molecule_stampv4.msp ]
+includes: [ config_molecule.msp ]
 
 configuration:
   logging:
-    debug: true
+    debug: false
   debug:
-    filter: [ ".*read_fatomes_mol" , ".*ljexp6rf_pc" , ".*intramolecular_setup" ]
+    filter:
+      - ".*read_fatomes_mol"
+      - ".*read_dump_molecule"
+      - ".*write_dump_molecule"
+      - ".*ljexp6rf_pc"
+      - ".*intramolecular_setup"
+      - ".*compute_force_improper"
+      - ".*compute_force_torsion"
+      - ".*compute_force_bend"
+      - ".*compute_force_bond"
+      - ".*intramolecular_pair_force"
+      - ".*intramolecular_pair_list"
+      - ".*mol_optimize_connectivity"
   profiling:
-    summary: false
+    summary: true
+
+replicate_domain_cmol:
+  repeat: [ 1 , 1 , 1 ]
+
+replicate_molecule_domain:
+  - ghost_comm_scheme
+  - id_map
+  - molecule_unfold
+  - replicate_domain_cmol
+  - move_particles
+  - load_balance_cost_model
+  - load_balance_rcb
+  - migrate_cell_particles
 
 input_data:
   - read_fatomes_mol:
       filename: molecule_polymere.FAtomes
       stampinput: molecule_polymere.init
+#  - replicate_molecule_domain
+
+xx_input_data:
+  - read_dump_molecule:
+      filename: molecule_000000003.MpiIO
 
 # user-specified global values
 global:
@@ -31,16 +61,7 @@ langevin_thermostat:
 
 # thermostat: langevin_thermostat
 
-dump_data:
-  - timestep_file: "molecule_dump_09d.xyz"
-  - message: { mesg: "Write xyz " , endl: false }
-  - print_dump_file:
-      rebind: { mesg: filename }
-      body:
-        - message: { endl: true }
-  - write_xyz_file
-
-simulation_epilog:
+xx_simulation_epilog:
   - check_values:
       file: molxyz_polymere.dat
       acc_threshold: 1.e-8

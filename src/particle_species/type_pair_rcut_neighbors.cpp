@@ -34,10 +34,10 @@ namespace exaStamp
   template<class CellsT>
   struct PairTypeRCutNeighborFilter
   {
-    static constexpr size_t MAX_TYPE_PAIRS = 248;
+    static constexpr size_t MAX_TYPE_PAIRS = 24;
     CellsT m_cells;
     double m_pair_rcut2[MAX_TYPE_PAIRS];
-    inline bool operator () (double d2, double rcut2,size_t cell_a,size_t p_a,size_t cell_b,size_t p_b) const
+    ONIKA_HOST_DEVICE_FUNC inline bool operator () (double d2, double rcut2,size_t cell_a,size_t p_a,size_t cell_b,size_t p_b) const
     {
       const unsigned int type_a = m_cells[cell_a][field::type][p_a];
       const unsigned int type_b = m_cells[cell_b][field::type][p_b];
@@ -52,10 +52,6 @@ namespace exaStamp
           >
   class PairTypeRCutNeighbors : public OperatorNode
   {
-#ifdef XNB_CUDA_VERSION
-    ADD_SLOT( onika::cuda::CudaContext , cuda_ctx , INPUT , OPTIONAL );
-#endif
-
     ADD_SLOT( GridT               , grid            , INPUT , REQUIRED );
     ADD_SLOT( AmrGrid             , amr             , INPUT , REQUIRED );
     ADD_SLOT( AmrSubCellPairCache , amr_grid_pairs  , INPUT , REQUIRED );
@@ -91,12 +87,10 @@ namespace exaStamp
       }
 
       bool gpu_enabled = false;
-#     ifdef XNB_CUDA_VERSION
-      if( cuda_ctx.has_value() )
+      if( global_cuda_ctx()!=nullptr )
       {
-        gpu_enabled = cuda_ctx->has_devices() ;
+        gpu_enabled = global_cuda_ctx()->has_devices() ;
       }
-#     endif
       
       LinearXForm xform_filter = {domain->xform()};
       static constexpr std::false_type no_zorder = {};
@@ -111,12 +105,17 @@ namespace exaStamp
         const unsigned int t1 = particle_type_map->at( ts1 );
         const unsigned int t2 = particle_type_map->at( ts2 );
         const unsigned int pair_id = unique_pair_id(t1,t2);
-        assert( pair_id < nbh_filter.MAX_TYPE_PAIRS );
+        ldbg << "pair ("<<ts1<<","<<ts2<<") -> ("<<t1<<","<<t2<<") -> "<<pair_id<<std::endl;
+        if( pair_id >= nbh_filter.MAX_TYPE_PAIRS )
+        {
+          fatal_error() << "pair id "<<pair_id<<" above maximum "<<nbh_filter.MAX_TYPE_PAIRS<<std::endl;
+        }
         const double nbh_rcut = pdist.second + (*rcut_inc);
         ldbg << ts1 << " / " << ts2 << " -> "<<pdist.second<<"+"<<(*rcut_inc)<<" = "<<nbh_rcut <<std::endl;
         nbh_filter.m_pair_rcut2[pair_id] = nbh_rcut * nbh_rcut;
       }
 
+      ldbg << "chunk_neighbors_execute: cs="<<cs<<" cslog2="<<cs_log2<<" nbh_dist_lab="<<(*nbh_dist_lab)<<" gpu_enabled="<<gpu_enabled<<" zorder="<<no_zorder.value <<std::endl;
       chunk_neighbors_execute(ldbg,*chunk_neighbors,*grid,*amr,*amr_grid_pairs,*config,*chunk_neighbors_scratch,cs,cs_log2,*nbh_dist_lab, xform_filter, gpu_enabled, no_zorder, nbh_filter );
     }
 

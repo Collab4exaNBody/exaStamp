@@ -13,11 +13,11 @@ namespace exaStamp
   ------------------------------------------------------------------------- */
   ONIKA_HOST_DEVICE_FUNC
   static inline void snap_compute_bi( // READ ONLY
-                                      int nelements, int idxz_max, int idxb_max, int idxu_max
-                                    , int const * __restrict__ idxu_block
-                                    , int const * __restrict__ const * __restrict__ const * __restrict__ idxz_block
-                                    , LAMMPS_NS::SNA_ZINDICES const * __restrict__ idxz
-                                    , LAMMPS_NS::SNA_BINDICES const * __restrict__ idxb
+                                      int nelements, int idxz_max, int idxb_max, int idxu_max, int twojmax
+//                                    , int const * __restrict__ idxu_block
+                                    , int const * __restrict__ idxz_block
+                                    , SnapInternal::SNA_ZINDICES const * __restrict__ idxz
+                                    , SnapInternal::SNA_BINDICES const * __restrict__ idxb
                                     , double const * __restrict__ zlist_r
                                     , double const * __restrict__ zlist_i
                                     , double const * __restrict__ ulisttot_r
@@ -48,12 +48,12 @@ namespace exaStamp
 
         for (int elem3 = 0; elem3 < nelements; elem3++) {
           for (int jjb = 0; jjb < idxb_max; jjb++) {
-            const int j1 = idxb[jjb].j1;
-            const int j2 = idxb[jjb].j2;
-            const int j = idxb[jjb].j;
+            const int j1 = IDXB(jjb).j1;
+            const int j2 = IDXB(jjb).j2;
+            const int j = IDXB(jjb).j;
 
-            int jjz = idxz_block[j1][j2][j];
-            int jju = idxu_block[j];
+            int jjz = IDXZ_BLOCK(j1,j2,j);
+            int jju = IDXU_BLOCK(j);
             double sumzu = 0.0;
             for (int mb = 0; 2 * mb < j; mb++)
               for (int ma = 0; ma <= j; ma++) {
@@ -92,8 +92,8 @@ namespace exaStamp
       if (!wselfall_flag) {
         itriple = (ielem*nelements+ielem)*nelements+ielem;
         for (int jjb = 0; jjb < idxb_max; jjb++) {
-          const int j = idxb[jjb].j;
-          BLIST(itriple*idxb_max+jjb) -= bzero[j];
+          const int j = IDXB(jjb).j;
+          BLIST(itriple*idxb_max+jjb) -= BZERO(j);
         } // end loop over JJ
       } else {
         int itriple = 0;
@@ -101,8 +101,8 @@ namespace exaStamp
           for (int elem2 = 0; elem2 < nelements; elem2++) {
             for (int elem3 = 0; elem3 < nelements; elem3++) {
               for (int jjb = 0; jjb < idxb_max; jjb++) {
-                const int j = idxb[jjb].j;
-                BLIST(itriple*idxb_max+jjb) -= bzero[j];
+                const int j = IDXB(jjb).j;
+                BLIST(itriple*idxb_max+jjb) -= BZERO(j);
               } // end loop over JJ
               itriple++;
             } // end loop over elem3

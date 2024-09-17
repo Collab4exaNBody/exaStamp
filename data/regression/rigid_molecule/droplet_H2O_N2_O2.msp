@@ -141,7 +141,6 @@ input_data:
             size: [ 3.103 ang , 3.103 ang , 3.103 ang ]
             noise: 0.1 ang
             noise_cutoff: 0.2 ang
-            repeats: [ 3231 , 161 , 161 ]
             region: DROPLET
         - lattice:
             init_domain: false
@@ -150,7 +149,6 @@ input_data:
             size: [ 34 ang , 34 ang , 34 ang ]
             noise: 0.1 ang
             noise_cutoff: 0.2 ang
-            repeats: [ 11 , 11 , 11 ]
             region: BOX and not HOLE
 #
 #     *** Initialize temperature ***

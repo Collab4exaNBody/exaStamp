@@ -63,6 +63,10 @@ namespace exaStamp
       double sum_miy  = 0.0;
       double sum_miz  = 0.0;
       double N        = 0.0;
+      double nddl_x=0.;
+      double nddl_y=0.;
+      double nddl_z=0.;
+
       static const double k = UnityConverterHelper::convert(legacy_constant::boltzmann, "J/K");
       const double T           = *(this->T);
       //double sum_nrj=0.0;
@@ -72,7 +76,7 @@ namespace exaStamp
       {
         //creation graine pour distribution gaussienne
         auto& re = rand::random_engine();
-        GRID_OMP_FOR_BEGIN(dims_no_ghost,_,loc_no_ghosts, reduction(+:sum_mass,sum_vx,sum_vxc,sum_vy,sum_vyc,sum_vz,sum_vzc,sum_wx,sum_wxc,sum_wy,sum_wyc,sum_wz,sum_wzc,sum_mix,sum_miy,sum_miz,N) schedule(dynamic) )
+        GRID_OMP_FOR_BEGIN(dims_no_ghost,_,loc_no_ghosts, reduction(+:sum_mass,sum_vx,sum_vxc,sum_vy,sum_vyc,sum_vz,sum_vzc,sum_wx,sum_wxc,sum_wy,sum_wyc,sum_wz,sum_wzc,sum_mix,sum_miy,sum_miz,N,nddl_x,nddl_y,nddl_z) schedule(dynamic) )
         {
           IJK loc = loc_no_ghosts + ghost_layers;
           size_t cell_i = grid_ijk_to_index(dims,loc);
@@ -105,9 +109,9 @@ namespace exaStamp
             vx[j] = f_rand_v(re);
             vy[j] = f_rand_v(re);
             vz[j] = f_rand_v(re);
-            if (minert.x > 0.) { angmom[j].x = f_rand_wx(re) * minert.x;}
-            if (minert.y > 0.) { angmom[j].y = f_rand_wy(re) * minert.y;}
-            if (minert.z > 0.) { angmom[j].z = f_rand_wz(re) * minert.z;}
+            if (minert.x > 0.) { angmom[j].x = f_rand_wx(re) * minert.x;nddl_x+=1.;}
+            if (minert.y > 0.) { angmom[j].y = f_rand_wy(re) * minert.y;nddl_y+=1.;}
+            if (minert.z > 0.) { angmom[j].z = f_rand_wz(re) * minert.z;nddl_z+=1.;}
 
             sum_mass += mass;
             sum_vx   += mass * vx[j];
@@ -139,6 +143,9 @@ namespace exaStamp
       MPI_Allreduce(MPI_IN_PLACE,&sum_miy,1,MPI_DOUBLE,MPI_SUM,*mpi);
       MPI_Allreduce(MPI_IN_PLACE,&sum_miz,1,MPI_DOUBLE,MPI_SUM,*mpi);
       MPI_Allreduce(MPI_IN_PLACE,&N,1,MPI_DOUBLE,MPI_SUM,*mpi);
+      MPI_Allreduce(MPI_IN_PLACE,&nddl_x,1,MPI_DOUBLE,MPI_SUM,*mpi);
+      MPI_Allreduce(MPI_IN_PLACE,&nddl_y,1,MPI_DOUBLE,MPI_SUM,*mpi);
+      MPI_Allreduce(MPI_IN_PLACE,&nddl_z,1,MPI_DOUBLE,MPI_SUM,*mpi);
 
       // partie 2
 #     pragma omp parallel
@@ -194,6 +201,14 @@ namespace exaStamp
 
 
       {
+
+        /* Modifications LS */
+        Vec3d TTcal={0.,0.,0.};
+        Vec3d EcTcal={0.,0.,0.};
+        Vec3d TRcal={0.,0.,0.};
+        Vec3d EcRcal={0.,0.,0.};
+        /* Fin Modifications LS */
+
         GRID_OMP_FOR_BEGIN(dims_no_ghost,_,loc_no_ghosts, schedule(dynamic)  )
         {
           IJK loc = loc_no_ghosts + ghost_layers;
@@ -208,7 +223,7 @@ namespace exaStamp
          auto* __restrict__ angmom = cells[cell_i][field::angmom];
 //         auto* __restrict__ couple = cells[cell_i][field::couple];
          auto* __restrict__ orient = cells[cell_i][field::orient];
-         //const auto* __restrict__ type_atom = cells[cell_i][field::type];
+         const auto* __restrict__ type_atom = cells[cell_i][field::type];
 
          size_t n = cells[cell_i].size();
 
@@ -217,16 +232,25 @@ namespace exaStamp
          {
            for(size_t j=0;j<n;j++)
            {
-              //const int t = type_atom[j];
-              //const Vec3d minert= species->at(t).m_minert;
-              //double mass = species->at(t).m_mass;
+              const int t = type_atom[j];
+              const Vec3d minert= species->at(t).m_minert;
+              double mass = species->at(t).m_mass;
 
               vx[j] *= std::sqrt( N * k * T / sum_vxc);
               vy[j] *= std::sqrt( N * k * T / sum_vyc);
               vz[j] *= std::sqrt( N * k * T / sum_vzc);
-              if (sum_wxc > 0.) { angmom[j].x *= std::sqrt( N * k * T / sum_wxc );}
-              if (sum_wyc > 0.) { angmom[j].y *= std::sqrt( N * k * T / sum_wyc );}
-              if (sum_wzc > 0.) { angmom[j].z *= std::sqrt( N * k * T / sum_wzc );}
+
+
+              if (sum_wxc > 0.) { angmom[j].x *= std::sqrt( nddl_x * k * T / sum_wxc );}
+              if (sum_wyc > 0.) { angmom[j].y *= std::sqrt( nddl_y * k * T / sum_wyc );}
+              if (sum_wzc > 0.) { angmom[j].z *= std::sqrt( nddl_z * k * T / sum_wzc );}
+
+             /* Modifications LS */
+             if (minert.x > 0.) {EcRcal.x += 0.5*angmom[j].x*angmom[j].x/minert.x;}
+             if (minert.y > 0.) {EcRcal.y += 0.5*angmom[j].y*angmom[j].y/minert.y;}
+             if (minert.z > 0.) {EcRcal.z += 0.5*angmom[j].z*angmom[j].z/minert.z;}
+             /* Fin Modifications LS */
+
               Mat3d mat_bf_lab;
               mat_bf_lab.m11 = orient[j].w*orient[j].w + orient[j].x*orient[j].x - orient[j].y*orient[j].y - orient[j].z*orient[j].z;
               mat_bf_lab.m22 = orient[j].w*orient[j].w - orient[j].x*orient[j].x + orient[j].y*orient[j].y - orient[j].z*orient[j].z;
@@ -237,12 +261,51 @@ namespace exaStamp
               mat_bf_lab.m13 = 2.0 * (orient[j].x*orient[j].z + orient[j].w*orient[j].y );
               mat_bf_lab.m32 = 2.0 * (orient[j].y*orient[j].z + orient[j].w*orient[j].x );
               mat_bf_lab.m23 = 2.0 * (orient[j].y*orient[j].z - orient[j].w*orient[j].x );
+
+
+
               //back to lab referential
               angmom[j] = mat_bf_lab*angmom[j];
+
+
+
+
+             /* Modifications LS */
+              EcTcal.x += 0.5 * mass *  vx[j] *vx[j];
+              EcTcal.y += 0.5 * mass *  vy[j] *vy[j];
+              EcTcal.z += 0.5 * mass *  vz[j] *vz[j];
+             /* Fin Modifications LS */
+
             }
           }
         }
         GRID_OMP_FOR_END
+
+        /* Modifications LS */
+        MPI_Allreduce(MPI_IN_PLACE,&EcTcal.x,1,MPI_DOUBLE,MPI_SUM,*mpi);
+        MPI_Allreduce(MPI_IN_PLACE,&EcTcal.y,1,MPI_DOUBLE,MPI_SUM,*mpi);
+        MPI_Allreduce(MPI_IN_PLACE,&EcTcal.z,1,MPI_DOUBLE,MPI_SUM,*mpi);
+        MPI_Allreduce(MPI_IN_PLACE,&EcRcal.x,1,MPI_DOUBLE,MPI_SUM,*mpi);
+        MPI_Allreduce(MPI_IN_PLACE,&EcRcal.y,1,MPI_DOUBLE,MPI_SUM,*mpi);
+        MPI_Allreduce(MPI_IN_PLACE,&EcRcal.z,1,MPI_DOUBLE,MPI_SUM,*mpi);
+
+        TTcal = 2. * EcTcal /(N * k);
+        if(nddl_x>0)
+                TRcal.x = 2. * EcRcal.x /(nddl_x * k);
+        if(nddl_y>0)
+                TRcal.y = 2. * EcRcal.y /(nddl_y * k);
+        if(nddl_z>0)
+                TRcal.z = 2. * EcRcal.z /(nddl_z * k);
+
+        lout<<"    Temperature cible : "<<T<<std::endl;
+        lout<<"    Nombre d'atomes : "<<N<<std::endl;
+        lout<<"    Nombre de degres de liberte rotationnels : "<<nddl_x<<" "<<nddl_y<<" "<<nddl_z<<std::endl;
+        lout<<"    Temperature de translation : "<<TTcal<<std::endl;
+        lout<<"    Temperature de rotation : "<<TRcal<<std::endl;
+
+        
+        /* Fin Modifications LS */
+
       }
 
     }

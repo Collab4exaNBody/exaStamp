@@ -32,5 +32,23 @@ namespace exaStamp
       else return value_if_not_found;
     }
   }
+
+  static inline size_t all_atoms_from_idmap(const uint64_t id, const IdMap& id_map, const IdMapGhosts& id_map_ghosts, uint64_t* locations, size_t max_locations )
+  {
+    size_t n_locations = 0;
+    auto it = id_map.find(id);
+    if(it!=id_map.end())
+    {
+      assert( n_locations < max_locations );
+      locations[ n_locations++ ] = it->second;
+    }
+    const auto range = id_map_ghosts.meta_bucket_map( id ).equal_range( id );
+    for(auto it = range.first; it != range.second; ++it)
+    {
+      assert( n_locations < max_locations );
+      locations[ n_locations++ ] = it->second;
+    }
+    return n_locations;
+  }
   
 }

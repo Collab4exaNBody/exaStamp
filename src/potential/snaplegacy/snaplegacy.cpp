@@ -199,6 +199,28 @@ namespace exaStamp
       const bool m_symetric_forces = false;
 
       template<class CellsAccessorT, class GridCellLocksT, class ParticleLockT>
+      inline void operator ()( size_t n, ComputeBuffer& buf,
+        double& en, double& fx, double& fy, double& fz, unsigned int type,
+        CellsAccessorT cells, GridCellLocksT locks, ParticleLockT& lock_a
+        ) const
+      {
+        FakeMat3d virial;
+        this->operator () ( n,buf,en,fx,fy,fz,type, virial, cells , locks, lock_a);
+      }
+
+      template<class CellsAccessorT>
+      inline void operator () ( size_t n, ComputeBuffer& buf,
+        double& en, double& fx, double& fy, double& fz, unsigned int type,
+        CellsAccessorT cells
+        ) const
+      {
+        FakeMat3d virial;
+        ComputePairOptionalLocks<false> locks = {};
+        FakeParticleLock lock_a = {};
+        this->operator () ( n,buf,en,fx,fy,fz,type,virial, cells, locks , lock_a );
+      }
+
+      template<class CellsAccessorT, class Mat3dT>
       inline void operator ()
         (
         size_t n,
@@ -208,16 +230,16 @@ namespace exaStamp
         double& fy,
         double& fz,
         unsigned int type, // to recover particle type
-        CellsAccessorT cells,
-        GridCellLocksT locks,
-        ParticleLockT& lock_a
+        Mat3dT& virial ,
+        CellsAccessorT cells
         ) const
       {
-        FakeMat3d virial;
-        this->operator () ( n,buf,en,fx,fy,fz,type, virial, cells , locks, lock_a);
+        ComputePairOptionalLocks<false> locks = {};
+        FakeParticleLock lock_a = {};
+        this->operator () ( n,buf,en,fx,fy,fz,type,virial, cells, locks , lock_a );
       }
 
-      template<class CellsAccessorT, class Mat3dT,class GridCellLocksT, class ParticleLockT>
+      template<class CellsAccessorT, class Mat3dT, class GridCellLocksT, class ParticleLockT>
       inline void operator ()
         (
         size_t n,
@@ -233,7 +255,7 @@ namespace exaStamp
         ParticleLockT& lock_a
         ) const
       {
-        static constexpr bool compute_virial = std::is_same_v< Mat3dT , Mat3d >;
+        static constexpr bool compute_virial = true; //std::is_same_v< Mat3dT , Mat3d >;
 
         // get thread specific compute context
         size_t tid = omp_get_thread_num();
@@ -286,7 +308,7 @@ namespace exaStamp
         const double e_tot = std::real(snap_bs.en_val(type));	
         const double e = e_tot / n;
 
-        Mat3dT _vir; // default constructor defines all elements to 0
+        Mat3d _vir; // default constructor defines all elements to 0
         // assert( _vir.m11==0 && _vir.m12==0 && _vir.m13==0 && _vir.m21==0 && _vir.m22==0 && _vir.m23==0 && _vir.m31==0 && _vir.m32==0 && _vir.m33==0);
 
         for(unsigned int i=0;i<n;++i)

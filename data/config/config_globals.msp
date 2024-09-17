@@ -12,6 +12,7 @@ global:
   simulation_dump_frequency: 1000         # 0 means no dump at all
   simulation_dump_thermo_frequency: 10
   analysis_dump_frequency: 0
+  trigger_thermo_state: true
   timestep: 0
   physical_time: 0.
   init_temperature: -1.0
@@ -20,7 +21,7 @@ global:
   enable_task_graph: false
   enable_grid_compact: true
   trigger_cost_model_fitting: false
-  cost_model_coefs: [ 0.003 , 0.0 , 4.0 , 1.0 ]
+  cost_model_coefs: [ 0.0 , 0.0 , 1.0 , 0.0 ]
   log_mode: mechanical # set to chemistry or default
 
 # default grid variant we use

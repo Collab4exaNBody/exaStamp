@@ -92,7 +92,7 @@ dump_data:
 
 final_dump: nop
 
-xxx_simulation_epilog:
+simulation_epilog:
   - check_values:
       file: meam_lj_Sn_O2_N2.dat
       threshold: 5.e-10

@@ -26,12 +26,11 @@ numerical_scheme_verlet:
   body:
     - verlet_first_half
     - check_and_update_particles
-#    - cost_model_fitting_prolog
+    - load_balance_auto_tune_start
     - compute_all_forces_energy
     - verlet_second_half
     - thermostat
-#    - cost_model_fitting_epilog
-
+    - load_balance_auto_tune_end
 
 # define the verlet numerical scheme
 numerical_scheme_basic:

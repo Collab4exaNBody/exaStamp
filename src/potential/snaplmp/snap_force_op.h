@@ -201,19 +201,21 @@ namespace exaStamp
       // compute Fij = dEi/dRj = -dEi/dRi
       // add to Fi, subtract from Fj
       // scaling is that for type I
-
+/*
       std::vector<double> betaloc;
       betaloc.clear();
       betaloc.resize(ncoeff);
-
+*/
       //      const double * const coeffi = coeffelem /*[ielem]*/;
+/*
       for(int icoeff=0;icoeff<ncoeff;icoeff++)
       {
         long coeffelem_idx = itype * (ncoeff + 1 ) + icoeff + 1;
         assert( (coeffelem_idx >= 0) && (coeffelem_idx < coeffelem_size) );
 	      betaloc[ icoeff ] = coeffelem[ coeffelem_idx ];
 	    }
-
+*/
+      auto * betaloc = coeffelem + itype * (ncoeff + 1 ) + 1;
       //      std::cout << " My Type = " << itype << std::endl;
 
       // for(int icoeff=0;icoeff<ncoeff;icoeff++)
@@ -222,7 +224,7 @@ namespace exaStamp
       // 	}
 
       //      snaptr->compute_yi( /* beta[ii] ==> */ beta + ( ncoeff * ( cell_particle_offset[buf.cell] + buf.part ) ) );
-      snaptr->compute_yi(betaloc.data());
+      snaptr->compute_yi( betaloc /*.data()*/ );
 
       for (int jj = 0; jj < ninside; jj++)
       {

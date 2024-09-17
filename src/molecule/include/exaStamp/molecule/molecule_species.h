@@ -151,65 +151,6 @@ namespace exaStamp
     return ( mol_instance << 16 ) | ( (mol_place&0xFF) << 8 ) | ( mol_type&0xFF ) ;
   }
 
-  // helper class to read and write molecule species to dump files
-  struct MoleculeOptionalHeaderIO
-  {
-    double& m_bond_max_dist;
-    double& m_bond_max_stretch;
-    MoleculeSpeciesVector* m_molecules = nullptr;
-    template<class WriteFuncT> inline size_t write_optional_header( WriteFuncT write_func )
-    {
-      static const uint64_t header_version = 100;
-      const int vermaj = header_version/100;
-      const int vermin = header_version%100;
-      size_t n_bytes = 0;
-      size_t n_molecules = 0;
-      if( m_molecules != nullptr ) n_molecules = m_molecules->m_molecules.size();
-      lout << "molecule ext. v"<<vermaj<<'.'<<vermin <<std::endl;
-      lout << "mol. max dist = "<<m_bond_max_dist<<std::endl;
-      lout << "mol. stretch  = "<<m_bond_max_stretch<<std::endl;
-      lout << "mol. species  = "<<n_molecules<<std::endl;
-      n_bytes += write_func( header_version );
-      n_bytes += write_func( m_bond_max_dist );
-      n_bytes += write_func( m_bond_max_stretch );
-      n_bytes += write_func( n_molecules );
-      for(size_t i=0;i<n_molecules;i++)
-      {
-        n_bytes += write_func( m_molecules->m_molecules.at(i) );
-      }
-      return n_bytes;
-    }
-    template<class ReadFuncT> inline size_t read_optional_header( ReadFuncT read_func )
-    {
-      uint64_t header_version = 100;
-      size_t n_bytes = 0;
-      size_t n_molecules = 0;
-      m_bond_max_dist = m_bond_max_stretch = 0.0;
-      n_bytes += read_func( header_version );
-      const int vermaj = header_version/100;
-      const int vermin = header_version%100;
-      if( header_version > 100 ) { fatal_error() << "Molecule header version "<<vermaj<<'.'<<vermin<<" not supported by this software version"<<std::endl; }
-      n_bytes += read_func( m_bond_max_dist );
-      n_bytes += read_func( m_bond_max_stretch );
-      n_bytes += read_func( n_molecules );
-      lout << "molecule ext. v"<<vermaj<<'.'<<vermin <<std::endl;
-      lout << "mol. max dist = "<<m_bond_max_dist<<std::endl;
-      lout << "mol. stretch  = "<<m_bond_max_stretch<<std::endl;
-      lout << "mol. species  = "<<n_molecules<<std::endl;
-      if( n_molecules>0 && m_molecules==nullptr )
-      {
-        fatal_error() << "Missing molecules container to read molecule species" << std::endl;
-      }
-      if( m_molecules!=nullptr ) m_molecules->m_molecules.resize( n_molecules );
-      for(size_t i=0;i<n_molecules;i++)
-      {
-        n_bytes += read_func( m_molecules->m_molecules.at(i) );
-      }
-      ldbg<<"Molecule dump header : bytes read ="<<n_bytes<<std::endl;
-      return n_bytes;
-    }
-  };
-
 }
 
 // specialize ReadOnlyShallowCopyType so MoleculeSpeciesVectorRO is the read only type for MoleculeSpeciesVector

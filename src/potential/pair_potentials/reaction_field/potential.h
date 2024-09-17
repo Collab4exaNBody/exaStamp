@@ -8,6 +8,7 @@
 #include <exaStamp/potential/reaction_field/reaction_field.h>
 
 #include <onika/cuda/cuda.h>
+#include <onika/flat_tuple.h>
 
 namespace exaStamp
 {
@@ -24,7 +25,7 @@ namespace exaStamp
 #define USTAMP_POTENTIAL_COMPUTE  reaction_field_compute_energy
 
 // only atom charges are meaningful for reaction field
-#define USTAMP_POTENTIAL_PAIR_PARAMS_EXTRACT(p) std::make_pair(p.m_atom_a.m_charge,p.m_atom_b.m_charge)
+#define USTAMP_POTENTIAL_PAIR_PARAMS_EXTRACT(p) onika::make_flat_tuple(p.m_atom_a.m_charge,p.m_atom_b.m_charge)
 
 #define USTAMP_POTENTIAL_ENABLE_CUDA 1
 

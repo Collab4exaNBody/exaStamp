@@ -7,6 +7,7 @@
 #include <map>
 #include <string>
 #include <exanb/core/physics_constants.h>
+#include <exanb/core/log.h>
 
 namespace SnapExt
 {
@@ -14,7 +15,7 @@ namespace SnapExt
 
 void snap_read_lammps(const std::string& paramFileName, const std::string& coefFileName, SnapConfig& config , bool conv_units )
 { 
-//  std::cout << "snap_read_lammps( "<<paramFileName<<" , "<<coefFileName<<" )" std::endl;
+//  std::cout << "read parameters in "<<paramFileName << std::endl;
 
   config = SnapConfig{}; // set default values
 
@@ -23,6 +24,7 @@ void snap_read_lammps(const std::string& paramFileName, const std::string& coefF
   
   std::string line;
   std::ifstream params( paramFileName );
+  if( !params.good() ) { exanb::fatal_error()<<"can't open file '"<<paramFileName<<"' for reading"<<std::endl; }
   while( params.good() )
   {
     std::getline(params,line);
@@ -52,15 +54,29 @@ void snap_read_lammps(const std::string& paramFileName, const std::string& coefF
   
 # undef SNAP_SET_KEY_VALUE
 
+//  std::cout << "read coefs in "<<coefFileName << std::endl;
+
   std::ifstream coefs( coefFileName );
-  do
+  if( ! coefs.good() )
   {
-    line = "";
+    exanb::fatal_error() << "cannot read file '"<<coefFileName<<"' , aborting"<<std::endl;
+  }
+  int n_skip_lines = 0;
+  std::getline(coefs,line);
+  while( !coefs.eof() && (line.find('#')==0 || line.empty()) && n_skip_lines < 100 )
+  {
+//    std::cout << "line "<<n_skip_lines<<" : eof="<< std::boolalpha << coefs.eof() << ", find('#')="<<line.find('#')<< ", skip line '"<<line<<"'"<< std::endl;
     std::getline(coefs,line);
-    //    std::cout << "skip line "<<line<<std::endl;
-  } while( !coefs.eof() && (line.find('#')==0 || line.empty()) );
+    ++ n_skip_lines;
+  } 
+  if( n_skip_lines >= 100 )
+  {
+    exanb::fatal_error() << "too many lines skipped in file '"<<coefFileName<<"' , aborting"<<std::endl;
+  }
+  
   size_t n_materials=0;
   size_t coefs_per_material=0;
+  
   std::istringstream(line) >> n_materials >> coefs_per_material;
 
   static const double conv_energy_inv =  1e-4 * exanb::legacy_constant::elementaryCharge / exanb::legacy_constant::atomicMass;
@@ -86,6 +102,7 @@ void snap_read_lammps(const std::string& paramFileName, const std::string& coefF
 	      double coef = 0.;
 	      double coef_converted = 0.;
 	      std::getline(coefs,line);
+//	      std::cout << "\tcoef "<<c<<" : line='"<<line<<"'"<<std::endl;
 	      std::istringstream(line) >> coef;	  
 	      coef_converted = coef;
 	      if( conv_units ) coef_converted *= conv_energy_inv;

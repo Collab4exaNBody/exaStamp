@@ -19,8 +19,7 @@
 
 #include <exaStamp/molecule/molecule_species.h>
 #include <exaStamp/molecule/intramolecular_pair_weight.h>
-
-#include <unordered_set>
+#include <exaStamp/molecule/molecule_compute_param.h>
 
 namespace exaStamp
 {
@@ -37,6 +36,7 @@ namespace exaStamp
     ADD_SLOT( MoleculeSpeciesVector , molecules , INPUT , DocString{"Molecule descriptions"} );
 
     ADD_SLOT( IntramolecularPairWeighting , weight   , INPUT , IntramolecularPairWeighting{} );
+    ADD_SLOT( MoleculeComputeParameterSet      , molecule_compute_parameters , INPUT, DocString{"Intramolecular functionals' parameters"} );
 
     ADD_SLOT( CompactGridPairWeights , compact_nbh_weight , INPUT_OUTPUT );
     
@@ -46,6 +46,8 @@ namespace exaStamp
     ADD_SLOT( ChemicalTorsions   , chemical_torsions , INPUT , OPTIONAL );
 
     ADD_SLOT( bool               , ignore_intramolecular , INPUT , false );
+
+    ADD_SLOT( ChemicalPairPotMap , chemical_pair_pot_map , INPUT , DocString{"Map of intramolecular pair potential parameter set and associated weights"} );
 
   public:
     inline void execute () override final
@@ -83,34 +85,14 @@ namespace exaStamp
       size_t n_total_nbh=0, n_positive_weights=0;
 
       // index chemical links by their extrema to rapidly find if an atom pair belongs to a chemical link
-      MultiThreadedConcurrentMap< std::unordered_map< std::array<uint64_t,2>, uint64_t> , 256 > chemicalMap;
+      const auto & chemPotMap = *chemical_pair_pot_map;
+      const auto & mcp = *molecule_compute_parameters;
 
 #     pragma omp parallel
       {
 
 #       pragma omp for
         for(size_t i=0;i<n_cells;i++) cgpw.m_cell_weights[i].clear();
-
-        if( ! no_intramolecular )
-        {        
-          const size_t n_bonds = chemical_bonds->size();
-          const size_t n_angles = chemical_angles->size();
-          const size_t n_torsions = chemical_torsions->size();
-
-          // parallel construction of chemical link map : extrema pair -> link type (0 bond, 1 angle, 2 torsion)
-#         pragma omp for
-          for(size_t i=0;i<n_torsions;i++) chemicalMap.insert( { { (*chemical_torsions)[i][0] , (*chemical_torsions)[i][3] } , 2 } );
-          
-#         pragma omp barrier
-
-#         pragma omp for
-          for(size_t i=0;i<n_angles;i++) chemicalMap.insert( { { (*chemical_angles)[i][0] , (*chemical_angles)[i][2] } , 1 } );
-          
-#         pragma omp barrier
-
-#         pragma omp for
-          for(size_t i=0;i<n_bonds;i++) chemicalMap.insert( { (*chemical_bonds)[i] , 0 } );
-        }
 
 #       pragma omp barrier
 
@@ -127,7 +109,7 @@ namespace exaStamp
           const auto& sp = *species;
   
           apply_cell_particle_neighbors(*grid, *chunk_neighbors, cell_a, loc_a, std::false_type() /* not symetric */,
-            [cells,cell_a,no_intramolecular,field_idmol,&cgpw,idmol_a,id_a,type_a,&chemicalMap,&molid_weight_map,&sp ,&n_total_nbh, &n_positive_weights]
+            [cells,cell_a,no_intramolecular,field_idmol,&cgpw,idmol_a,id_a,type_a,&molid_weight_map,&sp ,&n_total_nbh, &n_positive_weights, &chemPotMap, &mcp]
             ( unsigned int p_a, size_t cell_b, unsigned int p_b , size_t p_nbh_index )
             {
               const uint64_t* idmol_b = cells[cell_b].field_pointer_or_null(field_idmol);
@@ -137,60 +119,45 @@ namespace exaStamp
               //assert( p_nbh_index == nbh_weight[cell_a].size() );
               //assert( p_nbh_index == cgpw.m_cell_weights[cell_a].size() );
 
-              std::array<uint64_t,2> pair = { id_a[p_a] , id_b[p_b] };
+              onika::oarray_t<uint64_t,2> pair = { id_a[p_a] , id_b[p_b] };
               if( pair[0] > pair[1] )
               {
                 pair = { id_b[p_b] , id_a[p_a] };
               }
               assert( pair[0] != pair[1] );
 
+              const auto it = chemPotMap.find( pair );
               double pair_weight = 1.0;
               
               if( no_intramolecular )
               {
-                // New code : forbids intramolecular pair interactions, they are treated by intramolecular_compute operator
-                if( molecule_instance_from_id(idmol_a[p_a]) == molecule_instance_from_id(idmol_b[p_b]) )
-                {
-                  pair_weight = 0.0;
-                }
+                pair_weight = ( it != chemPotMap.end() ) ? 0.0 : 1.0;
               }
               else
               {
-                // Legacy code : assign intramolecular weights for pair interactions
-                //First case : not the same molecule, no weight-------------------------------
-                if( molecule_instance_from_id(idmol_a[p_a]) != molecule_instance_from_id(idmol_b[p_b]) )
+                const int moltype_a = molecule_type_from_id( idmol_a[p_a] );
+                // Third case : we check weights----------------------------------------------
+                if( it != chemPotMap.end() )
                 {
-                  pair_weight = 1.0;
-                }
-                // Second case----------------------------------------------------------------
-                // If the first term of "weight" is -1, no extramolecular potential
-                // applied between atoms of a same molecule
-                else
-                {
-                  int moltype_a = molecule_type_from_id( idmol_a[p_a] );
                   assert( moltype_a == molecule_type_from_id( idmol_b[p_b] ) );
-                  // Third case : we check weights----------------------------------------------
-                  auto it = chemicalMap.find(pair);
-                  if( it != chemicalMap.end() )
-                  {
-                    if( it->second == 0 ) pair_weight = molid_weight_map[moltype_a].m_bond_weight;
-                    else if( it->second == 1 ) pair_weight = molid_weight_map[moltype_a].m_bend_weight;
-                    else if( it->second == 2 ) pair_weight = molid_weight_map[moltype_a].m_torsion_weight;
-                    else
-                    {
-                      fatal_error() << "Internal error: inconsistent chemical link type "<<it->second<<" in chemicalMap"<<std::endl;
-                    }
-                  }
+                
+                  if( it->second == 0 ) pair_weight = molid_weight_map[moltype_a].m_bond_weight;
+                  else if( it->second == 1 ) pair_weight = molid_weight_map[moltype_a].m_bend_weight;
+                  else if( it->second == 2 ) pair_weight = molid_weight_map[moltype_a].m_torsion_weight;
                   else
                   {
-                    pair_weight = 1.0 ;
+                    fatal_error() << "Internal error: inconsistent chemical link type "<<it->second<<" in chemicalMap"<<std::endl;
                   }
                 }
+                else
+                {
+                  pair_weight = 1.0 ;
+                }                
               }
                             
               ++ n_total_nbh;
               if(pair_weight>0.0) ++n_positive_weights;
-
+              
               cgpw.m_cell_weights[cell_a].set_neighbor_weight( p_a , p_nbh_index , pair_weight );
             }
           );
