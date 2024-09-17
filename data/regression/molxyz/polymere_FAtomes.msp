@@ -2,7 +2,7 @@ includes: [ config_molecule.msp ]
 
 configuration:
   logging:
-    debug: false
+    debug: true
   debug:
     filter:
       - ".*read_fatomes_mol"
@@ -33,15 +33,15 @@ replicate_molecule_domain:
   - load_balance_rcb
   - migrate_cell_particles
 
-input_data:
+xx_input_data:
   - read_fatomes_mol:
       filename: molecule_polymere.FAtomes
       stampinput: molecule_polymere.init
 #  - replicate_molecule_domain
 
-xx_input_data:
+input_data:
   - read_dump_molecule:
-      filename: molecule_000000003.MpiIO
+      filename: molecule_000000005.MpiIO
 
 # user-specified global values
 global:
@@ -49,7 +49,7 @@ global:
   rcut_inc: 4.0 ang   # additional distance so that we don't have to rebuild neighbor list each time step
   simulation_end_iteration: 10
   simulation_log_frequency: 1
-  simulation_dump_frequency: 1000
+  simulation_dump_frequency: 100
   simulation_dump_thermo_frequency: -1
 #  bond_max_dist: 20.0 ang
 #  bond_max_stretch: 1.5
@@ -61,7 +61,9 @@ langevin_thermostat:
 
 # thermostat: langevin_thermostat
 
-xx_simulation_epilog:
+final_dump: nop
+
+simulation_epilog:
   - check_values:
       file: molxyz_polymere.dat
       acc_threshold: 1.e-8

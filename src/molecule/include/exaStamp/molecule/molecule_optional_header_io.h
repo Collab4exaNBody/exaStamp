@@ -16,6 +16,8 @@ namespace exaStamp
   template<class LDBGT>
   struct MoleculeOptionalHeaderIO
   {
+    static inline constexpr uint64_t header_version = 101; // Version 1.1 adds potential and weighting parameters in optional header
+  
     // since version 1.0
     double& m_bond_max_dist;
     double& m_bond_max_stretch;
@@ -49,19 +51,90 @@ namespace exaStamp
       char m_name[32];
       MolecularPairWeight m_weights;
     };
-    
-    template<class WriteFuncT> inline size_t write_optional_header( WriteFuncT write_func )
+
+    template<class StreamT>
+    inline void print(StreamT& out, const ParticleSpecies& species) const
     {
-      static const uint64_t header_version = 101; // Version 1.1 adds potential and weighting parameters in optional header
+      const int vermaj = header_version/100;
+      const int vermin = header_version%100;
+      out << std::defaultfloat << std::endl;
+      out << "molecule ext. v"<<vermaj<<'.'<<vermin <<std::endl;
+      out << "mol. max dist = "<<m_bond_max_dist<<std::endl;
+      out << "mol. stretch  = "<<m_bond_max_stretch<<std::endl;
+      out << std::setprecision(6) << std::endl;
+      if( m_molecules != nullptr )
+      {
+        out << "mol. species  = "<<m_molecules->m_molecules.size()<<std::endl;
+        for(const auto& mol : m_molecules->m_molecules)
+        {
+          mol.print( out , species );
+        }
+      }
+      if( header_version >= 101 )
+      {
+        if( m_potentials_for_bonds != nullptr )
+        {
+          out << "bond params = "<<m_potentials_for_bonds->m_bond_desc.size()<<std::endl;
+          for(const auto& bond : m_potentials_for_bonds->m_bond_desc)
+          {
+            out<<"\t"<<bond.species[0]<<"/"<<bond.species[1]<<" : "<<bond.type<<" = "<< bond.potential->generic_parameters()<<std::endl;
+          }
+        }
+        if( m_potentials_for_angles != nullptr )
+        {
+          out << "angle params  = "<<m_potentials_for_angles->m_potentials.size()<<std::endl;
+          for(const auto& angle : m_potentials_for_angles->m_potentials)
+          {
+            out<<"\t"<<angle.species[0]<<"/"<<angle.species[1]<<"/"<<angle.species[2]<<" : "<<angle.type<<" = "<< angle.m_potential_function->generic_parameters() <<std::endl;
+          }
+        }
+        if( m_potentials_for_torsions != nullptr )
+        {
+          out << "torsion params = "<<m_potentials_for_torsions->m_potentials.size()<<std::endl;
+          for(const auto& torsion : m_potentials_for_torsions->m_potentials)
+          {
+            out<<"\t"<<torsion.species[0]<<"/"<<torsion.species[1]<<"/"<<torsion.species[2]<<"/"<<torsion.species[3]<<" : "<<torsion.type<<" = "<< torsion.m_potential_function->generic_parameters() <<std::endl;
+          }
+        }
+        if( m_potentials_for_impropers != nullptr )
+        {
+          out << "improper params = "<<m_potentials_for_impropers->m_potentials.size()<<std::endl;
+          for(const auto& improper : m_potentials_for_impropers->m_potentials)
+          {
+            out<<"\t"<<improper.species[0]<<"/"<<improper.species[1]<<"/"<<improper.species[2]<<"/"<<improper.species[3]<<" : "<<improper.type<<" = "<< improper.m_potential_function->generic_parameters() <<std::endl;
+          }
+        }
+        if( m_potentials_for_pairs != nullptr )
+        {
+          out << "pair params = "<<m_potentials_for_pairs->m_potentials.size()<<std::endl;
+          for(const auto& pairpot : m_potentials_for_pairs->m_potentials)
+          {
+            out<<"\t"<<pairpot.m_type_a[0]<<"/"<<pairpot.m_type_b[1]<<" = "; pairpot.m_params.to_stream(out); out<<std::endl;
+          }
+        }
+        if( m_mol_pair_weights != nullptr )
+        {
+          out << "pair weights  = "<<m_mol_pair_weights->m_molecule_weight.size()<<std::endl;
+          for(const auto& elem : m_mol_pair_weights->m_molecule_weight)
+          {
+            out <<"\t"<<elem.first<<" : PAIR : bond="<<elem.second.m_bond_weight<<", angle="<<elem.second.m_bend_weight<<", torsion="<<elem.second.m_torsion_weight
+                                <<" : RF : bond="<<elem.second.m_rf_bond_weight<<", rf angle="<<elem.second.m_rf_bend_weight<<", rf torsion="<<elem.second.m_rf_torsion_weight<<std::endl;
+          }
+        }
+      }    
+    }
+
+    template<class WriteFuncT> inline size_t write_optional_header( WriteFuncT write_func , bool verbose = true )
+    {
       const int vermaj = header_version/100;
       const int vermin = header_version%100;
       size_t n_bytes = 0;
       size_t n_molecules = 0;
       if( m_molecules != nullptr ) n_molecules = m_molecules->m_molecules.size();
-      lout << "molecule ext. v"<<vermaj<<'.'<<vermin <<std::endl;
-      lout << "mol. max dist = "<<m_bond_max_dist<<std::endl;
-      lout << "mol. stretch  = "<<m_bond_max_stretch<<std::endl;
-      lout << "mol. species  = "<<n_molecules<<std::endl;
+      if(verbose) lout << "molecule ext. v"<<vermaj<<'.'<<vermin <<std::endl;
+      if(verbose) lout << "mol. max dist = "<<m_bond_max_dist<<std::endl;
+      if(verbose) lout << "mol. stretch  = "<<m_bond_max_stretch<<std::endl;
+      if(verbose) lout << "mol. species  = "<<n_molecules<<std::endl;
       n_bytes += write_func( header_version );
       n_bytes += write_func( m_bond_max_dist );
       n_bytes += write_func( m_bond_max_stretch );
@@ -162,7 +235,20 @@ namespace exaStamp
       return n_bytes;
     }
 
-    template<class ReadFuncT> inline size_t read_optional_header( ReadFuncT read_func )
+    inline size_t serialize_molecule_header( std::vector<uint8_t>& buffer )
+    {
+      buffer.clear();
+      auto bufwrite = [&buffer]( auto x ) -> size_t
+      {
+        const uint8_t * obj_ptr = reinterpret_cast<const uint8_t *>( & x );
+        buffer.insert( buffer.end() , obj_ptr , obj_ptr + sizeof(x) );
+        return sizeof(x);
+      };
+      this->write_optional_header( bufwrite , false );
+      return buffer.size();
+    }
+
+    template<class ReadFuncT> inline size_t read_optional_header( ReadFuncT read_func , bool verbose = true )
     {
       uint64_t header_version = 100;
       size_t n_bytes = 0;
@@ -174,10 +260,10 @@ namespace exaStamp
       n_bytes += read_func( m_bond_max_dist );
       n_bytes += read_func( m_bond_max_stretch );
       n_bytes += read_func( n_molecules );
-      lout << "mol. header   = v"<<vermaj<<'.'<<vermin <<std::endl;
-      lout << "mol. max dist = "<<m_bond_max_dist<<std::endl;
-      lout << "mol. stretch  = "<<m_bond_max_stretch<<std::endl;
-      lout << "mol. species  = "<<n_molecules<<std::endl;
+      if(verbose) lout << "mol. header   = v"<<vermaj<<'.'<<vermin <<std::endl;
+      if(verbose) lout << "mol. max dist = "<<m_bond_max_dist<<std::endl;
+      if(verbose) lout << "mol. stretch  = "<<m_bond_max_stretch<<std::endl;
+      if(verbose) lout << "mol. species  = "<<n_molecules<<std::endl;
       if( n_molecules>0 && m_molecules==nullptr )
       {
         fatal_error() << "Missing molecules container to read molecule species" << std::endl;
@@ -289,6 +375,25 @@ namespace exaStamp
       ldbg<<"Molecule dump header : bytes read ="<<n_bytes<<std::endl;
       return n_bytes;
     }
+    
+    inline size_t deserialize_molecule_header( const std::vector<uint8_t>& buffer )
+    {
+      uint8_t * bufptr = buffer.data();
+      size_t bufsz = buffer.size();
+      auto bufread = [&bufptr,&bufsz]( auto& x ) -> size_t
+      {
+        assert( bufsz >= sizeof(x) );
+        std::memcpy( reinterpret_cast<uint8_t*>(&x) , bufptr , sizeof(x) );
+        bufsz -= sizeof(x);
+        bufptr += sizeof(x);
+        return sizeof(x);
+      };
+      size_t n = this->read_optional_header( bufread , false );
+      assert( n == buffer.size() );
+      return n;
+    }
+
+    
   };
 
 }

@@ -18,6 +18,7 @@
 #include <exaStamp/molecule/molecule_species.h>
 #include <exaStamp/molecule/molecule_optional_header_io.h>
 
+
 namespace exaStamp
 {
   using namespace exanb;
@@ -68,6 +69,9 @@ namespace exaStamp
       if( molecules.has_value() ) dump_filter.optional_header_io.m_molecules = molecules.get_pointer();
 
       exanb::read_dump( *mpi, ldbg, *grid, *domain, *physical_time, *timestep, file_name, DumpFieldSet{} , dump_filter );
+      
+      ldbg << "--- Molecule compute parameters ---" << std::endl;
+      molecule_io.print( ldbg , *species );
     }
   };
 

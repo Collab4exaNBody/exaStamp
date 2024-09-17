@@ -70,6 +70,9 @@ namespace exaStamp
         potentials_for_pairs.get_pointer() ,
         mol_pair_weights.get_pointer() };
 
+      ldbg << "--- Molecule compute parameters ---" << std::endl;
+      molecule_io.print( ldbg , *species );
+
       AtomDumpFilter<GridT,DumpFieldSet,decltype(ldbg),MolIOExt> dump_filter = { *species, ldbg , molecule_io };
       
       if( molecules.has_value() ) dump_filter.optional_header_io.m_molecules = molecules.get_pointer();

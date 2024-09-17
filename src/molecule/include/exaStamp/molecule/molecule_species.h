@@ -73,7 +73,7 @@ namespace exaStamp
     inline bool has_connectivity() const { return m_nb_atoms==0 || m_nb_bonds>0 || m_nb_bends>0 || m_nb_torsions>0 || m_nb_impropers>0; }
     void update_connectivity();
     
-    template<class StreamT> inline void print(StreamT& out, const ParticleSpecies& species)
+    template<class StreamT> inline void print(StreamT& out, const ParticleSpecies& species) const
     {
       out << "Molecule "<<name()<<" : "<<m_nb_atoms<<" atoms" <<std::endl;
       for(unsigned int i=0;i<m_nb_atoms;i++)
