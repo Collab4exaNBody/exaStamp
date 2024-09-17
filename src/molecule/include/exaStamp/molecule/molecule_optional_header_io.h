@@ -210,8 +210,8 @@ namespace exaStamp
           for(const auto& pairpot : m_potentials_for_pairs->m_potentials)
           {
             IntramolecularPairIO descio;
-            std::strncpy( descio.m_type_a, pairpot.m_type_a.c_str(), 32 );
-            std::strncpy( descio.m_type_b, pairpot.m_type_b.c_str(), 32 );
+            std::strncpy( descio.m_type_a, pairpot.m_type_a.c_str(), 31 );
+            std::strncpy( descio.m_type_b, pairpot.m_type_b.c_str(), 31 );
             descio.m_params = pairpot.m_params;
             n_bytes += write_func( descio );
           }
@@ -225,7 +225,7 @@ namespace exaStamp
           for(const auto& elem : m_mol_pair_weights->m_molecule_weight)
           {
             IntramolecularPairWeightIO descio;
-            std::strncpy( descio.m_name, elem.first.c_str(), 32 );
+            std::strncpy( descio.m_name, elem.first.c_str(), 31 );
             descio.m_weights = elem.second;
             n_bytes += write_func( descio );
           }
@@ -376,7 +376,7 @@ namespace exaStamp
       return n_bytes;
     }
     
-    inline size_t deserialize_molecule_header( const std::vector<uint8_t>& buffer )
+    inline size_t deserialize_molecule_header( std::vector<uint8_t>& buffer )
     {
       uint8_t * bufptr = buffer.data();
       size_t bufsz = buffer.size();

@@ -18,7 +18,6 @@
 #include <exaStamp/molecule/molecule_species.h>
 #include <exaStamp/molecule/molecule_optional_header_io.h>
 
-
 namespace exaStamp
 {
   using namespace exanb;

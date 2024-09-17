@@ -27,6 +27,8 @@
 #include <exaStamp/molecule/torsions_potentials_parameters.h>
 #include <exaStamp/molecule/impropers_potentials_parameters.h>
 #include <exaStamp/molecule/intramolecular_pair_weight.h>
+#include <exaStamp/molecule/molecule_optional_header_io.h>
+
 #include <exaStamp/potential/ljexp6rf/ljexp6rf.h>
 
 #include <exanb/core/check_particles_inside_cell.h>
@@ -850,12 +852,39 @@ namespace exaStamp
         }
       }
 
-      // broadcast molecule species names
+      // broadcast molecule parameters
+      using MolIOExt = MoleculeOptionalHeaderIO<decltype(ldbg)>;
+      double bond_max_dist = 0.0;
+      double bond_max_stretch = 0.0;
+      MolIOExt molecule_io = {
+        bond_max_dist ,
+        bond_max_stretch ,
+        molecules.get_pointer() ,
+        ldbg,
+        potentials_for_bonds.get_pointer() ,
+        potentials_for_angles.get_pointer() ,
+        potentials_for_torsions.get_pointer() ,
+        potentials_for_impropers.get_pointer() ,
+        potentials_for_pairs.get_pointer() ,
+        mol_pair_weights.get_pointer() };
+      std::vector<uint8_t> serialize_buffer;
+      unsigned long molecule_header_size = 0;
+      if( rank == 0 )
+      {
+        molecule_header_size = molecule_io.serialize_molecule_header( serialize_buffer );
+        if( molecule_header_size != serialize_buffer.size() ) fatal_error() << "serialize buffer size error" << std::endl;
+      }
+      MPI_Bcast(&molecule_header_size, 1, MPI_UNSIGNED_LONG, 0, *mpi);
+      serialize_buffer.resize( molecule_header_size , 0 );
+      MPI_Bcast(serialize_buffer.data(), molecule_header_size, MPI_CHARACTER, 0, *mpi);
+      molecule_header_size = molecule_io.deserialize_molecule_header( serialize_buffer );
+      if( molecule_header_size != serialize_buffer.size() ) fatal_error() << "deserialize buffer size error" << std::endl;
+
       int nmol = molecules->m_molecules.size();
-      MPI_Bcast(&nmol, 1, MPI_INT, 0, *mpi);
-      molecules->m_bridge_molecules.clear();
-      molecules->m_molecules.resize( nmol );
-      MPI_Bcast( molecules->m_molecules.data() , sizeof(MoleculeSpecies)*nmol , MPI_CHARACTER , 0 , *mpi );
+//      MPI_Bcast(&nmol, 1, MPI_INT, 0, *mpi);
+//      molecules->m_bridge_molecules.clear();
+//      molecules->m_molecules.resize( nmol );
+//      MPI_Bcast( molecules->m_molecules.data() , sizeof(MoleculeSpecies)*nmol , MPI_CHARACTER , 0 , *mpi );
 
       // Broadcast domain parameters computed on MPI rank 0
       MPI_Bcast( domain.get_pointer() , sizeof(Domain), MPI_CHARACTER, 0, *mpi);
