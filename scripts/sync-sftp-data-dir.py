@@ -1,9 +1,8 @@
 #!/usr/bin/python3
 
 # Exmemple usage
+# ./scripts/sync-sftp-data-dir.py ${HOME}/data sftp://carrard@inti.ocre.cea.fr:/ccc/home/cont001/xstampdev/xstampdev/data
 # ./scripts/hash-data-dir.sh /usr/local/xstampv2/data
-# ./scripts/sync-sftp-data-dir.py /usr/local/xstampv2/data sftp://carrard@inti.ocre.cea.fr:/ccc/home/cont001/xstampdev/xstampdev/data
-# ./scripts/sync-sftp-data-dir.py /usr/local/xstampv2/data sftp://xstampdev@192.168.1.19:22/home/xstampdev/data
 
 import sys
 import urllib.parse
