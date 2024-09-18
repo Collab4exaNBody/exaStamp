@@ -35,7 +35,7 @@ namespace exaStamp
     ADD_SLOT( double      , physical_time , INPUT_OUTPUT , DocString{"Physical time"} );
 
     ADD_SLOT( double      , scale_cell_size , INPUT ,OPTIONAL , DocString{"if set, change cell size stored in file by scaling it with given factor"} );
-    ADD_SLOT( BoolVector  , periodic     , INPUT ,OPTIONAL , DocString{"if set, overrides domain's periodicity stored in file with this value"}  );
+    ADD_SLOT( BoolVector  , periodic        , INPUT ,OPTIONAL , DocString{"if set, overrides domain's periodicity stored in file with this value"}  );
     ADD_SLOT( StringVector, mirror          , INPUT ,OPTIONAL , DocString{"if set, overrides domain's boundary mirror flags in file with provided values"}  );
     ADD_SLOT( bool        , expandable      , INPUT ,OPTIONAL , DocString{"if set, override domain expandability stored in file"} );
     ADD_SLOT( AABB        , bounds          , INPUT ,OPTIONAL , DocString{"if set, override domain's bounds, filtering out particles outside of overriden bounds"} );

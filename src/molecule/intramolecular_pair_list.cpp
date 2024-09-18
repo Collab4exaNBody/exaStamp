@@ -2,6 +2,7 @@
 #include <exanb/core/operator_slot.h>
 #include <exanb/core/operator_factory.h>
 #include <exanb/core/log.h>
+#include <exanb/core/profiling_tools.h>
 #include <exaStamp/molecule/id_map.h>
 #include <exanb/core/particle_id_codec.h>
 
@@ -38,7 +39,10 @@ namespace exaStamp
 
       // index chemical links by their extrema to rapidly find if an atom pair belongs to a chemical link
       // ChemicalPairPotMap chemical_pair_pot_map;
-      
+
+      ProfilingTimer T;
+      profiling_timer_start( T );
+
       // first build list of interaction pair to be excluded form standard neighbor list
       // and for which a pair weight is applied
       // this map is built using original ids, not localized ones transformed in the second parallel section
@@ -66,6 +70,8 @@ namespace exaStamp
           chemical_pair_pot_map->insert( { { bond[0] , bond[1] } , 0 } );
         }
       }
+
+      ldbg << "map build time = " << profiling_timer_elapsed_restart(T) << std::endl;
 
       const size_t n_chemical_pairs = chemical_pair_pot_map->size();
       chemical_pairs->assign( n_chemical_pairs , {0,0} );
@@ -99,8 +105,9 @@ namespace exaStamp
         }
       }
       assert( pair_idx == n_chemical_pairs );
-      ldbg << "n_chemical_pairs = "<<n_chemical_pairs<<std::endl;
 
+      ldbg << "pairs build time = " << profiling_timer_elapsed_restart(T) << std::endl;
+      ldbg << "n_chemical_pairs = "<<n_chemical_pairs<<std::endl;
     }
   };
 

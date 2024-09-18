@@ -7,6 +7,8 @@ configuration:
     filter:
       - ".*read_fatomes_mol"
       - ".*read_dump_molecule"
+      - ".*replicate_domain_cmol"
+      - ".*move_particles"
       - ".*write_dump_molecule"
       - ".*ljexp6rf_pc"
       - ".*intramolecular_setup"
@@ -21,7 +23,7 @@ configuration:
     summary: true
 
 replicate_domain_cmol:
-  repeat: [ 1 , 1 , 1 ]
+  repeat: [ 2 , 2 , 2 ]
 
 replicate_molecule_domain:
   - ghost_comm_scheme
@@ -31,18 +33,24 @@ replicate_molecule_domain:
   - move_particles
   - load_balance_cost_model
   - load_balance_rcb
-  - migrate_cell_particles
+  - migrate_cell_particles: { ghost_dist: 0.0 ang }
 
 input_data:
   - read_dump_molecule:
       filename: molecule_polymere.MpiIO
+  - replicate_molecule_domain
+
++first_iteration:
+  - memory_stats
+  - grid_stats
+  - chunk_neighbors_stats
 
 # user-specified global values
 global:
-  dt: 1.0e-16 s
-  rcut_inc: 4.0 ang   # additional distance so that we don't have to rebuild neighbor list each time step
-  simulation_end_iteration: 10
-  simulation_log_frequency: 1
+  dt: 0.1 fs
+  rcut_inc: 1.5 ang   # additional distance so that we don't have to rebuild neighbor list each time step
+  simulation_end_iteration: 100
+  simulation_log_frequency: 10
   simulation_dump_frequency: 100
   simulation_dump_thermo_frequency: -1
 
@@ -50,11 +58,11 @@ langevin_thermostat:
   T: 300.0 K
   gamma: 0.1 ps^-1
 
-# thermostat: langevin_thermostat
+thermostat: langevin_thermostat
 
-final_dump: nop
+#final_dump: nop
 
-simulation_epilog:
+xx_simulation_epilog:
   - check_values:
       file: molxyz_polymere.dat
       acc_threshold: 1.e-8
