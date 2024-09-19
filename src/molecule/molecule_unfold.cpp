@@ -60,7 +60,10 @@ namespace exaStamp
       auto pecfunc = [self=this](auto ... args) { return self->parallel_execution_context(args ...); };
       auto pesfunc = [self=this](unsigned int i) { return self->parallel_execution_stream(i); }; 
 
+      std::unordered_map<uint64_t , uint64_t> molecule_owner;
+
       bool stable;
+      int pass = 0;
       do
       {
         const auto ghost_update_fields = onika::make_flat_tuple( idmol_field ); 
@@ -68,6 +71,8 @@ namespace exaStamp
                             *ghost_comm_buffers, pecfunc,pesfunc, ghost_update_fields,
                             *mpi_tag, true, true, true, true, false, std::false_type{} );
         stable = true;
+        ++ pass;
+        ldbg << "molecule_unfold: connect molecules, pass="<<pass<<std::endl;
 
         for(size_t cell_i=0;cell_i<n_cells;cell_i++)
         {
@@ -76,10 +81,8 @@ namespace exaStamp
           auto * __restrict__ mol_ids   = cells[cell_i][idmol_field];
           size_t n = cells[cell_i].size();
           for(size_t p_i=0;p_i<n;p_i++)
-          {
-            const uint64_t old_molid = mol_ids[p_i];
-            
-            uint64_t molidmin = std::min( ids[p_i] , old_molid );
+          { 
+            uint64_t molidmin = std::min( ids[p_i] , mol_ids[p_i] );
             for(size_t j=0;j<cmol[p_i].size();j++)
             {
               uint64_t locations[32];
@@ -93,6 +96,7 @@ namespace exaStamp
               }
             }
             
+            stable = stable && ( molidmin == mol_ids[p_i] );
             mol_ids[p_i] = molidmin;
             for(size_t j=0;j<cmol[p_i].size();j++)
             {
@@ -103,11 +107,14 @@ namespace exaStamp
                 size_t cell=null_index, pos=null_index;
                 decode_cell_particle( locations[k] , cell, pos );
                 assert( cell!=null_index && pos!=null_index );
-                cells[cell][idmol_field][pos] = molidmin;
+                if( cells[cell][idmol_field][pos] != molidmin )
+                {
+                  cells[cell][idmol_field][pos] = molidmin;
+                  stable = false;
+                }
               }
             }
             
-            stable = stable && ( molidmin == old_molid );
           }
         }
         
@@ -127,11 +134,18 @@ namespace exaStamp
         auto * __restrict__ rxf   = cells[cell_i][rxf_field];
         auto * __restrict__ ryf   = cells[cell_i][ryf_field];
         auto * __restrict__ rzf   = cells[cell_i][rzf_field];
-        size_t n = cells[cell_i].size();
+        const size_t n = cells[cell_i].size();
+        const bool is_ghost = grid->is_ghost_cell(cell_i);
         for(size_t p_i=0;p_i<n;p_i++)
         {
-          if( ids[p_i] == mol_ids[p_i] )
+          if( ids[p_i] == mol_ids[p_i] && !is_ghost )
           {
+            const auto ploc = encode_cell_particle(cell_i,p_i,0);
+            if( molecule_owner.find(ploc) != molecule_owner.end() )
+            {
+              fatal_error() << "duplicate owner particle for molecule id #"<<mol_ids[p_i]<<std::endl;
+            }
+            molecule_owner.insert( { mol_ids[p_i] , ploc } );
             rxf[p_i] = rx[p_i];
             ryf[p_i] = ry[p_i];
             rzf[p_i] = rz[p_i];
@@ -150,6 +164,9 @@ namespace exaStamp
                       std::abs(domain->extent().z - domain->origin().z)};
       const double half_min_size_box = std::min( std::min(size_box.x,size_box.y) , size_box.z) / 2.0; 
 
+      ldbg << "Number of molecules = "<< molecule_owner.size()<<" , size_box = "<<size_box<<" , half_min_size_box = "<<half_min_size_box<<std::endl;
+
+      pass = 0;
       do
       {
         const auto ghost_update_fields = onika::make_flat_tuple( rxf_field, ryf_field, rzf_field ); 
@@ -157,6 +174,8 @@ namespace exaStamp
                             *ghost_comm_buffers, pecfunc,pesfunc, ghost_update_fields,
                             *mpi_tag, true, true, true, true, false, std::false_type{} );
         stable = true;
+        ++ pass;
+        ldbg << "molecule_unfold: unfold positions, pass="<<pass<<std::endl;
 
         for(size_t cell_i=0;cell_i<n_cells;cell_i++)
         {
@@ -183,14 +202,20 @@ namespace exaStamp
                   if( std::isnan(cells[cell][rxf_field][pos]) || std::isnan(cells[cell][ryf_field][pos]) || std::isnan(cells[cell][rzf_field][pos]) )
                   {
                     const Vec3d rj = { cells[cell][field::rx][pos], cells[cell][field::ry][pos], cells[cell][field::rz][pos] };
-                    Vec3d rij = periodic_r_delta( ri , rj , size_box , half_min_size_box );
-                    cells[cell][rxf_field][pos] = ri.x + rij.x;
-                    cells[cell][ryf_field][pos] = ri.y + rij.y;
-                    cells[cell][rzf_field][pos] = ri.z + rij.z;
+                    const Vec3d rij = periodic_r_delta( ri , rj , size_box , half_min_size_box );
+                    if( norm(rij)>=half_min_size_box || rij==Vec3d{0,0,0} )
+                    {
+                      fatal_error() << "in cell #"<<cell_i<<" , particle #"<<p_i<<" , bond #"<<j<<" bond distance too long : "<<norm(rij)<<" >= "<<half_min_size_box<< std::endl;
+                    }
+                    const Vec3d rj_unfolded = ri + rij;
+                    cells[cell][rxf_field][pos] = rj_unfolded.x;
+                    cells[cell][ryf_field][pos] = rj_unfolded.y;
+                    cells[cell][rzf_field][pos] = rj_unfolded.z;
                     stable = false;
                   }
                 }
               }
+              
             }
             
           }
@@ -209,9 +234,16 @@ namespace exaStamp
         size_t n = cells[cell_i].size();
         for(size_t p_i=0;p_i<n;p_i++)
         {
-          rx[p_i] = rxf[p_i];
-          ry[p_i] = ryf[p_i];
-          rz[p_i] = rzf[p_i];
+          if( ! std::isnan(rxf[p_i]) && ! std::isnan(ryf[p_i]) && ! std::isnan(rzf[p_i]) )
+          {
+            rx[p_i] = rxf[p_i];
+            ry[p_i] = ryf[p_i];
+            rz[p_i] = rzf[p_i];
+          }
+          else
+          {
+            fatal_error() << "in cell #"<<cell_i<<" , particle #"<<p_i<<" not unfolded"<<std::endl;
+          }
         }
       }
 

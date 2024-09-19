@@ -2,11 +2,12 @@ includes: [ config_molecule.msp ]
 
 configuration:
   logging:
-    debug: false
+    debug: true
   debug:
     filter:
       - ".*read_fatomes_mol"
       - ".*read_dump_molecule"
+      - ".*molecule_unfold"
       - ".*replicate_domain_cmol"
       - ".*move_particles"
       - ".*write_dump_molecule"
@@ -23,7 +24,7 @@ configuration:
     summary: true
 
 replicate_domain_cmol:
-  repeat: [ 2 , 2 , 2 ]
+  repeat: [ 1 , 1 , 1 ]
 
 replicate_molecule_domain:
   - ghost_comm_scheme
@@ -38,6 +39,7 @@ replicate_molecule_domain:
 input_data:
   - read_dump_molecule:
       filename: molecule_polymere.MpiIO
+      scale_cell_size: 2.0
   - replicate_molecule_domain
 
 +first_iteration:
@@ -48,10 +50,10 @@ input_data:
 # user-specified global values
 global:
   dt: 0.1 fs
-  rcut_inc: 1.5 ang   # additional distance so that we don't have to rebuild neighbor list each time step
-  simulation_end_iteration: 100
+  rcut_inc: 0.8 ang   # additional distance so that we don't have to rebuild neighbor list each time step
+  simulation_end_iteration: 12
   simulation_log_frequency: 10
-  simulation_dump_frequency: 100
+  simulation_dump_frequency: 10
   simulation_dump_thermo_frequency: -1
 
 langevin_thermostat:
