@@ -82,7 +82,7 @@ namespace exaStamp
 
         if constexpr ( ComputeVirial )
         {
-          auto virial = tensor(F,r) * 0.5;
+          auto virial = tensor(F,r) * (-0.5);
           concurent_add_contributions<ParticleLockT,CPAA,LOCK,double,double,double,double,Mat3d> (
               cp_locks[cell_a][p_a]
             , m_cells[cell_a][field::fx][p_a], m_cells[cell_a][field::fy][p_a], m_cells[cell_a][field::fz][p_a], m_cells[cell_a][field::ep][p_a], m_cells[cell_a][m_virial_field][p_a]
