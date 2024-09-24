@@ -54,6 +54,8 @@ namespace exaStamp
 
     ADD_SLOT( GridT                        , grid              , INPUT_OUTPUT);
     ADD_SLOT( MoleculeSpeciesVector        , molecules         , INPUT_OUTPUT , REQUIRED , DocString{"Molecule descriptions"} );
+    
+    ADD_SLOT( bool  , long_range_correction , INPUT_OUTPUT, true , DocString{"Compute long range corrections if set to true"} );    
     ADD_SLOT( MoleculeComputeParameterSet  , molecule_compute_parameters , INPUT_OUTPUT, DocString{"Intramolecular functionals' parameters"} );
 
   public:
@@ -224,15 +226,26 @@ namespace exaStamp
 	      ecorr *= 4. * M_PI / Vtot * 1./2. ;
 	      vcorr *= 4. * M_PI / Vtot * 1./6. ;
 
-	      // addition of the corrections due to the couple [ta, tb] to the corrections of atoms of type ta
-	      molecule_compute_parameters->m_energy_correction[ta] += ecorr *nb;
-	      molecule_compute_parameters->m_virial_correction[ta] += Mat3d{ vcorr*nb, 0.0, 0.0, 0.0, vcorr*nb, 0.0, 0.0, 0.0, vcorr*nb };
+	      if (*long_range_correction) {
+	        // addition of the corrections due to the couple [ta, tb] to the corrections of atoms of type ta
+	        molecule_compute_parameters->m_energy_correction[ta] += ecorr *nb;
+	        molecule_compute_parameters->m_virial_correction[ta] += Mat3d{ vcorr*nb, 0.0, 0.0, 0.0, vcorr*nb, 0.0, 0.0, 0.0, vcorr*nb };
+	      } else {
+		      molecule_compute_parameters->m_energy_correction[ta] += 0.;
+		      molecule_compute_parameters->m_virial_correction[ta] += Mat3d{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
+	      }
 
 	      //In the case where ta is different from tb, addition of the corrections to atoms of type tb
 	      // the couple (ta, tb) is encountered only once
         if (ta != tb) {
-	        molecule_compute_parameters->m_energy_correction[tb] += ecorr *na;
-          molecule_compute_parameters->m_virial_correction[tb] += Mat3d{ vcorr*na, 0.0, 0.0, 0.0, vcorr*na, 0.0, 0.0, 0.0, vcorr*na };
+          if( *long_range_correction )
+          {
+	    molecule_compute_parameters->m_energy_correction[tb] += ecorr *na;
+            molecule_compute_parameters->m_virial_correction[tb] += Mat3d{ vcorr*na, 0.0, 0.0, 0.0, vcorr*na, 0.0, 0.0, 0.0, vcorr*na };
+          } else {
+            molecule_compute_parameters->m_energy_correction[tb] += 0.;
+	    molecule_compute_parameters->m_virial_correction[tb] += Mat3d{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
+	  }
         }
 
 
