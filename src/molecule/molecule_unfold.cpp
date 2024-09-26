@@ -47,7 +47,7 @@ namespace exaStamp
       const auto idmol_field = grid->field_accessor( field::idmol );
       const auto cmol_field = grid->field_accessor( field::cmol );
       static constexpr uint64_t null_id = std::numeric_limits<uint64_t>::max();
-//      static constexpr uint64_t null_loc = std::numeric_limits<uint64_t>::max();
+      static constexpr uint64_t null_loc = std::numeric_limits<uint64_t>::max();
       static constexpr size_t null_index = std::numeric_limits<size_t>::max();
 
       // basic assumption
@@ -94,8 +94,8 @@ namespace exaStamp
             uint64_t molidmin = mol_ids[p_i];
             for(size_t j=0;j<cmol[p_i].size();j++)
             {
-              const auto conloc = atom_from_idmap_if_found( cmol[p_i][j] , *id_map , *id_map_ghosts , null_id );
-              if( conloc != null_id )
+              const auto conloc = atom_from_idmap_if_found( cmol[p_i][j] , *id_map , *id_map_ghosts , null_loc );
+              if( conloc != null_loc )
               {
                 size_t cell=null_index, pos=null_index;
                 decode_cell_particle( conloc , cell, pos );
@@ -163,71 +163,137 @@ namespace exaStamp
       const double half_min_size_box = std::min( std::min(size_box.x,size_box.y) , size_box.z) / 2.0; 
       ldbg << "Number of molecules = "<< molecule_owner.size()<<" , size_box = "<<size_box<<" , half_min_size_box = "<<half_min_size_box<<std::endl;
 
+      // debug map to keep track of duplicated positions
+      std::unordered_map<uint64_t,Vec3d> particle_pos_map;
+
       // second multipass algorithm : unfold positions by applying boundary conditions shift
       // whenever a bound particle has an excessive distance, taking the one with the
       pass = 0;
       do
-      {
+      {                  
+        int sub_pass = 0;        
+        do
+        {
+          update_count = 0;
+          for(size_t cell_i=0;cell_i<n_cells;cell_i++) if( ! grid->is_ghost_cell(cell_i) )
+          {
+            const auto *  __restrict__ cmol = cells[cell_i][cmol_field];
+            auto * __restrict__ mol_ids = cells[cell_i][idmol_field];
+            auto * __restrict__ ufpos = cells[cell_i][ufpos_field];
+            size_t n = cells[cell_i].size();
+            for(size_t p_i=0;p_i<n;p_i++)
+            {
+              if( mol_ids[p_i] != null_id ) // unfolded central particle
+              {
+                const Vec3d ri = ufpos[p_i];
+                for(size_t j=0;j<cmol[p_i].size();j++)
+                {
+                  const auto conloc = atom_from_idmap_if_found( cmol[p_i][j] , *id_map , *id_map_ghosts , null_loc );
+                  if( conloc != null_loc )
+                  {
+                    size_t cell=null_index, pos=null_index;
+                    decode_cell_particle( conloc , cell, pos );
+                    assert( cell!=null_index && pos!=null_index );
+                    assert( cell!=cell_i || pos!=p_i );
+                    const Vec3d rj = cells[cell][ufpos_field][pos] ;
+                    if( cells[cell][idmol_field][pos] == null_id ) // not unfolded bond neighbor
+                    {
+                      const Vec3d rij = periodic_r_delta_loop( ri , rj , size_box , half_min_size_box );
+                      const double norm_rij = norm(rij);
+                      if( norm_rij > half_min_size_box || norm_rij == 0.0 )
+                      {
+                        fatal_error() << "pre-check: in C#"<<cell_i<<"P#"<<p_i<<" (id="<<cells[cell_i][field::id][p_i]<<") bond#"<<j
+                        <<" with C#"<<cell<<"P#"<<pos<<" (id="<<cells[cell][field::id][pos]<<",ghost="<<grid->is_ghost_cell(cell)<<") bad dist. "<<norm_rij<<" not in ] 0 ; "<<half_min_size_box<<" ]"
+                        <<" , ri="<<ri<<" , rj="<<rj<< std::endl;
+                      }
+                      bond_max_dist = std::max( bond_max_dist , norm_rij );   
+                      const Vec3d rj_unfolded = ri + rij;
+                      auto it = particle_pos_map.find( cells[cell][field::id][pos] );
+                      if( it != particle_pos_map.end() )
+                      {
+                        if( rj_unfolded != it->second )
+                        {
+                          fatal_error() << "different ghost pos : rj_unfolded="<<rj_unfolded<<" , stored="<<it->second<<" dist="<<norm(rj_unfolded-it->second)<<std::endl;
+                        }
+                      }
+                      else
+                      {
+                        particle_pos_map.insert( { cells[cell][field::id][pos] , rj_unfolded } );
+                      }
+                      cells[cell][ufpos_field][pos] = rj_unfolded;
+                      cells[cell][idmol_field][pos] = mol_ids[p_i];
+                      ++ update_count;
+                    } // if bond neighbor nor unfolded yet
+                  } // bond neighbor is present
+                } // for each bond neighbor
+              } // if central is unfolded
+            } // for each cell's particle
+          } // for each non ghost cell
+
+          ++ sub_pass;
+          ldbg << "molecule_unfold: unfold central positions, sub_pass="<<sub_pass<<" , updates="<<update_count <<std::endl;
+        } while( update_count > 0 );
+
+        // propagate ghost updates
         const auto ghost_update_fields = onika::make_flat_tuple( idmol_field, ufpos_field );
         grid_update_ghosts( exanb::ldbg, *mpi, *ghost_comm_scheme, *grid, *domain, nullptr,
                             *ghost_comm_buffers, pecfunc,pesfunc, ghost_update_fields,
-                            *mpi_tag, true, true, true, true, false, std::false_type{} );
+                            *mpi_tag, true, true, true, true, false, std::false_type{} );        
+
+        // gather updates from ghosts (from neighbor sub-domains)
         update_count = 0;
         for(size_t cell_i=0;cell_i<n_cells;cell_i++) if( ! grid->is_ghost_cell(cell_i) )
         {
           const auto *  __restrict__ cmol = cells[cell_i][cmol_field];
-          const auto * __restrict__ ids = cells[cell_i][field::id];
           auto * __restrict__ mol_ids = cells[cell_i][idmol_field];
           auto * __restrict__ ufpos = cells[cell_i][ufpos_field];
           size_t n = cells[cell_i].size();
           for(size_t p_i=0;p_i<n;p_i++)
           {
-            const Vec3d ri = ufpos[p_i];
-            bool ri_unfolded = ( mol_ids[p_i] != null_id );
-
-            for(size_t j=0;j<cmol[p_i].size();j++)
+            if( mol_ids[p_i] == null_id ) // central particle not unfolded yet
             {
-              const auto conloc = atom_from_idmap_if_found( cmol[p_i][j] , *id_map , *id_map_ghosts , null_id );
-              if( conloc != null_id )
+              const Vec3d ri = ufpos[p_i];
+              int ri_updates = 0;
+              Vec3d last_ri_unfolded = { 0, 0, 0 };
+              for(size_t j=0;j<cmol[p_i].size();j++)
               {
-                size_t cell=null_index, pos=null_index;
-                decode_cell_particle( conloc , cell, pos );
-                assert( cell!=null_index && pos!=null_index );
-                assert( cell!=cell_i || pos!=p_i );
-                const Vec3d rj = cells[cell][ufpos_field][pos] ;
-                bool rj_unfolded = ( cells[cell][idmol_field][pos] != null_id );
+                const auto conloc = atom_from_idmap_if_found( cmol[p_i][j] , *id_map , *id_map_ghosts , null_loc );
+                if( conloc != null_loc )
+                {
+                  size_t cell=null_index, pos=null_index;
+                  decode_cell_particle( conloc , cell, pos );
+                  assert( cell!=null_index && pos!=null_index );
+                  assert( cell!=cell_i || pos!=p_i );
+                  const Vec3d rj = cells[cell][ufpos_field][pos] ;
+                  if( cells[cell][idmol_field][pos] != null_id ) // bond neighbor already unfolded
+                  {
+                    const Vec3d rij = periodic_r_delta_loop( ri , rj , size_box , half_min_size_box );
+                    const Vec3d ri_unfolded = ri - rij;
+                    if( ri_updates > 0 )
+                    {
+                      if( ri_unfolded != last_ri_unfolded )
+                      {
+                        fatal_error() << "different update of central particle : last_ri_unfolded="<<last_ri_unfolded<<" ri_unfolded="<<ri_unfolded<<" dist="<<norm(ri_unfolded-last_ri_unfolded)<<" ri_updates="<<ri_updates<<" j="<<j<<std::endl;
+                      }
+                    }
+                    else
+                    {
+                      last_ri_unfolded = ri_unfolded;
+                    }
+                    ufpos[p_i] = ri_unfolded;
+                    mol_ids[p_i] = cells[cell][idmol_field][pos];
+                    ++ ri_updates;
+                  } // if bond neighbor nor unfolded yet
+                } // bond neighbor is present
+              } // for each bond neighbor
+              update_count += ri_updates;
+            } // if central is unfolded
+          } // for each cell's particle
+        } // for each non ghost cell
 
-                const Vec3d rij = periodic_r_delta_loop( ri , rj , size_box , half_min_size_box );
-                const double norm_rij = norm(rij);
-                if( norm_rij > half_min_size_box || norm_rij == 0.0 )
-                {
-                  fatal_error() << "pre-check: in C#"<<cell_i<<"P#"<<p_i<<" (id="<<cells[cell_i][field::id][p_i]<<") bond#"<<j
-                  <<" with C#"<<cell<<"P#"<<pos<<" (id="<<cells[cell][field::id][pos]<<",ghost="<<grid->is_ghost_cell(cell)<<") bad dist. "<<norm_rij<<" not in ] 0 ; "<<half_min_size_box<<" ]"
-                  <<" , ri_unfolded="<<std::boolalpha<<ri_unfolded<<" , rj_unfolded="<<std::boolalpha<<rj_unfolded
-                  <<" , ri="<<ri<<" , rj="<<rj<< std::endl;
-                }
-                bond_max_dist = std::max( bond_max_dist , norm_rij );
-                
-                if( ri_unfolded && !rj_unfolded )
-                {
-                  cells[cell][ufpos_field][pos] = ri + rij;
-                  cells[cell][idmol_field][pos] = mol_ids[p_i];
-                  ++ update_count;
-                }
-                if( !ri_unfolded && rj_unfolded )
-                {
-                  ufpos[p_i] = rj - rij;
-                  mol_ids[p_i] = cells[cell][idmol_field][pos];
-                  ri_unfolded = true;
-                  ++ update_count;
-                }
-              }
-            }
-          }
-        }
         MPI_Allreduce( MPI_IN_PLACE, &update_count , 1 , MPI_LONG , MPI_SUM , *mpi );
         ++ pass;
-        ldbg << "molecule_unfold: unfold positions, pass="<<pass<<" , updates="<<update_count <<std::endl;
+        ldbg << "molecule_unfold: unfold from bond neighbor positions, pass="<<pass<<" , updates="<<update_count <<std::endl;
         
       } while( update_count > 0 );
 
