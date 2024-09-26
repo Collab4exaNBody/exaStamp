@@ -46,7 +46,7 @@ namespace exaStamp
     ADD_SLOT( IntramolecularPairWeighting      , mol_pair_weights         , INPUT_OUTPUT, IntramolecularPairWeighting{} );
 
     ADD_SLOT(double , bond_max_dist     , INPUT_OUTPUT , 0.0 , DocString{"molecule bond max distance, in physical space"} );
-    ADD_SLOT(double , bond_max_stretch  , INPUT_OUTPUT , 0.0 , DocString{"fraction of bond_max_dist."} );
+    ADD_SLOT(double , bond_max_stretch  , INPUT_OUTPUT , 1.0 , DocString{"fraction of bond_max_dist."} );
 
     ADD_SLOT( double      , scale_cell_size , INPUT ,OPTIONAL , DocString{"if set, change cell size stored in file by scaling it with given factor"} );
     ADD_SLOT( BoolVector  , periodic        , INPUT ,OPTIONAL , DocString{"if set, overrides domain's periodicity stored in file with this value"}  );
@@ -57,14 +57,16 @@ namespace exaStamp
 
   public:
     inline void execute () override final
-    {
+      {
       using DumpFieldSet = FieldSet< field::_rx,field::_ry,field::_rz, field::_vx,field::_vy,field::_vz, field::_charge, field::_virial, field::_id, field::_idmol, field::_cmol, field::_type >;
       using MolIOExt = MoleculeOptionalHeaderIO<decltype(ldbg)>;
       std::string file_name = data_file_path( *filename );
 
+      double reader_bond_max_dist = 0.0;
+      double reader_bond_max_stretch = 0.0;
       MolIOExt molecule_io = {
-        *bond_max_dist ,
-        *bond_max_stretch ,
+        reader_bond_max_dist ,
+        reader_bond_max_stretch ,
         molecules.get_pointer() ,
         ldbg,
         potentials_for_bonds.get_pointer() ,
@@ -127,6 +129,12 @@ namespace exaStamp
       
       ldbg << "--- Molecule compute parameters ---" << std::endl;
       molecule_io.print( ldbg , *species );
+
+      MPI_Allreduce( MPI_IN_PLACE, &reader_bond_max_dist , 1 , MPI_DOUBLE , MPI_MAX , *mpi );
+      MPI_Allreduce( MPI_IN_PLACE, &reader_bond_max_stretch , 1 , MPI_DOUBLE , MPI_MAX , *mpi );
+      *bond_max_dist = std::max( *bond_max_dist , reader_bond_max_dist );
+      *bond_max_stretch = std::max( *bond_max_stretch , reader_bond_max_stretch );
+      ldbg << "bond max dist = "<< *bond_max_dist << " , bond_max_stretch = " << *bond_max_stretch << std::endl;
     }
   };
 

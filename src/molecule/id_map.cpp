@@ -54,6 +54,9 @@ namespace exaStamp
           }
         }
       }
+
+      ldbg << "molecule id_map @"<<id_map.get_pointer() <<" size = "<< id_map->size() << std::endl;
+      ldbg << "molecule id_map_ghosts @"<<id_map_ghosts.get_pointer() <<" size = "<< id_map_ghosts->size() << std::endl;
     }
 
   };

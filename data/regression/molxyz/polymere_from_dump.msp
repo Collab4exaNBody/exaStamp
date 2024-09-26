@@ -7,6 +7,7 @@ configuration:
     filter:
       - ".*read_fatomes_mol"
       - ".*read_dump_molecule"
+      - ".*id_map"
       - ".*molecule_unfold"
       - ".*replicate_domain_cmol"
       - ".*move_particles"
@@ -26,8 +27,22 @@ configuration:
 replicate_domain_cmol:
   repeat: [ 1 , 1 , 1 ]
 
-replicate_molecule_domain:
+input_data:
+  - read_dump_molecule:
+      filename: molecule_polymere.MpiIO
+      scale_cell_size: 2.0
+      bond_max_dist: 4.0 ang
+      bond_max_stretch: 1.0
+  - message: "*************** before replication **********"
+  - nbh_dist: { verbose: true }
+  - move_particles
+  - load_balance_cost_model
+  - load_balance_rcb
+  - migrate_cell_particles
   - ghost_comm_scheme
+  - ghost_update_all_impl
+  - grid_stats
+  - message: "************** start replication ************"
   - id_map
   - molecule_unfold
   - replicate_domain_cmol
@@ -35,12 +50,9 @@ replicate_molecule_domain:
   - load_balance_cost_model
   - load_balance_rcb
   - migrate_cell_particles: { ghost_dist: 0.0 ang }
-
-input_data:
-  - read_dump_molecule:
-      filename: molecule_polymere.MpiIO
-      scale_cell_size: 2.0
-  - replicate_molecule_domain
+  - ghost_comm_scheme
+  - ghost_update_all_impl
+  - message: "************** end replicatin **************"
 
 +first_iteration:
   - memory_stats

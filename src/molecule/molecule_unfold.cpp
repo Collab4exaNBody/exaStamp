@@ -14,6 +14,9 @@
 #include <mpi.h>
 #include <exanb/mpi/grid_update_ghosts.h>
 
+#include <exanb/fields.h>
+XSTAMP_DECLARE_FIELD( exanb::Vec3d, molufpos, "molecule unfolded particle position" );
+
 namespace exaStamp
 {
 
@@ -28,10 +31,10 @@ namespace exaStamp
     ADD_SLOT( long                     , mpi_tag           , INPUT , 0 );
 
     ADD_SLOT( Domain                   , domain            , INPUT );
-    ADD_SLOT( GridT       , grid          , INPUT_OUTPUT );
+    ADD_SLOT( GridT       , grid       , INPUT_OUTPUT );
 
-    ADD_SLOT( IdMap       , id_map        , INPUT );
-    ADD_SLOT( IdMapGhosts , id_map_ghosts , INPUT );
+    ADD_SLOT( IdMap       , id_map        , INPUT , REQUIRED );
+    ADD_SLOT( IdMapGhosts , id_map_ghosts , INPUT , REQUIRED );
 
     ADD_SLOT( UpdateGhostsScratch      , ghost_comm_buffers, PRIVATE );
     ADD_SLOT( GhostCommunicationScheme , ghost_comm_scheme , INPUT_OUTPUT , REQUIRED );
@@ -39,122 +42,117 @@ namespace exaStamp
   public:
     inline void execute ()  override final
     {
-      // clear previous content
-      id_map->clear();
-      id_map_ghosts->clear();
-
       auto cells = grid->cells_accessor();
       size_t n_cells = grid->number_of_cells();
       const auto idmol_field = grid->field_accessor( field::idmol );
       const auto cmol_field = grid->field_accessor( field::cmol );
-//      static constexpr uint64_t null_id = std::numeric_limits<uint64_t>::max();
+      static constexpr uint64_t null_id = std::numeric_limits<uint64_t>::max();
 //      static constexpr uint64_t null_loc = std::numeric_limits<uint64_t>::max();
       static constexpr size_t null_index = std::numeric_limits<size_t>::max();
 
+      // basic assumption
+      assert( domain->origin() == grid->origin() );
+
+      // those two lambdas are used to launch parallel kernels within a function exterior to this OperatorNode's implementation
+      auto pecfunc = [self=this](auto ... args) { return self->parallel_execution_context(args ...); };
+      auto pesfunc = [self=this](unsigned int i) { return self->parallel_execution_stream(i); }; 
+
+      // map of molecule id (identical to owner's particle id) to owner particle location ( encoded cell / position in cell )
+      std::unordered_map<uint64_t , uint64_t> molecule_owner;
+      
+      // maximum molecule bond distance found in dataset
+      double bond_max_dist = 0.0;
+
+      // preamble : assign particle's molid particles' ids, so that we start with individual molecules
+      // of one atom each, and we will then merge those bound by intramolecular bond
       for(size_t cell_i=0;cell_i<n_cells;cell_i++)
       {
         size_t n = cells[cell_i].size();
         for(size_t p_i=0;p_i<n;p_i++) cells[cell_i][idmol_field][p_i] = cells[cell_i][field::id][p_i];
       }
+      ldbg << "molecule_unfold: id_map @"<<id_map.get_pointer()<<" size = "<<id_map->size()<<" , id_map_ghosts @ "<<id_map_ghosts.get_pointer() <<" size = "<<id_map_ghosts->size() <<std::endl;
 
-      auto pecfunc = [self=this](auto ... args) { return self->parallel_execution_context(args ...); };
-      auto pesfunc = [self=this](unsigned int i) { return self->parallel_execution_stream(i); }; 
-
-      std::unordered_map<uint64_t , uint64_t> molecule_owner;
-
-      bool stable;
+      // first multi pass algorithm : propagate molecule ids through bonds, keeping only the minimum id a the molecule id
+      long update_count = 0;
       int pass = 0;
       do
       {
         const auto ghost_update_fields = onika::make_flat_tuple( idmol_field ); 
-        grid_update_ghosts( ldbg, *mpi, *ghost_comm_scheme, *grid, *domain, nullptr,
+        grid_update_ghosts( exanb::ldbg, *mpi, *ghost_comm_scheme, *grid, *domain, nullptr,
                             *ghost_comm_buffers, pecfunc,pesfunc, ghost_update_fields,
                             *mpi_tag, true, true, true, true, false, std::false_type{} );
-        stable = true;
-        ++ pass;
-        ldbg << "molecule_unfold: connect molecules, pass="<<pass<<std::endl;
-
-        for(size_t cell_i=0;cell_i<n_cells;cell_i++)
+        update_count = 0;
+        for(size_t cell_i=0;cell_i<n_cells;cell_i++) if( ! grid->is_ghost_cell(cell_i) )
         {
           const auto * __restrict__ ids = cells[cell_i][field::id];
           const auto *  __restrict__ cmol = cells[cell_i][cmol_field];
           auto * __restrict__ mol_ids   = cells[cell_i][idmol_field];
           size_t n = cells[cell_i].size();
           for(size_t p_i=0;p_i<n;p_i++)
-          { 
-            uint64_t molidmin = std::min( ids[p_i] , mol_ids[p_i] );
+          {
+            assert( mol_ids[p_i] <= ids[p_i] );
+            uint64_t molidmin = mol_ids[p_i];
             for(size_t j=0;j<cmol[p_i].size();j++)
             {
-              uint64_t locations[32];
-              const size_t nloc = all_atoms_from_idmap( cmol[p_i][j] , *id_map , *id_map_ghosts, locations, 32 );
-              for(size_t k=0;k<nloc;k++)                
+              const auto conloc = atom_from_idmap_if_found( cmol[p_i][j] , *id_map , *id_map_ghosts , null_id );
+              if( conloc != null_id )
               {
                 size_t cell=null_index, pos=null_index;
-                decode_cell_particle( locations[k] , cell, pos );
+                decode_cell_particle( conloc , cell, pos );
                 assert( cell!=null_index && pos!=null_index );
-                molidmin = std::min( molidmin ,  cells[cell][idmol_field][pos] );
-              }
-            }
-            
-            stable = stable && ( molidmin == mol_ids[p_i] );
-            mol_ids[p_i] = molidmin;
-            for(size_t j=0;j<cmol[p_i].size();j++)
-            {
-              uint64_t locations[32];
-              const size_t nloc = all_atoms_from_idmap( cmol[p_i][j] , *id_map , *id_map_ghosts, locations, 32 );
-              for(size_t k=0;k<nloc;k++)                
-              {
-                size_t cell=null_index, pos=null_index;
-                decode_cell_particle( locations[k] , cell, pos );
-                assert( cell!=null_index && pos!=null_index );
-                if( cells[cell][idmol_field][pos] != molidmin )
+                const auto con_mol_id = cells[cell][idmol_field][pos];
+                molidmin = std::min( molidmin , con_mol_id );
+                if( molidmin < con_mol_id )
                 {
                   cells[cell][idmol_field][pos] = molidmin;
-                  stable = false;
+                  ++ update_count;
                 }
               }
             }
-            
+            if( molidmin < mol_ids[p_i] )
+            {
+              mol_ids[p_i] = molidmin;
+              ++ update_count;
+              // ldbg << "cell #"<<cell_i<<" particle #"<<p_i<<" molid "<<mol_ids[p_i]<<" -> "<<molidmin<<std::endl;
+            }
           }
         }
-        
-      } while( ! stable );
+        MPI_Allreduce( MPI_IN_PLACE, &update_count , 1 , MPI_LONG , MPI_SUM , *mpi );
+        ++ pass;
+        ldbg << "molecule_unfold: connect molecules, pass="<<pass<<" , updates="<<update_count<<std::endl;
+      } while( update_count > 0 );
 
-      const auto rxf_field = grid->field_accessor( field::rxf );
-      const auto ryf_field = grid->field_accessor( field::ryf );
-      const auto rzf_field = grid->field_accessor( field::rzf );
+      // this temporary position field holds particle's unfolded position with respect
+      // to molecule owner particle.
+      const auto ufpos_field = grid->field_accessor( field::molufpos );
 
-      for(size_t cell_i=0;cell_i<n_cells;cell_i++)
+      // a first pre-process pass initialize molufpos to unmodified particle's postiotion
+      for(size_t cell_i=0;cell_i<n_cells;cell_i++) if( ! grid->is_ghost_cell(cell_i) )
       {
         const auto * __restrict__ ids = cells[cell_i][field::id];
-        const auto * __restrict__ mol_ids   = cells[cell_i][idmol_field];
-        const auto * __restrict__ rx   = cells[cell_i][field::rx];
-        const auto * __restrict__ ry   = cells[cell_i][field::ry];
-        const auto * __restrict__ rz   = cells[cell_i][field::rz];
-        auto * __restrict__ rxf   = cells[cell_i][rxf_field];
-        auto * __restrict__ ryf   = cells[cell_i][ryf_field];
-        auto * __restrict__ rzf   = cells[cell_i][rzf_field];
+        const auto * __restrict__ rx = cells[cell_i][field::rx];
+        const auto * __restrict__ ry = cells[cell_i][field::ry];
+        const auto * __restrict__ rz = cells[cell_i][field::rz];
+        auto * __restrict__ mol_ids = cells[cell_i][idmol_field];
+        auto * __restrict__ ufpos = cells[cell_i][ufpos_field];
         const size_t n = cells[cell_i].size();
-        const bool is_ghost = grid->is_ghost_cell(cell_i);
         for(size_t p_i=0;p_i<n;p_i++)
         {
-          if( ids[p_i] == mol_ids[p_i] && !is_ghost )
+          ufpos[p_i] = Vec3d{ rx[p_i] , ry[p_i] , rz[p_i] };
+          const auto mid = mol_ids[p_i];
+          if( ids[p_i] == mid )
           {
             const auto ploc = encode_cell_particle(cell_i,p_i,0);
-            if( molecule_owner.find(ploc) != molecule_owner.end() )
+            if( molecule_owner.find(mid) != molecule_owner.end() )
             {
               fatal_error() << "duplicate owner particle for molecule id #"<<mol_ids[p_i]<<std::endl;
             }
-            molecule_owner.insert( { mol_ids[p_i] , ploc } );
-            rxf[p_i] = rx[p_i];
-            ryf[p_i] = ry[p_i];
-            rzf[p_i] = rz[p_i];
+            molecule_owner.insert( { mid , ploc } );
+            // ldbg << "cell #"<<cell_i<<" particle #"<<p_i<<" owner of molid #"<<mid<<std::endl;
           }
           else
           {
-            rxf[p_i] = std::numeric_limits<double>::quiet_NaN();
-            ryf[p_i] = std::numeric_limits<double>::quiet_NaN();
-            rzf[p_i] = std::numeric_limits<double>::quiet_NaN();            
+            mol_ids[p_i] = null_id;
           }
         }
       }
@@ -163,93 +161,104 @@ namespace exaStamp
                       std::abs(domain->extent().y - domain->origin().y),
                       std::abs(domain->extent().z - domain->origin().z)};
       const double half_min_size_box = std::min( std::min(size_box.x,size_box.y) , size_box.z) / 2.0; 
-
       ldbg << "Number of molecules = "<< molecule_owner.size()<<" , size_box = "<<size_box<<" , half_min_size_box = "<<half_min_size_box<<std::endl;
 
+      // second multipass algorithm : unfold positions by applying boundary conditions shift
+      // whenever a bound particle has an excessive distance, taking the one with the
       pass = 0;
       do
       {
-        const auto ghost_update_fields = onika::make_flat_tuple( rxf_field, ryf_field, rzf_field ); 
-        grid_update_ghosts( ldbg, *mpi, *ghost_comm_scheme, *grid, *domain, nullptr,
+        const auto ghost_update_fields = onika::make_flat_tuple( idmol_field, ufpos_field );
+        grid_update_ghosts( exanb::ldbg, *mpi, *ghost_comm_scheme, *grid, *domain, nullptr,
                             *ghost_comm_buffers, pecfunc,pesfunc, ghost_update_fields,
                             *mpi_tag, true, true, true, true, false, std::false_type{} );
-        stable = true;
-        ++ pass;
-        ldbg << "molecule_unfold: unfold positions, pass="<<pass<<std::endl;
-
-        for(size_t cell_i=0;cell_i<n_cells;cell_i++)
+        update_count = 0;
+        for(size_t cell_i=0;cell_i<n_cells;cell_i++) if( ! grid->is_ghost_cell(cell_i) )
         {
           const auto *  __restrict__ cmol = cells[cell_i][cmol_field];
-          auto * __restrict__ rxf   = cells[cell_i][rxf_field];
-          auto * __restrict__ ryf   = cells[cell_i][ryf_field];
-          auto * __restrict__ rzf   = cells[cell_i][rzf_field];
-
+          const auto * __restrict__ ids = cells[cell_i][field::id];
+          auto * __restrict__ mol_ids = cells[cell_i][idmol_field];
+          auto * __restrict__ ufpos = cells[cell_i][ufpos_field];
           size_t n = cells[cell_i].size();
           for(size_t p_i=0;p_i<n;p_i++)
           {
-            const Vec3d ri = { rxf[p_i], ryf[p_i], rzf[p_i] };
-            if( !std::isnan(ri.x) && !std::isnan(ri.y) && !std::isnan(ri.z) )
+            const Vec3d ri = ufpos[p_i];
+            bool ri_unfolded = ( mol_ids[p_i] != null_id );
+
+            for(size_t j=0;j<cmol[p_i].size();j++)
             {
-              for(size_t j=0;j<cmol[p_i].size();j++)
+              const auto conloc = atom_from_idmap_if_found( cmol[p_i][j] , *id_map , *id_map_ghosts , null_id );
+              if( conloc != null_id )
               {
-                uint64_t locations[32];
-                const size_t nloc = all_atoms_from_idmap( cmol[p_i][j] , *id_map , *id_map_ghosts, locations, 32 );
-                for(size_t k=0;k<nloc;k++)                
+                size_t cell=null_index, pos=null_index;
+                decode_cell_particle( conloc , cell, pos );
+                assert( cell!=null_index && pos!=null_index );
+                assert( cell!=cell_i || pos!=p_i );
+                const Vec3d rj = cells[cell][ufpos_field][pos] ;
+                bool rj_unfolded = ( cells[cell][idmol_field][pos] != null_id );
+
+                const Vec3d rij = periodic_r_delta_loop( ri , rj , size_box , half_min_size_box );
+                const double norm_rij = norm(rij);
+                if( norm_rij > half_min_size_box || norm_rij == 0.0 )
                 {
-                  size_t cell=null_index, pos=null_index;
-                  decode_cell_particle( locations[k] , cell, pos );
-                  assert( cell!=null_index && pos!=null_index );
-                  if( std::isnan(cells[cell][rxf_field][pos]) || std::isnan(cells[cell][ryf_field][pos]) || std::isnan(cells[cell][rzf_field][pos]) )
-                  {
-                    const Vec3d rj = { cells[cell][field::rx][pos], cells[cell][field::ry][pos], cells[cell][field::rz][pos] };
-                    const Vec3d rij = periodic_r_delta( ri , rj , size_box , half_min_size_box );
-                    if( norm(rij)>=half_min_size_box || rij==Vec3d{0,0,0} )
-                    {
-                      fatal_error() << "in cell #"<<cell_i<<" , particle #"<<p_i<<" , bond #"<<j<<" bond distance too long : "<<norm(rij)<<" >= "<<half_min_size_box<< std::endl;
-                    }
-                    const Vec3d rj_unfolded = ri + rij;
-                    cells[cell][rxf_field][pos] = rj_unfolded.x;
-                    cells[cell][ryf_field][pos] = rj_unfolded.y;
-                    cells[cell][rzf_field][pos] = rj_unfolded.z;
-                    stable = false;
-                  }
+                  fatal_error() << "pre-check: in C#"<<cell_i<<"P#"<<p_i<<" (id="<<cells[cell_i][field::id][p_i]<<") bond#"<<j
+                  <<" with C#"<<cell<<"P#"<<pos<<" (id="<<cells[cell][field::id][pos]<<",ghost="<<grid->is_ghost_cell(cell)<<") bad dist. "<<norm_rij<<" not in ] 0 ; "<<half_min_size_box<<" ]"
+                  <<" , ri_unfolded="<<std::boolalpha<<ri_unfolded<<" , rj_unfolded="<<std::boolalpha<<rj_unfolded
+                  <<" , ri="<<ri<<" , rj="<<rj<< std::endl;
+                }
+                bond_max_dist = std::max( bond_max_dist , norm_rij );
+                
+                if( ri_unfolded && !rj_unfolded )
+                {
+                  cells[cell][ufpos_field][pos] = ri + rij;
+                  cells[cell][idmol_field][pos] = mol_ids[p_i];
+                  ++ update_count;
+                }
+                if( !ri_unfolded && rj_unfolded )
+                {
+                  ufpos[p_i] = rj - rij;
+                  mol_ids[p_i] = cells[cell][idmol_field][pos];
+                  ri_unfolded = true;
+                  ++ update_count;
                 }
               }
-              
             }
-            
           }
         }
+        MPI_Allreduce( MPI_IN_PLACE, &update_count , 1 , MPI_LONG , MPI_SUM , *mpi );
+        ++ pass;
+        ldbg << "molecule_unfold: unfold positions, pass="<<pass<<" , updates="<<update_count <<std::endl;
         
-      } while( ! stable );
+      } while( update_count > 0 );
 
-      for(size_t cell_i=0;cell_i<n_cells;cell_i++)
+      for(size_t cell_i=0;cell_i<n_cells;cell_i++) if( ! grid->is_ghost_cell(cell_i) )
       {
+        const auto * __restrict__ ufpos = cells[cell_i][ufpos_field];
+        const auto * __restrict__ mol_ids = cells[cell_i][idmol_field];
+        const auto * __restrict__ ids = cells[cell_i][field::id];
         auto * __restrict__ rx   = cells[cell_i][field::rx];
         auto * __restrict__ ry   = cells[cell_i][field::ry];
         auto * __restrict__ rz   = cells[cell_i][field::rz];
-        const auto * __restrict__ rxf   = cells[cell_i][rxf_field];
-        const auto * __restrict__ ryf   = cells[cell_i][ryf_field];
-        const auto * __restrict__ rzf   = cells[cell_i][rzf_field];
-        size_t n = cells[cell_i].size();
+        const size_t n = cells[cell_i].size();
         for(size_t p_i=0;p_i<n;p_i++)
         {
-          if( ! std::isnan(rxf[p_i]) && ! std::isnan(ryf[p_i]) && ! std::isnan(rzf[p_i]) )
+          if( mol_ids[p_i] != null_id )
           {
-            rx[p_i] = rxf[p_i];
-            ry[p_i] = ryf[p_i];
-            rz[p_i] = rzf[p_i];
+            rx[p_i] = ufpos[p_i].x;
+            ry[p_i] = ufpos[p_i].y;
+            rz[p_i] = ufpos[p_i].z;
           }
           else
           {
-            fatal_error() << "in cell #"<<cell_i<<" , particle #"<<p_i<<" not unfolded"<<std::endl;
+            fatal_error() << "Cell #"<<cell_i<<" , particle #"<<p_i<<" not unfolded"<<std::endl;
           }
         }
       }
 
-      grid->remove_flat_array( "rxf" );
-      grid->remove_flat_array( "ryf" );
-      grid->remove_flat_array( "rzf" );
+      grid->remove_flat_array( "molufpos" );
+      
+      MPI_Allreduce( MPI_IN_PLACE, &bond_max_dist , 1 , MPI_DOUBLE , MPI_MAX , *mpi );
+      ldbg << "bond_max_dist = " << bond_max_dist << std::endl;
     }
 
   };
