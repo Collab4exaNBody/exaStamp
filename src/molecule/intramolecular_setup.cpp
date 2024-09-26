@@ -48,14 +48,14 @@ namespace exaStamp
     ADD_SLOT( BendsPotentialParameters     , potentials_for_angles    , INPUT, OPTIONAL );
     ADD_SLOT( TorsionsPotentialParameters  , potentials_for_torsions  , INPUT, OPTIONAL );
     ADD_SLOT( ImpropersPotentialParameters , potentials_for_impropers , INPUT, OPTIONAL );
-    ADD_SLOT( LJExp6RFMultiParms           , potentials_for_pairs , INPUT , LJExp6RFMultiParms{} );
+    ADD_SLOT( LJExp6RFMultiParms           , potentials_for_pairs     , INPUT, LJExp6RFMultiParms{} );
     
     ADD_SLOT( IntramolecularPairWeighting  , mol_pair_weights  , INPUT , IntramolecularPairWeighting{} );
 
     ADD_SLOT( GridT                        , grid              , INPUT_OUTPUT);
     ADD_SLOT( MoleculeSpeciesVector        , molecules         , INPUT_OUTPUT , REQUIRED , DocString{"Molecule descriptions"} );
     
-    ADD_SLOT( bool  , long_range_correction , INPUT_OUTPUT, true , DocString{"Compute long range corrections if set to true"} );    
+    ADD_SLOT( bool                         , long_range_correction , INPUT_OUTPUT, true , DocString{"Compute long range corrections if set to true"} );    
     ADD_SLOT( MoleculeComputeParameterSet  , molecule_compute_parameters , INPUT_OUTPUT, DocString{"Intramolecular functionals' parameters"} );
 
   public:
@@ -147,15 +147,21 @@ namespace exaStamp
 
       const unsigned int n_type_pairs = unique_pair_count( species->size() );
       molecule_compute_parameters->m_pair_params.assign( n_type_pairs * 3 , IntramolecularPairParams{ LJExp6RFParms{}, 0.0f, 0.0f } );
-      for(const auto& potelem : potentials_for_pairs->m_potentials)
+      for(auto& potelem : potentials_for_pairs->m_potentials)
       {
-        const auto & pot = potelem.m_params;
+        auto & pot = potelem.m_params;
         if( str2type(potelem.m_type_a)==-1 ) { fatal_error()<<"unknown type "<<potelem.m_type_a<<" in potential description"<<std::endl; }
         if( str2type(potelem.m_type_b)==-1 ) { fatal_error()<<"unknown type "<<potelem.m_type_b<<" in potential description"<<std::endl; }
         const unsigned int ta = str2type(potelem.m_type_a);
         const unsigned int tb = str2type(potelem.m_type_b); 
-
         const unsigned int pair_id = unique_pair_id(ta,tb);
+        
+        // if long_range_correction is enabled, we must set non-RF pair potenital's ecut to 0
+        if( *long_range_correction )
+        {
+          pot.m_ecut = 0.0;
+        }
+        
         molecule_compute_parameters->m_pair_params[ n_type_pairs * 0 + pair_id ] = IntramolecularPairParams{ pot , bond_pair_weight, bond_rf_weight };
         molecule_compute_parameters->m_pair_params[ n_type_pairs * 1 + pair_id ] = IntramolecularPairParams{ pot , angle_pair_weight, angle_rf_weight };
         molecule_compute_parameters->m_pair_params[ n_type_pairs * 2 + pair_id ] = IntramolecularPairParams{ pot , torsion_pair_weight, torsion_rf_weight };
@@ -377,6 +383,7 @@ namespace exaStamp
         }
       }
       
+      // count number of different pair potential parameters
       std::map< std::pair<int,int> , LJExp6RFMultiParmsPair > pair_param_map;
       for( const auto & pp : potentials_for_pairs->m_potentials )
       {
