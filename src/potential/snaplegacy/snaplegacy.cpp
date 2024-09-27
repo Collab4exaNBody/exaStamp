@@ -249,7 +249,45 @@ namespace exaStamp
         double& fy,
         double& fz,
         unsigned int type, // to recover particle type
-        Mat3dT& virial ,
+        CellsAccessorT cells
+        ) const
+      {
+        Mat3d virial;
+        ComputePairOptionalLocks<false> locks = {};
+        FakeParticleLock lock_a = {};
+        this->operator () ( n,buf,en,fx,fy,fz,type, virial, cells , locks, lock_a);
+      }
+
+      template<class CellsAccessorT>
+      inline void operator ()
+        (
+        size_t n,
+        ComputeBuffer& buf,
+        double& en,
+        double& fx,
+        double& fy,
+        double& fz,
+        unsigned int type, // to recover particle type
+        Mat3d& virial ,
+        CellsAccessorT cells
+        ) const
+      {
+        ComputePairOptionalLocks<false> locks = {};
+        FakeParticleLock lock_a = {};
+        this->operator () ( n,buf,en,fx,fy,fz,type, virial, cells , locks, lock_a);
+      }
+
+      template<class CellsAccessorT,class GridCellLocksT, class ParticleLockT>
+      inline void operator ()
+        (
+        size_t n,
+        ComputeBuffer& buf,
+        double& en,
+        double& fx,
+        double& fy,
+        double& fz,
+        unsigned int type, // to recover particle type
+        Mat3d& virial ,
         CellsAccessorT cells,
         GridCellLocksT locks,
         ParticleLockT& lock_a

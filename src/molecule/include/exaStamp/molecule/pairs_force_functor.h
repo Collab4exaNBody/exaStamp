@@ -16,7 +16,6 @@
 
 namespace exaStamp
 {
-
   template<class CellsT, class ChargeFieldT, class VirialFieldT, bool ComputeVirial = false>
   struct IntramolecularPairForceOp
   {
@@ -39,7 +38,8 @@ namespace exaStamp
       static constexpr bool CPAA = gpu_device_execution();
       static constexpr bool LOCK = ! gpu_device_execution();
       exanb::ComputePairOptionalLocks<LOCK> cp_locks = {};
-      if constexpr ( LOCK ) cp_locks.m_locks = m_particle_locks;
+      init_cp_locks( cp_locks , m_particle_locks );
+//      if constexpr ( LOCK ) { cp_locks.m_locks = m_particle_locks; }
       using ParticleLockT = decltype( cp_locks[0][0] );
       
       const int param_idx = m_pair_param_idx[i];
