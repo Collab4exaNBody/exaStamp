@@ -58,7 +58,7 @@ endforeach()
 # ==============================
 # === Application version    ===
 # ==============================
-set(EXASTAMP_VERSION "exaStamp-3.5") 
+set(EXASTAMP_VERSION "exaStamp-3.6") 
 message(STATUS "Project version : ${EXASTAMP_VERSION}")
 
 # ==================================
