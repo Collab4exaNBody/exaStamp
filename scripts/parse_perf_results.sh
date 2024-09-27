@@ -13,12 +13,10 @@ chk_mem="grep 'chunk_neighbors.*GridChunkNeighbors' \${LOGFILE}|sed s/chunk_neig
 nb_iter="grep '    scheme ........................................' \${LOGFILE}|tr -s ' '|cut -d' ' -f7"
 #dispover="grep '        particle_displ_over .......................' \${LOGFILE}|tr -s ' '|cut -d' ' -f4"
 
-ALL_VARS=""
-for R in ${PREFIX}*
-do
-	ALL_VARS="${ALL_VARS} "`echo $R | sed s/^${PREFIX}//g | tr "\n" "_" | sed "s/=[^_]*_/ /g"`
-done
-LISTVAR=`echo "${ALL_VARS}"|tr " " "\n"|sort -u`
+FIRSTLOG=`ls ${PREFIX}*|head -1`
+#echo "FIRSTLOG=${FIRSTLOG}"
+LISTVAR=`echo "${FIRSTLOG}" | sed -e "s/^${PREFIX}//g" -e "s/.txt\$//g"  | tr "_" " " | sed "s/=[0-9]*//g"`
+#echo "LISTVAR=${LISTVAR}"
 
 # print CSV header row
 for V in $LISTVAR; do echo -n "$V;" ; done
@@ -27,12 +25,12 @@ echo -n "${OPNAME}"
 echo ""
 
 # populate CSV rows parsing logs
-for R in ${PREFIX}*
+for LOGFILE in ${PREFIX}*
 do
-  LOGFILE=`ls -t $R/log*.txt|head -1`
+#  LOGFILE=`ls -t $R/log*.txt|head -1`
 #  echo "REP=$R , LOG=$LOGFILE"
   for V in $LISTVAR; do eval $V="N/A" ; done
-  eval `echo $R|sed "s/^${PREFIX}//g"|sed "s/_/;/g"`
+  eval `echo $LOGFILE|sed -e "s/^${PREFIX}//g" -e "s/.txt\$//g" |sed "s/_/;/g"`
   for V in $LISTVAR; do eval "echo -n \$$V\;" ; done
   SEP=""
   for OP in `echo $OPNAME|tr ';' ' '`
@@ -57,4 +55,3 @@ do
   done
   echo ""
 done
-
