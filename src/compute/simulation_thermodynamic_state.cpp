@@ -173,36 +173,8 @@ namespace exaStamp
         total_particles = tmp[26];
       }
 
-//      ldbg << "Bounds = " << domain->bounds() << std::endl;
-//      ldbg << "Avg speed = " << momentum / mass << std::endl;
-
-      // kinetic energy
-      //double kinetic_energy_scal = kinetic_energy.x + kinetic_energy.y + kinetic_energy.z;
-      //m_[EKIN] = m_[EK_X] + m_[EK_Y] + m_[EK_Z];
-
-      // total energy
-      // double total_energy = kinetic_energy_scal + potential_energy;
-      //m_[ETOT] = m_[EKIN] + m_[EPOT] + m_[EINT] + m_[ECHM];
-      
-      // temperature
       Vec3d temperature = 2. * ( kinetic_energy - 0.5 * momentum * momentum / mass );
       Mat3d ke_test     = 2. * (      ke_tensor - 0.5 * tensor(momentum,momentum) / mass);
-      // std::cout << "Tx   = " << temperature.x << std::endl;
-      // std::cout << "Kexx = " << ke_test.m11 << std::endl;
-      // std::cout << "Ty   = " << temperature.y << std::endl;
-      // std::cout << "Keyy = " << ke_test.m22 << std::endl;
-      // std::cout << "Tz   = " << temperature.z << std::endl;
-      // std::cout << "Kezz = " << ke_test.m33 << std::endl;
-
-      // std::cout << " " << std::endl;
-      //double temperature_scal = ( temperature.x + temperature.y + temperature.z ) / 3.;
-      //m_[T_X]  = 2. * (m_[EK_X] - 0.5 * m_[MOMX] * m_[MOMX] / m_[MASS]) / (Stamp_Constant::boltzmann * m_n);
-      //m_[T_Y]  = 2. * (m_[EK_Y] - 0.5 * m_[MOMY] * m_[MOMY] / m_[MASS]) / (Stamp_Constant::boltzmann * m_n);
-      //m_[T_Z]  = 2. * (m_[EK_Z] - 0.5 * m_[MOMZ] * m_[MOMZ] / m_[MASS]) / (Stamp_Constant::boltzmann * m_n);
-      //m_[TEMP] = (m_[T_X] + m_[T_Y] + m_[T_Z]) / 3.;
-
-      
-      // lout <<"has_virial="<<has_virial_field<< ", virial = " << virial <<std::endl;
 
       Vec3d virdiag = { virial.m11 , virial.m22, virial.m33 };
       Vec3d virdev  = { virial.m12 , virial.m13, virial.m23 };
@@ -220,31 +192,13 @@ namespace exaStamp
         volume = dot( cross(a,b) , c );
       }
       volume *= bounds_volume( domain->bounds() );
-
-      //double kinetic_pressure = temperature_scal / volume;
-      //double potential_pressure = ( virdiag.x + virdiag.y + virdiag.z ) / ( 3. * volume );
-      //double pressure_scal = kinetic_pressure + potential_pressure;
       
       Vec3d phydro = ( ke_tensor_diag + virdiag ) / volume;
       Vec3d pdev   = (  ke_tensor_dev +  virdev ) / volume;
 
-      // Vec3d deviatorpos = ( ke_tensor_diag + virdiag ) / volume;
-      // Vec3d deviatorinf = ( ke_tensor_diag + virdiag ) / volume;
-      
-      // const double volume = Global::domainInfo.getVolume();
-      // m_[PKIN] = m_n * Stamp_Constant::boltzmann * m_[TEMP] / volume;
-      // m_[PPOT] = (m_[V_XX] + m_[V_YY] + m_[V_ZZ]) / (3. * volume);
-      // m_[PRES] = m_[PKIN] + m_[PPOT];
-      // m_[P_X] = (m_n * Stamp_Constant::boltzmann * m_[T_X] + m_[V_XX]) / volume;
-      // m_[P_Y] = (m_n * Stamp_Constant::boltzmann * m_[T_Y] + m_[V_YY]) / volume;
-      // m_[P_Z] = (m_n * Stamp_Constant::boltzmann * m_[T_Z] + m_[V_ZZ]) / volume;
-
-//      ldbg << "TS: potential_energy = "<< potential_energy <<std::endl;
-//      ldbg << "TS: potential_energy_shift = "<< (*potential_energy_shift) <<std::endl;
-
       // write results to output
       sim_info.set_virial( virial );
-      sim_info.set_ke_tensor( ke_tensor );      
+      sim_info.set_ke_tensor( ke_test );
       sim_info.set_pressure( phydro );
       sim_info.set_deviator( pdev );
       sim_info.set_kinetic_energy( kinetic_energy );

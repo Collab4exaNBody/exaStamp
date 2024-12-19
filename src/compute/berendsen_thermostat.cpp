@@ -14,6 +14,7 @@
 #include <onika/memory/allocator.h>
 #include <exanb/core/parallel_random.h>
 #include <exanb/grid_cell_particles/particle_region.h>
+#include <exaStamp/compute/thermodynamic_state.h>
 
 namespace exaStamp
 {
@@ -23,7 +24,7 @@ namespace exaStamp
     class GridT ,
     class = AssertGridHasFields< GridT, field::_ax, field::_ay, field::_az, field::_vx, field::_vy, field::_vz >
     >
-  class LangevinThermostatNode : public OperatorNode
+  class BerendsenThermostatNode : public OperatorNode
   {
     // compile time constant indicating if grid has type field
     using has_type_field_t = typename GridT::CellParticles::template HasField < field::_type > ;
@@ -34,10 +35,10 @@ namespace exaStamp
 
     ADD_SLOT( GridT          , grid    , INPUT_OUTPUT);
     ADD_SLOT( ParticleSpecies, species , INPUT , REQUIRED );
-    ADD_SLOT( double         , gamma   , INPUT , 0.1 );
+    ADD_SLOT( double         , tau     , INPUT , 0.1 );
     ADD_SLOT( double         , T       , INPUT , REQUIRED );
-    ADD_SLOT( size_t         , seed    , INPUT , OPTIONAL );
     ADD_SLOT( double         , dt      , INPUT , REQUIRED );
+    ADD_SLOT( ThermodynamicState      , thermodynamic_state , INPUT );
 
     ADD_SLOT( ParticleRegions   , particle_regions , INPUT , OPTIONAL );
     ADD_SLOT( ParticleRegionCSG , region           , INPUT , OPTIONAL );
@@ -53,12 +54,17 @@ namespace exaStamp
       if( grid->number_of_cells() == 0 ) return;
 
       GridT& grid              = *(this->grid);
-      const double gamma       = *(this->gamma);
+      const double tau         = *(this->tau);
       const double T           = *(this->T);
+      const ThermodynamicState& sim_info = *(this->thermodynamic_state);
       double dt                = *(this->dt);
       ParticleSpecies& species = *(this->species);
+      long natoms = sim_info.particle_count();
+      static constexpr double conv_temperature = 1.e4 * legacy_constant::atomicMass / legacy_constant::boltzmann;      
+      double T_cur = sim_info.temperature_scal() / natoms * conv_temperature;
 
-      ldbg << "langevin: gamma="<<gamma<<", T="<<T<<", dt="<<dt<<std::endl;
+      double lambda = sqrt( 1. + dt * ( T/T_cur - 1 ) / tau );
+      ldbg << "berendsen: tau="<<tau<<", T="<<T<<", dt="<<dt<<std::endl;
 
       size_t nSpecies = species.size();
       double masses[ nSpecies ];
@@ -88,8 +94,6 @@ namespace exaStamp
 
 #     pragma omp parallel
       {
-        auto& re = rand::random_engine();
-        std::normal_distribution<double> f_rand(0.0,1.0);
 
         GRID_OMP_FOR_BEGIN(dims-2*gl,_,loc, schedule(dynamic) )
         {
@@ -119,9 +123,9 @@ namespace exaStamp
             if constexpr (has_id_field) { p_id = ids[j]; }
             if( prcsg.contains( Vec3d{rx[j],ry[j],rz[j]} , p_id ) )
             {
-              fx[j] +=  /* Ff */ - ( mass / gamma ) * vx[j]  +  /* Fr */ f_rand(re) * std::sqrt( 2.0 * k * T * mass / ( dt * gamma ) ) ;
-              fy[j] +=  /* Ff */ - ( mass / gamma ) * vy[j]  +  /* Fr */ f_rand(re) * std::sqrt( 2.0 * k * T * mass / ( dt * gamma ) ) ;
-              fz[j] +=  /* Ff */ - ( mass / gamma ) * vz[j]  +  /* Fr */ f_rand(re) * std::sqrt( 2.0 * k * T * mass / ( dt * gamma ) ) ;
+              fx[j] *= lambda ;
+              fy[j] *= lambda ;
+              fz[j] *= lambda ;              
             }
           }
 
@@ -147,12 +151,12 @@ namespace exaStamp
     inline std::string documentation() const override final
     {
       return R"EOF(
-Apply a langevin thermostat on particles.
+Apply a berendsen thermostat on particles.
 if a single value is given as the node description, it is understood as the T parameter (temperature)
 
 Uses formulation as in LAMMPS documentation :
 =============================================
-Apply a Langevin thermostat as described in (Schneider) to a group of atoms which models an interaction with a background implicit solvent. Used with fix nve, this command performs Brownian dynamics (BD), since the total force on each atom will have the form:
+Apply a Berendsen thermostat as described in (Schneider) to a group of atoms which models an interaction with a background implicit solvent. Used with fix nve, this command performs Brownian dynamics (BD), since the total force on each atom will have the form:
 F = Fc + Ff + Fr
 Ff = - (m / damp) v
 Fr is proportional to sqrt(Kb T m / (dt damp))
@@ -163,13 +167,13 @@ Fr is a force due to solvent atoms at a temperature T randomly bumping into the 
 
 exemple 1:
 ==========
-langevin_thermostat: 500 K
+berendsen_thermostat: 500 K
 
 exemple 2:
 ==========
-langevin_thermostat:
+berendsen_thermostat:
   T: 800 K
-  gamma: 0.25
+  tau: 0.1 ps
 
 Note: do not process particles in ghost layers.
 )EOF";
@@ -177,14 +181,14 @@ Note: do not process particles in ghost layers.
 
   };
 
-  template<class GridT> using LangevinThermostatNodeTmpl = LangevinThermostatNode<GridT>;
+  template<class GridT> using BerendsenThermostatNodeTmpl = BerendsenThermostatNode<GridT>;
 
   // === register factories ===
   CONSTRUCTOR_FUNCTION
   {
    OperatorNodeFactory::instance()->register_factory(
-    "langevin_thermostat",
-    make_grid_variant_operator< LangevinThermostatNodeTmpl >
+    "berendsen_thermostat",
+    make_grid_variant_operator< BerendsenThermostatNodeTmpl >
     );
   }
 

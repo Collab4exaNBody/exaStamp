@@ -1,0 +1,52 @@
+init_prolog:
+  - deformation_xform:
+      defbox: { extension: [ 1.0 , 1.0 , 1.0 ] }
+  
+init_epilog:
+  - domain_volume
+  - init_npt
+
+first_iteration:
+  - init_particles
+  - compute_all_forces_energy
+  - default_thermodynamic_state
+  - default_print_thermodynamic_state: { lb_flag: false , move_flag: false , print_header: true }
+  - default_dump_thermodynamic_state
+  - setup_npt
+  - next_time_step
+  
+numerical_scheme: numerical_scheme_npt
+    
+numerical_scheme_npt:
+  - initial_integrate
+  - final_integrate
+
+initial_integrate:
+  - simulation_thermodynamic_state
+  - nhc_press_integrate
+  - nhc_temp_integrate
+  - nh_v_temp:
+      rebind: { value: vscale }
+      body: [ scale_v ]
+  - simulation_thermodynamic_state
+  - nh_omega_dot
+  - nh_v_press
+  - push_f_v: { dt_scale: 0.5, xform_mode: IDENTITY }
+  - remap_npt
+  - push_v_r: { dt_scale: 1.0, xform_mode: INV_XFORM }
+  - remap_npt
+  - check_and_update_particles
+  - compute_all_forces_energy
+
+final_integrate:
+  - push_f_v: {dt_scale: 0.5, xform_mode: IDENTITY}
+  - simulation_thermodynamic_state
+  - nh_v_press
+  - simulation_thermodynamic_state
+  - nh_omega_dot
+  - nhc_temp_integrate
+  - nh_v_temp:
+      rebind: { value: vscale }
+      body: [ scale_v ]
+  - nhc_press_integrate
+  

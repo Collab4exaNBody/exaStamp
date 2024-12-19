@@ -56,6 +56,18 @@ namespace exaStamp
       Mat3d S = (1./volume()) * m_virial;
       return S;
     }
+
+    inline Mat3d kinetic_tensor() const
+    {
+      Mat3d KE = (1./volume()) * m_ke_tensor;
+      return KE;
+    }
+
+    inline Mat3d full_stress_tensor() const
+    {
+      Mat3d full = stress_tensor() + kinetic_tensor();//(1./volume()) * ( m_ke_tensor + m_virial );
+      return full;
+    }
     
     inline void set_kinetic_energy(const Vec3d& x) { m_kinetic_energy = x; }
     inline const Vec3d& kinetic_energy() const { return m_kinetic_energy; }
