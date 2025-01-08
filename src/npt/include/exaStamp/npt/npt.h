@@ -8,23 +8,13 @@
 namespace exaStamp
 {
 
-  struct NPTConfig
-  {
-    using Mat3d = exanb::Mat3d;
-    double m_Tstart;
-    double m_Tend;    
-    double m_Tdamp;
-    Mat3d  m_Pstart { 0.,0.,0., 0.,0.,0., 0.,0.,0. };
-    Mat3d  m_Pend { 0.,0.,0., 0.,0.,0., 0.,0.,0. };
-    double m_Pdamp;
-    std::string m_mode;
-  };
-
   struct NPTContext
   {
     using Mat3d = exanb::Mat3d;
-    NPTConfig m_config;
 
+    std::string algo;
+    std::string pmode;    
+    
     int dimension, which;
     double dtv, dtf, dthalf, dt4, dt8, dto;
     double boltz, nktv2p, tdof;
@@ -36,17 +26,19 @@ namespace exaStamp
     double t_current, t_target, ke_target;
     double t_freq;
     int tstat_flag;
-
+    long start_it;
+    
     // For barostat purposes
-    int pstyle, pcouple, allremap;
+    std::string pstyle,pcouple;
     int p_flag[6];    // 1 if control P on this dim, 0 if not
     double p_start[6], p_stop[6];
-    double p_freq[6], p_target[6];
+    double p_period[6], p_freq[6], p_target[6];
     double omega[6], omega_dot[6];
     double omega_mass[6];
     double p_current[6];
-    double drag, tdrag_factor;     // drag factor on particle thermostat
-    double pdrag_factor;           // drag factor on barostat
+    double drag;                     // drag factor specified by user (default = 0)
+    double tdrag_factor;             // drag factor on thermostat
+    double pdrag_factor;             // drag factor on barostat
     int pstat_flag;    // 1 if control P
 
     double p_temp;    // target temperature for barostat
@@ -89,77 +81,85 @@ namespace exaStamp
     int scaleyz;     // 1 if yz scaled with lz
     int scalexz;     // 1 if xz scaled with lz
     int scalexy;     // 1 if xy scaled with ly
-    int flipflag;    // 1 if box flips are invoked as needed
-
-    int pre_exchange_flag;    // set if pre_exchange needed for box flips
 
     double fixedpoint[3];    // location of dilation fixed-point
-    
-    // evolutive parameters
-    double m_gammaNVT = 0.0;
-    double m_gammaNVTp = 0.0;
-    Mat3d h, hp, hpp; // these matrices are to be initialized to 0,
-    Mat3d G, Gp;      // this is done in the default constructor of Mat3d
 
-    // derived quantities, updated in updateMembers
-    Mat3d hi, ht, Gi, Giht, GiGp, hpt, hpthp;
-
-    template<class StreamT>
-    inline void print(StreamT& out)
+    inline void update_target_T_KE(long cur_it, long end_it)
     {
-      out << exanb::default_stream_format;
-      out << "Tstart        = " << this->m_config.m_Tstart << std::endl;
-      out << "Tend          = " << this->m_config.m_Tend << std::endl;
-      out << "Tdamp         = " << this->m_config.m_Tdamp << std::endl;
-      out << "--------------- "  << std::endl;
-      out << "Pxx_start     = " << this->m_config.m_Pstart.m11 << std::endl;
-      out << "Pyy_start     = " << this->m_config.m_Pstart.m22 << std::endl;
-      out << "Pzz_start     = " << this->m_config.m_Pstart.m33 << std::endl;      
-      out << "Pxy_start     = " << this->m_config.m_Pstart.m12 << std::endl;
-      out << "Pxz_start     = " << this->m_config.m_Pstart.m13 << std::endl;
-      out << "Pyz_start     = " << this->m_config.m_Pstart.m23 << std::endl;      
-      out << "Pdamp         = " << this->m_config.m_Pdamp << std::endl;
+      double delta = cur_it - this->start_it;
+      if (delta > 0) delta /= (end_it - this->start_it);
+      this->t_target = this->t_start + delta * (this->t_stop-this->t_start);
+      this->ke_target = this->tdof * this->boltz * this->t_target;      
     }
 
-    inline void updateMembers()
+    inline void update_target_P(long cur_it, long end_it)
     {
-      using namespace exanb;
+      double delta = cur_it - this->start_it;
+      if (delta > 0) delta /= (end_it - this->start_it);
+      this->p_hydro = 0.0;
+      for (int i = 0; i < 3; i++)
+        if (this->p_flag[i]) {
+          this->p_target[i] = this->p_start[i] + delta * (this->p_stop[i] - this->p_start[i]);
+          this->p_hydro += this->p_target[i];
+        }
+      if (this->pdim > 0) this->p_hydro /= this->pdim;
+      if (this->pstyle == "TRICLINIC")
+        for (int i = 3; i < 6; i++)
+          this->p_target[i] = this->p_start[i] + delta * (this->p_stop[i] - this->p_start[i]);
+    }
 
-      // h = xform * diag_matrix(domain.extent());
-      hi = inverse(h);
-      ht = transpose(h);
-      hpt = transpose(hp);
-      hpthp = hpt * hp;
+    inline void update_sigma()
+    {
+      // generate upper-triangular half of
+      // sigma = vol0*h0inv*(p_target-p_hydro)*h0inv^t
+      // units of sigma are are PV/L^2 e.g. atm.A
+      //
+      // [ 0 5 4 ]   [ 0 5 4 ] [ 0 5 4 ] [ 0 - - ]
+      // [ 5 1 3 ] = [ - 1 3 ] [ 5 1 3 ] [ 5 1 - ]
+      // [ 4 3 2 ]   [ - - 2 ] [ 4 3 2 ] [ 4 3 2 ]
+      ///      ldbg << "VOL0 = " << this->vol0 << std::endl;
+      this->sigma[0] = this->vol0*(this->h0_inv[0]*((this->p_target[0]-this->p_hydro)*this->h0_inv[0] + this->p_target[5]*this->h0_inv[5]+this->p_target[4]*this->h0_inv[4]) + this->h0_inv[5]*(this->p_target[5]*this->h0_inv[0] + (this->p_target[1]-this->p_hydro)*this->h0_inv[5]+this->p_target[3]*this->h0_inv[4]) + this->h0_inv[4]*(this->p_target[4]*this->h0_inv[0]+this->p_target[3]*this->h0_inv[5] + (this->p_target[2]-this->p_hydro)*this->h0_inv[4]));
+      this->sigma[1] = this->vol0*(this->h0_inv[1]*((this->p_target[1]-this->p_hydro)*this->h0_inv[1] + this->p_target[3]*this->h0_inv[3]) + this->h0_inv[3]*(this->p_target[3]*this->h0_inv[1] + (this->p_target[2]-this->p_hydro)*this->h0_inv[3]));
+      this->sigma[2] = this->vol0*(this->h0_inv[2]*((this->p_target[2]-this->p_hydro)*this->h0_inv[2]));
+      this->sigma[3] = this->vol0*(this->h0_inv[1]*(this->p_target[3]*this->h0_inv[2]) + this->h0_inv[3]*((this->p_target[2]-this->p_hydro)*this->h0_inv[2]));
+      this->sigma[4] = this->vol0*(this->h0_inv[0]*(this->p_target[4]*this->h0_inv[2]) + this->h0_inv[5]*(this->p_target[3]*this->h0_inv[2]) + this->h0_inv[4]*((this->p_target[2]-this->p_hydro)*this->h0_inv[2]));
+      this->sigma[5] = this->vol0*(this->h0_inv[0]*(this->p_target[5]*this->h0_inv[1]+this->p_target[4]*this->h0_inv[3]) + this->h0_inv[5]*((this->p_target[1]-this->p_hydro)*this->h0_inv[1]+this->p_target[3]*this->h0_inv[3]) + this->h0_inv[4]*(this->p_target[3]*this->h0_inv[1]+(this->p_target[2]-this->p_hydro)*this->h0_inv[3]));
+    }
+
+    inline void update_fdev(Mat3d h)
+    {
+      // ldbg << "h[0] = " << h.m11 << std::endl;
+      // ldbg << "h[1] = " << h.m22 << std::endl;
+      // ldbg << "h[2] = " << h.m33 << std::endl;
+      // ldbg << "h[3] = " << h.m23 << std::endl;
+      // ldbg << "h[4] = " << h.m13 << std::endl;
+      // ldbg << "h[5] = " << h.m12 << std::endl;      
+
+      // for (int i = 0; i < 6; i++) {
+      //   ldbg << "sigma["<<i<<"] = " << this->sigma[i] << std::endl;
+      // }      
       
-      G = ht * h;
-      Gi = inverse(G);
-      Giht = Gi * ht;
-      Gp = diag_matrix({0.,0.,0.}); // this is in stamp and yes it's strange
-      GiGp = Gi * Gp;
-    }
-
-    inline void apply_mask()
-    {
-      using namespace exanb;
-
-      // hp = comp_multiply( hp, m_config.m_hmask );
-      // hpp = comp_multiply( hpp , m_config.m_hmask );
-      // if( ! is_identity(m_config.m_hblend) )
-      // {
-      //   if( is_diagonal(hp) && is_diagonal(hpp) )
-      //   {
-      //     hp = diag_matrix( m_config.m_hblend * Vec3d{ hp.m11 , hp.m22 , hp.m33 } );
-      //     hpp = diag_matrix( m_config.m_hblend * Vec3d{ hpp.m11 , hpp.m22 , hpp.m33 } );
-      //   }
-      //   else
-      //   {
-      //     lerr<<"Cannot apply Hp/Hpp diagonal blending matrix because Hp or Hpp is not diagonal"<<std::endl;
-      //     lerr<<"Hp = "<< hp<<std::endl;
-      //     lerr<<"Hpp = "<< hpp<<std::endl;
-      //     lerr<<"Hblend = "<< m_config.m_hblend<<std::endl;
-      //     std::abort();
-      //   }
-      // }
+      this->fdev[0] =
+        h.m11*(this->sigma[0]*h.m11+this->sigma[5]*h.m12+this->sigma[4]*h.m13) +
+        h.m12*(this->sigma[5]*h.m11+this->sigma[1]*h.m12+this->sigma[3]*h.m13) +
+        h.m13*(this->sigma[4]*h.m11+this->sigma[3]*h.m12+this->sigma[2]*h.m13);
+      this->fdev[1] =
+        h.m22*(              this->sigma[1]*h.m22+this->sigma[3]*h.m23) +
+        h.m23*(              this->sigma[3]*h.m22+this->sigma[2]*h.m23);
+      this->fdev[2] =
+        h.m33*(                            this->sigma[2]*h.m33);
+      this->fdev[3] =
+        h.m22*(                            this->sigma[3]*h.m33) +
+        h.m23*(                            this->sigma[2]*h.m33);
+      this->fdev[4] =
+        h.m11*(                            this->sigma[4]*h.m33) +
+        h.m12*(                            this->sigma[3]*h.m33) +
+        h.m13*(                            this->sigma[2]*h.m33);
+      this->fdev[5] =
+        h.m11*(              this->sigma[5]*h.m22+this->sigma[4]*h.m23) +
+        h.m12*(              this->sigma[1]*h.m22+this->sigma[3]*h.m23) +
+        h.m13*(              this->sigma[3]*h.m22+this->sigma[2]*h.m23);
+      
     }
 
   };

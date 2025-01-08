@@ -13,9 +13,6 @@
 #include <iostream>
 #include <string>
 
-enum{NONE,XYZ,XY,YZ,XZ};
-enum{ISO,ANISO,TRICLINIC};
-
 namespace exaStamp
 {
   using namespace exanb;
@@ -28,26 +25,29 @@ namespace exaStamp
 
     inline void execute () override final
     {
-      ldbg << "Couple NPT" << std::endl;
-      const ThermodynamicState& sim_info = *(this->thermodynamic_state);      
-      Mat3d tensor = sim_info.virial() + sim_info.ke_tensor();
-      double scalar = sim_info.pressure_scal();
+      const ThermodynamicState& sim_info = *(this->thermodynamic_state);
+      static const double conv_pressure = 1.e4 * legacy_constant::atomicMass * UnityConverterHelper::convert(1, "m^3");
+      double pascal_to_bar = 1.e-5;
       
-      if (npt_ctx->pstyle == ISO)
+      Mat3d tensor = pascal_to_bar * sim_info.full_stress_tensor() * conv_pressure;
+      double scalar = pascal_to_bar * sim_info.pressure_scal() * conv_pressure;
+      double ave = 0.0;
+      
+      if (npt_ctx->pstyle == "ISO")
       	npt_ctx->p_current[0] = npt_ctx->p_current[1] = npt_ctx->p_current[2] = scalar;
-      else if (npt_ctx->pcouple == XYZ) {
-      	double ave = 1.0/3.0 * (tensor.m11 + tensor.m22 + tensor.m33);
+      else if (npt_ctx->pcouple == "XYZ") {
+      	ave = 1.0/3.0 * (tensor.m11 + tensor.m22 + tensor.m33);
       	npt_ctx->p_current[0] = npt_ctx->p_current[1] = npt_ctx->p_current[2] = ave;
-      } else if (npt_ctx->pcouple == XY) {
-      	double ave = 0.5 * (tensor.m11 + tensor.m22);
+      } else if (npt_ctx->pcouple == "XY") {
+      	ave = 0.5 * (tensor.m11 + tensor.m22);
       	npt_ctx->p_current[0] = npt_ctx->p_current[1] = ave;
       	npt_ctx->p_current[2] = tensor.m33;
-      } else if (npt_ctx->pcouple == YZ) {
-      	double ave = 0.5 * (tensor.m22 + tensor.m33);
+      } else if (npt_ctx->pcouple == "YZ") {
+      	ave = 0.5 * (tensor.m22 + tensor.m33);
       	npt_ctx->p_current[1] = npt_ctx->p_current[2] = ave;
       	npt_ctx->p_current[0] = tensor.m11;
-      } else if (npt_ctx->pcouple == XZ) {
-      	double ave = 0.5 * (tensor.m11 + tensor.m33);
+      } else if (npt_ctx->pcouple == "XZ") {
+      	ave = 0.5 * (tensor.m11 + tensor.m33);
       	npt_ctx->p_current[0] = npt_ctx->p_current[2] = ave;
       	npt_ctx->p_current[1] = tensor.m22;
       } else {
@@ -56,10 +56,10 @@ namespace exaStamp
       	npt_ctx->p_current[2] = tensor.m33;
       }
 
-      if (npt_ctx->pstyle == TRICLINIC) {
-	npt_ctx->p_current[3] = tensor.m23;
-	npt_ctx->p_current[4] = tensor.m13;
-	npt_ctx->p_current[5] = tensor.m12;
+      if (npt_ctx->pstyle == "TRICLINIC") {
+        npt_ctx->p_current[3] = tensor.m23;
+        npt_ctx->p_current[4] = tensor.m13;
+        npt_ctx->p_current[5] = tensor.m12;
       }
       
     }

@@ -27,7 +27,6 @@
 namespace exaStamp
 {
   using namespace exanb;
-  enum{ISO,ANISO,TRICLINIC};
 
   template<
     class GridT ,
@@ -57,8 +56,6 @@ namespace exaStamp
     inline void execute () override final
     {
 
-//       static const double k = UnityConverterHelper::convert(legacy_constant::boltzmann, "J/K");
-
       if( grid->number_of_cells() == 0 ) return;
       
       GridT& grid = *(this->grid);
@@ -69,14 +66,6 @@ namespace exaStamp
       factor.x = exp(-npt_ctx->dt4*(npt_ctx->omega_dot[0]+npt_ctx->mtk_term2));
       factor.y = exp(-npt_ctx->dt4*(npt_ctx->omega_dot[1]+npt_ctx->mtk_term2));
       factor.z = exp(-npt_ctx->dt4*(npt_ctx->omega_dot[2]+npt_ctx->mtk_term2));
-      ldbg << std::fixed;
-      ldbg << std::setprecision(10);
-      ldbg << "fact x = " << factor.x << std::endl;
-      ldbg << "fact y = " << factor.y << std::endl;
-      ldbg << "fact z = " << factor.z << std::endl;
-      ldbg << "omega_dot[3] = " << npt_ctx->omega_dot[3] << std::endl;
-      ldbg << "omega_dot[4] = " << npt_ctx->omega_dot[4] << std::endl;
-      ldbg << "omega_dot[5] = " << npt_ctx->omega_dot[5] << std::endl;
 
 #     pragma omp parallel
       {
@@ -96,10 +85,10 @@ namespace exaStamp
                 vx[j] *= factor.x;
                 vy[j] *= factor.y;
                 vz[j] *= factor.z;
-                //                if (npt_ctx->pstyle == TRICLINIC) {
-                vx[j] -= npt_ctx->dthalf*(vy[j]*npt_ctx->omega_dot[5] + vz[j]*npt_ctx->omega_dot[4]);
-                vy[j] -= npt_ctx->dthalf*vz[j]*npt_ctx->omega_dot[3];
-                //                }
+                if (npt_ctx->pstyle == "TRICLINIC") {
+                  vx[j] -= npt_ctx->dthalf*(vy[j]*npt_ctx->omega_dot[5] + vz[j]*npt_ctx->omega_dot[4]);
+                  vy[j] -= npt_ctx->dthalf*vz[j]*npt_ctx->omega_dot[3];
+                }
                 vx[j] *= factor.x;
                 vy[j] *= factor.y;
                 vz[j] *= factor.z;		

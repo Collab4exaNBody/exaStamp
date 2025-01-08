@@ -16,7 +16,6 @@
 namespace exaStamp
 {
   using namespace exanb;
-  enum{ISO,ANISO,TRICLINIC};
   
   struct NHCPressIntegrateNode : public OperatorNode
   {
@@ -31,67 +30,62 @@ namespace exaStamp
     inline void execute () override final
     {
 
-      int ich,i,pdof;
-      double expfac,factor_etap,kecurrent;
-      double kt = npt_ctx->boltz * npt_ctx->t_target;
-      ldbg << std::fixed;
-      ldbg << std::setprecision(10);
-
-      ldbg << "kt = " << kt << std::endl;      
-      double lkt_press;
       const ThermodynamicState& sim_info = *(this->thermodynamic_state);
       long natoms = sim_info.particle_count();
       
+      int pdof;
+      double expfac,factor_etap,kecurrent,lkt_press,nkt;
+      double kt = npt_ctx->boltz * npt_ctx->t_target;
+      
       if (npt_ctx->omega_mass_flag) {
-        double nkt = (natoms + 1) * kt;
-        for (i = 0; i < 6; i++)
+        nkt = (natoms + 1) * kt;
+        for (int i = 0; i < 3; i++)
           if (npt_ctx->p_flag[i])
             npt_ctx->omega_mass[i] = nkt/(npt_ctx->p_freq[i]*npt_ctx->p_freq[i]);
+        if (npt_ctx->pstyle == "TRICLINIC") {
+          for (int i = 3; i < 6; i++)
+            if (npt_ctx->p_flag[i]) npt_ctx->omega_mass[i] = nkt/(npt_ctx->p_freq[i]*npt_ctx->p_freq[i]);
+        }
       }
-      for (i = 0; i < 6; i++)
-        ldbg << "omega_mass[="<<i<<"] = " << npt_ctx->omega_mass[i] << std::endl;      
 
       if (npt_ctx->etap_mass_flag) {
       	if (npt_ctx->mpchain) {
       	  npt_ctx->etap_mass[0] = npt_ctx->boltz * npt_ctx->t_target / (npt_ctx->p_freq_max*npt_ctx->p_freq_max);
-      	  for (ich = 1; ich < npt_ctx->mpchain; ich++) {
+      	  for (int ich = 1; ich < npt_ctx->mpchain; ich++) {
       	    npt_ctx->etap_mass[ich] = npt_ctx->boltz * npt_ctx->t_target / (npt_ctx->p_freq_max*npt_ctx->p_freq_max);
-            ldbg << "etap_mass["<<ich<<"] = " << npt_ctx->etap_mass[ich] << std::endl;      
           }
-      	  for (ich = 1; ich < npt_ctx->mpchain; ich++) {
+      	  for (int ich = 1; ich < npt_ctx->mpchain; ich++) {
       	    npt_ctx->etap_dotdot[ich] =
       	      (npt_ctx->etap_mass[ich-1]*npt_ctx->etap_dot[ich-1]*npt_ctx->etap_dot[ich-1] -
       	       npt_ctx->boltz * npt_ctx->t_target) / npt_ctx->etap_mass[ich];
-            ldbg << "etap_dotdot["<<ich<<"] = " << npt_ctx->etap_dotdot[ich] << std::endl;
           }
       	}
       }
-      ldbg << "etap_mass_flag passed" << std::endl;
-      ldbg << "etap_mass[0] = " << npt_ctx->etap_mass[0] << std::endl;      
       
       kecurrent = 0.0;
       pdof = 0;
-      for (i = 0; i < 6; i++)
+      for (int i = 0; i < 3; i++)
       	if (npt_ctx->p_flag[i]) {
       	  kecurrent += npt_ctx->omega_mass[i]*npt_ctx->omega_dot[i]*npt_ctx->omega_dot[i];
       	  pdof++;
       	}
-      ldbg << "kecurrent = " << kecurrent << std::endl;
       
-      //      if (npt_ctx->pstyle == ISO) lkt_press = kt;
-      lkt_press = pdof * kt;
+      if (npt_ctx->pstyle == "TRICLINIC") {
+        for (int i = 3; i < 6; i++)
+          if (npt_ctx->p_flag[i]) {
+            kecurrent += npt_ctx->omega_mass[i]*npt_ctx->omega_dot[i]*npt_ctx->omega_dot[i];
+            pdof++;
+          }
+      }
+      
+      if (npt_ctx->pstyle == "ISO") lkt_press = kt;
+      else lkt_press = pdof * kt;
+      
       npt_ctx->etap_dotdot[0] = (kecurrent - lkt_press)/npt_ctx->etap_mass[0];
-
-      ldbg << "lkt_press = " << lkt_press << std::endl;
-      ldbg << "etap_dotdot[0] = " << npt_ctx->etap_dotdot[0] << std::endl;      
       
-      // NO SUBCYCLE FOR NOW IN NPT
-      // MIGHT ADD LATER
-      //     double ncfac = 1.0/npt_ctx->nc_pchain;
-      // for (int iloop = 0; iloop < npt_ctx->nc_pchain; iloop++) {
       double ncfac = 1.0;
 
-      for (ich = npt_ctx->mpchain-1; ich > 0; ich--) {
+      for (int ich = npt_ctx->mpchain-1; ich > 0; ich--) {
         expfac = exp(-ncfac*npt_ctx->dt8*npt_ctx->etap_dot[ich+1]);
         npt_ctx->etap_dot[ich] *= expfac;
         npt_ctx->etap_dot[ich] += npt_ctx->etap_dotdot[ich] * ncfac*npt_ctx->dt4;
@@ -104,37 +98,36 @@ namespace exaStamp
       npt_ctx->etap_dot[0] += npt_ctx->etap_dotdot[0] * ncfac*npt_ctx->dt4;
       npt_ctx->etap_dot[0] *= npt_ctx->pdrag_factor;
       npt_ctx->etap_dot[0] *= expfac;
-
-      ldbg << "expfac = " << expfac << std::endl;
-      ldbg << "etap_dot[0] = " << npt_ctx->etap_dot[0] << std::endl;
-      ldbg << "etap_dot[1] = " << npt_ctx->etap_dot[1] << std::endl;
       
-      for (ich = 0; ich < npt_ctx->mpchain; ich++) {
+      for (int ich = 0; ich < npt_ctx->mpchain; ich++) {
         npt_ctx->etap[ich] += ncfac*npt_ctx->dthalf*npt_ctx->etap_dot[ich];
-        ldbg << "etap["<<ich<<"] = " << npt_ctx->etap[ich] << std::endl;
       }
       
       factor_etap = exp(-ncfac*npt_ctx->dthalf*npt_ctx->etap_dot[0]);
-      ldbg << "factor_etap = " << factor_etap << std::endl;
-      for (i = 0; i < 6; i++) {
+      for (int i = 0; i < 3; i++) {
         if (npt_ctx->p_flag[i]) npt_ctx->omega_dot[i] *= factor_etap;
-        ldbg << "omega_dot["<<i<<"] = " << npt_ctx->omega_dot[i] << std::endl;
+      }
+
+      if (npt_ctx->pstyle == "TRICLINIC") {
+        for (int i = 3; i < 6; i++)
+          if (npt_ctx->p_flag[i]) npt_ctx->omega_dot[i] *= factor_etap;
       }
       
       kecurrent = 0.0;
-      for (i = 0; i < 6; i++)
+      for (int i = 0; i < 3; i++)
         if (npt_ctx->p_flag[i]) kecurrent += npt_ctx->omega_mass[i]*npt_ctx->omega_dot[i]*npt_ctx->omega_dot[i];
-      ldbg << "kecurrent = " << kecurrent << std::endl;
-      npt_ctx->etap_dotdot[0] = (kecurrent - lkt_press)/npt_ctx->etap_mass[0];
 
+      if (npt_ctx->pstyle == "TRICLINIC") {
+        for (int i = 3; i < 6; i++)
+          if (npt_ctx->p_flag[i]) kecurrent += npt_ctx->omega_mass[i]*npt_ctx->omega_dot[i]*npt_ctx->omega_dot[i];
+      }
+      
+      npt_ctx->etap_dotdot[0] = (kecurrent - lkt_press)/npt_ctx->etap_mass[0];
       npt_ctx->etap_dot[0] *= expfac;
       npt_ctx->etap_dot[0] += npt_ctx->etap_dotdot[0] * ncfac*npt_ctx->dt4;
       npt_ctx->etap_dot[0] *= expfac;
-
-      ldbg << "etap_dotdot[0] = " << npt_ctx->etap_dotdot[0] << std::endl;
-      ldbg << "etap_dot[0] = " << npt_ctx->etap_dot[0] << std::endl;
       
-      for (ich = 1; ich < npt_ctx->mpchain; ich++) {
+      for (int ich = 1; ich < npt_ctx->mpchain; ich++) {
         expfac = exp(-ncfac*npt_ctx->dt8*npt_ctx->etap_dot[ich+1]);
         npt_ctx->etap_dot[ich] *= expfac;
         npt_ctx->etap_dotdot[ich] = (npt_ctx->etap_mass[ich-1]*npt_ctx->etap_dot[ich-1]*npt_ctx->etap_dot[ich-1] - npt_ctx->boltz*npt_ctx->t_target) / npt_ctx->etap_mass[ich];
@@ -142,10 +135,6 @@ namespace exaStamp
         npt_ctx->etap_dot[ich] *= expfac;
         ldbg << ich << std::endl;
       }
-      // SUBCYCLE LOOP ENDS
-  //     }
-
-      //      std::abort();
   
     }
   };

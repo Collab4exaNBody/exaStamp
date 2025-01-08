@@ -35,11 +35,11 @@ namespace YAML
         }
       if( node["Pstart"] )
         {
-          v.m_Pstart = node["Pstart"].as<Mat3d>();
+          v.m_Pstart = node["Pstart"].as<double>();
         }
       if( node["Pend"] )
         {
-          v.m_Pend = node["Pend"].as<Mat3d>();
+          v.m_Pend = node["Pend"].as<double>();
         }
       if( node["Pdamp"] )
         {
@@ -59,6 +59,10 @@ namespace YAML
       else
         {
           v.m_mode = node["mode"].as<std::string>();
+        }
+      if ( node["Pmode"] )
+        {
+          v.m_Pmode = node["Pmode"].as<std::string>();
         }
       return true;
     }
