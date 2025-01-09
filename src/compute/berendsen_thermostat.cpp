@@ -41,7 +41,8 @@ namespace exaStamp
     ADD_SLOT( ParticleSpecies, species , INPUT , REQUIRED );
     ADD_SLOT( double         , dt      , INPUT , REQUIRED );
     ADD_SLOT( long           , timestep     , INPUT , REQUIRED );
-    ADD_SLOT( long           , simulation_end_iteration , INPUT , REQUIRED );    
+    ADD_SLOT( long           , simulation_end_iteration , INPUT , REQUIRED );
+    ADD_SLOT( long           , simulation_start_iteration , INPUT , 0 );
     ADD_SLOT( ThermodynamicState      , thermodynamic_state , INPUT );
     ADD_SLOT( ParticleRegions   , particle_regions , INPUT , OPTIONAL );
     ADD_SLOT( ParticleRegionCSG , region           , INPUT , OPTIONAL );
@@ -130,7 +131,9 @@ namespace exaStamp
       if (constant_T) {
         Ttarget = *T;
       } else if (linear_T) {
-        Ttarget = *Tstart + (*timestep)/(*simulation_end_iteration) * (*Tstop-*Tstart);
+        double delta = (*timestep)-(*simulation_start_iteration);
+        double frac = delta/((*simulation_end_iteration) - (*simulation_start_iteration));
+        Ttarget = *Tstart + frac * ( (*Tstop)-(*Tstart) );
       } else if (interpolated_T) {
         double tcurrent = dt * (*timestep);
         const TempVec& tempvec = *Tserie;        
