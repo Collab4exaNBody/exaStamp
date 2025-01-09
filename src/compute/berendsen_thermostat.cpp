@@ -30,41 +30,113 @@ namespace exaStamp
     using has_type_field_t = typename GridT::CellParticles::template HasField < field::_type > ;
     static constexpr bool has_type_field = has_type_field_t::value;
 
+    // compile time constant indicating if grid has id field
     using has_id_field_t = typename GridT::CellParticles::template HasField < field::_id > ;
     static constexpr bool has_id_field = has_id_field_t::value;
 
+    using TimeVec = std::vector<double>;
+    using TempVec = std::vector<double>;
+    
     ADD_SLOT( GridT          , grid    , INPUT_OUTPUT);
     ADD_SLOT( ParticleSpecies, species , INPUT , REQUIRED );
-    ADD_SLOT( double         , tau     , INPUT , 0.1 );
-    ADD_SLOT( double         , T       , INPUT , REQUIRED );
     ADD_SLOT( double         , dt      , INPUT , REQUIRED );
+    ADD_SLOT( long           , timestep     , INPUT , REQUIRED );
+    ADD_SLOT( long           , simulation_end_iteration , INPUT , REQUIRED );    
     ADD_SLOT( ThermodynamicState      , thermodynamic_state , INPUT );
-
     ADD_SLOT( ParticleRegions   , particle_regions , INPUT , OPTIONAL );
     ADD_SLOT( ParticleRegionCSG , region           , INPUT , OPTIONAL );
+    ADD_SLOT( double         , tau     , INPUT , 0.1 );
+    ADD_SLOT( double         , T       , INPUT , OPTIONAL );
+    ADD_SLOT( double         , Tstart  , INPUT , OPTIONAL );
+    ADD_SLOT( double         , Tstop   , INPUT , OPTIONAL );
+    ADD_SLOT( TimeVec        , tserie  , INPUT , OPTIONAL );
+    ADD_SLOT( TempVec        , Tserie  , INPUT , OPTIONAL );    
 
+    template<typename YFunc>
+    static inline double interpolate( const std::vector<double>& X , double ix, YFunc yfunc )
+    {
+      assert( std::is_sorted( X.begin() , X.end() ) );
+      size_t N = X.size();
+      
+      if( N == 0 )
+      {
+        return 0.0;
+      }
+      if( N == 1 )
+      {
+        return yfunc(0);
+      }
+      if( ix < X[0] )
+      {
+        return yfunc(0);
+      }
+      
+      size_t k = 0;
+      while( ix > X[k+1] && k<(N-2) ) { ++k; }
+      
+      if( ix > X[k+1] )
+      {
+        return yfunc(k+1);
+      }
+
+      double t = (ix - X[k]) / ( X[k+1] - X[k] );
+      assert( t>=0 && t<=1.0 );
+
+      return yfunc(k)*(1.-t) + yfunc(k+1)*t;
+    }
+    
   public:
 
     // -----------------------------------------------
     // -----------------------------------------------
     inline void execute ()  override final
     {
-      static const double k = UnityConverterHelper::convert(legacy_constant::boltzmann, "J/K");
 
       if( grid->number_of_cells() == 0 ) return;
 
       GridT& grid              = *(this->grid);
       const double tau         = *(this->tau);
-      const double T           = *(this->T);
       const ThermodynamicState& sim_info = *(this->thermodynamic_state);
       double dt                = *(this->dt);
       ParticleSpecies& species = *(this->species);
-      long natoms = sim_info.particle_count();
-      static constexpr double conv_temperature = 1.e4 * legacy_constant::atomicMass / legacy_constant::boltzmann;      
-      double T_cur = sim_info.temperature_scal() / natoms * conv_temperature;
 
-      double lambda = sqrt( 1. + dt * ( T/T_cur - 1 ) / tau );
-      ldbg << "berendsen: tau="<<tau<<", T="<<T<<", dt="<<dt<<std::endl;
+      // Getting current temperature
+      static constexpr double conv_temperature = 1.e4 * legacy_constant::atomicMass / legacy_constant::boltzmann;
+      double Tcurrent = sim_info.temperature_scal() / sim_info.particle_count() * conv_temperature;
+
+      // Checking definition of target temperature
+      bool constant_T = T.has_value();
+      bool linear_T = Tstart.has_value() && Tstop.has_value();
+      bool interpolated_T = tserie.has_value() && Tserie.has_value();
+      if ( (constant_T && linear_T && interpolated_T) || (constant_T && linear_T) || (constant_T && interpolated_T) || (linear_T && interpolated_T)) {
+        lerr << "Multiple definition of target temperature are provided" << std::endl;
+        lout << "You must define the target temperature using one of the three following solutions:" << std::endl;
+        lout << "berendsen_thermostat:" << std::endl;
+        lout << "  T: 300 K" << std::endl;
+        lout << "  tau: 0.1 ps" << std::endl;
+        lout << "berendsen_thermostat:" << std::endl;
+        lout << "  Tstart: 300 K" << std::endl;
+        lout << "  Tstop: 300 K" << std::endl;        
+        lout << "  tau: 0.1 ps" << std::endl;
+        lout << "berendsen_thermostat:" << std::endl;
+        lout << "  tserie: [0, 1]" << std::endl;
+        lout << "  Tserie: [300, 300]" << std::endl;        
+        lout << "  tau: 0.1 ps" << std::endl;
+        std::abort();
+      }
+
+      // Getting target temperature      
+      double Ttarget = 0.;
+      if (constant_T) {
+        Ttarget = *T;
+      } else if (linear_T) {
+        Ttarget = *Tstart + (*timestep)/(*simulation_end_iteration) * (*Tstop-*Tstart);
+      } else if (interpolated_T) {
+        double tcurrent = dt * (*timestep);
+        const TempVec& tempvec = *Tserie;        
+        Ttarget = interpolate( *tserie , tcurrent , [&tempvec](size_t i)->double { return tempvec[i]; } );
+      }
+      const double lambda = sqrt( 1. + dt/tau*(Ttarget/Tcurrent - 1.0));
 
       size_t nSpecies = species.size();
       double masses[ nSpecies ];
@@ -104,13 +176,9 @@ namespace exaStamp
           const auto* __restrict__ rz = cells[i][field::rz];
           [[maybe_unused]] const auto* __restrict__ ids = cells[i].field_pointer_or_null(field::id);
 
-          auto* __restrict__ fx = cells[i][field::fx]; ONIKA_ASSUME_ALIGNED(fx);
-          auto* __restrict__ fy = cells[i][field::fy]; ONIKA_ASSUME_ALIGNED(fy);
-          auto* __restrict__ fz = cells[i][field::fz]; ONIKA_ASSUME_ALIGNED(fz);
-
-          const auto* __restrict__ vx = cells[i][field::vx];
-          const auto* __restrict__ vy = cells[i][field::vy];
-          const auto* __restrict__ vz = cells[i][field::vz];
+          auto* __restrict__ vx = cells[i][field::vx];
+          auto* __restrict__ vy = cells[i][field::vy];
+          auto* __restrict__ vz = cells[i][field::vz];
 
           const auto* __restrict__ atom_type = cells[i].field_pointer_or_null(field::type);
           const unsigned int n = cells[i].size();
@@ -123,9 +191,9 @@ namespace exaStamp
             if constexpr (has_id_field) { p_id = ids[j]; }
             if( prcsg.contains( Vec3d{rx[j],ry[j],rz[j]} , p_id ) )
             {
-              fx[j] *= lambda ;
-              fy[j] *= lambda ;
-              fz[j] *= lambda ;              
+              vx[j] *= lambda ;
+              vy[j] *= lambda ;
+              vz[j] *= lambda ;              
             }
           }
 
@@ -133,50 +201,6 @@ namespace exaStamp
         GRID_OMP_FOR_END
 	    }
 
-    }
-
-    inline void yaml_initialize(const YAML::Node& node) override final
-    {
-      YAML::Node tmp;
-      if( node.IsScalar() )
-      {
-        tmp["T"] = node;
-      }
-      else { tmp = node; }
-      this->OperatorNode::yaml_initialize( tmp );
-    }
-
-    // -----------------------------------------------
-    // -----------------------------------------------
-    inline std::string documentation() const override final
-    {
-      return R"EOF(
-Apply a berendsen thermostat on particles.
-if a single value is given as the node description, it is understood as the T parameter (temperature)
-
-Uses formulation as in LAMMPS documentation :
-=============================================
-Apply a Berendsen thermostat as described in (Schneider) to a group of atoms which models an interaction with a background implicit solvent. Used with fix nve, this command performs Brownian dynamics (BD), since the total force on each atom will have the form:
-F = Fc + Ff + Fr
-Ff = - (m / damp) v
-Fr is proportional to sqrt(Kb T m / (dt damp))
-Fc is the conservative force computed via the usual inter-particle interactions (pair_style, bond_style, etc).
-The Ff and Fr terms are added by this fix on a per-particle basis. See the pair_style dpd/tstat command for a thermostatting option that adds similar terms on a pairwise basis to pairs of interacting particles.
-Ff is a frictional drag or viscous damping term proportional to the particle’s velocity. The proportionality constant for each atom is computed as m/damp, where m is the mass of the particle and damp is the damping factor specified by the user.
-Fr is a force due to solvent atoms at a temperature T randomly bumping into the particle. As derived from the fluctuation/dissipation theorem, its magnitude as shown above is proportional to sqrt(Kb T m / dt damp), where Kb is the Boltzmann constant, T is the desired temperature, m is the mass of the particle, dt is the timestep size, and damp is the damping factor. Random numbers are used to randomize the direction and magnitude of this force as described in (Dunweg), where a uniform random number is used (instead of a Gaussian random number) for speed.
-
-exemple 1:
-==========
-berendsen_thermostat: 500 K
-
-exemple 2:
-==========
-berendsen_thermostat:
-  T: 800 K
-  tau: 0.1 ps
-
-Note: do not process particles in ghost layers.
-)EOF";
     }
 
   };
