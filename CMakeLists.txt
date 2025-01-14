@@ -14,7 +14,7 @@ endif()
 # ===============
 # === Project ===
 # ===============
-project(exaStamp VERSION 3.5 LANGUAGES C CXX)
+project(exaStamp VERSION 3.6 LANGUAGES C CXX)
 
 # ===========================
 # === CMake customization ===
@@ -58,7 +58,7 @@ endforeach()
 # ==============================
 # === Application version    ===
 # ==============================
-set(EXASTAMP_VERSION "exaStamp-3.5") 
+set(EXASTAMP_VERSION "exaStamp-${CMAKE_PROJECT_VERSION}")
 message(STATUS "Project version : ${EXASTAMP_VERSION}")
 
 # ==================================
