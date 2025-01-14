@@ -1,6 +1,10 @@
 # no-seq enable-if-EXASTAMP_ENABLE_PERF_TESTS nthreads=max
 
 configuration:
+  logging:
+    debug: true
+  debug:
+    filter: [ ".*cc_label" , ".*write_cc_table" ]
   profiling:
     summary: true # default is deactivated, activate with --profiling-summary true
 
@@ -40,10 +44,15 @@ lj_compute_force:
   parameters: { epsilon: 9.340E-20 J , sigma: 0.227E-09 m }
   rcut: 5.68 ang
 
-dump_analysis: dump_data_grid_vtk
+dump_analysis: dump_data_CCL
+
+cc_label:
+  grid_cell_field: mass
+  grid_cell_threshold: 100.0
+  cc_count_threshold: 15
 
 atom_cell_projection:
   splat_size: 3.0
   grid_subdiv: 3
-  fields: [ count , mv2 , vnorm ]
+  fields: [ mass , mv2 , processor_id ]
 

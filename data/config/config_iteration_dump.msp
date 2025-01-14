@@ -1,3 +1,23 @@
+# 
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+# 
+#   http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+# 
+
+
 # define when log must be printed
 trigger_dump_data:
   rebind: { freq: simulation_dump_frequency , result: trigger_dump_data }
@@ -96,13 +116,14 @@ dump_data_grid_vtk:
 #dump_data: dump_data_stamp_v3
 dump_data: dump_data_atoms
 
-dump_data_CCL_analysis:
+dump_data_CCL:
   - grid_flavor
   - resize_grid_cell_values
   - atom_cell_projection
-  - grid_connected_components
-  - timestep_file: "grid_label_analysis_%09d.csv"
-  - grid_label_analysis
+  - cc_label
+  - timestep_file: "cc_%09d"
+  - write_grid_vtk
+  - write_cc_table
 
 dump_data_xyz:
   - timestep_file: "exaStamp_%09d.xyz"
@@ -121,13 +142,6 @@ dump_data_lmp:
       body:
         - message: { endl: true }
   - write_lmp_file
-
-dump_data_slice_analysis:
-  - grid_flavor
-  - resize_grid_cell_values
-  - atom_cell_projection
-  - timestep_file: "grid_slice_analysis_%09d.csv"
-  - grid_slice_analysis
 
 dump_analysis: dump_data_grid_vtk
 
