@@ -178,7 +178,7 @@ namespace exaStamp
               ++ nb_neighbors;
               IJK nbh_cell_loc;
               IJK nbh_subcell_loc;
-              subcell_neighbor( center_cell_loc, center_subcell_loc, subdiv, IJK{ci,cj,ck}, nbh_cell_loc, nbh_subcell_loc );
+              gcv_subcell_neighbor( center_cell_loc, center_subcell_loc, subdiv, IJK{ci,cj,ck}, nbh_cell_loc, nbh_subcell_loc );
               if( grid->contains(nbh_cell_loc) )
               {
                 ++ nb_contribs;
@@ -288,7 +288,7 @@ namespace exaStamp
               IJK nbh { ni, nj, nk };
               IJK nbh_cell_loc;
               IJK nbh_subcell_loc;
-              subcell_neighbor( cell_loc, sc, subdiv, nbh, nbh_cell_loc, nbh_subcell_loc );
+              gcv_subcell_neighbor( cell_loc, sc, subdiv, nbh, nbh_cell_loc, nbh_subcell_loc );
               if( grid->contains(nbh_cell_loc) )
               {
                 ssize_t nbh_cell_i = grid_ijk_to_index( dims , nbh_cell_loc );
@@ -462,7 +462,7 @@ namespace exaStamp
             {
               IJK nbh_cell_loc;
               IJK nbh_subcell_loc;
-              subcell_neighbor( center_cell_loc, center_subcell_loc, subdiv, IJK{ci,cj,ck}, nbh_cell_loc, nbh_subcell_loc );
+              gcv_subcell_neighbor( center_cell_loc, center_subcell_loc, subdiv, IJK{ci,cj,ck}, nbh_cell_loc, nbh_subcell_loc );
               ssize_t nbh_cell_i = grid_ijk_to_index( dims , nbh_cell_loc );
               ssize_t nbh_subcell_i = grid_ijk_to_index( IJK{subdiv,subdiv,subdiv} , nbh_subcell_loc );
               assert( nbh_cell_i>=0 && nbh_cell_i<n_cells );
@@ -521,18 +521,6 @@ while ionic temperature (Ti) commes from particles kinetic energy.
       cell_loc = make_ijk( r / cell_size );
       Vec3d ro = r - (cell_loc*cell_size);
       subcell_loc = vclamp( make_ijk(ro / sub_cellsize) , 0 , subdiv-1 );
-    }
-
-    static inline void subcell_neighbor( const IJK& cell_loc, const IJK& subcell_loc, ssize_t subdiv, IJK ninc, IJK& nbh_cell_loc, IJK& nbh_subcell_loc )
-    {
-      nbh_cell_loc = cell_loc;
-      nbh_subcell_loc = subcell_loc + ninc;
-      if(nbh_subcell_loc.i<0) { -- nbh_cell_loc.i; } else if(nbh_subcell_loc.i>=subdiv) { ++ nbh_cell_loc.i; }
-      if(nbh_subcell_loc.j<0) { -- nbh_cell_loc.j; } else if(nbh_subcell_loc.j>=subdiv) { ++ nbh_cell_loc.j; }
-      if(nbh_subcell_loc.k<0) { -- nbh_cell_loc.k; } else if(nbh_subcell_loc.k>=subdiv) { ++ nbh_cell_loc.k; }
-      nbh_subcell_loc.i = ( nbh_subcell_loc.i + subdiv ) % subdiv;
-      nbh_subcell_loc.j = ( nbh_subcell_loc.j + subdiv ) % subdiv;
-      nbh_subcell_loc.k = ( nbh_subcell_loc.k + subdiv ) % subdiv;      
     }
 
     static inline double Ce( double Te )
