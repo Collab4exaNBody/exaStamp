@@ -1,0 +1,60 @@
+# override parameters with command line options :
+# -----------------------------------------------
+#
+# exaStamp atom_dump_to_ccl_grid.msp --set-global-inputfile microjet.dump --set-global-outputfile ccl
+#
+
+configuration:
+  logging:
+    debug: true
+#    parallel: true
+  debug:
+    filter: [ ".*cc_label" , ".*write_cc_table" ]
+  profiling:
+    summary: true
+
+global:
+  ghost_dist: 10.0 ang
+  inputfile: microjet.dump
+  outputfile: ccl
+  enable_cell_values: true # crucial so that cell values are updated even where there are no particles
+
+cc_label:
+  grid_cell_field: mass
+  grid_cell_threshold: 100.0
+  cc_count_threshold: 15
+  cc_ordered: true
+
+atom_cell_projection:
+  splat_size: 0.1
+  grid_subdiv: 3
+  fields: [ mass , mv2 , processor_id ]
+
+simulation:
+  - mpi_comm_world
+  - grid_flavor_multimat
+  - global
+  - domain
+  - species
+  - read_input_file:
+      rebind: { filename: inputfile }
+      body: [ read_dump_atoms ]
+  - reduce_species
+  - simple_cost_model
+  - load_balance_rcb
+  - migrate_cell_particles
+  - ghost_comm_scheme
+  - ghost_update_all
+  - simulation_thermodynamic_state
+  - print_thermodynamic_state
+  - grid_stats
+  - memory_stats
+  - resize_grid_cell_values
+  - atom_cell_projection
+  - cc_label
+  - write_output_file:
+      rebind: { filename: outputfile }
+      body:
+        - write_grid_vtk
+        - write_cc_table
+

@@ -3,6 +3,7 @@
 configuration:
   logging:
     debug: true
+#    parallel: true
   debug:
     filter: [ ".*cc_label" , ".*write_cc_table" ]
   profiling:
@@ -22,16 +23,17 @@ input_data:
 
 global:
   dt: 1.0e-3 ps
-  simulation_end_iteration: 601000
-  simulation_log_frequency: 10
+  simulation_end_iteration: 600003
+  simulation_log_frequency: 1
   simulation_dump_frequency: 1000
-  analysis_dump_frequency: 10
+#  analysis_dump_frequency: 5
   rcut_inc: 1.25 ang
 
 +first_iteration:
   - grid_stats
   - chunk_neighbors_stats
   - memory_stats
+  - dump_data_CCL
 
 #dump_data:
 #  - memory_stats
@@ -43,6 +45,15 @@ compute_force:
 lj_compute_force:
   parameters: { epsilon: 9.340E-20 J , sigma: 0.227E-09 m }
   rcut: 5.68 ang
+
+dump_data_CCL:
+  - grid_flavor
+  - resize_grid_cell_values
+  - atom_cell_projection
+  - cc_label
+  - timestep_file: "cc_%09d"
+  - write_grid_vtk
+  - write_cc_table
 
 dump_analysis: dump_data_CCL
 
