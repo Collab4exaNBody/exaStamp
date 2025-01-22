@@ -3,7 +3,6 @@ init_prolog:
       defbox: { extension: [ 1.0 , 1.0 , 1.0 ] }
   
 init_epilog:
-  - domain_volume
   - init_npt
   - is_npt
 
@@ -18,7 +17,9 @@ first_iteration:
   - default_print_thermodynamic_state: { lb_flag: false , move_flag: false , print_header: true }
   - default_dump_thermodynamic_state
   - setup_npt
-  - couple_npt
+  - first_couple:
+      condition: is_npt
+      body: [ couple_npt ]
   - next_time_step
   
 numerical_scheme:

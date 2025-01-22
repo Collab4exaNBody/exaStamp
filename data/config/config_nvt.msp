@@ -1,5 +1,4 @@
 init_epilog:
-  - domain_volume
   - init_npt
 
 first_iteration:
@@ -11,13 +10,13 @@ first_iteration:
   - setup_npt  
   - next_time_step
 
-numerical_scheme: numerical_scheme_npt
+numerical_scheme: numerical_scheme_nvt
 
-numerical_scheme_npt:
-  - initial_integrate
-  - final_integrate
+numerical_scheme_nvt:
+  - initial_integrate_nvt
+  - final_integrate_nvt
 
-initial_integrate:
+initial_integrate_nvt:
   - simulation_thermodynamic_state
   - nhc_temp_integrate
   - nh_v_temp:
@@ -29,7 +28,7 @@ initial_integrate:
   - check_and_update_particles
   - compute_all_forces_energy
   
-final_integrate:
+final_integrate_nvt:
   - push_f_v: {dt_scale: 0.5, xform_mode: IDENTITY}
   - simulation_thermodynamic_state
   - nhc_temp_integrate
