@@ -1,7 +1,3 @@
-includes:
-  - config_eam.msp
-  - rngstate4p4t.msp
-
 grid_flavor: grid_flavor_full
 
 species:
@@ -10,35 +6,53 @@ species:
       z: 73
       charge: 0 e-
 
+johnson_force:
+  rcut: 6.1 ang
+  parameters:
+    re: 2.860082 ang
+    fe: 3.08634 eV/ang
+    rhoe: 33.787168 eV/ang
+    alpha: 8.489528
+    beta: 4.527748
+    A: 0.611679 eV
+    B: 1.032101 eV
+    kappa: 0.176977
+    lambda: 0.353954
+    Fn0: -5.103845 eV
+    Fn1: -0.405524 eV
+    Fn2: 1.112997 eV
+    Fn3: -3.585325 eV
+    F0: -5.14 eV
+    F1: 0.0 eV
+    F2: 1.640098 eV
+    F3: 0.221375 eV
+    eta: 0.848843 eV
+    Fo: -5.141526 eV
+  
 langevin_thermostat:
   T: 300. K
   gamma: 0.1 ps^-1
-  seed: 384565
 
 compute_force:
-  - compute_force_sym
+  - johnson_force
   - langevin_thermostat
 
 input_data:
   - domain:
-      cell_size: 10. ang
-      periodic: [true, true, true]
-      expandable: false
-  - read_from_xyz_file:
-      - message: "Restart from initial xyz file ..."
-      - read_xyz_file_with_xform:
-          file: "Ta_disturbed.xyz"
-          pbc_adjust_xform: true
-    
+      cell_size: 5.0 ang
+  - bulk_lattice:
+      structure: CUSTOM
+      np: 2
+      types: [ Ta, Ta]
+      positions: [ [0.25,0.25,0.25], [0.75,0.75,0.75] ]
+      size: [ 3.3024 ang , 3.3024 ang , 3.3024 ang ]
+      repeat: [ 10, 10, 10 ]
+        
 global:
-  simulation_end_iteration: 20
-  simulation_log_frequency: 5
+  simulation_end_iteration: 1000
+  simulation_log_frequency: 20
   simulation_dump_thermo_frequency: -1
   simulation_dump_frequency: -1
   rcut_inc: 1.0 ang
-  dt: 1.0e-3 ps
-
-simulation_epilog:
-  - check_values:
-      file: check_langevin_constant_T.dat
-      threshold: 1.e-10  
+  dt: 2.0e-3 ps
+  init_temperature: 5. K
