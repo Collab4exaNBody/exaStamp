@@ -1,0 +1,44 @@
+includes:
+  - config_eam.msp
+    
+grid_flavor: grid_flavor_full
+
+species:
+  - Ta:
+      mass: 180.95 Da
+      z: 73
+      charge: 0 e-
+
+langevin_thermostat:
+  Tstart: 300. K
+  Tstop: 5. K  
+  gamma: 0.1 ps^-1
+  seed: 168411
+
+compute_force:
+  - compute_force_sym
+  - langevin_thermostat
+
+input_data:
+  - domain:
+      cell_size: 10. ang
+      periodic: [true, true, true]
+      expandable: false
+  - read_from_xyz_file:
+      - message: "Restart from initial xyz file ..."
+      - read_xyz_file_with_xform:
+          file: "Ta_disturbed.xyz"
+          pbc_adjust_xform: true
+    
+global:
+  simulation_end_iteration: 20
+  simulation_log_frequency: 5
+  simulation_dump_thermo_frequency: -1
+  simulation_dump_frequency: -1
+  rcut_inc: 1.0 ang
+  dt: 1.0e-3 ps
+
+simulation_epilog:
+  - check_values:
+      file: check_langevin_linear_T.dat
+      threshold: 1.e-10  
