@@ -13,10 +13,12 @@ input_data:
   - domain:
       cell_size: 6.4 ang
   - bulk_lattice:
-      structure: BCC
+      structure: CUSTOM
+      np: 2
       types: [ Ta, Ta]
+      positions: [ [0.25,0.25,0.25], [0.75,0.75,0.75] ]
       size: [ 3.2 ang , 3.1 ang , 3.3 ang ]
-      repeat: [ 20,20,20 ]
+      repeat: [ 10, 10, 10 ]
     
 global:
   simulation_end_iteration: 100
