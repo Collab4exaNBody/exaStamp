@@ -84,7 +84,9 @@ namespace exaStamp
         update_count = 0;
         for(size_t cell_i=0;cell_i<n_cells;cell_i++) if( ! grid->is_ghost_cell(cell_i) )
         {
+#         ifndef NDEBUG
           const auto * __restrict__ ids = cells[cell_i][field::id];
+#         endif
           const auto *  __restrict__ cmol = cells[cell_i][cmol_field];
           auto * __restrict__ mol_ids   = cells[cell_i][idmol_field];
           size_t n = cells[cell_i].size();
@@ -301,7 +303,6 @@ namespace exaStamp
       {
         const auto * __restrict__ ufpos = cells[cell_i][ufpos_field];
         const auto * __restrict__ mol_ids = cells[cell_i][idmol_field];
-        const auto * __restrict__ ids = cells[cell_i][field::id];
         auto * __restrict__ rx   = cells[cell_i][field::rx];
         auto * __restrict__ ry   = cells[cell_i][field::ry];
         auto * __restrict__ rz   = cells[cell_i][field::rz];

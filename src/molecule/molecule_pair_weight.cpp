@@ -112,7 +112,9 @@ namespace exaStamp
             [cells,cell_a,no_intramolecular,field_idmol,&cgpw,idmol_a,id_a,type_a,&molid_weight_map,&sp ,&n_total_nbh, &n_positive_weights, &chemPotMap, &mcp]
             ( unsigned int p_a, size_t cell_b, unsigned int p_b , size_t p_nbh_index )
             {
+#             ifndef NDEBUG            
               const uint64_t* idmol_b = cells[cell_b].field_pointer_or_null(field_idmol);
+#             endif
               const uint64_t* id_b    = cells[cell_b][field::id];
 
               // assert( cell_a>=0 && cell_a<n_cells );
