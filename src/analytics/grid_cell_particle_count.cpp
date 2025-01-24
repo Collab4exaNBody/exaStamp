@@ -56,7 +56,7 @@ namespace exaStamp
       {
         GRID_OMP_FOR_BEGIN(dims,i,cell_loc, schedule(dynamic) )
         {
-	        const Vec3d cell_origin = grid->cell_position( cell_loc );
+	  const Vec3d cell_origin = grid->cell_position( cell_loc );
           const size_t n = cells[i].size();
           const double* __restrict__ rx = cells[i][field::rx]; ONIKA_ASSUME_ALIGNED(rx);
           const double* __restrict__ ry = cells[i][field::ry]; ONIKA_ASSUME_ALIGNED(ry);
