@@ -29,7 +29,6 @@ numerical_scheme_verlet:
 #    - cost_model_fitting_prolog
     - compute_all_forces_energy
     - verlet_second_half
-    - thermostat
 #    - cost_model_fitting_epilog
 
 
@@ -39,13 +38,11 @@ numerical_scheme_basic:
   - push_f_v: { xform_mode: IDENTITY }
   - push_v_r: { xform_mode: INV_XFORM }
   - check_and_update_particles
-  - thermostat
   
 numerical_scheme_overdamped:
   - compute_all_forces_energy
   - push_f_r: { xform_mode: INV_XFORM }
   - check_and_update_particles
-  - thermostat
 
 numerical_scheme: numerical_scheme_verlet
 

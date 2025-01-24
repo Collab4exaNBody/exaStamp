@@ -1,0 +1,30 @@
+grid_flavor: grid_flavor_full
+
+species:
+  - Ta:
+      mass: 180.95 Da
+      z: 73
+      charge: 0 e-
+    
+compute_force:
+  - compute_force_sym
+  
+input_data:
+  - domain:
+      cell_size: 6.4 ang
+  - bulk_lattice:
+      structure: CUSTOM
+      np: 2
+      types: [ Ta, Ta]
+      positions: [ [0.25,0.25,0.25], [0.75,0.75,0.75] ]
+      size: [ 3.2 ang , 3.1 ang , 3.3 ang ]
+      repeat: [ 10, 10, 10 ]
+    
+global:
+  simulation_end_iteration: 100
+  simulation_log_frequency: 10
+  simulation_dump_thermo_frequency: 10
+  simulation_dump_frequency: -1
+  rcut_inc: 2.0 ang
+  dt: 1.0e-3 ps
+  init_temperature: 5. K

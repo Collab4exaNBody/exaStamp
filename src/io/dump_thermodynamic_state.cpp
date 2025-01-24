@@ -25,6 +25,7 @@ namespace exaStamp
     ADD_SLOT( double             , electronic_energy   , INPUT, OPTIONAL );
     ADD_SLOT( std::string        , file                , INPUT , "thermodynamic_state.csv" );
     ADD_SLOT( bool               , force_flush_file    , INPUT , false );
+    ADD_SLOT( bool               , force_append_thermo , INPUT , false );    
     ADD_SLOT( bool               , is_dump_virial      , INPUT , false);
     // NEW
     ADD_SLOT(Domain              , domain              , INPUT , OPTIONAL, DocString{"Deformation box matrix"} );
@@ -80,7 +81,7 @@ namespace exaStamp
       double BETA  = acos(dot(c,a)/(B*C))/acos(-1.)*180. ;
       double GAMMA = acos(dot(a,b)/(B*C))/acos(-1.)*180. ;
 
-      oss <<format_string("%9ld % .6e %13ld  % .10e  % .10e  % .10e  % 9.3f  % 9.3f  % 9.3f  % 9.3f  % 9.3f  % 9.3f % 9.3f % 12.6f % 12.6f % 12.6f % 9.3f % 9.3f % 9.3f % 16.6e % 13.6f ",
+      oss <<format_string("%9ld % .6e %13ld  % .10e  % .10e  % .10e  % 9.12f  % 9.12f  % 9.12f  % 9.12f  % 9.12f  % 9.12f % 9.12f % 12.12f % 12.12f % 12.12f % 9.12f % 9.12f % 9.12f % 16.12f % 13.12f ",
         *timestep,
         *physical_time,
         sim_info.particle_count(),
@@ -88,12 +89,18 @@ namespace exaStamp
         sim_info.kinetic_energy_scal()       / sim_info.particle_count() * conv_energy,
         sim_info.potential_energy()          / sim_info.particle_count() * conv_energy,
         sim_info.temperature_scal()          / sim_info.particle_count() * conv_temperature,
-	sim_info.pressure().x                                            * conv_pressure,
-	sim_info.pressure().y                                            * conv_pressure,
-	sim_info.pressure().z                                            * conv_pressure,
-        sim_info.deviator().x                                            * conv_pressure,
-        sim_info.deviator().y                                            * conv_pressure,
-	sim_info.deviator().z                                            * conv_pressure,
+	sim_info.full_stress_tensor().m11                                            * conv_pressure,
+	sim_info.full_stress_tensor().m22                                            * conv_pressure,
+	sim_info.full_stress_tensor().m33                                            * conv_pressure,
+	// sim_info.pressure().x                                            * conv_pressure,
+	// sim_info.pressure().y                                            * conv_pressure,
+	// sim_info.pressure().z                                            * conv_pressure,
+	sim_info.full_stress_tensor().m12                                            * conv_pressure,
+	sim_info.full_stress_tensor().m13                                            * conv_pressure,
+	sim_info.full_stress_tensor().m23                                            * conv_pressure,
+  //       sim_info.deviator().x                                            * conv_pressure,
+  //       sim_info.deviator().y                                            * conv_pressure,
+	// sim_info.deviator().z                                            * conv_pressure,
 	A, B, C, ALPHA, BETA, GAMMA, sim_info.volume(), conv_density * sim_info.mass()/sim_info.volume()) ;
 
       if( electronic_energy.has_value() )
@@ -115,7 +122,7 @@ namespace exaStamp
       }
       oss << "\n";
 
-      FileAppendWriteBuffer::instance().append_to_file( *file , oss.str() );
+      FileAppendWriteBuffer::instance().append_to_file( *file , oss.str(), *force_append_thermo );
 
       if( *force_flush_file )
       {

@@ -14,6 +14,7 @@
 #include <onika/memory/allocator.h>
 #include <exanb/core/parallel_random.h>
 #include <exanb/grid_cell_particles/particle_region.h>
+#include <exaStamp/compute/thermodynamic_state.h>
 
 namespace exaStamp
 {
@@ -23,29 +24,29 @@ namespace exaStamp
     class GridT ,
     class = AssertGridHasFields< GridT, field::_ax, field::_ay, field::_az, field::_vx, field::_vy, field::_vz >
     >
-  class LangevinThermostatNode : public OperatorNode
+  class BerendsenThermostatNode : public OperatorNode
   {
     // compile time constant indicating if grid has type field
     using has_type_field_t = typename GridT::CellParticles::template HasField < field::_type > ;
     static constexpr bool has_type_field = has_type_field_t::value;
-    
+
     // compile time constant indicating if grid has id field
     using has_id_field_t = typename GridT::CellParticles::template HasField < field::_id > ;
     static constexpr bool has_id_field = has_id_field_t::value;
 
     using TimeVec = std::vector<double>;
     using TempVec = std::vector<double>;
-
+    
     ADD_SLOT( GridT          , grid    , INPUT_OUTPUT);
     ADD_SLOT( ParticleSpecies, species , INPUT , REQUIRED );
     ADD_SLOT( double         , dt      , INPUT , REQUIRED );
     ADD_SLOT( long           , timestep     , INPUT , REQUIRED );
-    ADD_SLOT( long           , simulation_end_iteration , INPUT , REQUIRED );    
-    ADD_SLOT( long           , simulation_start_iteration , INPUT , 0 );    
+    ADD_SLOT( long           , simulation_end_iteration , INPUT , REQUIRED );
+    ADD_SLOT( long           , simulation_start_iteration , INPUT , 0 );
+    ADD_SLOT( ThermodynamicState      , thermodynamic_state , INPUT );
     ADD_SLOT( ParticleRegions   , particle_regions , INPUT , OPTIONAL );
     ADD_SLOT( ParticleRegionCSG , region           , INPUT , OPTIONAL );
-    ADD_SLOT( double         , gamma   , INPUT , 0.1 );
-    ADD_SLOT( size_t         , seed    , INPUT , OPTIONAL );
+    ADD_SLOT( double         , tau     , INPUT , 0.1 );
     ADD_SLOT( double         , T       , INPUT , OPTIONAL );
     ADD_SLOT( double         , Tstart  , INPUT , OPTIONAL );
     ADD_SLOT( double         , Tstop   , INPUT , OPTIONAL );
@@ -91,14 +92,18 @@ namespace exaStamp
     // -----------------------------------------------
     inline void execute ()  override final
     {
-      static const double k = UnityConverterHelper::convert(legacy_constant::boltzmann, "J/K");
 
       if( grid->number_of_cells() == 0 ) return;
 
       GridT& grid              = *(this->grid);
-      const double gamma       = *(this->gamma);
+      const double tau         = *(this->tau);
+      const ThermodynamicState& sim_info = *(this->thermodynamic_state);
       double dt                = *(this->dt);
       ParticleSpecies& species = *(this->species);
+
+      // Getting current temperature
+      static constexpr double conv_temperature = 1.e4 * legacy_constant::atomicMass / legacy_constant::boltzmann;
+      double Tcurrent = sim_info.temperature_scal() / sim_info.particle_count() * conv_temperature;
 
       // Checking definition of target temperature
       bool constant_T = T.has_value();
@@ -107,17 +112,17 @@ namespace exaStamp
       if ( (constant_T && linear_T && interpolated_T) || (constant_T && linear_T) || (constant_T && interpolated_T) || (linear_T && interpolated_T)) {
         lerr << "Multiple definition of target temperature are provided" << std::endl;
         lout << "You must define the target temperature using one of the three following solutions:" << std::endl;
-        lout << "langevin_thermostat:" << std::endl;
+        lout << "berendsen_thermostat:" << std::endl;
         lout << "  T: 300 K" << std::endl;
-        lout << "  gamma: 0.1 ps" << std::endl;
-        lout << "langevin_thermostat:" << std::endl;
+        lout << "  tau: 0.1 ps" << std::endl;
+        lout << "berendsen_thermostat:" << std::endl;
         lout << "  Tstart: 300 K" << std::endl;
         lout << "  Tstop: 300 K" << std::endl;        
-        lout << "  gamma: 0.1 ps" << std::endl;
-        lout << "langevin_thermostat:" << std::endl;
+        lout << "  tau: 0.1 ps" << std::endl;
+        lout << "berendsen_thermostat:" << std::endl;
         lout << "  tserie: [0, 1]" << std::endl;
         lout << "  Tserie: [300, 300]" << std::endl;        
-        lout << "  gamma: 0.1 ps" << std::endl;
+        lout << "  tau: 0.1 ps" << std::endl;
         std::abort();
       }
 
@@ -134,8 +139,8 @@ namespace exaStamp
         const TempVec& tempvec = *Tserie;        
         Ttarget = interpolate( *tserie , tcurrent , [&tempvec](size_t i)->double { return tempvec[i]; } );
       }
-      ldbg << "langevin: gamma="<<gamma<<", T="<<Ttarget<<", dt="<<dt<<std::endl;
-      
+      const double lambda = sqrt( 1. + dt/tau*(Ttarget/Tcurrent - 1.0));
+
       size_t nSpecies = species.size();
       double masses[ nSpecies ];
       for(size_t i=0;i<nSpecies;i++)
@@ -164,8 +169,6 @@ namespace exaStamp
 
 #     pragma omp parallel
       {
-        auto& re = rand::random_engine();
-        std::normal_distribution<double> f_rand(0.0,1.0);
 
         GRID_OMP_FOR_BEGIN(dims-2*gl,_,loc, schedule(dynamic) )
         {
@@ -176,13 +179,9 @@ namespace exaStamp
           const auto* __restrict__ rz = cells[i][field::rz];
           [[maybe_unused]] const auto* __restrict__ ids = cells[i].field_pointer_or_null(field::id);
 
-          auto* __restrict__ fx = cells[i][field::fx]; ONIKA_ASSUME_ALIGNED(fx);
-          auto* __restrict__ fy = cells[i][field::fy]; ONIKA_ASSUME_ALIGNED(fy);
-          auto* __restrict__ fz = cells[i][field::fz]; ONIKA_ASSUME_ALIGNED(fz);
-
-          const auto* __restrict__ vx = cells[i][field::vx];
-          const auto* __restrict__ vy = cells[i][field::vy];
-          const auto* __restrict__ vz = cells[i][field::vz];
+          auto* __restrict__ vx = cells[i][field::vx];
+          auto* __restrict__ vy = cells[i][field::vy];
+          auto* __restrict__ vz = cells[i][field::vz];
 
           const auto* __restrict__ atom_type = cells[i].field_pointer_or_null(field::type);
           const unsigned int n = cells[i].size();
@@ -195,9 +194,9 @@ namespace exaStamp
             if constexpr (has_id_field) { p_id = ids[j]; }
             if( prcsg.contains( Vec3d{rx[j],ry[j],rz[j]} , p_id ) )
             {
-              fx[j] +=  /* Ff */ - ( mass / gamma ) * vx[j]  +  /* Fr */ f_rand(re) * std::sqrt( 2.0 * k * Ttarget * mass / ( dt * gamma ) ) ;
-              fy[j] +=  /* Ff */ - ( mass / gamma ) * vy[j]  +  /* Fr */ f_rand(re) * std::sqrt( 2.0 * k * Ttarget * mass / ( dt * gamma ) ) ;
-              fz[j] +=  /* Ff */ - ( mass / gamma ) * vz[j]  +  /* Fr */ f_rand(re) * std::sqrt( 2.0 * k * Ttarget * mass / ( dt * gamma ) ) ;
+              vx[j] *= lambda ;
+              vy[j] *= lambda ;
+              vz[j] *= lambda ;              
             }
           }
 
@@ -207,60 +206,16 @@ namespace exaStamp
 
     }
 
-    inline void yaml_initialize(const YAML::Node& node) override final
-    {
-      YAML::Node tmp;
-      if( node.IsScalar() )
-      {
-        tmp["T"] = node;
-      }
-      else { tmp = node; }
-      this->OperatorNode::yaml_initialize( tmp );
-    }
-
-    // -----------------------------------------------
-    // -----------------------------------------------
-    inline std::string documentation() const override final
-    {
-      return R"EOF(
-Apply a langevin thermostat on particles.
-if a single value is given as the node description, it is understood as the T parameter (temperature)
-
-Uses formulation as in LAMMPS documentation :
-=============================================
-Apply a Langevin thermostat as described in (Schneider) to a group of atoms which models an interaction with a background implicit solvent. Used with fix nve, this command performs Brownian dynamics (BD), since the total force on each atom will have the form:
-F = Fc + Ff + Fr
-Ff = - (m / damp) v
-Fr is proportional to sqrt(Kb T m / (dt damp))
-Fc is the conservative force computed via the usual inter-particle interactions (pair_style, bond_style, etc).
-The Ff and Fr terms are added by this fix on a per-particle basis. See the pair_style dpd/tstat command for a thermostatting option that adds similar terms on a pairwise basis to pairs of interacting particles.
-Ff is a frictional drag or viscous damping term proportional to the particle’s velocity. The proportionality constant for each atom is computed as m/damp, where m is the mass of the particle and damp is the damping factor specified by the user.
-Fr is a force due to solvent atoms at a temperature T randomly bumping into the particle. As derived from the fluctuation/dissipation theorem, its magnitude as shown above is proportional to sqrt(Kb T m / dt damp), where Kb is the Boltzmann constant, T is the desired temperature, m is the mass of the particle, dt is the timestep size, and damp is the damping factor. Random numbers are used to randomize the direction and magnitude of this force as described in (Dunweg), where a uniform random number is used (instead of a Gaussian random number) for speed.
-
-exemple 1:
-==========
-langevin_thermostat: 500 K
-
-exemple 2:
-==========
-langevin_thermostat:
-  T: 800 K
-  gamma: 0.25
-
-Note: do not process particles in ghost layers.
-)EOF";
-    }
-
   };
 
-  template<class GridT> using LangevinThermostatNodeTmpl = LangevinThermostatNode<GridT>;
+  template<class GridT> using BerendsenThermostatNodeTmpl = BerendsenThermostatNode<GridT>;
 
   // === register factories ===
   CONSTRUCTOR_FUNCTION
   {
    OperatorNodeFactory::instance()->register_factory(
-    "langevin_thermostat",
-    make_grid_variant_operator< LangevinThermostatNodeTmpl >
+    "berendsen_thermostat",
+    make_grid_variant_operator< BerendsenThermostatNodeTmpl >
     );
   }
 
