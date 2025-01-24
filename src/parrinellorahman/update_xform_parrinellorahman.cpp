@@ -34,6 +34,7 @@ namespace exaStamp
     ADD_SLOT( std::string             , file       , INPUT , "parrinello_rahman.dat" );
     ADD_SLOT( long                    , timestep            , INPUT, REQUIRED);
     ADD_SLOT( double                  , physical_time       , INPUT );
+    ADD_SLOT( bool                    , force_append_thermo , INPUT , false );
 
     using PointerTuple = onika::soatl::FieldPointerTuple< GridT::CellParticles::Alignment , GridT::CellParticles::ChunkSize, field::_vx, field::_vy, field::_vz >;
 
@@ -100,7 +101,7 @@ namespace exaStamp
 			   newMat.m32,
 			   newMat.m33);
 
-      FileAppendWriteBuffer::instance().append_to_file( *file , oss.str() );
+      FileAppendWriteBuffer::instance().append_to_file( *file , oss.str(), *force_append_thermo);
 
       //const Mat3d newPM = parrinello_rahman_ctx->h * diag_matrix( reciprocal(newExt) );
       //ldbg << "newPM = "<< newPM << std::endl;

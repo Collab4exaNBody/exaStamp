@@ -24,7 +24,8 @@ namespace exaStamp
     ADD_SLOT( double             , electronic_energy   , INPUT, OPTIONAL );
     ADD_SLOT( std::string        , file                , INPUT , "thermodynamic_state.csv" );
     ADD_SLOT( bool               , force_flush_file    , INPUT , false );
-
+    ADD_SLOT( bool               , force_append_thermo , INPUT , false );
+    
     inline void execute () override final
     {
       static const double conv_temperature = 1.e4 * legacy_constant::atomicMass / legacy_constant::boltzmann ;
@@ -83,7 +84,7 @@ namespace exaStamp
       
       oss << "\n";
 
-      FileAppendWriteBuffer::instance().append_to_file( *file , oss.str() );
+      FileAppendWriteBuffer::instance().append_to_file( *file , oss.str(), *force_append_thermo );
 
       if( *force_flush_file )
       {
