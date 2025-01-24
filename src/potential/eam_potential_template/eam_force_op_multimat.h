@@ -115,8 +115,8 @@ namespace exaStamp
       template<class ComputeBufferT, class CellParticlesT>
       ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE void operator () (ComputeBufferT& ctx, CellParticlesT cells, size_t cell_a, size_t p_a, exanb::ComputePairParticleContextStop ) const
       {
-        static constexpr bool CPAA = NewtonSym &&   onika::cuda::gpu_device_execution_t::value;
-        static constexpr bool LOCK = NewtonSym && ! onika::cuda::gpu_device_execution_t::value;
+        static constexpr bool CPAA = NewtonSym &&   ONIKA_GPU_DEVICE_EXECUTION_TYPE::value;
+        static constexpr bool LOCK = NewtonSym && ! ONIKA_GPU_DEVICE_EXECUTION_TYPE::value;
         if constexpr ( LOCK ) cp_locks[cell_a][p_a].lock();
         if constexpr ( CPAA ) { ONIKA_CU_BLOCK_ATOMIC_ADD( m_rho_data[m_cell_particle_offset[cell_a]+p_a] , ctx.ext.rho ); }
         if constexpr (!CPAA ) { m_rho_data[m_cell_particle_offset[cell_a]+p_a] += ctx.ext.rho; }
@@ -128,8 +128,8 @@ namespace exaStamp
         ComputeBufferT& ctx, Vec3d dr,double d2, int type_a,
         CellParticlesT cells,size_t cell_b,size_t p_b , double /*scale */ ) const
       {
-        static constexpr bool CPAA = NewtonSym &&   onika::cuda::gpu_device_execution_t::value;
-        static constexpr bool LOCK = NewtonSym && ! onika::cuda::gpu_device_execution_t::value;
+        static constexpr bool CPAA = NewtonSym &&   ONIKA_GPU_DEVICE_EXECUTION_TYPE::value;
+        static constexpr bool LOCK = NewtonSym && ! ONIKA_GPU_DEVICE_EXECUTION_TYPE::value;
         if( m_pair_enabled!=nullptr && !m_pair_enabled[unique_pair_id(type_a,type_a)] ) return;
         //assert( cell_b < m_nb_cells );
         //assert( p_b < ( m_cell_offsets[cell_b+1] - m_cell_offsets[cell_b] ) );
@@ -219,8 +219,8 @@ namespace exaStamp
       template<class ComputeBufferT, class CellParticlesT>
       ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE void operator () (const ComputeBufferT& ctx, CellParticlesT cells, size_t cell_a, size_t p_a, exanb::ComputePairParticleContextStop ) const
       {
-        static constexpr bool CPAA = NewtonSym &&   onika::cuda::gpu_device_execution_t::value;
-        static constexpr bool LOCK = NewtonSym && ! onika::cuda::gpu_device_execution_t::value;
+        static constexpr bool CPAA = NewtonSym &&   ONIKA_GPU_DEVICE_EXECUTION_TYPE::value;
+        static constexpr bool LOCK = NewtonSym && ! ONIKA_GPU_DEVICE_EXECUTION_TYPE::value;
         if constexpr ( LOCK ) cp_locks[cell_a][p_a].lock();
         if constexpr ( CPAA )
         {
@@ -262,8 +262,8 @@ namespace exaStamp
         CellParticlesT cells,size_t cell_b, size_t p_b
         , double /*scale*/) const
       {
-        static constexpr bool CPAA = NewtonSym &&   onika::cuda::gpu_device_execution_t::value;
-        static constexpr bool LOCK = NewtonSym && ! onika::cuda::gpu_device_execution_t::value;
+        static constexpr bool CPAA = NewtonSym &&   ONIKA_GPU_DEVICE_EXECUTION_TYPE::value;
+        static constexpr bool LOCK = NewtonSym && ! ONIKA_GPU_DEVICE_EXECUTION_TYPE::value;
         static constexpr bool eflag = std::is_same_v<decltype(ctx.ext),ForceEnergyOpExtStorage> ;
         if( m_pair_enabled!=nullptr && !m_pair_enabled[unique_pair_id(type_a,type_a)] ) return;
 

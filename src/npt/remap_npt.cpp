@@ -43,37 +43,34 @@ namespace exaStamp
       Mat3d hprec = domain->xform() * diag_matrix( domain->extent() - domain->origin() );
       Mat3d h = hprec;
       
-      int i;
-      double expfac;
-      
       double dto2 = npt_ctx->dto/2.0;
       double dto4 = npt_ctx->dto/4.0;
       double dto8 = npt_ctx->dto/8.0;
 
       if (npt_ctx->pstyle == "TRICLINIC") {
         if (npt_ctx->p_flag[4]) {
-          expfac = exp(dto8*npt_ctx->omega_dot[0]);
+          const double expfac = exp(dto8*npt_ctx->omega_dot[0]);
           h.m13 *= expfac;
           h.m13 += dto4*(npt_ctx->omega_dot[5]*h.m23+npt_ctx->omega_dot[4]*h.m33);
           h.m13 *= expfac;
         }
         
         if (npt_ctx->p_flag[3]) {
-          expfac = exp(dto4*npt_ctx->omega_dot[1]);
+          const double expfac = exp(dto4*npt_ctx->omega_dot[1]);
           h.m23 *= expfac;
           h.m23 += dto2*(npt_ctx->omega_dot[3]*h.m33);
           h.m23 *= expfac;
         }
 
         if (npt_ctx->p_flag[5]) {
-          expfac = exp(dto4*npt_ctx->omega_dot[0]);
+          const double expfac = exp(dto4*npt_ctx->omega_dot[0]);
           h.m12 *= expfac;
           h.m12 += dto2*(npt_ctx->omega_dot[5]*h.m22);
           h.m12 *= expfac;
         }
 
         if (npt_ctx->p_flag[4]) {
-          expfac = exp(dto8*npt_ctx->omega_dot[0]);
+          const double expfac = exp(dto8*npt_ctx->omega_dot[0]);
           h.m13 *= expfac;
           h.m13 += dto4*(npt_ctx->omega_dot[5]*h.m23+npt_ctx->omega_dot[4]*h.m33);
           h.m13 *= expfac;
@@ -81,18 +78,18 @@ namespace exaStamp
       }
       
       if (npt_ctx->p_flag[0]) {
-      	expfac = exp(npt_ctx->dto*npt_ctx->omega_dot[0]);
+      	const double expfac = exp(npt_ctx->dto*npt_ctx->omega_dot[0]);
         h.m11 *= expfac;
       }
 
       if (npt_ctx->p_flag[1]) {
-      	expfac = exp(npt_ctx->dto*npt_ctx->omega_dot[1]);
+      	const double expfac = exp(npt_ctx->dto*npt_ctx->omega_dot[1]);
         h.m22 *= expfac;
         if (npt_ctx->scalexy) h.m12 *= expfac;
       }
 
       if (npt_ctx->p_flag[2]) {
-      	expfac = exp(npt_ctx->dto*npt_ctx->omega_dot[2]);
+      	const double expfac = exp(npt_ctx->dto*npt_ctx->omega_dot[2]);
         h.m33 *= expfac;
         if (npt_ctx->scalexz) h.m13 *= expfac;
         if (npt_ctx->scaleyz) h.m23 *= expfac;        
@@ -101,28 +98,28 @@ namespace exaStamp
       if (npt_ctx->pstyle == "TRICLINIC") {
 
         if (npt_ctx->p_flag[4]) {
-          expfac = exp(dto8*npt_ctx->omega_dot[0]);
+          const double expfac = exp(dto8*npt_ctx->omega_dot[0]);
           h.m13 *= expfac;
           h.m13 += dto4*(npt_ctx->omega_dot[5]*h.m23+npt_ctx->omega_dot[4]*h.m33);
           h.m13 *= expfac;
         }
       
         if (npt_ctx->p_flag[3]) {
-          expfac = exp(dto4*npt_ctx->omega_dot[1]);
+          const double expfac = exp(dto4*npt_ctx->omega_dot[1]);
           h.m23 *= expfac;
           h.m23 += dto2*(npt_ctx->omega_dot[3]*h.m33);
           h.m23 *= expfac;
         }
       
         if (npt_ctx->p_flag[5]) {
-          expfac = exp(dto4*npt_ctx->omega_dot[0]);
+          const double expfac = exp(dto4*npt_ctx->omega_dot[0]);
           h.m12 *= expfac;
           h.m12 += dto2*(npt_ctx->omega_dot[5]*h.m22);
           h.m12 *= expfac;
         }
       
         if (npt_ctx->p_flag[4]) {
-          expfac = exp(dto8*npt_ctx->omega_dot[0]);
+          const double expfac = exp(dto8*npt_ctx->omega_dot[0]);
           h.m13 *= expfac;
           h.m13 += dto4*(npt_ctx->omega_dot[5]*h.m23+npt_ctx->omega_dot[4]*h.m33);
           h.m13 *= expfac;
