@@ -1,4 +1,4 @@
-#include <exanb/core/basic_types.h>
+#include <onika/math/basic_types.h>
 
 #include <exanb/defbox/deformation.h>
 #include <exanb/defbox/deformation_math.h>

@@ -1,11 +1,11 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/grid.h>
-#include <exanb/core/basic_types.h>
+#include <onika/math/basic_types.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/fields.h>
+#include <exanb/core/grid_fields.h>
 #include <exanb/core/position_long_term_backup.h>
 
 #include <onika/soatl/packed_field_arrays.h>
@@ -151,7 +151,7 @@ namespace exaStamp
   template<class GridT> using FilteredPositionBackupLongTermMoveDataTmpl = FilteredPositionBackupLongTermMoveData<GridT>;  
 
  // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(backup_r_rf_lt_move_data)
   {
    OperatorNodeFactory::instance()->register_factory( "backup_r_rf_lt_move_data", make_grid_variant_operator< FilteredPositionBackupLongTermMoveDataTmpl > );
   }

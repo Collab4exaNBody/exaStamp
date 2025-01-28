@@ -1,11 +1,11 @@
 #include <exaStamp/particle_species/particle_specie_yaml.h>
 
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/log.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/log.h>
 #include <exanb/mpi/cost_weight_map.h>
-#include <exanb/core/quantity_yaml.h>
+#include <onika/physics/units.h>
 
 namespace exaStamp
 {
@@ -77,7 +77,7 @@ namespace exaStamp
   };
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(type_cost_map)
   {
     OperatorNodeFactory::instance()->register_factory( "type_costs", make_simple_operator<TypeCostMap> );
   }

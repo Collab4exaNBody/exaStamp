@@ -7,7 +7,7 @@
 #include <map>
 #include <string>
 #include <exanb/core/physics_constants.h>
-#include <exanb/core/log.h>
+#include <onika/log.h>
 
 namespace SnapExt
 {

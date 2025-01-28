@@ -1,14 +1,14 @@
 #include <exanb/core/domain.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <onika/memory/allocator.h> // for ONIKA_ASSUME_ALIGNED macro
 #include <exanb/core/thread.h> // for ONIKA_ASSUME_ALIGNED macro
 
-#include <exanb/core/basic_types_operators.h>
+#include <onika/math/basic_types_operators.h>
 #include <exanb/core/domain.h>
 #include <exanb/core/string_utils.h>
 
@@ -277,7 +277,7 @@ Compute analytics summury values.
   template<class GridT> using SlipLinkAnalyticsOperatorTmpl = SlipLinkAnalyticsOperator<GridT>;
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(sliplink_analytics)
   {
     OperatorNodeFactory::instance()->register_factory( "sliplink_analytics", make_grid_variant_operator< SlipLinkAnalyticsOperatorTmpl > );
   }

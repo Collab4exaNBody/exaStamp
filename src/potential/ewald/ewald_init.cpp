@@ -1,11 +1,11 @@
-#include <exanb/core/basic_types.h>
-#include <exanb/core/basic_types_operators.h>
-#include <exanb/core/basic_types_stream.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/operator_slot.h>
+#include <onika/math/basic_types.h>
+#include <onika/math/basic_types_operators.h>
+#include <onika/math/basic_types_stream.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/scg/operator_slot.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/log.h>
+#include <onika/log.h>
 #include <exanb/core/cpp_utils.h>
 #include <exaStamp/potential/ewald/ewald.h>
 
@@ -85,7 +85,7 @@ namespace exaStamp
   };
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(ewald_init)
   {  
     OperatorNodeFactory::instance()->register_factory( "ewald_init" , make_simple_operator< EwaldInitOperator > );
   }

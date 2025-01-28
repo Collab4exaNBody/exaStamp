@@ -1,6 +1,6 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/parallel_grid_algorithm.h>
@@ -87,7 +87,7 @@ namespace exaStamp
   template<typename GridT> using HistoVxNT = TutorialHistoNTOperator<GridT,field::_vx>;
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(histogram_seq_naive_thread)
   {
    OperatorNodeFactory::instance()->register_factory( "histoseqnt_energy" , make_grid_variant_operator< HistoEnergyNT > );
    OperatorNodeFactory::instance()->register_factory( "histoseqnt_vx" , make_grid_variant_operator< HistoVxNT > );

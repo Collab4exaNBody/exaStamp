@@ -1,16 +1,16 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
 #include <onika/memory/allocator.h>
 #include <exaStamp/npt/npt.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/basic_types.h>
-#include <exanb/core/basic_types_operators.h>
-#include <exanb/core/basic_types_yaml.h>
-#include <exanb/core/basic_types_stream.h>
+#include <onika/math/basic_types.h>
+#include <onika/math/basic_types_operators.h>
+#include <onika/math/basic_types_yaml.h>
+#include <onika/math/basic_types_stream.h>
 #include <exanb/core/physics_constants.h>
 
 #include <exanb/core/string_utils.h>
@@ -138,7 +138,7 @@ namespace exaStamp
  template<class GridT> using RemapNPTTmpl = RemapNPT<GridT>;
 
  // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(remap_npt)
   {
    OperatorNodeFactory::instance()->register_factory( "remap_npt", make_grid_variant_operator< RemapNPTTmpl > );
   }

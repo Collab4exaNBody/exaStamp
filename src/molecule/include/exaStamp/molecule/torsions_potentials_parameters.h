@@ -7,10 +7,10 @@
 #include <algorithm>
 #include <string>
 
-#include <exanb/core/quantity_yaml.h>
+#include <onika/physics/units.h>
 #include <exaStamp/particle_species/particle_specie.h>
 //#include "exanb/container_utils.h"
-#include <exanb/core/log.h>
+#include <onika/log.h>
 
 #include <exaStamp/molecule/potential_functional.h>
 

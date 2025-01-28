@@ -5,15 +5,15 @@
 #include <exaStamp/potential/eam/eam_buffer.h>
 
 #include <exanb/core/grid.h>
-#include <exanb/core/basic_types.h>
-#include <exanb/core/basic_types_operators.h>
+#include <onika/math/basic_types.h>
+#include <onika/math/basic_types_operators.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/operator_slot.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/scg/operator_slot.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/core/log.h>
+#include <onika/log.h>
 #include <exanb/core/cpp_utils.h>
 
 #include <exanb/particle_neighbors/chunk_neighbors.h>
@@ -147,7 +147,7 @@ namespace exaStamp
   }
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(eam_potential)
   {
     OperatorNodeFactory::instance()->register_factory( EamPotentialStr           , make_grid_variant_operator< tmplhelper::EamPotentialOperatorName          > );
     OperatorNodeFactory::instance()->register_factory( EamPotentialEmbNoGhostStr , make_grid_variant_operator< tmplhelper::EamPotentialComputeEmbNoGhostName > );

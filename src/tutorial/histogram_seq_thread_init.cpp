@@ -1,6 +1,6 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/histogram.h>
 
 #include "histogram_worker.h"
@@ -25,7 +25,7 @@ namespace exaStamp
   };
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(histogram_seq_thread_init)
   {
    OperatorNodeFactory::instance()->register_factory( "histoseq_thread_init" , make_simple_operator< TutorialHistoThreadInit > );
   }

@@ -1,8 +1,8 @@
 // #pragma xstamp_cuda_enable // DO NOT REMOVE THIS LINE
 
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 
 #include <exaStamp/molecule/bonds_force_functor.h>
 
@@ -10,9 +10,9 @@
 #include <exanb/core/domain.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/core/basic_types_yaml.h>
+#include <onika/math/basic_types_yaml.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/log.h>
+#include <onika/log.h>
 
 #include <string>
 #include <iostream>
@@ -118,7 +118,7 @@ namespace exaStamp
   template<class GridT> using ComputeForcesBondsNodeTmpl = ComputeForcesBondsNode<GridT>;
 
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(compute_forces_molecules_bonds)
   {
     OperatorNodeFactory::instance()->register_factory( "compute_force_bond", make_grid_variant_operator< ComputeForcesBondsNodeTmpl > );
   }

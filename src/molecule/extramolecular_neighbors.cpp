@@ -1,8 +1,8 @@
 #pragma xstamp_grid_variant
 
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/amr/amr_grid.h>
 #include <exanb/core/grid.h>
@@ -94,7 +94,7 @@ namespace exaStamp
   };
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(extramolecular_neighbors)
   {
    OperatorNodeFactory::instance()->register_factory("extramolecular_neighbors", make_grid_variant_operator< ExtraMolecularNeighbors > );
   }

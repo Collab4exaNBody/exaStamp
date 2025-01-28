@@ -1,7 +1,7 @@
 #pragma once
 
-#include <exanb/fields.h>
-#include <exanb/core/basic_types.h>
+#include <exanb/core/grid_fields.h>
+#include <onika/math/basic_types.h>
 #include <exaStamp/particle_species/particle_specie.h>
 
 namespace exaStamp

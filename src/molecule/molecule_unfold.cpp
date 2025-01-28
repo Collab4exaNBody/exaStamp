@@ -1,9 +1,9 @@
 //#include <chrono>
 #include <memory>
 
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/make_grid_variant_operator.h>
@@ -14,7 +14,7 @@
 #include <mpi.h>
 #include <exanb/mpi/grid_update_ghosts.h>
 
-#include <exanb/fields.h>
+#include <exanb/core/grid_fields.h>
 XSTAMP_DECLARE_FIELD( exanb::Vec3d, molufpos, "molecule unfolded particle position" );
 
 namespace exaStamp
@@ -333,7 +333,7 @@ namespace exaStamp
   template<class GridT> using MoleculeUnfoldTmpl = MoleculeUnfold<GridT>;
 
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(molecule_unfold)
   {
    OperatorNodeFactory::instance()->register_factory( "molecule_unfold", make_grid_variant_operator<MoleculeUnfoldTmpl> );
   }

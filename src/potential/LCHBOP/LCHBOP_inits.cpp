@@ -1,6 +1,6 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/operator_slot.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/scg/operator_slot.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/algorithm.h>
 #include <exanb/core/parallel_grid_algorithm.h>
@@ -20,10 +20,10 @@
 #include <vector>
 #include <string>
 
-#include <exanb/core/quantity_yaml.h>
+#include <onika/physics/units.h>
 #include <exanb/core/unityConverterHelper.h>
 //#include "exanb/container_utils.h"
-#include <exanb/core/log.h>
+#include <onika/log.h>
 #include <exanb/core/file_utils.h>
 
 #include "lchbop_inits.h"

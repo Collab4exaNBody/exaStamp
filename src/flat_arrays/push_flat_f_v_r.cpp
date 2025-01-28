@@ -19,9 +19,9 @@ under the License.
 
 // #pragma xstamp_cuda_enable // DO NOT REMOVE THIS LINE
 
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/grid.h>
@@ -34,7 +34,7 @@ namespace exanb
   template<class GridT> using PushAccelVelocityToPositionFlat = PushVec3SecondOrderXForm<GridT, field::_rx,field::_ry,field::_rz,field::_vx,field::_vy,field::_vz,field::_flat_fx,field::_flat_fy,field::_flat_fz>;
   
  // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(push_flat_f_v_r)
   {
    OperatorNodeFactory::instance()->register_factory( "push_flat_f_v_r", make_grid_variant_operator< PushAccelVelocityToPositionFlat > );
   }

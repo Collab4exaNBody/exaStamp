@@ -8,8 +8,8 @@
 #include <string>
 
 #include <yaml-cpp/yaml.h>
-#include <exanb/core/quantity_yaml.h>
-#include <exanb/core/basic_types_yaml.h>
+#include <onika/physics/units.h>
+#include <onika/math/basic_types_yaml.h>
 
 #include <exanb/core/quaternion_to_matrix.h>
 

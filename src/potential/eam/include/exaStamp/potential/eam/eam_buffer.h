@@ -1,7 +1,7 @@
 
 #pragma once
 
-#include <exanb/fields.h>
+#include <exanb/core/grid_fields.h>
 
 // EAM package specific fields
 XSTAMP_DECLARE_FIELD(double          ,rho_dEmb          ,"density or embedding term");

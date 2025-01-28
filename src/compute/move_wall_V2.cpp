@@ -1,9 +1,9 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/basic_types.h>
-#include <exanb/core/basic_types_operators.h>
-#include <exanb/core/basic_types_stream.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/math/basic_types.h>
+#include <onika/math/basic_types_operators.h>
+#include <onika/math/basic_types_stream.h>
 #include <vector>
 #include <iomanip>
 
@@ -55,7 +55,7 @@ namespace exaStamp
   };
   
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(move_wall_V2)
   {
     OperatorNodeFactory::instance()->register_factory( "move_wall_v2", make_simple_operator< move_wall_v2 > );
   }

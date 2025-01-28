@@ -2,9 +2,9 @@
 
 // #pragma xstamp_grid_variant // DO NOT REMOVE THIS LINE
 
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/grid.h>
@@ -126,7 +126,7 @@ namespace exaStamp
   };
     
  // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(init_virial_energy_correction)
   {
    OperatorNodeFactory::instance()->register_factory( "zero_force_energy_with_correction", make_grid_variant_operator< InitVirialEnergyCorrection > );
   }

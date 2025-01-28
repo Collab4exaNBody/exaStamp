@@ -1,10 +1,10 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/grid.h>
-#include <exanb/core/basic_types_stream.h>
+#include <onika/math/basic_types_stream.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <vector>
 
@@ -48,7 +48,7 @@ namespace exaStamp
   namespace tmplhelper { template<class GridT> using CopyChargeFromSpecyToParticleNode = ::exaStamp::CopyChargeFromSpecyToParticleNode<GridT>; }
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(copy_charge_specy_to_particle)
   {
     OperatorNodeFactory::instance()->register_factory( "copy_charge_specy_to_particle", make_grid_variant_operator< tmplhelper::CopyChargeFromSpecyToParticleNode > );
   }

@@ -1,16 +1,16 @@
-#include <exanb/core/basic_types_yaml.h>
-#include <exanb/core/basic_types.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/math/basic_types_yaml.h>
+#include <onika/math/basic_types.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
-#include <exanb/core/basic_types_stream.h>
+#include <onika/math/basic_types_stream.h>
 #include <exanb/core/domain.h>
 #include <exanb/core/string_utils.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/fields.h>
+#include <exanb/core/grid_fields.h>
 
 
 #include <mpi.h>
@@ -220,7 +220,7 @@ Velocities
   template<class GridT> using WriteLMPTmpl = WriteLMP<GridT>;
   
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(write_lmp)
   {
     OperatorNodeFactory::instance()->register_factory( "write_lmp", make_grid_variant_operator< WriteLMPTmpl > );
   }

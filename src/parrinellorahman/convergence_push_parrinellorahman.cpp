@@ -1,6 +1,6 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/grid.h>
@@ -14,7 +14,7 @@
 #include <exanb/core/quantity.h>
 #include <exanb/core/physics_constants.h>
 #include <exaStamp/compute/thermodynamic_state.h>
-#include <exanb/core/basic_types_stream.h>
+#include <onika/math/basic_types_stream.h>
 #include <exanb/core/value_streamer.h>
 
 #include <onika/soatl/field_pointer_tuple.h>
@@ -365,7 +365,7 @@ namespace exaStamp
   template<class GridT> using ConvergencePushParrinelloRahmanTmpl = ConvergencePushParrinelloRahman<GridT>;
   
  // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(convergence_push_parrinellorahman)
   {
    OperatorNodeFactory::instance()->register_factory( "convergence_push_parrinellorahman", make_grid_variant_operator< ConvergencePushParrinelloRahmanTmpl > );
   }

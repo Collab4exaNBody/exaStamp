@@ -8,16 +8,16 @@
 #include <string>
 #include <numeric>
 
-#include <exanb/core/basic_types_yaml.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/math/basic_types_yaml.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/parallel_grid_algorithm.h>
-#include <exanb/core/log.h>
+#include <onika/log.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/parallel_random.h>
+#include <onika/parallel/random.h>
 #include <exanb/core/unityConverterHelper.h>
 #include <exanb/core/physics_constants.h>
 #include <exanb/core/quantity.h>
@@ -286,7 +286,7 @@ namespace exaStamp
   // === register factories ===
   template<class GridT> using TorqueToQuaternionRigidMolTmpl = TorqueToQuaternionRigidMol<GridT>;
 
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(torque_to_quaternion)
   {
     OperatorNodeFactory::instance()->register_factory("torque_to_quaternion", make_grid_variant_operator< TorqueToQuaternionRigidMolTmpl >);
   }

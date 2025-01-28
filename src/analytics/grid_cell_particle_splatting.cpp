@@ -1,11 +1,11 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/fields.h>
+#include <exanb/core/grid_fields.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <onika/memory/allocator.h>
 #include <exanb/grid_cell_particles/grid_cell_values.h>
@@ -849,7 +849,7 @@ namespace exaStamp
   template<class GridT> using GridCellParticleSplattingTmpl = GridCellParticleSplatting<GridT>;
 
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(grid_cell_particle_splatting)
   {
     OperatorNodeFactory::instance()->register_factory("grid_cell_particle_splatting", make_grid_variant_operator< GridCellParticleSplattingTmpl > );
   }

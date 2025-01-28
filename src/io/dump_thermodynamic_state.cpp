@@ -1,7 +1,7 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/log.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/log.h>
 #include <exanb/core/string_utils.h>
 #include <exanb/core/print_utils.h>
 #include <exaStamp/compute/thermodynamic_state.h>
@@ -147,7 +147,7 @@ gnuplot -e 'plot "thermodynamic_state.csv" every ::1 using 2:4' # this plots tot
   };
     
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(dump_thermodynamic_state)
   {
    OperatorNodeFactory::instance()->register_factory( "dump_thermodynamic_state", make_simple_operator<DumpThermodynamicStateNode> );
   }

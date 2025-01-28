@@ -2,9 +2,9 @@
 
 #include <exanb/core/domain.h>
 #include <exanb/core/grid.h>
-#include <exanb/fields.h>
-#include <exanb/core/basic_types_stream.h>
-#include <exanb/core/log.h>
+#include <exanb/core/grid_fields.h>
+#include <onika/math/basic_types_stream.h>
+#include <onika/log.h>
 #include <exanb/core/thread.h>
 #include <exanb/core/unityConverterHelper.h>
 

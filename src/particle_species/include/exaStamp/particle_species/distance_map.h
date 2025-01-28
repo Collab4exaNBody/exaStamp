@@ -5,7 +5,7 @@
 
 //#include <onika/memory/allocator.h>
 #include <yaml-cpp/yaml.h>
-#include <exanb/core/quantity_yaml.h>
+#include <onika/physics/units.h>
 
 namespace exaStamp
 {

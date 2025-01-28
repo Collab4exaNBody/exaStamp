@@ -2,9 +2,9 @@
 
 #include <exaStamp/potential/eam/eam_buffer.h>
 
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
 #include <exanb/core/make_grid_variant_operator.h>
@@ -58,7 +58,7 @@ namespace exaStamp
 
   };
 
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(update_rho_from_ghost)
   {
     OperatorNodeFactory::instance()->register_factory( "update_rho_from_ghost", make_grid_variant_operator<EAMUpdateRhoFromGhosts> );
   }

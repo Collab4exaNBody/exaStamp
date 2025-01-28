@@ -1,20 +1,19 @@
-cmake_minimum_required(VERSION 3.22)
+cmake_minimum_required(VERSION 3.26)
 
 # ========================================
 # === Compiler toolchain configuration ===
 # ========================================
 # C++ standard
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS NO)
-if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-  set(CMAKE_CUDA_ARCHITECTURES 86)
-endif()
 
 # ===============
 # === Project ===
 # ===============
 project(exaStamp VERSION 3.6 LANGUAGES C CXX)
+set(EXASTAMP_VERSION "exaSPH-${CMAKE_PROJECT_VERSION}") 
+message(STATUS "Project version : ${EXASPH_VERSION}")
 
 # ===========================
 # === CMake customization ===
@@ -23,49 +22,16 @@ set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS Release RelWithDebInfo Debu
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 # ======================================
+# === exaStamp package specializations ===
+# ======================================
+set(XNB_INCLUDE_DIRECTORIES ${CMAKE_SOURCE_DIR}/include)
+set(XNB_COMPILE_DEFINITIONS XNB_DOMAIN_SPECIFIC_FIELDS_INCLUDE=\<exaStamp/fields.h\>)
+set(XNB_APP_HAS_GRID_SPECIALIZATIONS ON)
+
+# ======================================
 # === exaNBody application framework ===
 # ======================================
 find_package(exaNBody)
-
-# =============================
-# === Field sets selection  ===
-# =============================
-option(XSTAMP_ENABLE_SLIPLINK "Enable SlipLink extensions" ON)
-if(NOT XSTAMP_ENABLE_SLIPLINK)
-  set(XSTAMP_ENABLE_SlipLinkFieldSet_FORCED ON)
-  set(XSTAMP_ENABLE_SlipLinkFieldSet OFF)
-endif()
-
-# =================================
-# === Host System configuration ===
-# =================================
-# find command that gives OS description string
-find_file(CCC_OS_CMD NAMES ccc_os cea_os uname PATHS /ccc/local/products/sr/bin /usr/local/sr/bin /ccc/products/ccc_users_env/bin ENV PATH)
-if(CCC_OS_CMD)
-  execute_process(COMMAND ${CCC_OS_CMD} OUTPUT_VARIABLE HOST_OS OUTPUT_STRIP_TRAILING_WHITESPACE)
-endif()
-
-# =========================
-# === Custom submodules ===
-# =========================
-foreach(esm ${EXASTAMP_SUBMODULES})
-    if(EXISTS ${CMAKE_SOURCE_DIR}/${esm}/config.cmake)
-        message(STATUS "load sub module configuration ${CMAKE_SOURCE_DIR}/${esm}/config.cmake")
-        include(${CMAKE_SOURCE_DIR}/${esm}/config.cmake)
-    endif()
-endforeach()
-
-# ==============================
-# === Application version    ===
-# ==============================
-set(EXASTAMP_VERSION "exaStamp-${CMAKE_PROJECT_VERSION}")
-message(STATUS "Project version : ${EXASTAMP_VERSION}")
-
-# ==================================
-# === environment setup commands ===
-# ==================================
-set(PROJECT_SETUP_ENV_COMMANDS "" CACHE STRING "Environment setup commands") 
-
 
 # ====================================
 # === CCC supercomputing facility  ===
@@ -80,53 +46,26 @@ if(EXASTAMP_CCC_USER)
   set(XNB_APP_LIBRARIES ${XNB_APP_LIBRARIES} ${CCC_USER_LIBRARIES})
 endif()
 
-
-# ==============================
-# === test data directory    ===
-# ==============================
-include(DataDirectoryMD5)
-set(EXASTAMP_TEST_DATA_DIR "./data" CACHE STRING "Path where to find input data files used by regression tests")
-set(EXASTAMP_TEST_DATA_MD5_FILE ${CMAKE_SOURCE_DIR}/data/data_dir.md5)
-set(EXASTAMP_TEST_DATA_DIR_STATUS ${CMAKE_CURRENT_BINARY_DIR}/data_dir_checked)
-option(EXASTAMP_CHECK_DATA_DIR_MD5 "Check test data dir integrity" OFF)
-if(EXISTS ${EXASTAMP_TEST_DATA_DIR_STATUS})
-  file(READ ${EXASTAMP_TEST_DATA_DIR_STATUS} EXASTAMP_TEST_DATA_DIR_CHECKED)
-else()
-  set(EXASTAMP_TEST_DATA_DIR_CHECKED OFF)
-endif()
-
-if(IS_DIRECTORY ${EXASTAMP_TEST_DATA_DIR} AND EXASTAMP_CHECK_DATA_DIR_MD5 AND NOT EXASTAMP_TEST_DATA_DIR_CHECKED)
-  CheckDirectoryMD5(${EXASTAMP_TEST_DATA_DIR} ${EXASTAMP_TEST_DATA_MD5_FILE} EXASTAMP_TEST_DATA_DIR_CHECKED)
-  file(WRITE ${EXASTAMP_TEST_DATA_DIR_STATUS} ${EXASTAMP_TEST_DATA_DIR_CHECKED})
-endif()
-
-
-# =======================================
-# === build exaNBody plugins and main ===
-# =======================================
-exaNBodyStartApplication()
-
 # ==========================================
 # === build application plugins and libs ===
 # ==========================================
 add_subdirectory(src)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/exaStamp DESTINATION include)
 
-# ========================================
-# === add application regression tests ===
-# ========================================
-AddRegressionTestDir("${CMAKE_SOURCE_DIR}/data/regression")
 
-# ==================================================
-# === exaNBody plugins and unit tests final pass ===
-# ==================================================
-exaNBodyFinalizeApplication()
-
+# =================================================
+# === generate and install config and test data ===
+# =================================================
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/data DESTINATION ${CMAKE_INSTALL_PREFIX})
+if(ONIKA_REGRESSION_TEST_ENABLE)
+  AddRegressionTestDir("${CMAKE_SOURCE_DIR}/data/regression")
+endif()
 
 # =======================================
 # === contributed tools and libraries ===
 # =======================================
-option(XNB_BUILD_CONTRIBS "Build contrib tools" ON)
-if(XNB_BUILD_CONTRIBS)
+option(EXASTAMP_BUILD_CONTRIBS "Build contrib tools" OFF)
+if(EXASTAMP_BUILD_CONTRIBS)
   add_subdirectory(contribs)
 endif()
 
@@ -137,4 +76,10 @@ option(EXASTAMP_BUILD_DOC "Build documentation" OFF)
 if(EXASTAMP_BUILD_DOC)
   add_subdirectory(doc)
 endif()
+
+# ===========================================================
+# === generate execution wrappers and environment scripts ===
+# ===========================================================
+GenerateEndUserExecEnv()
+
 

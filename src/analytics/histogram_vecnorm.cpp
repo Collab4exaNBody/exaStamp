@@ -1,6 +1,6 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/parallel_grid_algorithm.h>
@@ -177,7 +177,7 @@ namespace exaStamp
   template<typename GridT> using HistogramForceNorm = HistogramVecNorm<GridT,field::_fx,field::_fy,field::_fz>;
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(histogram_vecnorm)
   {
    OperatorNodeFactory::instance()->register_factory( "histogram_velocity" , make_grid_variant_operator< HistogramVelocityNorm > );
    OperatorNodeFactory::instance()->register_factory( "histogram_force" , make_grid_variant_operator< HistogramForceNorm > );

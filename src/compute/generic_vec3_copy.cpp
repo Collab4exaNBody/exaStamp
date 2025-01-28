@@ -19,9 +19,9 @@ under the License.
 
 //#pragma xstamp_cuda_enable // DO NOT REMOVE THIS LINE
 
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
 #include <exanb/compute/compute_cell_particles.h>
@@ -35,7 +35,7 @@ namespace exanb
   template<class GridT> using CopyPositionFromFlatArray = GenericVec3Copy< GridT, field::_flat_rx, field::_flat_ry, field::_flat_rz , field::_rx,field::_ry,field::_rz >;
   
  // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(generic_vec3_copy)
   {
    OperatorNodeFactory::instance()->register_factory( "copy_force_to_flat_array", make_grid_variant_operator< CopyForceToFlatArray > );
    OperatorNodeFactory::instance()->register_factory( "copy_position_to_flat_array", make_grid_variant_operator< CopyPositionToFlatArray > );

@@ -1,9 +1,9 @@
 #pragma xstamp_grid_variant
 
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/cpp_utils.h>
 #include <exaStamp/potential_factory/pair_potential.h>
 #include <exaStamp/potential_factory/pair_potential_yaml.h>
@@ -155,7 +155,7 @@ namespace exaStamp
   template<class GridT> using ComputeForcePairMultimatChunkTmpl = ComputeForcePairMultimatChunk<GridT>;
 
    // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(compute_force_pair_multimat)
   {
     OperatorNodeFactory::instance()->register_factory( "compute_force_pair_multimat", make_grid_variant_operator< ComputeForcePairMultimatChunkTmpl > );
   }

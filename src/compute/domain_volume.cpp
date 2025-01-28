@@ -1,6 +1,6 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/domain.h>
 
 #include <mpi.h>
@@ -32,7 +32,7 @@ namespace exaStamp
   };
   
  // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(domain_volume)
   {
    OperatorNodeFactory::instance()->register_factory( "domain_volume", make_simple_operator< DomainVolume > );
   }

@@ -1,6 +1,6 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/domain.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/grid.h>
@@ -1638,7 +1638,7 @@ Computes analytical informations on a connected grid
   };
 
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(grid_slice_analysis)
   {
     // OperatorNodeFactory::instance()->register_factory("grid_slice_analysis", make_simple_operator< GridSliceAnalysis > );
     OperatorNodeFactory::instance()->register_factory("grid_slice_analysis", make_grid_variant_operator< GridSliceAnalysis > );

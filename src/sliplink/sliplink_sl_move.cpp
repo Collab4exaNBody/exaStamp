@@ -1,9 +1,9 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
-#include <exanb/core/parallel_random.h>
+#include <onika/parallel/random.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/particle_id_codec.h>
 #include <exanb/core/particle_id_translation.h>
@@ -435,7 +435,7 @@ computes sliplink movement along curvilinear abcsissa. movement has two origins 
   template<class GridT> using SlipLinkSLMoveOperatorTmpl = SlipLinkSLMoveOperator<GridT>;
   
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(sliplink_sl_move)
   {
     OperatorNodeFactory::instance()->register_factory( "sliplink_sl_move", make_grid_variant_operator< SlipLinkSLMoveOperatorTmpl > );
   }

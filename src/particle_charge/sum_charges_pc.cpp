@@ -1,9 +1,9 @@
 #include <exanb/core/grid.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/operator_slot.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/scg/operator_slot.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/core/log.h>
+#include <onika/log.h>
 #include <exanb/core/cpp_utils.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 
@@ -88,7 +88,7 @@ namespace exaStamp
   template<class GridT> using SumChargesPC = SumChargesPCOperator<GridT>;
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(sum_charges_pc)
   {  
     OperatorNodeFactory::instance()->register_factory( "sum_charges_pc" , make_grid_variant_operator< SumChargesPC > );
   }

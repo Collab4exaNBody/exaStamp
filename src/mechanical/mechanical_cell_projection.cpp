@@ -1,6 +1,6 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/grid_cell_particles/grid_cell_values.h>
@@ -88,7 +88,7 @@ namespace exaStamp
   };
 
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(mechanical_cell_projection)
   {
     OperatorNodeFactory::instance()->register_factory("mechanical_cell_projection", make_grid_variant_operator< MechanicalCellProjection > );
   }

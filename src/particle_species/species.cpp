@@ -1,11 +1,11 @@
 #include <exaStamp/particle_species/particle_specie_yaml.h>
-#include <exanb/core/basic_types_stream.h>
+#include <onika/math/basic_types_stream.h>
 
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/log.h>
-#include <exanb/core/yaml_utils.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/log.h>
+#include <onika/yaml/yaml_utils.h>
 #include <exanb/core/particle_type_id.h>
 
 #include <iostream>
@@ -162,7 +162,7 @@ namespace exaStamp
   };
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(species)
   {
     OperatorNodeFactory::instance()->register_factory( "species", make_simple_operator<ParticleSpeciesNode> );
   }

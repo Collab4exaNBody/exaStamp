@@ -19,7 +19,7 @@ under the License.
 
 //#pragma xstamp_cuda_enable // DO NOT REMOVE THIS LINE
 
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/compute/generic_scalar_blender.h>
 
@@ -29,7 +29,7 @@ namespace exanb
   template<class GridT> using BlendEnergyFromFlatArray  = GenericScalarBlender< GridT, field::_flat_ep , field::_ep >;
   
  // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(generic_scalar_blender)
   {
    OperatorNodeFactory::instance()->register_factory( "blend_energy_to_flat_array", make_grid_variant_operator< BlendEnergyToFlatArray > );
    OperatorNodeFactory::instance()->register_factory( "blend_energy_from_flat_array", make_grid_variant_operator< BlendEnergyFromFlatArray > );

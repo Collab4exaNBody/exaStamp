@@ -1,9 +1,9 @@
 #include <exaStamp/potential_factory/pair_potential_factory.h>
 
 #include <exanb/core/grid.h>
-#include <exanb/core/log.h>
+#include <onika/log.h>
 #include <exanb/core/plugin.h>
-#include <exanb/core/yaml_utils.h>
+#include <onika/yaml/yaml_utils.h>
 
 #include <cassert>
 #include <iostream>

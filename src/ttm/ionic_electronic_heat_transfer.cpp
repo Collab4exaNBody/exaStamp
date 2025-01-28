@@ -1,13 +1,13 @@
 #include <memory>
 
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/fields.h>
+#include <exanb/core/grid_fields.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exanb/core/quantity.h>
 #include <exanb/core/physics_constants.h>
@@ -545,7 +545,7 @@ while ionic temperature (Ti) commes from particles kinetic energy.
   template<class GridT> using IonicElectronicHeatTransferTmpl = IonicElectronicHeatTransfer<GridT>;
 
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(ionic_electronic_heat_transfer)
   {
    OperatorNodeFactory::instance()->register_factory("ionic_eletronic_heat_transfer", make_grid_variant_operator< IonicElectronicHeatTransferTmpl > );
   }

@@ -20,9 +20,9 @@ under the License.
 
 #pragma xstamp_grid_variant
 
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/grid.h>
@@ -35,7 +35,7 @@ namespace exanb
   template<class GridT> using PushForceToPositionFlat = PushVec3FirstOrder<GridT, field::_rx,field::_ry,field::_rz, field::_flat_fx,field::_flat_fy,field::_flat_fz >;
   
  // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(push_flat_f_v)
   {
    OperatorNodeFactory::instance()->register_factory( "push_flat_f_v", make_grid_variant_operator< PushForceToVelocityFlat > );
    OperatorNodeFactory::instance()->register_factory( "push_flat_f_r", make_grid_variant_operator< PushForceToPositionFlat > );

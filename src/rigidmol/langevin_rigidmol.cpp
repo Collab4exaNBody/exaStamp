@@ -4,16 +4,16 @@
 #include <string>
 #include <numeric>
 
-#include <exanb/core/basic_types_yaml.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/math/basic_types_yaml.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/parallel_grid_algorithm.h>
-#include <exanb/core/log.h>
+#include <onika/log.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/parallel_random.h>
+#include <onika/parallel/random.h>
 #include <exanb/core/unityConverterHelper.h>
 #include <exanb/core/physics_constants.h>
 #include <exanb/core/quantity.h>
@@ -178,7 +178,7 @@ namespace exaStamp
   template<class GridT> using LangevinRigidMolTmpl = LangevinRigidMol<GridT>;
 
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(langevin_rigidmol)
   {
     OperatorNodeFactory::instance()->register_factory("langevin_rigidmol", make_grid_variant_operator< LangevinRigidMolTmpl >);
   }

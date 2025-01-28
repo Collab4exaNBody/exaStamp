@@ -7,26 +7,26 @@
 #include <random>
 #include <cmath>
 
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/fields.h>
+#include <exanb/core/grid_fields.h>
 #include <exanb/core/domain.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exanb/core/simple_block_rcb.h>
 //#include "exanb/container_utils.h"
 
-#include <exanb/core/basic_types_yaml.h>
-#include <exanb/core/basic_types_stream.h>
-#include <exanb/core/log.h>
+#include <onika/math/basic_types_yaml.h>
+#include <onika/math/basic_types_stream.h>
+#include <onika/log.h>
 //#include "exanb/vector_utils.h"
 #include <exanb/core/file_utils.h>
 #include <exanb/core/check_particles_inside_cell.h>
 #include <exanb/core/physics_constants.h>
-#include <exanb/core/parallel_random.h>
+#include <onika/parallel/random.h>
 
 #include <exanb/core/thread.h>
 
@@ -613,7 +613,7 @@ namespace exaStamp
   };
 
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(orthorhombic_lattice)
   {
     OperatorNodeFactory::instance()->register_factory("orthorhombic_lattice", make_grid_variant_operator< OrthorhombicLatticeOperator >);
   }

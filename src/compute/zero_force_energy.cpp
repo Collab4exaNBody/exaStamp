@@ -2,9 +2,9 @@
 
 // #pragma xstamp_grid_variant // DO NOT REMOVE THIS LINE
 
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/grid.h>
@@ -123,7 +123,7 @@ namespace exaStamp
   template<class GridT> using ZeroForceEnergyFlat = ZeroForceEnergyNode<GridT,field::_flat_fx,field::_flat_fy,field::_flat_fz, field::_flat_ep, field::_virial, field::_couple>;
   
  // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(zero_force_energy)
   {
    OperatorNodeFactory::instance()->register_factory( "zero_force_energy", make_grid_variant_operator< ZeroForceEnergy > );
    OperatorNodeFactory::instance()->register_factory( "zero_force_energy_flat", make_grid_variant_operator< ZeroForceEnergyFlat > );

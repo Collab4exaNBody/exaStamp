@@ -6,7 +6,7 @@
 #include <string>
 
 //#include "exanb/container_utils.h"
-#include <exanb/core/log.h>
+#include <onika/log.h>
 
 #include "lchbop_getEF.h"
 //#include "lchbop_utils.h"

@@ -8,8 +8,8 @@
 #include <cassert>
 #include <iomanip>
 
-#include <exanb/core/basic_types_def.h>
-#include <exanb/core/basic_types_operators.h>
+#include <onika/math/basic_types_def.h>
+#include <onika/math/basic_types_operators.h>
 //#include <exaStamp/atom_bond_connectivity.h>
 
 #include <onika/memory/allocator.h>

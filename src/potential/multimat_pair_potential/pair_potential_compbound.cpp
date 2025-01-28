@@ -1,6 +1,6 @@
 #include <exaStamp/potential_factory/pair_potential_factory.h>
 #include <exaStamp/potential_factory/pair_potential.h>
-#include <exanb/core/quantity_yaml.h>
+#include <onika/physics/units.h>
 #include <exanb/core/cpp_utils.h>
 
 #include <yaml-cpp/yaml.h>
@@ -92,7 +92,7 @@ namespace exaStamp
   };
 
   // === register potential factory ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(pair_potential_compbound)
   {
     PairPotentialFactory::register_factory( "compbound" , PairPotentialCompbound::make_potential );
   }

@@ -1,14 +1,14 @@
 #pragma once
 
-#include <exanb/fields.h>
+#include <exanb/core/grid_fields.h>
 #include <exanb/core/field_set_utils.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <onika/soatl/field_tuple.h>
 #include <exanb/io/sim_dump_io.h>
 #include <iostream>
 
-#include <exanb/core/basic_types_operators.h>
-#include <exanb/core/basic_types_stream.h>
+#include <onika/math/basic_types_operators.h>
+#include <onika/math/basic_types_stream.h>
 #include <exanb/core/quaternion_operators.h>
 #include <exanb/core/quaternion_stream.h>
 #include <exanb/core/string_utils.h>

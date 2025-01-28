@@ -2,9 +2,9 @@
 
 #include <cmath>
 #include <yaml-cpp/yaml.h>
-#include <exanb/core/quantity_yaml.h>
+#include <onika/physics/units.h>
 #include <exanb/core/physics_constants.h>
-#include <exanb/core/basic_types_operators.h>
+#include <onika/math/basic_types_operators.h>
 #include <onika/cuda/cuda.h>
 #include <onika/cuda/cuda_math.h>
 #include <onika/cuda/ro_shallow_copy.h>

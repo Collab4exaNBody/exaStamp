@@ -4,15 +4,15 @@
 
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/basic_types.h>
-#include <exanb/core/basic_types_operators.h>
+#include <onika/math/basic_types.h>
+#include <onika/math/basic_types_operators.h>
 #include <exanb/compute/compute_cell_particle_pairs.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/operator_slot.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/scg/operator_slot.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/core/log.h>
+#include <onika/log.h>
 #include <exanb/core/cpp_utils.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exanb/core/file_utils.h>
@@ -293,7 +293,7 @@ namespace exaStamp
   template<class GridT> using N2P2ComputeForceTmpl = N2P2ComputeForce<GridT>;
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(n2p2)
   {
     OperatorNodeFactory::instance()->register_factory( "n2p2_force" ,make_grid_variant_operator< N2P2ComputeForceTmpl > );
   }

@@ -1,11 +1,11 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/grid_cell_particles/grid_cell_values.h>
-#include <exanb/core/quantity_yaml.h>
+#include <onika/physics/units.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/source_term.h>
 
@@ -84,7 +84,7 @@ Initializes cell_te grid values and source terms for ttm model
   };
 
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(init_ttm)
   {
    OperatorNodeFactory::instance()->register_factory("init_ttm", make_grid_variant_operator< InitTTM > );
   }

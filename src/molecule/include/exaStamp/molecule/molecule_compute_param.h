@@ -1,7 +1,7 @@
 #pragma once
 
 #include <exaStamp/molecule/molecule_species.h>
-#include <exanb/core/basic_types_def.h>
+#include <onika/math/basic_types_def.h>
 #include <exanb/core/mt_concurrent_map.h>
 
 #include <onika/oarray.h>

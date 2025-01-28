@@ -19,7 +19,7 @@ under the License.
 
 //#pragma xstamp_cuda_enable // DO NOT REMOVE THIS LINE
 
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/compute/generic_scalar_copy.h>
 
@@ -30,7 +30,7 @@ namespace exanb
   template<class GridT> using CopyEnergyFromFlatArray = GenericScalarCopy< GridT, field::_flat_ep , field::_ep >;
   
  // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(generic_scalar_copy)
   {
    OperatorNodeFactory::instance()->register_factory( "copy_type_to_flat_array", make_grid_variant_operator< CopyTypeToFlatArray > );
    OperatorNodeFactory::instance()->register_factory( "copy_type_from_flat_array", make_grid_variant_operator< CopyTypeFromFlatArray > );

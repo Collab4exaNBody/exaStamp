@@ -1,6 +1,6 @@
 #include "tabulated_eam.h"
 #include <exanb/core/file_utils.h>
-#include <exanb/core/log.h>
+#include <onika/log.h>
 #include <exanb/core/physics_constants.h>
 
 // Yaml conversion operators, allows to read potential parameters from config file

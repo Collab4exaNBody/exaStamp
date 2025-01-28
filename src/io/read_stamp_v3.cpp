@@ -1,12 +1,12 @@
-#include <exanb/core/basic_types_yaml.h>
-#include <exanb/core/basic_types.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/math/basic_types_yaml.h>
+#include <onika/math/basic_types.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
-#include <exanb/core/basic_types_stream.h>
-#include <exanb/core/log.h>
+#include <onika/math/basic_types_stream.h>
+#include <onika/log.h>
 #include <exanb/core/file_utils.h>
 
 #include <exaStamp/io/read_stamp_v3.h>
@@ -70,7 +70,7 @@ namespace exaStamp
   };
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(read_stamp_v3)
   {
     OperatorNodeFactory::instance()->register_factory( "read_stamp_v3", make_grid_variant_operator< ReadStampV3Node > );
   }

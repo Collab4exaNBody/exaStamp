@@ -1,7 +1,7 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/log.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/log.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/print_particle.h>
 
@@ -165,7 +165,7 @@ namespace exaStamp
   template<class GridT> using DebugMinMaxParticleTmpl = DebugMinMaxParticle<GridT>;
   
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(debug_min_max_particle)
   {
     OperatorNodeFactory::instance()->register_factory( "debug_min_max_particle", make_grid_variant_operator< DebugMinMaxParticleTmpl > );
   }

@@ -17,7 +17,7 @@ specific language governing permissions and limitations
 under the License.
 */
 
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/units.h>
 #include <exanb/io/write_xyz.h>
@@ -119,7 +119,7 @@ namespace exaStamp
   };
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(write_xyz)
   {
     OperatorNodeFactory::instance()->register_factory( "write_xyz", make_grid_variant_operator< WriteXYZ > );
   }

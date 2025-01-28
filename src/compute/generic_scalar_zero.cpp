@@ -19,7 +19,7 @@ under the License.
 
 //#pragma xstamp_cuda_enable // DO NOT REMOVE THIS LINE
 
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/compute/generic_scalar_zero.h>
 
@@ -28,7 +28,7 @@ namespace exanb
   template<class GridT> using ZeroFlatForceEnergy    = GenericScalarZero< GridT, field::_flat_fx, field::_flat_fy, field::_flat_fz, field::_flat_ep >;
   
  // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(generic_scalar_zero)
   {
    OperatorNodeFactory::instance()->register_factory( "zero_flat_force_energy", make_grid_variant_operator< ZeroFlatForceEnergy > );
   }

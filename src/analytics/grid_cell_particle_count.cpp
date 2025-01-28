@@ -1,6 +1,6 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/domain.h>
@@ -96,7 +96,7 @@ namespace exaStamp
 
   };
 
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(grid_cell_particle_count)
   {
     OperatorNodeFactory::instance()->register_factory( "grid_cell_particle_count", make_grid_variant_operator<GridCellParticleCount> );
   }

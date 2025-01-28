@@ -1,15 +1,15 @@
 // #pragma xstamp_cuda_enable // DO NOT REMOVE THIS LINE !!
 
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/log.h>
-#include <exanb/core/basic_types_stream.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/log.h>
+#include <onika/math/basic_types_stream.h>
 #include <exanb/core/grid.h>
 #include <exanb/grid_cell_particles/grid_cell_values.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/particle_id_codec.h>
-#include <exanb/field_sets.h>
+#include <exanb/core/grid_fields.h>
 #include <exanb/core/check_particles_inside_cell.h>
 
 #include <onika/soatl/field_tuple.h>
@@ -42,7 +42,7 @@ namespace exaStamp
   template<typename GridT> using UpdateGhostsRQ = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz , field::_orient > , false >;
   template<typename GridT> using UpdateGhostsIdMol = UpdateGhostsNode< GridT , FieldSet<field::_idmol> , false >;
 
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(update_ghosts)
   {
     OperatorNodeFactory::instance()->register_factory( "ghost_update_all_no_fv", make_grid_variant_operator<UpdateGhostsAllFieldsNoFV> );
     OperatorNodeFactory::instance()->register_factory( "ghost_update_r_v_vir",   make_grid_variant_operator<UpdateGhostsRandVandVir> );

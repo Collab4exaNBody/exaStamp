@@ -1,6 +1,6 @@
 #pragma once
 
-#include <exanb/core/log.h>
+#include <onika/log.h>
 
 namespace LAMMPS_NS
 {

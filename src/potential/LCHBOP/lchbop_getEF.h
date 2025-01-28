@@ -4,7 +4,7 @@
 #include <vector>
 #include <cstdlib>
 #include <exanb/core/grid.h>
-#include <exanb/core/basic_types_def.h>
+#include <onika/math/basic_types_def.h>
 
 using std::vector;
 using std::pair;

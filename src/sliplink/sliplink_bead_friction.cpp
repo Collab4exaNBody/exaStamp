@@ -1,11 +1,11 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/grid.h>
 #include <onika/memory/allocator.h>
-#include <exanb/core/parallel_random.h>
+#include <onika/parallel/random.h>
 #include <exaStamp/sliplink/sliplink.h>
 
 #include <memory>
@@ -60,7 +60,7 @@ namespace exaStamp
   template<class GridT> using SliplinkForceOverdampedTmpl = SliplinkForceOverdamped<GridT>;
   
  // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(sliplink_bead_friction)
   {
    OperatorNodeFactory::instance()->register_factory( "sliplink_bead_friction", make_grid_variant_operator< SliplinkForceOverdampedTmpl > );
   }

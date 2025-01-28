@@ -43,7 +43,7 @@ namespace exaStamp
   };
 
   // === register potential factory ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(pair_potential_class)
   {
     PairPotentialFactory::register_factory( USTAMP_POTENTIAL_STRING , USTAMP_POTENTIAL_CLASS::make_potential );
   }

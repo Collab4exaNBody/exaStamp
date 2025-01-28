@@ -1,13 +1,13 @@
 //#pragma xstamp_enable_cuda // DO NOT REMOVE THIS LINE
 
 #include <exanb/core/grid.h>
-#include <exanb/core/basic_types.h>
+#include <onika/math/basic_types.h>
 #include <exanb/compute/compute_cell_particle_pairs.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/operator_slot.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/scg/operator_slot.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/core/log.h>
+#include <onika/log.h>
 #include <exanb/core/domain.h>
 
 #include <exanb/particle_neighbors/chunk_neighbors.h>
@@ -103,7 +103,7 @@ namespace exanb
   template<class GridT> using RemoveMergedAtomsTmpl = RemoveMergedAtoms<GridT>;
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(remove_merged_atoms)
   {  
     OperatorNodeFactory::instance()->register_factory( "remove_merged_atoms" , make_grid_variant_operator<RemoveMergedAtomsTmpl> );
   }

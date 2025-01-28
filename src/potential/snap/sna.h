@@ -17,7 +17,7 @@
 
 #pragma once
 
-#include <exanb/core/log.h>
+#include <onika/log.h>
 #include <onika/cuda/cuda.h>
 #include "pointers.h"
 #include "sna_defs.h"

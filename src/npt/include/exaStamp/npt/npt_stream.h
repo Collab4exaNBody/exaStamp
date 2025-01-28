@@ -1,7 +1,7 @@
 #pragma once
 
 #include <exaStamp/npt/npt.h>
-#include <exanb/core/basic_types_stream.h>
+#include <onika/math/basic_types_stream.h>
 #include <iostream>
 
 namespace exaStamp

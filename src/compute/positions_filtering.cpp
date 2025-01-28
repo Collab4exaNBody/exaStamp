@@ -1,18 +1,18 @@
 #include <memory>
 
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/fields.h>
+#include <exanb/core/grid_fields.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exanb/core/quantity.h>
 #include <exanb/core/physics_constants.h>
 #include <exanb/core/unityConverterHelper.h>
 //#include "exanb/memory.h"
-#include <exanb/core/parallel_random.h>
+#include <onika/parallel/random.h>
 #include <exanb/core/physics_constants.h>
 #include <exanb/core/domain.h>
 
@@ -127,7 +127,7 @@ namespace exaStamp
   template<class GridT> using PositionsFilteringNodeTmpl = PositionsFilteringNode<GridT>;
 
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(positions_filtering)
   {
    OperatorNodeFactory::instance()->register_factory(
     "positions_filtering",

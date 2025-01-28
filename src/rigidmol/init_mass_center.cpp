@@ -1,13 +1,13 @@
 #include <exaStamp/particle_species/particle_specie_yaml.h>
-#include <exanb/core/basic_types_stream.h>
-#include <exanb/core/basic_types_yaml.h>
-#include <exanb/core/basic_types_operators.h>
+#include <onika/math/basic_types_stream.h>
+#include <onika/math/basic_types_yaml.h>
+#include <onika/math/basic_types_operators.h>
 
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/log.h>
-#include <exanb/core/yaml_utils.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/log.h>
+#include <onika/yaml/yaml_utils.h>
 
 #include <iostream>
 #include <iomanip>
@@ -66,7 +66,7 @@ namespace exaStamp
   };
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(init_mass_center)
   {
     OperatorNodeFactory::instance()->register_factory( "init_mass_center", make_simple_operator< InitMassCenter > );
   }

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <exaStamp/parrinellorahman/parrinellorahman.h>
-#include <exanb/core/basic_types_yaml.h>
+#include <onika/math/basic_types_yaml.h>
 #include <exanb/core/physics_constants.h>
 #include <yaml-cpp/yaml.h>
 

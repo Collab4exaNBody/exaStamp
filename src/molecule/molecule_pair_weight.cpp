@@ -1,8 +1,8 @@
-#include <exanb/core/basic_types_yaml.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/log.h>
+#include <onika/math/basic_types_yaml.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/log.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/particle_id_codec.h>
@@ -179,7 +179,7 @@ namespace exaStamp
   template<class GridT> using MoleculePairWeightChunkTmpl = MoleculePairWeightChunk<GridT>;
 
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(molecule_pair_weight)
   {
     /* ', field::_idmol' : this ensures that only grids with idmol field will be accepted to instantiate this operator */
     OperatorNodeFactory::instance()->register_factory( "molecule_pair_weight", make_grid_variant_operator< MoleculePairWeightChunkTmpl > );

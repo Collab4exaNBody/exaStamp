@@ -4,7 +4,7 @@
 #include <limits>
 #include <utility>
 #include <yaml-cpp/yaml.h>
-#include <exanb/core/quantity_yaml.h>
+#include <onika/physics/units.h>
 #include <exaStamp/potential_factory/pair_potential.h>
 #include <exanb/core/physics_constants.h>
 

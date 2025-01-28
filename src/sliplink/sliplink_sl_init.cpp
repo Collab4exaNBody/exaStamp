@@ -1,10 +1,10 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/parallel_random.h>
+#include <onika/parallel/random.h>
 #include <exanb/core/particle_id_codec.h>
 #include <exanb/core/particle_id_constants.h>
 #include <exaStamp/sliplink/sliplink.h>
@@ -228,7 +228,7 @@ Every chain has beads_per_chain beads.
   };
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(sliplink_sl_init)
   {
     OperatorNodeFactory::instance()->register_factory( "sliplink_sl_init", make_grid_variant_operator< SlipLinkInitOperator > );
   }

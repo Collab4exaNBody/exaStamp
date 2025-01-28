@@ -1,8 +1,8 @@
 #pragma xstamp_grid_variant
 
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/grid.h>
@@ -22,7 +22,7 @@
 #include <iostream>
 #include <iomanip>
 #include <mpi.h>
-#include <exanb/core/basic_types_stream.h>
+#include <onika/math/basic_types_stream.h>
 
 
 namespace exaStamp
@@ -255,7 +255,7 @@ namespace exaStamp
   template<class GridT> using FirstPushParrinelloRahmanTmpl = FirstPushParrinelloRahman<GridT>;
   
  // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(first_push_parrinellorahman)
   {
    OperatorNodeFactory::instance()->register_factory( "first_push_parrinellorahman", make_grid_variant_operator< FirstPushParrinelloRahmanTmpl > );
   }

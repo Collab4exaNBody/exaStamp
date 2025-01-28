@@ -5,7 +5,7 @@
 #include <map>
 #include <iostream>
 #include <algorithm>
-#include <exanb/core/log.h>
+#include <onika/log.h>
 #include <onika/cuda/cuda_math.h>
 #include <onika/memory/allocator.h>
 

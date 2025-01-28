@@ -5,12 +5,12 @@
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exaStamp/particle_species/particle_specie_yaml.h>
 
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/fields.h>
+#include <exanb/core/grid_fields.h>
 #include <exanb/core/quantity.h>
 #include <exanb/compute/compute_cell_particles.h>
 
@@ -98,7 +98,7 @@ Converts force field to acceleration field, dividing it by particle mass
   template<class GridT> using ForceToAccelerationFlat = ForceToAcceleration<GridT, field::_flat_fx, field::_flat_fy, field::_flat_fz, field::_flat_type >;
 
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(force_to_accel)
   {
    OperatorNodeFactory::instance()->register_factory( "force_to_accel", make_grid_variant_operator< ForceToAccelerationTmpl > );
    OperatorNodeFactory::instance()->register_factory( "force_to_accel_flat", make_grid_variant_operator< ForceToAccelerationFlat > );

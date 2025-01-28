@@ -4,19 +4,19 @@
 #include <memory>
 #include <utility>// std::pair
 
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/core/basic_types_yaml.h>
+#include <onika/math/basic_types_yaml.h>
 #include <exaStamp/molecule/mol_connectivity.h>
 #include <exanb/core/particle_id_codec.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/log.h>
+#include <onika/log.h>
 #include <exanb/core/thread.h> // GridParticleLocks
 
 #include <exaStamp/molecule/bends_potentials_parameters.h>
@@ -124,7 +124,7 @@ namespace exaStamp
   template<class GridT> using ComputeForcesBendsNodeTmpl = ComputeForcesBendsNode<GridT>;
 
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(compute_forces_molecules_bends)
   {
     OperatorNodeFactory::instance()->register_factory( "compute_force_bend", make_grid_variant_operator< ComputeForcesBendsNodeTmpl > );
   }
