@@ -110,7 +110,7 @@ namespace exaStamp
   template<class StreamT>
   inline StreamT& print_user_input(const ParticleSpecies& species, StreamT& out, int indent=0)
   {
-    using exanb::norm2;
+    using onika::math::norm2;
     auto space = [indent](unsigned int n) -> std::string { return std::string((indent+n)*2,' '); } ;
     for(const auto & atom : species)
     {
