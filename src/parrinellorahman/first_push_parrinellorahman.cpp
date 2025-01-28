@@ -12,10 +12,10 @@
 #include <exaStamp/parrinellorahman/parrinellorahman_stream.h>
 #include <exanb/core/domain.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/unityConverterHelper.h>
-#include <exanb/core/quantity.h>
-#include <exanb/core/physics_constants.h>
-#include <exanb/core/unityConverterHelper.h>
+#include <onika/physics/units.h>
+#include <onika/physics/units.h>
+#include <onika/physics/constants.h>
+#include <onika/physics/units.h>
 
 #include <onika/soatl/field_pointer_tuple.h>
 #include <memory>
@@ -62,7 +62,7 @@ namespace exaStamp
     
     inline void execute () override final
     {
-      static const double boltzmann_internal = UnityConverterHelper::convert(legacy_constant::boltzmann, "m^2*kg/s^2/K");
+      static const double boltzmann_internal = UnityConverterHelper::convert(onika::physics::boltzmann, "m^2*kg/s^2/K");
       static const double conv_gnvtv = UnityConverterHelper::convert(1.0,"m^2/s^2");
       static const double conv_time = UnityConverterHelper::convert(1.0,"1/s^2");
       ParrinelloRahmanContext& data = *parrinello_rahman_ctx;

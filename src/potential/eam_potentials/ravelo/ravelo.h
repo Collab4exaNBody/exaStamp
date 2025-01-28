@@ -110,7 +110,7 @@ namespace YAML
 {
   using exaStamp::EamRaveloParameters;
   using exanb::UnityConverterHelper;
-  using exanb::Quantity;
+  using onika::physics::Quantity;
 
   template<> struct convert<EamRaveloParameters>
     {

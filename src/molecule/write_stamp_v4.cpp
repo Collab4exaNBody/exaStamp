@@ -9,7 +9,7 @@
 #include <onika/scg/operator_slot.h>
 #include <onika/scg/operator_factory.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/unityConverterHelper.h>
+#include <onika/physics/units.h>
 
 #include <exanb/io/mpi_file_io.h>
 #include <exaStamp/molecule/stampv4_io.h>

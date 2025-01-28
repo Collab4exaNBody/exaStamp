@@ -6,7 +6,7 @@
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid_fields.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/quantity.h>
+#include <onika/physics/units.h>
 #include <exanb/core/domain.h>
 
 #include <onika/soatl/field_pointer_tuple.h>

@@ -1,4 +1,4 @@
-// _cuda_enable // DO NOT REMOVE THIS LINE
+//  // DO NOT REMOVE THIS LINE
 
 #include <exaStamp/potential/eam/eam_buffer.h>
 

@@ -1,4 +1,4 @@
-_cuda_enable
+
 
 
 
@@ -20,7 +20,7 @@ _cuda_enable
 #include "n2p2.h"
 
 #include "InterfaceExastamp.h"
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 
 #include <onika/cuda/cuda_context.h>
 

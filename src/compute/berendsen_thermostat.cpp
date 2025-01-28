@@ -8,9 +8,9 @@
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid_fields.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/quantity.h>
-#include <exanb/core/physics_constants.h>
-#include <exanb/core/unityConverterHelper.h>
+#include <onika/physics/units.h>
+#include <onika/physics/constants.h>
+#include <onika/physics/units.h>
 #include <onika/memory/allocator.h>
 #include <onika/parallel/random.h>
 #include <exanb/grid_cell_particles/particle_region.h>
@@ -102,7 +102,7 @@ namespace exaStamp
       ParticleSpecies& species = *(this->species);
 
       // Getting current temperature
-      static constexpr double conv_temperature = 1.e4 * legacy_constant::atomicMass / legacy_constant::boltzmann;
+      static constexpr double conv_temperature = 1.e4 * onika::physics::atomicMass / onika::physics::boltzmann;
       double Tcurrent = sim_info.temperature_scal() / sim_info.particle_count() * conv_temperature;
 
       // Checking definition of target temperature

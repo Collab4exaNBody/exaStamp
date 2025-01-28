@@ -14,9 +14,9 @@
 #include <onika/log.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <onika/parallel/random.h>
-#include <exanb/core/unityConverterHelper.h>
-#include <exanb/core/physics_constants.h>
-#include <exanb/core/quantity.h>
+#include <onika/physics/units.h>
+#include <onika/physics/constants.h>
+#include <onika/physics/units.h>
 
 #include <exanb/core/quaternion_operators.h>
 
@@ -67,7 +67,7 @@ namespace exaStamp
       double nddl_y=0.;
       double nddl_z=0.;
 
-      static const double k = UnityConverterHelper::convert(legacy_constant::boltzmann, "J/K");
+      static const double k = UnityConverterHelper::convert(onika::physics::boltzmann, "J/K");
       const double T           = *(this->T);
       //double sum_nrj=0.0;
 
@@ -75,7 +75,7 @@ namespace exaStamp
 #     pragma omp parallel
       {
         //creation graine pour distribution gaussienne
-        auto& re = rand::random_engine();
+        auto& re = onika::parallel::random_engine();
         GRID_OMP_FOR_BEGIN(dims_no_ghost,_,loc_no_ghosts, reduction(+:sum_mass,sum_vx,sum_vxc,sum_vy,sum_vyc,sum_vz,sum_vzc,sum_wx,sum_wxc,sum_wy,sum_wyc,sum_wz,sum_wzc,sum_mix,sum_miy,sum_miz,N,nddl_x,nddl_y,nddl_z) schedule(dynamic) )
         {
           IJK loc = loc_no_ghosts + ghost_layers;

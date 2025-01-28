@@ -1,4 +1,4 @@
-#pragma xstamp_cuda_enable // DO NOT REMOVE THIS LINE
+#pragma xstamp // DO NOT REMOVE THIS LINE
 
 #include <onika/scg/operator.h>
 #include <onika/scg/operator_slot.h>

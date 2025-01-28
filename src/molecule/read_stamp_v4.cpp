@@ -11,7 +11,7 @@
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exaStamp/molecule/molecule_species.h>
 
-#include <exanb/core/quantity.h>
+#include <onika/physics/units.h>
 
 #include <exaStamp/molecule/read_stamp_v4.h>
 

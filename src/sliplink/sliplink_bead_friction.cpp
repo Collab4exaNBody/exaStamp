@@ -32,7 +32,7 @@ namespace exaStamp
 
 #     pragma omp parallel
       {
-        auto& re = rand::random_engine();
+        auto& re = onika::parallel::random_engine();
         std::normal_distribution<double> gaussian(0.0,sigma1);
 
         GRID_OMP_FOR_BEGIN(dims-2*gl,_,loc)

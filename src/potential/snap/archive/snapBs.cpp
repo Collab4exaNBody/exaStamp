@@ -1,6 +1,6 @@
 
 #include "snapBs.h"
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 
 #include <iostream>
 #include <fstream>
@@ -648,7 +648,7 @@ void snapBs::compute_bs()
 
 void snapBs::compute_bs0()
 {
-  // static const double conv_energy_inv =  1e-4 * exanb::legacy_constant::elementaryCharge / exanb::legacy_constant::atomicMass;
+  // static const double conv_energy_inv =  1e-4 * onika::physics::elementaryCharge / onika::physics::atomicMass;
   
   const unsigned int nbs_comp = n_idx_bs(m_two_jmax);
   double bzero[m_two_jmax+1]; 

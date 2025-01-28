@@ -28,7 +28,7 @@ namespace exaStamp
 namespace YAML
 {
   using exaStamp::Exp6Parms;
-  using exanb::Quantity;
+  using onika::physics::Quantity;
 
   template<> struct convert<Exp6Parms>
   {

@@ -6,7 +6,7 @@
 #include <sstream>
 #include <map>
 #include <string>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 #include <onika/log.h>
 
 namespace SnapExt
@@ -79,7 +79,7 @@ void snap_read_lammps(const std::string& paramFileName, const std::string& coefF
   
   std::istringstream(line) >> n_materials >> coefs_per_material;
 
-  static const double conv_energy_inv =  1e-4 * exanb::legacy_constant::elementaryCharge / exanb::legacy_constant::atomicMass;
+  static const double conv_energy_inv =  1e-4 * onika::physics::elementaryCharge / onika::physics::atomicMass;
 
   for(size_t m=0;m<n_materials;m++)
     {

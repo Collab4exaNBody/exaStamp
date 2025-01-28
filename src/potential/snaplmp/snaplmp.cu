@@ -1,4 +1,4 @@
-//#/* */pragma xstamp_cuda_enable
+//#/* */pragma xstamp
 
 
 

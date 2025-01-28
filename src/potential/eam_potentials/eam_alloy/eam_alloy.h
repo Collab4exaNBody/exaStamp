@@ -3,7 +3,7 @@
 #include <cmath>
 #include <yaml-cpp/yaml.h>
 #include <onika/physics/units.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 #include <onika/math/basic_types_operators.h>
 #include <onika/cuda/cuda.h>
 #include <onika/cuda/cuda_math.h>

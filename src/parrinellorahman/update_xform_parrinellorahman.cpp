@@ -11,7 +11,7 @@
 #include <onika/math/basic_types_operators.h>
 #include <onika/math/basic_types_yaml.h>
 #include <onika/math/basic_types_stream.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 
 #include <exanb/core/string_utils.h>
 #include <exanb/core/print_utils.h>
@@ -78,9 +78,9 @@ namespace exaStamp
       double Lb = norm(b);
       double Lc = norm(c);
 
-      double alpha = 180. * asin(norm(cross(a,b)) / (La * Lb)) / legacy_constant::pi;
-      double beta  = 180. * asin(norm(cross(b,c)) / (Lb * Lc)) / legacy_constant::pi;
-      double gamma = 180. * asin(norm(cross(c,a)) / (Lc * La)) / legacy_constant::pi;
+      double alpha = 180. * asin(norm(cross(a,b)) / (La * Lb)) / M_PI;
+      double beta  = 180. * asin(norm(cross(b,c)) / (Lb * Lc)) / M_PI;
+      double gamma = 180. * asin(norm(cross(c,a)) / (Lc * La)) / M_PI;
 
       oss << format_string("%9ld % .6e % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e \n",
 			   *timestep,

@@ -6,7 +6,7 @@
 #include <yaml-cpp/yaml.h>
 #include <onika/physics/units.h>
 #include <exaStamp/potential_factory/pair_potential.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 
 #include <onika/cuda/cuda.h>
 
@@ -39,7 +39,7 @@ namespace YAML
   {
     static bool decode(const Node& node, exaStamp::RelaxParms& v)
     {
-      using exanb::Quantity;
+      using onika::physics::Quantity;
       v = exaStamp::RelaxParms{};
       if( !node.IsMap() ) { return false; }
       if( ! node["r1"] ) { return false; }

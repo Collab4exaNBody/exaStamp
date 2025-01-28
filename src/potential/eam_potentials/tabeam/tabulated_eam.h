@@ -88,7 +88,7 @@ namespace YAML
 {
   using exaStamp::TabEAMPotentialParms;
   using exanb::UnityConverterHelper;
-  using exanb::Quantity;
+  using onika::physics::Quantity;
 
   template<> struct convert<TabEAMPotentialParms>
   {

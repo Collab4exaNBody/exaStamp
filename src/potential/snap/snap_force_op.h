@@ -1,6 +1,6 @@
 #pragma once
 
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 #include <exanb/core/concurent_add_contributions.h>
 #include <onika/cuda/cuda.h>
 

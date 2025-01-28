@@ -35,7 +35,7 @@ namespace YAML
 {
   using exaStamp::LennardJonesParms;
   using exanb::UnityConverterHelper;
-  using exanb::Quantity;
+  using onika::physics::Quantity;
 
   template<> struct convert<LennardJonesParms>
   {

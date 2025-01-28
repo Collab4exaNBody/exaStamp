@@ -27,7 +27,7 @@ namespace YAML
       cmap.clear();
       for(auto p: node)
       {
-        cmap[ p.first.as<std::string>() ] = p.second.as<exanb::Quantity>().convert();
+        cmap[ p.first.as<std::string>() ] = p.second.as<onika::physics::Quantity>().convert();
       }
       return true;
     }

@@ -1,7 +1,7 @@
 #include "ravelo.h"
 #include <exanb/core/file_utils.h>
 #include <onika/log.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 
 // Yaml conversion operators, allows to read potential parameters from config file
 namespace YAML
@@ -10,7 +10,7 @@ namespace YAML
   bool convert<exaStamp::EamRaveloParameters>::decode(const Node& _node, exaStamp::EamRaveloParameters& v)
   {
     using exanb::UnityConverterHelper;
-    using exanb::Quantity;
+    using onika::physics::Quantity;
     using exanb::lout;
     using exanb::lerr;
     using exanb::ldbg;
@@ -44,8 +44,8 @@ namespace YAML
     {
       if (node["format"].as<std::string>() == "exastampv1")
       {
-        fs = exanb::legacy_constant::avogadro * 1.e-1 ; // .... <--
-        dfs = exanb::legacy_constant::avogadro * 1.e-3 ;
+        fs = onika::physics::avogadro * 1.e-1 ; // .... <--
+        dfs = onika::physics::avogadro * 1.e-3 ;
       }
     }
 

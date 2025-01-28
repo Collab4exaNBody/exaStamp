@@ -2,7 +2,7 @@
 
 #include <yaml-cpp/yaml.h>
 #include <onika/physics/units.h>
-#include <exanb/core/unityConverterHelper.h>
+#include <onika/physics/units.h>
 #include <onika/memory/allocator.h>
 #include <onika/math/basic_types.h>
 #include <onika/math/basic_types_yaml.h>
@@ -343,7 +343,7 @@ namespace YAML
 {
   using exaStamp::EwaldParms;
   using exanb::UnityConverterHelper;
-  using exanb::Quantity;
+  using onika::physics::Quantity;
   using exanb::Vec3d;
   using exaStamp::ewald_init_parameters;
 

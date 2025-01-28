@@ -56,7 +56,7 @@ namespace YAML
   using exaStamp::LJWOLFParms;
   using exaStamp::LennardJonesParms;
   using exaStamp::CoulWolfParms;
-  using exanb::Quantity;
+  using onika::physics::Quantity;
   using exaStamp::lj_compute_energy;
   using exaStamp::PairPotentialMinimalParameters;
 

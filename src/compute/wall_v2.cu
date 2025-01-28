@@ -1,7 +1,3 @@
-_cuda_enable
-
-
-
 #include <onika/scg/operator.h>
 #include <onika/scg/operator_slot.h>
 #include <onika/scg/operator_factory.h>
@@ -17,6 +13,8 @@ _cuda_enable
 #include <exanb/compute/compute_cell_particles.h>
 #include <exanb/compute/compute_pair_optional_args.h>
 
+#include <exaStamp/compute/unit_system.h>
+
 #include <cmath>
 
 namespace exaStamp
@@ -31,7 +29,7 @@ namespace exaStamp
     const double D;
     const double R;
     const long exposant = 12;
-    const double epsilon = make_quantity(1.0e-19,"J").convert();
+    const double epsilon = onika::physics::make_quantity( 1.0e-19 , "J" ).convert();
     XFormT xform;
     
     ONIKA_HOST_DEVICE_FUNC inline void operator () ( double rx, double ry, double rz, double& fx, double& fy, double& fz, double& ep ) const
@@ -82,14 +80,16 @@ namespace exaStamp
     , class = AssertGridHasFields< GridT, field::_fx, field::_fy, field::_fz, field::_ep >
     >
   class WallV2 : public OperatorNode
-  {  
+  {
+    static inline constexpr double default_epsilon = ONIKA_CONST_QUANTITY( 1.0e-19 * J ).convert( exaStamp::UNIT_SYSTEM );
+  
     ADD_SLOT( GridT  , grid    , INPUT_OUTPUT );
     ADD_SLOT( Vec3d  , normal  , INPUT , Vec3d{1.0,0.0,0.0} );
     ADD_SLOT( double , offset  , INPUT , 0.0 );
     ADD_SLOT( double , cutoff  , INPUT , REQUIRED );
     ADD_SLOT( Domain , domain  , INPUT , REQUIRED );
     ADD_SLOT( long   , exponent, INPUT , 12 );
-    ADD_SLOT( double , epsilon , INPUT , make_quantity(1.0e-19,"J").convert() );
+    ADD_SLOT( double , epsilon , INPUT , default_epsilon );
 
     static constexpr FieldSet<field::_rx,field::_ry,field::_rz, field::_fx, field::_fy, field::_fz, field::_ep > compute_field_set{};
 
@@ -116,6 +116,7 @@ namespace exaStamp
  // === register factories ===  
   ONIKA_AUTORUN_INIT(wall_v2)
   {
+   OperatorNodeFactory::instance()->register_factory( "wall", make_grid_variant_operator< WallV2Tmpl > );
    OperatorNodeFactory::instance()->register_factory( "wall_v2", make_grid_variant_operator< WallV2Tmpl > );
   }
 

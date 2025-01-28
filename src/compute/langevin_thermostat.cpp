@@ -8,9 +8,9 @@
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid_fields.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/quantity.h>
-#include <exanb/core/physics_constants.h>
-#include <exanb/core/unityConverterHelper.h>
+#include <onika/physics/units.h>
+#include <onika/physics/constants.h>
+#include <onika/physics/units.h>
 #include <onika/memory/allocator.h>
 #include <onika/parallel/random.h>
 #include <exanb/grid_cell_particles/particle_region.h>
@@ -91,7 +91,7 @@ namespace exaStamp
     // -----------------------------------------------
     inline void execute ()  override final
     {
-      static const double k = UnityConverterHelper::convert(legacy_constant::boltzmann, "J/K");
+      const double k = onika::physics::make_quantity( onika::physics::boltzmann , "J/K" );
 
       if( grid->number_of_cells() == 0 ) return;
 
@@ -164,7 +164,7 @@ namespace exaStamp
 
 #     pragma omp parallel
       {
-        auto& re = rand::random_engine();
+        auto& re = onika::parallel::random_engine();
         std::normal_distribution<double> f_rand(0.0,1.0);
 
         GRID_OMP_FOR_BEGIN(dims-2*gl,_,loc, schedule(dynamic) )

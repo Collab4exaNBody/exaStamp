@@ -1,4 +1,4 @@
-// _cuda_enable  // DO NOT REMOVE THIS LINE !!
+//   // DO NOT REMOVE THIS LINE !!
 
 //   // DO NOT REMOVE THIS LINE !!
 
@@ -11,7 +11,7 @@
 #include <exanb/core/grid.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid_fields.h>
-#include <exanb/core/quantity.h>
+#include <onika/physics/units.h>
 #include <exanb/compute/compute_cell_particles.h>
 
 namespace exaStamp

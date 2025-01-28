@@ -211,7 +211,7 @@ namespace YAML
       double rcut = 0.0;
       if( node["rcut"] )
       {
-        rcut = node["rcut"].as<exanb::Quantity>().convert();
+        rcut = node["rcut"].as<onika::physics::Quantity>().convert();
       }
 
       if( node["exp6"] )

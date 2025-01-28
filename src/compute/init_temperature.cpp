@@ -8,7 +8,7 @@
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid_fields.h>
 #include <onika/math/basic_types_stream.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 #include <onika/parallel/random.h>
 
 #include <mpi.h>
@@ -46,7 +46,7 @@ namespace exaStamp
   public:
     inline void execute () override final
     {
-      static constexpr double conv_temperature = 1.e4 * legacy_constant::atomicMass / legacy_constant::boltzmann ;
+      static constexpr double conv_temperature = 1.e4 * onika::physics::atomicMass / onika::physics::boltzmann ;
 
       // build particle selection object 'prcsg' from region expression, if any specified
       ParticleRegionCSGShallowCopy prcsg;
@@ -97,7 +97,7 @@ namespace exaStamp
 
 #     pragma omp parallel
       {
-        auto& re = rand::random_engine();
+        auto& re = onika::parallel::random_engine();
         std::normal_distribution<double> gaussian(0.0,1.0);
         
         GRID_OMP_FOR_BEGIN(dims_no_ghost,_,loc_no_ghosts, reduction(+:momentum,kinetic_energy,total_mass,total_particles) schedule(dynamic) )

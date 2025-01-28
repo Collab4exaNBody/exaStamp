@@ -14,9 +14,9 @@
 #include <onika/log.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <onika/parallel/random.h>
-#include <exanb/core/unityConverterHelper.h>
-#include <exanb/core/physics_constants.h>
-#include <exanb/core/quantity.h>
+#include <onika/physics/units.h>
+#include <onika/physics/constants.h>
+#include <onika/physics/units.h>
 
 //#include "quaternion_rotation.h"
 #include <exanb/core/quaternion_operators.h>
@@ -43,7 +43,7 @@ namespace exaStamp
   public:
     inline void execute () override final
     {
-      static const double k = UnityConverterHelper::convert(legacy_constant::boltzmann, "J/K");
+      static const double k = UnityConverterHelper::convert(onika::physics::boltzmann, "J/K");
     
       auto cells = grid->cells();
       IJK dims = grid->dimension();
@@ -67,7 +67,7 @@ namespace exaStamp
 #     pragma omp parallel
       {
         //creation graine pour distribution gaussienne
-        auto& re = rand::random_engine();
+        auto& re = onika::parallel::random_engine();
         std::normal_distribution<double> f_rand(0.0 , 1.0) ;
         GRID_OMP_FOR_BEGIN(dims_no_ghost,_,loc_no_ghosts, schedule(dynamic) )
         {

@@ -5,7 +5,7 @@
 #include <exanb/core/string_utils.h>
 #include <exanb/core/print_utils.h>
 #include <exaStamp/compute/thermodynamic_state.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 
 #include <sstream>
 #include <mpi.h>
@@ -28,9 +28,9 @@ namespace exaStamp
     
     inline void execute () override final
     {
-      static const double conv_temperature = 1.e4 * legacy_constant::atomicMass / legacy_constant::boltzmann ;
-      static const double conv_energy = 1.e4 * legacy_constant::atomicMass / legacy_constant::elementaryCharge;
-      static const double conv_pressure = legacy_constant::atomicMass * 1e20;
+      static const double conv_temperature = 1.e4 * onika::physics::atomicMass / onika::physics::boltzmann ;
+      static const double conv_energy = 1.e4 * onika::physics::atomicMass / onika::physics::elementaryCharge;
+      static const double conv_pressure = onika::physics::atomicMass * 1e20;
       static const std::string header = "     Step     Time (ps)     Particles   Tot. E. (eV/part)  Kin. E. (eV/part)  Rot. E. (eV/part)  Pot. E. (eV/part)  Temperature   Pressure     sMises     Volume       Mass  Kin. Tx  Kin. Ty  Kin. Tz  Rot. Tx  Rot. Ty  Rot. Tz ";
 
       // MPI Initialization

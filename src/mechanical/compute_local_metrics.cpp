@@ -10,7 +10,7 @@
 #include <onika/math/basic_types_stream.h>
 #include <onika/log.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/quantity.h>
+#include <onika/physics/units.h>
 #include <exanb/core/string_utils.h>
 #include <exanb/core/grid_fields.h>
 

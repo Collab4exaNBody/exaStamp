@@ -6,9 +6,9 @@
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid_fields.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/quantity.h>
-#include <exanb/core/physics_constants.h>
-#include <exanb/core/unityConverterHelper.h>
+#include <onika/physics/units.h>
+#include <onika/physics/constants.h>
+#include <onika/physics/units.h>
 #include <onika/parallel/random.h>
 #include <onika/physics/units.h>
 #include <onika/math/basic_types_yaml.h>
@@ -35,7 +35,7 @@ namespace YAML
   {
     static inline bool decode(const Node& node, exaStamp::MaterialLangevin& v)
     {
-      using exanb::Quantity;
+      using onika::physics::Quantity;
       
       if( ! node.IsMap() ) return false;
       if( ! node["gamma"] ) return false;
@@ -77,7 +77,7 @@ namespace exaStamp
     // -----------------------------------------------
     inline void execute ()  override final
     {
-      static const double k = UnityConverterHelper::convert(legacy_constant::boltzmann, "J/K");
+      const double k = onika::physics::make_quantity( onika::physics::boltzmann , "J/K" );
 
       ldbg << "per material langevin: dt="<<*dt<<std::endl;
 
@@ -107,7 +107,7 @@ namespace exaStamp
 
 #     pragma omp parallel
       {
-        auto& re = rand::random_engine();
+        auto& re = onika::parallel::random_engine();
         std::normal_distribution<double> f_rand(0.0,1.0);
 
         GRID_OMP_FOR_BEGIN(dims-2*gl,_,loc, schedule(dynamic) )

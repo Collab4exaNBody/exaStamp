@@ -25,7 +25,7 @@
 //#include "exanb/vector_utils.h"
 #include <exanb/core/file_utils.h>
 #include <exanb/core/check_particles_inside_cell.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 #include <onika/parallel/random.h>
 
 #include <exanb/core/thread.h>
@@ -185,7 +185,7 @@ namespace exaStamp
 	  {0.25000000,    0.58333333,    0.75000000} ,
 	  {0.75000000,    0.08333333,    0.75000000} };
 
-	size.y = 2. * size.y * sin(120. * exanb::legacy_constant::pi / 180.);
+	size.y = 2. * size.y * sin(120. * M_PI / 180.);
 	
 	lout << "hcp cell = " << size << std::endl;
       } else if (structure == "DIAMOND" ) {
@@ -488,7 +488,7 @@ namespace exaStamp
 		      
 		      if (is_noise) {
 
-			auto& re = rand::random_engine();
+			auto& re = onika::parallel::random_engine();
 			std::normal_distribution<double> f_rand(0.,sigma_noise);
 			pos.x += f_rand(re);
 			pos.y += f_rand(re);

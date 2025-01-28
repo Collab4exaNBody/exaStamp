@@ -4,7 +4,7 @@
 #include <onika/log.h>
 #include <exanb/core/string_utils.h>
 #include <exaStamp/compute/thermodynamic_state.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 
 namespace exaStamp
 {
@@ -32,9 +32,9 @@ namespace exaStamp
 
     inline void execute () override final
     {
-      double conv_temperature = 1.e4 * legacy_constant::atomicMass / legacy_constant::boltzmann ;
-      double conv_energy = 1.e4 * legacy_constant::atomicMass / legacy_constant::elementaryCharge;
-      double conv_pressure = legacy_constant::atomicMass * 1e20;
+      double conv_temperature = 1.e4 * onika::physics::atomicMass / onika::physics::boltzmann ;
+      double conv_energy = 1.e4 * onika::physics::atomicMass / onika::physics::elementaryCharge;
+      double conv_pressure = onika::physics::atomicMass * 1e20;
       
       static const std::string header = "     Step     Time (ps)     Particles   Mv/Ext/Imb.  Tot. E. (eV/part)  Kin. E. (eV/part)  Rot. E. (eV/part)  Pot. E. (eV/part)      T. (K)     Tkin (K)    Trot (K) Pressure    sMises    Volume       Mass";
       

@@ -84,7 +84,7 @@ namespace exaStamp
       uint64_t bead_id_start = chain_start * n_beads;
       uint64_t bead_id = bead_id_start;
 
-      auto& re = rand::random_engine();
+      auto& re = onika::parallel::random_engine();
 
       for(size_t c=0;c<chain_count;c++)
       {

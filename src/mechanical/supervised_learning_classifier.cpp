@@ -10,7 +10,7 @@
 #include <onika/math/basic_types_stream.h>
 #include <onika/log.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/quantity.h>
+#include <onika/physics/units.h>
 #include <exanb/core/string_utils.h>
 #include <exaStamp/compute/thermodynamic_state.h>
 #include <exaStamp/particle_species/particle_specie.h>

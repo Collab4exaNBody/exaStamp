@@ -9,7 +9,7 @@
 #include <exaStamp/particle_species/particle_specie.h>
 #include <onika/memory/allocator.h>
 #include <exanb/grid_cell_particles/grid_cell_values.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 
 #include <exaStamp/mechanical/cell_particles_local_mechanical_metrics.h>
 

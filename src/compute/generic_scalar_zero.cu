@@ -17,7 +17,7 @@ specific language governing permissions and limitations
 under the License.
 */
 
-//_cuda_enable // DO NOT REMOVE THIS LINE
+// // DO NOT REMOVE THIS LINE
 
 #include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>

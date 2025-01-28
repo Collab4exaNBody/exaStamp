@@ -1,4 +1,4 @@
-_cuda_enable
+
 
 
 
@@ -18,9 +18,9 @@ _cuda_enable
 #include <onika/log.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <onika/parallel/random.h>
-#include <exanb/core/unityConverterHelper.h>
-#include <exanb/core/physics_constants.h>
-#include <exanb/core/quantity.h>
+#include <onika/physics/units.h>
+#include <onika/physics/constants.h>
+#include <onika/physics/units.h>
 
 #include <onika/cuda/cuda.h>
 #include <exanb/compute/compute_cell_particles.h>

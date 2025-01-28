@@ -8,8 +8,8 @@
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid_fields.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/quantity.h>
-#include <exanb/core/unityConverterHelper.h>
+#include <onika/physics/units.h>
+#include <onika/physics/units.h>
 #include <onika/memory/allocator.h>
 
 #include <onika/math/basic_types.h>
@@ -18,7 +18,7 @@
 #include <onika/math/basic_types_stream.h>
 #include <exaStamp/npt/npt.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 #include <exaStamp/compute/thermodynamic_state.h>
 
 #include <iostream>

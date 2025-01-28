@@ -7,7 +7,7 @@
 #include <exanb/grid_cell_particles/grid_cell_values.h>
 #include <exanb/core/grid_algorithm.h>
 #include <exanb/core/simple_block_rcb.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 
 #include <exanb/core/make_grid_variant_operator.h>
 
@@ -776,8 +776,8 @@ namespace exaStamp
                     }
                 }
 
-              // const double temp_cst = legacy_constant::atomicMass * 10000.0 / (3.0*legacy_constant::boltzmann);
-              const double temp_cst = legacy_constant::atomicMass * 10000.0 / (3.0*legacy_constant::boltzmann);
+              // const double temp_cst = onika::physics::atomicMass * 10000.0 / (3.0*onika::physics::boltzmann);
+              const double temp_cst = onika::physics::atomicMass * 10000.0 / (3.0*onika::physics::boltzmann);
               const double density_cst = 1.660539066;
               const double velocity_cst = 100.0;
               const double pressure_cst = 1.660539066 * 0.01;

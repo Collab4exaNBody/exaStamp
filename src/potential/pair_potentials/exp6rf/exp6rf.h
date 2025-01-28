@@ -52,7 +52,7 @@ namespace YAML
   using exaStamp::Exp6RFParms;
   using exaStamp::Exp6Parms;
   using exaStamp::ReactionFieldParms;
-  using exanb::Quantity;
+  using onika::physics::Quantity;
   using exaStamp::exp6_compute_energy;
   using exaStamp::PairPotentialMinimalParameters;
 

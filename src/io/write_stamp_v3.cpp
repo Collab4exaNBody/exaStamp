@@ -8,7 +8,7 @@
 #include <onika/math/basic_types_stream.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <onika/log.h>
-#include <exanb/core/unityConverterHelper.h>
+#include <onika/physics/units.h>
 
 #include <exaStamp/io/StampV3LegacyIOStructures.h>
 

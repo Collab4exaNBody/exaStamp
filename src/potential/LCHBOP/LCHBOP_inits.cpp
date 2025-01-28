@@ -7,7 +7,7 @@
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/quantity.h>
+#include <onika/physics/units.h>
 #include <exanb/core/particle_id_codec.h>
 
 #include <memory>
@@ -21,7 +21,7 @@
 #include <string>
 
 #include <onika/physics/units.h>
-#include <exanb/core/unityConverterHelper.h>
+#include <onika/physics/units.h>
 //#include "exanb/container_utils.h"
 #include <onika/log.h>
 #include <exanb/core/file_utils.h>

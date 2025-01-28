@@ -7,7 +7,7 @@
 #include <onika/math/basic_types_stream.h>
 #include <exaStamp/npt/npt.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 #include <exaStamp/compute/thermodynamic_state.h>
 
 #include <iostream>
@@ -29,7 +29,7 @@ namespace exaStamp
     
     inline void execute () override final
     {
-      static const double conv_temperature = 1.e4 * legacy_constant::atomicMass / legacy_constant::boltzmann;
+      static const double conv_temperature = 1.e4 * onika::physics::atomicMass / onika::physics::boltzmann;
       const ThermodynamicState& sim_info = *(this->thermodynamic_state);
       long natoms = sim_info.particle_count();
       npt_ctx->t_current = sim_info.temperature_scal() / natoms * conv_temperature;

@@ -12,8 +12,8 @@ set(CMAKE_CXX_EXTENSIONS NO)
 # === Project ===
 # ===============
 project(exaStamp VERSION 3.6 LANGUAGES C CXX)
-set(EXASTAMP_VERSION "exaSPH-${CMAKE_PROJECT_VERSION}") 
-message(STATUS "Project version : ${EXASPH_VERSION}")
+set(EXASTAMP_VERSION ${CMAKE_PROJECT_VERSION}) 
+message(STATUS "Project version : ${EXASTAMP_VERSION}")
 
 # ===========================
 # === CMake customization ===
@@ -25,7 +25,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 # === exaStamp package specializations ===
 # ======================================
 set(XNB_INCLUDE_DIRECTORIES ${CMAKE_SOURCE_DIR}/include)
-set(XNB_COMPILE_DEFINITIONS XNB_DOMAIN_SPECIFIC_FIELDS_INCLUDE=\<exaStamp/fields.h\>)
+set(XNB_COMPILE_DEFINITIONS XNB_DOMAIN_SPECIFIC_FIELDS_INCLUDE=\<exaStamp/fields.h\> EXASTAMP_VERSION=${EXASTAMP_VERSION})
 set(XNB_APP_HAS_GRID_SPECIALIZATIONS ON)
 
 # ======================================

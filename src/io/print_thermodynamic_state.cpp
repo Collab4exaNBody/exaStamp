@@ -4,7 +4,7 @@
 #include <onika/log.h>
 #include <exanb/core/string_utils.h>
 #include <exaStamp/compute/thermodynamic_state.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 #include <exanb/core/domain.h>
 
 #include <exaStamp/io/thermodynamic_log_config.h>
@@ -203,12 +203,12 @@ namespace exaStamp
         log_config->m_active_items.push_back( ThermodynamicLogConfig::ELECTRON_E );
       }
     
-      double conv_temperature = 1.e4 * legacy_constant::atomicMass / legacy_constant::boltzmann ;       // internal units to Kelvin
-      //double conv_energy = 1.e4 * legacy_constant::atomicMass / legacy_constant::elementaryCharge;    // internal units to Joule
-      double conv_energy = 1.e4 * legacy_constant::atomicMass / legacy_constant::elementaryCharge;      // internal units to eV
-//      double conv_pressure = legacy_constant::atomicMass * 1e20;					// ORIGINAL LINE - NO IDEA WHAT UNITS THIS IS (1e-14 Pascal)
-      double conv_pressure = 1.e4 * legacy_constant::atomicMass * 1e30;                                 // internal units to Pascal
-      double conv_density = legacy_constant::atomicMass*1e3*1e24;                                       // internal units to g/cm^3
+      double conv_temperature = 1.e4 * onika::physics::atomicMass / onika::physics::boltzmann ;       // internal units to Kelvin
+      //double conv_energy = 1.e4 * onika::physics::atomicMass / onika::physics::elementaryCharge;    // internal units to Joule
+      double conv_energy = 1.e4 * onika::physics::atomicMass / onika::physics::elementaryCharge;      // internal units to eV
+//      double conv_pressure = onika::physics::atomicMass * 1e20;					// ORIGINAL LINE - NO IDEA WHAT UNITS THIS IS (1e-14 Pascal)
+      double conv_pressure = 1.e4 * onika::physics::atomicMass * 1e30;                                 // internal units to Pascal
+      double conv_density = onika::physics::atomicMass*1e3*1e24;                                       // internal units to g/cm^3
 
             
       if( *internal_units )

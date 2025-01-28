@@ -1,7 +1,7 @@
 #include "tabulated_eam.h"
 #include <exanb/core/file_utils.h>
 #include <onika/log.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 
 // Yaml conversion operators, allows to read potential parameters from config file
 namespace YAML
@@ -10,7 +10,7 @@ namespace YAML
   bool convert<exaStamp::TabEAMPotentialParms>::decode(const Node& _node, exaStamp::TabEAMPotentialParms& v)
   {
     using exanb::UnityConverterHelper;
-    using exanb::Quantity;
+    using onika::physics::Quantity;
     using exanb::lout;
     using exanb::lerr;
     using exanb::ldbg;
@@ -49,10 +49,10 @@ namespace YAML
     {
       if (node["format"].as<std::string>() == "exastampv1")
       {
-        phis = exanb::legacy_constant::avogadro * 1.e-1 ;
-        dphis = exanb::legacy_constant::avogadro * 1.e-11;
-        fs = exanb::legacy_constant::avogadro * 1.e-1 ; // .... <--
-        dfs = exanb::legacy_constant::avogadro * 1.e-3 ;
+        phis = onika::physics::avogadro * 1.e-1 ;
+        dphis = onika::physics::avogadro * 1.e-11;
+        fs = onika::physics::avogadro * 1.e-1 ; // .... <--
+        dfs = onika::physics::avogadro * 1.e-3 ;
         drhos = 1.e-8; // drho scale factor
         rhos = 1.0;
         ls = exanb::make_quantity(1.0,"m").convert();

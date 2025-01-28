@@ -7,7 +7,7 @@
 #include <onika/math/basic_types_stream.h>
 #include <exaStamp/npt/npt.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 #include <exaStamp/compute/thermodynamic_state.h>
 
 #include <iostream>
@@ -26,7 +26,7 @@ namespace exaStamp
     inline void execute () override final
     {
       const ThermodynamicState& sim_info = *(this->thermodynamic_state);
-      static const double conv_pressure = 1.e4 * legacy_constant::atomicMass * UnityConverterHelper::convert(1, "m^3");
+      static const double conv_pressure = 1.e4 * onika::physics::atomicMass * UnityConverterHelper::convert(1, "m^3");
       double pascal_to_bar = 1.e-5;
       
       Mat3d tensor = pascal_to_bar * sim_info.full_stress_tensor() * conv_pressure;

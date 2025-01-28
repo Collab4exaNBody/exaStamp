@@ -172,7 +172,7 @@ namespace exaStamp
 
 	        if (is_noise) {
 
-	          auto& re = rand::random_engine();
+	          auto& re = onika::parallel::random_engine();
 	          std::normal_distribution<double> f_rand(0.,sigma_noise);
 	          x += f_rand(re);
 	          y += f_rand(re);

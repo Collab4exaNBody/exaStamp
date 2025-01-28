@@ -81,7 +81,7 @@ namespace exaStamp
 
 #     pragma omp parallel
       {
-        auto& re = rand::random_engine();
+        auto& re = onika::parallel::random_engine();
         // random distributions used for sliplink parameters
         std::uniform_int_distribution<size_t> random_chain( 0 , n_chains-1 );
         std::uniform_int_distribution<size_t> random_bead( 0 , n_beads-2 );
@@ -375,7 +375,7 @@ namespace exaStamp
 
 #       pragma omp parallel
         {
-          auto& re = rand::random_engine();
+          auto& re = onika::parallel::random_engine();
           GRID_OMP_FOR_BEGIN(dims_no_ghost,_,loc_no_ghost)
           {
             IJK loc = loc_no_ghost + ghost_layers;

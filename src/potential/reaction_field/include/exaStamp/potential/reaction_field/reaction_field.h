@@ -2,9 +2,9 @@
 
 #include <yaml-cpp/yaml.h>
 #include <onika/physics/units.h>
-#include <exanb/core/unityConverterHelper.h>
+#include <onika/physics/units.h>
 //#include <exanb/pair_potential.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 
 #include <onika/cuda/cuda.h>
 
@@ -38,7 +38,7 @@ namespace exaStamp
 
   inline void init_rf(ReactionFieldParms& v, double rc, double epsilon)
   {
-    const double one_FourPiEpsilon0 = 1./4./M_PI/UnityConverterHelper::convert(exanb::legacy_constant::epsilonZero, "C^2.s^2/m^3/kg^1");
+    const double one_FourPiEpsilon0 = 1./4./M_PI/UnityConverterHelper::convert(onika::physics::epsilonZero, "C^2.s^2/m^3/kg^1");
     v.rc = rc;
     if( rc==0.0 || epsilon==0.0 )
     {
@@ -69,7 +69,7 @@ namespace YAML
   using exaStamp::ReactionFieldParms;
   using exaStamp::reaction_field_compute_energy;
   using exanb::UnityConverterHelper;
-  using exanb::Quantity;
+  using onika::physics::Quantity;
 
   template<> struct convert<ReactionFieldParms>
   {

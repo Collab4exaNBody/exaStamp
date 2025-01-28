@@ -7,7 +7,7 @@
 #include <onika/math/basic_types_stream.h>
 #include <exaStamp/npt/npt.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 
 #include <iostream>
 #include <string>
@@ -74,8 +74,8 @@ namespace exaStamp
       double pascal_to_bar = 1.e-5;      
       *npt_ctx = NPTContext { *algo, *Pmode};
 
-      npt_ctx->boltz = UnityConverterHelper::convert(1, "J/eV") * legacy_constant::boltzmann;
-      npt_ctx->nktv2p = UnityConverterHelper::convert(1, "m^3") * legacy_constant::elementaryCharge * pascal_to_bar;      
+      npt_ctx->boltz = UnityConverterHelper::convert(1, "J/eV") * onika::physics::boltzmann;
+      npt_ctx->nktv2p = UnityConverterHelper::convert(1, "m^3") * onika::physics::elementaryCharge * pascal_to_bar;      
       npt_ctx->dthalf = (*dt)/2.;
       npt_ctx->dt4 = (*dt)/4.;
       npt_ctx->dt8 = *dt/8.;

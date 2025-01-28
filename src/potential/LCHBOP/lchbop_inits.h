@@ -9,7 +9,7 @@
 #include <mpi.h>
 
 #include <onika/physics/units.h>
-#include <exanb/core/unityConverterHelper.h>
+#include <onika/physics/units.h>
 #include <exaStamp/particle_species/particle_specie.h>
 //#include "exanb/container_utils.h"
 #include <onika/log.h>

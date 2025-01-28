@@ -4,9 +4,9 @@
 #include <yaml-cpp/yaml.h>
 
 #include <onika/physics/units.h>
-#include <exanb/core/unityConverterHelper.h>
+#include <onika/physics/units.h>
 #include <exaStamp/potential_factory/pair_potential.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 
 #include <onika/cuda/cuda.h>
 
@@ -54,7 +54,7 @@ namespace YAML
 {
   using exaStamp::CoulWolfParms;
   using exanb::UnityConverterHelper;
-  using exanb::Quantity;
+  using onika::physics::Quantity;
 
   template<> struct convert<CoulWolfParms>
   {

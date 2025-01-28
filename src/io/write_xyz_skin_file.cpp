@@ -8,7 +8,7 @@
 #include <exanb/core/grid.h>
 #include <onika/math/basic_types_stream.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/quantity.h>
+#include <onika/physics/units.h>
 #include <exanb/core/string_utils.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exanb/core/grid_fields.h>

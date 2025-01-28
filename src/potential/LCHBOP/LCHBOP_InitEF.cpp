@@ -6,7 +6,7 @@
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/quantity.h>
+#include <onika/physics/units.h>
 #include <exanb/core/particle_id_codec.h>
 
 #include <memory>

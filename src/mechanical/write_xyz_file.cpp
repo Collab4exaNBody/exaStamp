@@ -17,7 +17,7 @@
 #include <exanb/defbox/deformation_stream.h>
 #include <exanb/defbox/deformation_yaml.h>
 #include <exanb/defbox/deformation_math.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 
 #include <exaStamp/mechanical/cell_particles_local_metrics.h>
 #include <exaStamp/mechanical/cell_particles_local_mechanical_metrics.h>
@@ -94,7 +94,7 @@ namespace exaStamp
       using std::vector;
       using std::ostringstream;
 
-      static const double conv_energy = 1.e4 * legacy_constant::atomicMass / legacy_constant::elementaryCharge;	// internal units to eV
+      static const double conv_energy = 1.e4 * onika::physics::atomicMass / onika::physics::elementaryCharge;	// internal units to eV
 
       GridT& grid = *(this->grid);
       bool is_ghosts = *(this->is_ghosts);

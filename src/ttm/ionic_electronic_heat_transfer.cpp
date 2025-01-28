@@ -9,9 +9,9 @@
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid_fields.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/quantity.h>
-#include <exanb/core/physics_constants.h>
-#include <exanb/core/unityConverterHelper.h>
+#include <onika/physics/units.h>
+#include <onika/physics/constants.h>
+#include <onika/physics/units.h>
 #include <onika/memory/allocator.h>
 #include <exanb/grid_cell_particles/grid_cell_values.h>
 #include <exanb/core/source_term.h>
@@ -106,7 +106,7 @@ namespace exaStamp
         return;
       }
   
-//      static const double k = UnityConverterHelper::convert(legacy_constant::boltzmann, "J/K");
+//      static const double k = UnityConverterHelper::convert(onika::physics::boltzmann, "J/K");
       //ldbg << "cell_heat: dt="<<(*dt)<<std::endl;
 
       size_t nSpecies = species->size();

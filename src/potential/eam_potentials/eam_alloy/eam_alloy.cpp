@@ -1,7 +1,7 @@
 #include "eam_alloy.h"
 #include <exanb/core/file_utils.h>
 #include <onika/log.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 #include <fstream>
 
 

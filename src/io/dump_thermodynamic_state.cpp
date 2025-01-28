@@ -5,7 +5,7 @@
 #include <exanb/core/string_utils.h>
 #include <exanb/core/print_utils.h>
 #include <exaStamp/compute/thermodynamic_state.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 #include <exanb/core/domain.h>
 
 #include <sstream>
@@ -33,12 +33,12 @@ namespace exaStamp
 
     inline void execute () override final
     {
-      static const double conv_temperature = 1.e4 * legacy_constant::atomicMass / legacy_constant::boltzmann ;	// internal units to Kelvin
-      //static const double conv_energy = 1.e4 * legacy_constant::atomicMass;					// internal units to Joule
-      static const double conv_energy = 1.e4 * legacy_constant::atomicMass / legacy_constant::elementaryCharge;	// internal units to eV
-      //static const double conv_pressure = legacy_constant::atomicMass * 1e20;					// ORIGINAL LINE - NO IDEA WHAT UNITS THIS IS (1e-14 Pascal)
-      static const double conv_pressure = 1.e4 * legacy_constant::atomicMass * 1e30;				// internal units to Pascal
-      static const double conv_density = legacy_constant::atomicMass*1e3*1e24; 					// internal units to g/cm^3
+      static const double conv_temperature = 1.e4 * onika::physics::atomicMass / onika::physics::boltzmann ;	// internal units to Kelvin
+      //static const double conv_energy = 1.e4 * onika::physics::atomicMass;					// internal units to Joule
+      static const double conv_energy = 1.e4 * onika::physics::atomicMass / onika::physics::elementaryCharge;	// internal units to eV
+      //static const double conv_pressure = onika::physics::atomicMass * 1e20;					// ORIGINAL LINE - NO IDEA WHAT UNITS THIS IS (1e-14 Pascal)
+      static const double conv_pressure = 1.e4 * onika::physics::atomicMass * 1e30;				// internal units to Pascal
+      static const double conv_density = onika::physics::atomicMass*1e3*1e24; 					// internal units to g/cm^3
 	
 //     static const std::string header = "###  Step     Time (ps)     Particles  Tot. E. (eV/part)  Kin. E. (eV/part)  Pot. E. (eV/part)  Temp. (K)                     Tx/Ty/Tz (K)    Press. (Pa)                                            Pxx/Pyy/Pzz (Pa) Pxy/Pxz/Pyz (Pa)   sMises (Pa)                            A/B/C (ang)    alpha/beta/gamma (deg)     Vol. (ang^3)  Rho (g/cm^3)";
      static const std::string header = "# Step     Time (ps)     Particles  Tot. E. (eV/part)  Kin. E. (eV/part)  Pot. E. (eV/part)  Temp. (K) Pxx Pyy Pzz Pxy Pxz Pyz (Pa) A/B/C (ang)    alpha/beta/gamma (deg)     Vol. (ang^3)  Rho (g/cm^3)";     

@@ -7,7 +7,7 @@
 #include <onika/math/basic_types_stream.h>
 #include <exaStamp/parrinellorahman/parrinellorahman.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 
 #include <iostream>
 #include <string>
@@ -35,7 +35,7 @@ namespace exaStamp
     {
       *parrinello_rahman_ctx = ParrinelloRahmanContext { { *Text, *masseNVT, *Pext, *masseNPT, *hmask, *hblend } };
 
-      static const double conv_pressure = 1.e4 * legacy_constant::atomicMass * 1e30;                            // internal units to Pascal
+      static const double conv_pressure = 1.e4 * onika::physics::atomicMass * 1e30;                            // internal units to Pascal
 
       lout << "=== Parrinello-Rahman scheme ===" << std::endl;
       lout << "  Text     : " << parrinello_rahman_ctx->m_config.m_Text               << " K" << std::endl;

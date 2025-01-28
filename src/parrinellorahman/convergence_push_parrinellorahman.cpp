@@ -10,9 +10,9 @@
 #include <exaStamp/parrinellorahman/parrinellorahman_stream.h>
 #include <exanb/core/domain.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/unityConverterHelper.h>
-#include <exanb/core/quantity.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/units.h>
+#include <onika/physics/units.h>
+#include <onika/physics/constants.h>
 #include <exaStamp/compute/thermodynamic_state.h>
 #include <onika/math/basic_types_stream.h>
 #include <exanb/core/value_streamer.h>
@@ -70,8 +70,8 @@ namespace exaStamp
   public:
     inline void execute () override final
     {
-      static constexpr double conv_temperature = 1.e4 * legacy_constant::atomicMass / legacy_constant::boltzmann ;
-      static const double boltzmann_internal = UnityConverterHelper::convert(legacy_constant::boltzmann, "m^2*kg/s^2/K");
+      static constexpr double conv_temperature = 1.e4 * onika::physics::atomicMass / onika::physics::boltzmann ;
+      static const double boltzmann_internal = UnityConverterHelper::convert(onika::physics::boltzmann, "m^2*kg/s^2/K");
       static const double conv_gammadt = UnityConverterHelper::convert(1.0, "1/m^2");
       static const double conv_gammanvt = UnityConverterHelper::convert(1.0, "s/m^2");
       // ldbg << "conv_gammanvt = " << conv_gammanvt << std::endl;

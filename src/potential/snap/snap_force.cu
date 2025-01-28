@@ -1,4 +1,4 @@
-// _cuda_enable    // DO NOT NOT REMOVE THIS LINE
+//     // DO NOT NOT REMOVE THIS LINE
 //    // DO NOT NOT REMOVE THIS LINE
 
 #include <exanb/core/grid.h>

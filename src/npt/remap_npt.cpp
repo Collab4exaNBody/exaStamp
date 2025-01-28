@@ -11,7 +11,7 @@
 #include <onika/math/basic_types_operators.h>
 #include <onika/math/basic_types_yaml.h>
 #include <onika/math/basic_types_stream.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 
 #include <exanb/core/string_utils.h>
 #include <exanb/core/print_utils.h>
