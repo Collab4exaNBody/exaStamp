@@ -3,5 +3,5 @@
 # ====================================================================
 
 set(exaStampNPT_LINK_LIBRARIES exaStampCompute exaStampParticleSpecies)
-xstamp_add_plugin(exaStampNPT ${CMAKE_CURRENT_SOURCE_DIR})
+onika_add_plugin(exaStampNPT ${CMAKE_CURRENT_SOURCE_DIR})
 

@@ -21,6 +21,6 @@ add_custom_target( SnapAutoGen
   BYPRODUCTS ${exaStampSnap_GENERATED_SOURCES} )
 
 set(exaStampSnap_LINK_LIBRARIES exaStampPotential exanbParticleNeighbors)
-xstamp_add_plugin(exaStampSnap ${CMAKE_CURRENT_SOURCE_DIR})
+onika_add_plugin(exaStampSnap ${CMAKE_CURRENT_SOURCE_DIR})
 add_dependencies(exaStampSnapPlugin SnapAutoGen)
 

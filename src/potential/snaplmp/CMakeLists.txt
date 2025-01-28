@@ -9,5 +9,5 @@ set(exaStampSnapLMP_EXTERNAL_HDRS ${LMP_SRC_DIR}/src/memory.h ${LMP_SRC_DIR}/src
 set(exaStampSnapLMP_LINK_LIBRARIES exaStampSnap exaStampPotential exanbParticleNeighbors)
 
 set(XSTAMP_BUILD_exaStampSnapLMP_DEFAULT OFF) # disbaled, have to be ativated by hand
-xstamp_add_plugin(exaStampSnapLMP ${CMAKE_CURRENT_SOURCE_DIR})
+onika_add_plugin(exaStampSnapLMP ${CMAKE_CURRENT_SOURCE_DIR})
 
