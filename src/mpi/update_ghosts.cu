@@ -24,7 +24,7 @@
 #include <exanb/mpi/update_ghost_utils.h>
 #include <exanb/mpi/ghosts_comm_scheme.h>
 #include <exanb/mpi/update_ghosts.h>
-#include <exanb/mpi/data_types.h>
+#include <onika/mpi/data_types.h>
 
 namespace exaStamp
 {

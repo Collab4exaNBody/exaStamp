@@ -127,7 +127,7 @@ namespace exaStamp
         //const auto gammaNVTp_old = data.m_gammaNVTp;
         //const auto hp_old = data.hp;
 /*
-        ldbg << default_stream_format
+        ldbg << onika::default_stream_format
              << "iteration "<< count <<" / "<<maxIter<<std::endl
              << "temp_old="<<temperature_old<<" gammaNVT_old="<<gammaNVT_old<<" gammaNVTp_old="<<gammaNVTp_old<<std::endl
              << "hp_old="<<hp_old <<std::endl;

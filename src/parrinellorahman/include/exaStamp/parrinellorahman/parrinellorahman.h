@@ -38,7 +38,7 @@ namespace exaStamp
     template<class StreamT>
     inline void print(StreamT& out)
     {
-      out << exanb::default_stream_format;
+      out << onika::default_stream_format;
       out << "Text        = " << this->m_config.m_Text << std::endl;
       out << "masseNVT    = " << this->m_config.m_masseNVT << std::endl;
       out << "Pext        = " << this->m_config.m_Pext << std::endl;

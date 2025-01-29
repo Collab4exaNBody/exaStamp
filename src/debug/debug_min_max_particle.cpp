@@ -139,7 +139,7 @@ namespace exaStamp
         if( ( f.m_min_cell>=0 && f.m_min_part>=0 && f.m_min_rank == rank ) || ( f.m_max_cell>=0 && f.m_max_part>=0 && f.m_max_rank == rank ) )
         {
           std::ostringstream oss;
-          oss<< default_stream_format;
+          oss<< onika::default_stream_format;
           if( f.m_min_cell>=0 && f.m_min_part>=0 && f.m_min_rank == rank )
           {
             oss << f.m_name << " MIN : P"<<rank<<", cell="<<f.m_min_cell<<", part="<<f.m_min_part<<" : ";

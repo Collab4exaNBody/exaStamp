@@ -281,10 +281,10 @@ namespace exaStamp
         if( pair_min[pair_id] != std::numeric_limits<double>::max() )
         {
           lout << species->at(ta).name() << " / " << species->at(tb).name()
-               << " : count = " << large_integer_to_string(pair_count[pair_id])
+               << " : count = " << onika::large_integer_to_string(pair_count[pair_id])
                << " , min = " << pair_min[pair_id]
                << " , max = " << pair_max[pair_id]
-               << " , count<"<<onika::format_string("% .3e",sqrt(pairdist[pair_id])) <<" = [ " << large_integer_to_string(pair_dist_count_min[pair_id])<<" ; "<< large_integer_to_string(pair_dist_count_max[pair_id])<<" ]"
+               << " , count<"<<onika::format_string("% .3e",sqrt(pairdist[pair_id])) <<" = [ " << onika::large_integer_to_string(pair_dist_count_min[pair_id])<<" ; "<< onika::large_integer_to_string(pair_dist_count_max[pair_id])<<" ]"
                << " , avg = " << (pair_sum[pair_id] / pair_count[pair_id]) << std::endl;
         }
       }

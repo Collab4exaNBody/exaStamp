@@ -5,7 +5,7 @@
 #include <exanb/core/grid.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/histogram.h>
-#include <exanb/mpi/data_types.h>
+#include <onika/mpi/data_types.h>
 
 #include <mpi.h>
 

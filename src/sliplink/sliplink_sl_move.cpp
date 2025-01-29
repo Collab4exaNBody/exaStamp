@@ -12,7 +12,7 @@
 #include <exanb/core/algorithm.h>
 #include <exaStamp/sliplink/sliplink.h>
 
-#include <exanb/mpi/data_types.h>
+#include <onika/mpi/data_types.h>
 
 #include <random>
 #include <mpi.h>

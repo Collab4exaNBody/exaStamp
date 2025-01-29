@@ -14,7 +14,7 @@
 #include <exanb/core/particle_id_codec.h>
 #include <exanb/core/check_particles_inside_cell.h>
 
-#include <exanb/mpi/data_types.h>
+#include <onika/mpi/data_types.h>
 #include <exanb/mpi/ghosts_comm_scheme.h>
 
 #include <mpi.h>

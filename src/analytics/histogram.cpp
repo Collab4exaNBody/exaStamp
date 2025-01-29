@@ -7,7 +7,7 @@
 #include <exanb/core/histogram.h>
 
 #include <mpi.h>
-#include <exanb/mpi/data_types.h>
+#include <onika/mpi/data_types.h>
 
 #include <memory>
 #include <vector>
