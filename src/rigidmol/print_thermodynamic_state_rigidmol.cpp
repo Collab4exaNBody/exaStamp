@@ -2,7 +2,7 @@
 #include <onika/scg/operator_slot.h>
 #include <onika/scg/operator_factory.h>
 #include <onika/log.h>
-#include <exanb/core/string_utils.h>
+#include <onika/string_utils.h>
 #include <exaStamp/compute/thermodynamic_state.h>
 #include <onika/physics/constants.h>
 
@@ -85,7 +85,7 @@ namespace exaStamp
         }
         else
         {
-          lb_value = format_string("%.1e", lb_inbalance);
+          lb_value = onika::format_string("%.1e", lb_inbalance);
         }
       }
 
@@ -102,7 +102,7 @@ namespace exaStamp
         lout << std::endl;
       }
 
-      lout<<format_string("%9ld % .6e %13ld  %c %c %8s  %.10e  %  .10e  % .10e  % .10e  % 11.3f % 11.3f % 11.3f % .3e % .3e % .3e % .3e",
+      lout<<onika::format_string("%9ld % .6e %13ld  %c %c %8s  %.10e  %  .10e  % .10e  % .10e  % 11.3f % 11.3f % 11.3f % .3e % .3e % .3e % .3e",
         *timestep,
 	      *physical_time,
         sim_info.particle_count(),
@@ -121,7 +121,7 @@ namespace exaStamp
       
       if( electronic_energy.has_value() )
       {
-        lout << format_string(" % .7e",(*electronic_energy) * conv_energy / sim_info.particle_count() );
+        lout << onika::format_string(" % .7e",(*electronic_energy) * conv_energy / sim_info.particle_count() );
       }
       lout << std::endl;
     }

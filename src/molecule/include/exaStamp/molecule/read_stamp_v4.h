@@ -10,7 +10,7 @@
 
 #include <exanb/io/mpi_file_io.h>
 #include <exaStamp/molecule/stampv4_io.h>
-#include <exanb/mpi/all_value_equal.h>
+#include <onika/mpi/all_value_equal.h>
 #include <onika/oarray.h>
 
 #include <exaStamp/molecule/molecule_species.h>

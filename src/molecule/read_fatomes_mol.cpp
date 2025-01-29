@@ -9,7 +9,7 @@
 
 #include <exanb/io/mpi_file_io.h>
 #include <exaStamp/molecule/stampv4_io.h>
-#include <exanb/mpi/all_value_equal.h>
+#include <onika/mpi/all_value_equal.h>
 #include <onika/oarray.h>
 
 #include <onika/math/basic_types_yaml.h>
@@ -19,7 +19,7 @@
 #include <exanb/core/make_grid_variant_operator.h>
 
 //#include "exanb/vector_utils.h"
-#include <exanb/core/file_utils.h>
+#include <onika/file_utils.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exaStamp/molecule/molecule_species.h>
 #include <exaStamp/molecule/bonds_potentials_parameters.h>
@@ -35,7 +35,7 @@
 #include <onika/parallel/random.h>
 #include <exanb/core/math_utils.h>
 #include <onika/math/basic_types_operators.h>
-#include <exanb/core/string_utils.h>
+#include <onika/string_utils.h>
 #include <exanb/defbox/deformation.h>
 #include <exanb/defbox/deformation_math.h>
 
@@ -97,7 +97,7 @@ namespace exaStamp
     inline void execute () override final
     {
       //-------------------------------------------------------------------------------------------
-      std::string file_name = data_file_path( *filename );
+      std::string file_name = onika::data_file_path( *filename );
       std::string basename;
       std::string::size_type p = file_name.rfind("/");
       if( p != std::string::npos ) basename = file_name.substr(p+1);
@@ -707,7 +707,7 @@ namespace exaStamp
         if( stampinput.has_value() )
         {
           //ldbg << "Init file = "<< *stampinput << std::endl;
-          file.open( data_file_path( *stampinput ) );
+          file.open( onika::data_file_path( *stampinput ) );
         }
         if( file.good() )
         {
@@ -837,7 +837,7 @@ namespace exaStamp
           const Vec3d r = { tp[field::rx] , tp[field::ry] , tp[field::rz] };
           IJK loc = grid->locate_cell( r ); // domain_periodic_location( *domain, r );
 //          const Vec3d v = { tp[field::vx] , tp[field::vy] , tp[field::vz] };
-//          ldbg << format_string("\t%d : %s , Pos=(% .5e,% .5e,% .5e) , V=(% .5e,% .5e,% .5e)\n",tp[field::id], species->at(tp[field::type]).name(), r.x,r.y,r.z, v.x,v.y,v.z );
+//          ldbg << onika::format_string("\t%d : %s , Pos=(% .5e,% .5e,% .5e) , V=(% .5e,% .5e,% .5e)\n",tp[field::id], species->at(tp[field::type]).name(), r.x,r.y,r.z, v.x,v.y,v.z );
           grid->cell(loc).push_back( tp );
         }
 

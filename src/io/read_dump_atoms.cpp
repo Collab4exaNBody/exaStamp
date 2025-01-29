@@ -7,7 +7,7 @@
 #include <onika/math/basic_types_stream.h>
 #include <onika/log.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/file_utils.h>
+#include <onika/file_utils.h>
 
 #include <iostream>
 #include <fstream>
@@ -49,7 +49,7 @@ namespace exaStamp
     inline void execute () override final
     {
       static constexpr FieldSet< field::_rx,field::_ry,field::_rz, field::_vx,field::_vy,field::_vz, field::_id, field::_type > dump_field_set={};
-      std::string file_name = data_file_path( *filename );
+      std::string file_name = onika::data_file_path( *filename );
       *physical_time = 0.0;
       *timestep = 0;
       auto dump_filter = make_atom_dump_filter(*grid,*species,ldbg,dump_field_set);
@@ -87,15 +87,15 @@ namespace exaStamp
         dump_filter.override_mirroring = true;
         for(auto m : *mirror)
         {
-          if( exanb::str_tolower(m) == "x-" ) { dump_filter.mirror_x_min=true; }
-          if( exanb::str_tolower(m) == "x+" ) { dump_filter.mirror_x_max=true; }
-          if( exanb::str_tolower(m) == "x" )  { dump_filter.mirror_x_min=true; dump_filter.mirror_x_max=true; }
-          if( exanb::str_tolower(m) == "y-" ) { dump_filter.mirror_y_min=true; }
-          if( exanb::str_tolower(m) == "y+" ) { dump_filter.mirror_y_max=true; }
-          if( exanb::str_tolower(m) == "y" )  { dump_filter.mirror_y_min=true; dump_filter.mirror_y_max=true; }
-          if( exanb::str_tolower(m) == "z-" ) { dump_filter.mirror_z_min=true; }
-          if( exanb::str_tolower(m) == "z+" ) { dump_filter.mirror_z_max=true; }
-          if( exanb::str_tolower(m) == "z" )  { dump_filter.mirror_z_min=true; dump_filter.mirror_z_max=true; }
+          if( onika::str_tolower(m) == "x-" ) { dump_filter.mirror_x_min=true; }
+          if( onika::str_tolower(m) == "x+" ) { dump_filter.mirror_x_max=true; }
+          if( onika::str_tolower(m) == "x" )  { dump_filter.mirror_x_min=true; dump_filter.mirror_x_max=true; }
+          if( onika::str_tolower(m) == "y-" ) { dump_filter.mirror_y_min=true; }
+          if( onika::str_tolower(m) == "y+" ) { dump_filter.mirror_y_max=true; }
+          if( onika::str_tolower(m) == "y" )  { dump_filter.mirror_y_min=true; dump_filter.mirror_y_max=true; }
+          if( onika::str_tolower(m) == "z-" ) { dump_filter.mirror_z_min=true; }
+          if( onika::str_tolower(m) == "z+" ) { dump_filter.mirror_z_max=true; }
+          if( onika::str_tolower(m) == "z" )  { dump_filter.mirror_z_min=true; dump_filter.mirror_z_max=true; }
         }
       }
       exanb::read_dump( *mpi, ldbg, *grid, *domain, *physical_time, *timestep, file_name, dump_field_set , dump_filter );

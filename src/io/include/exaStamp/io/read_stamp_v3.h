@@ -5,11 +5,12 @@
 #include <exanb/core/grid_fields.h>
 #include <onika/math/basic_types_stream.h>
 #include <onika/log.h>
-#include <exanb/core/thread.h>
+#include <onika/thread.h>
 #include <onika/physics/units.h>
 
 #include <exaStamp/io/StampV3LegacyIOStructures.h>
-#include <exanb/mpi/all_value_equal.h>
+#include <exaStamp/compute/unit_system.h>
+#include <onika/mpi/all_value_equal.h>
 
 #include <iostream>
 #include <cstdlib>
@@ -56,8 +57,8 @@ namespace exaStamp
     static constexpr size_t io_chunk_size = 1048576;
 
     // conversion constants
-    static const double coord_conv = UnityConverterHelper::convert(1.0, "m"); // conversion factor between input unity to exaStamp internal unity
-    static const double vel_conv = UnityConverterHelper::convert(1.0, "m/s");
+    static constexpr double coord_conv = EXASTAMP_CONST_QUANTITY( 1.0 * m ); // conversion factor between input unity to exaStamp internal unity
+    static constexpr double vel_conv = EXASTAMP_CONST_QUANTITY( 1.0 * m/s );
 
     // MPI Initialization
     int rank=0, np=1;

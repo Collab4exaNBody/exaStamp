@@ -9,9 +9,9 @@
 
 #include <onika/math/basic_types_operators.h>
 #include <onika/math/basic_types_stream.h>
-#include <exanb/core/quaternion_operators.h>
-#include <exanb/core/quaternion_stream.h>
-#include <exanb/core/string_utils.h>
+#include <onika/math/quaternion_operators.h>
+#include <onika/math/quaternion_stream.h>
+#include <onika/string_utils.h>
 
 namespace exaStamp
 {

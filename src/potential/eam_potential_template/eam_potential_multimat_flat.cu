@@ -15,7 +15,7 @@
 #include <onika/log.h>
 #include <exanb/core/cpp_utils.h>
 #include <exanb/compute/compute_pair_optional_args.h>
-#include <exanb/core/thread.h>
+#include <onika/thread.h>
 
 #include <exaStamp/potential/eam/eam_buffer.h>
 #include <exaStamp/potential/eam/eam_yaml.h>

@@ -13,12 +13,12 @@
 #include <onika/math/basic_types_stream.h>
 #include <onika/log.h>
 //#include "exanb/vector_utils.h"
-#include <exanb/core/file_utils.h>
+#include <onika/file_utils.h>
 #include <exanb/core/domain.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exanb/core/check_particles_inside_cell.h>
 
-#include <exanb/core/quaternion_operators.h>
+#include <onika/math/quaternion_operators.h>
 
 namespace exaStamp
 {
@@ -50,7 +50,7 @@ namespace exaStamp
     ldbg << "read "<<file_name <<std::endl;
     
     std::ifstream file;
-    file.open( data_file_path(file_name), std::ifstream::in);
+    file.open( onika::data_file_path(file_name), std::ifstream::in);
     if(!file.is_open())
     {
       lerr << "Error in reading xyz : file "<< file_name << " not found !" << std::endl;

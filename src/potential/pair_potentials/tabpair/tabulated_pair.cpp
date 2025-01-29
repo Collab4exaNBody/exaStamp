@@ -1,5 +1,5 @@
 #include "tabulated_pair.h"
-#include <exanb/core/file_utils.h>
+#include <onika/file_utils.h>
 #include <onika/yaml/yaml_utils.h>
 #include <onika/log.h>
 #include <onika/physics/constants.h>
@@ -40,7 +40,7 @@ namespace YAML
     Node node;
     if( ! file_to_load.empty() )
     {
-      file_to_load = exanb::data_file_path(file_to_load);
+      file_to_load = onika::onika::data_file_path(file_to_load);
       ldbg << "tabulated pair data from "<<file_to_load<<std::endl;
       node = yaml_load_file_abort_on_except(file_to_load);
     }

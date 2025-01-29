@@ -19,7 +19,7 @@ under the License.
 
 #include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/core/units.h>
+#include <onika/physics/units.h>
 #include <exanb/io/write_xyz.h>
 #include <exanb/compute/field_combiners.h>
 #include <exaStamp/compute/field_combiners.h>
@@ -82,7 +82,7 @@ namespace exaStamp
       {
         const auto s = "1.0 " + umap.second;
         bool conv_ok = false;
-        auto q = exanb::units::quantity_from_string( s , conv_ok );
+        auto q = onika::physics::quantity_from_string( s , conv_ok );
         if( ! conv_ok ) { fatal_error() << "Failed to parse unit string '"<<s<<"'"<<std::endl; }
         conv_scale[umap.first] = q.convert();
       }

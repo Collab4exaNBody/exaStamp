@@ -24,7 +24,7 @@
 #include <onika/physics/units.h>
 //#include "exanb/container_utils.h"
 #include <onika/log.h>
-#include <exanb/core/file_utils.h>
+#include <onika/file_utils.h>
 
 #include "lchbop_inits.h"
 //#include "parallel_build_dual_nbtbl.h"

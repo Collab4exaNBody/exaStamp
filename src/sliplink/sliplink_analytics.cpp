@@ -6,11 +6,11 @@
 #include <exanb/core/grid.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <onika/memory/allocator.h> // for ONIKA_ASSUME_ALIGNED macro
-#include <exanb/core/thread.h> // for ONIKA_ASSUME_ALIGNED macro
+#include <onika/thread.h> // for ONIKA_ASSUME_ALIGNED macro
 
 #include <onika/math/basic_types_operators.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/string_utils.h>
+#include <onika/string_utils.h>
 
 #include <exaStamp/sliplink/sliplink.h>
 #include <exanb/core/particle_id_translation.h>
@@ -228,7 +228,7 @@ namespace exaStamp
           }
           else
           {
-            lb_value = format_string("%.3e", *lb_inbalance);
+            lb_value = onika::format_string("%.3e", *lb_inbalance);
           }
         }
 
@@ -240,7 +240,7 @@ namespace exaStamp
         double volume = 1.0;
         volume *= bounds_volume( domain->bounds() );
         
-        lout<<format_string("%9ld % .8e  %15ld  %c%10s  % .10e  % .10e  % .10e",
+        lout<<onika::format_string("%9ld % .8e  %15ld  %c%10s  % .10e  % .10e  % .10e",
           *timestep, *physical_time,
           *sl_regen_count,
           lb_move_char,lb_value,

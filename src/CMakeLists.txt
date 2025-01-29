@@ -3,7 +3,7 @@
 #add_subdirectory(debug)
 #add_subdirectory(analytics)
 add_subdirectory(particle_species)
-#add_subdirectory(io)
+add_subdirectory(io)
 add_subdirectory(compute)
 #add_subdirectory(mpi)
 #add_subdirectory(parrinellorahman)

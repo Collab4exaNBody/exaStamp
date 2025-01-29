@@ -14,7 +14,7 @@
 #include <mpi.h>
 #include <cstring>
 
-#include <exanb/core/quaternion_operators.h>
+#include <onika/math/quaternion_operators.h>
 namespace exaStamp
 {
 

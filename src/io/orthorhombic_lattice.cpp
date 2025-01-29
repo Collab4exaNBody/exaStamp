@@ -23,12 +23,12 @@
 #include <onika/math/basic_types_stream.h>
 #include <onika/log.h>
 //#include "exanb/vector_utils.h"
-#include <exanb/core/file_utils.h>
+#include <onika/file_utils.h>
 #include <exanb/core/check_particles_inside_cell.h>
 #include <onika/physics/constants.h>
 #include <onika/parallel/random.h>
 
-#include <exanb/core/thread.h>
+#include <onika/thread.h>
 
 namespace exaStamp
 {

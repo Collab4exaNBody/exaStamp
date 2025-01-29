@@ -1,7 +1,7 @@
 #include <onika/math/basic_types.h>
 #include <onika/math/basic_types_stream.h>
 #include <onika/math/basic_types_yaml.h>
-#include <exanb/core/file_utils.h>
+#include <onika/file_utils.h>
 #include <exanb/core/grid.h>
 #include <onika/log.h>
 #include <exanb/core/make_grid_variant_operator.h>
@@ -52,7 +52,7 @@ namespace exaStamp
 
     inline void execute () override final
     {
-      std::string file_name = data_file_path( *file );
+      std::string file_name = onika::data_file_path( *file );
       read_stamp_v4( ldbg, *mpi,file_name,*enlarge_bounds,*bounds_mode,*grid,*domain
                    , *timestep,*dt,*physical_time,*species
                    , *enable_xform_scale , *pbc_adjust_xform , *version , *molrig42 );

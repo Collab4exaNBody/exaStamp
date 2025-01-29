@@ -2,8 +2,8 @@
 #include <onika/scg/operator_slot.h>
 #include <onika/scg/operator_factory.h>
 #include <onika/log.h>
-#include <exanb/core/string_utils.h>
-#include <exanb/core/print_utils.h>
+#include <onika/string_utils.h>
+#include <onika/print_utils.h>
 #include <exaStamp/compute/thermodynamic_state.h>
 #include <onika/physics/constants.h>
 
@@ -57,7 +57,7 @@ namespace exaStamp
         total_energy_int_unit += *electronic_energy;
       }
 
-      oss << format_string("%9ld % .6e %13ld  % .10e  % .10e  % .10e  % .10e  % 11.3f % .3e % .3e % .3e % .3e % 11.3f % 11.3f % 11.3f % 11.3f % 11.3f % 11.3f /",
+      oss << onika::format_string("%9ld % .6e %13ld  % .10e  % .10e  % .10e  % .10e  % 11.3f % .3e % .3e % .3e % .3e % 11.3f % 11.3f % 11.3f % 11.3f % 11.3f % 11.3f /",
                              *timestep,
                              *physical_time,
                              sim_info.particle_count(),
@@ -79,16 +79,16 @@ namespace exaStamp
                              
       if( electronic_energy.has_value() )
       {
-        oss << format_string(" % .7e",(*electronic_energy) * conv_energy / sim_info.particle_count() );
+        oss << onika::format_string(" % .7e",(*electronic_energy) * conv_energy / sim_info.particle_count() );
       }
       
       oss << "\n";
 
-      FileAppendWriteBuffer::instance().append_to_file( *file , oss.str(), *force_append_thermo );
+      onika::FileAppendWriteBuffer::instance().append_to_file( *file , oss.str(), *force_append_thermo );
 
       if( *force_flush_file )
       {
-        FileAppendWriteBuffer::instance().flush();
+	      onika::FileAppendWriteBuffer::instance().flush();
       }
 
     }

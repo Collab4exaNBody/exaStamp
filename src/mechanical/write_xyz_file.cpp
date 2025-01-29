@@ -8,7 +8,7 @@
 #include <exanb/core/grid.h>
 #include <onika/math/basic_types_stream.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/string_utils.h>
+#include <onika/string_utils.h>
 #include <exaStamp/compute/thermodynamic_state.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exanb/core/grid_fields.h>
@@ -189,14 +189,14 @@ namespace exaStamp
       Mat3d lattice = diag_matrix(domain->extent()-domain->origin());
       Mat3d lot = transpose(xform * lattice);
       if ( (local_data.has_value() or local_mechanical_data.has_value() or local_structural_data.has_value()) and per_atom_data.has_value() ) {// Writting out atoms type, position as well as per-atom metrics computed through compute_local_metrics operator
-      	header = format_string("%ld\nLattice=\"%10.12e %10.12e %10.12e %10.12e %10.12e %10.12e %10.12e %10.12e %10.12e\" ",total_particle_number, lot.m11, lot.m12, lot.m13, lot.m21, lot.m22, lot.m23, lot.m31, lot.m32, lot.m33);
+      	header = onika::format_string("%ld\nLattice=\"%10.12e %10.12e %10.12e %10.12e %10.12e %10.12e %10.12e %10.12e %10.12e\" ",total_particle_number, lot.m11, lot.m12, lot.m13, lot.m21, lot.m22, lot.m23, lot.m31, lot.m32, lot.m33);
       	for (size_t var=0; var<per_atom_variables.size(); ++var)
       	  {
-      	    header += format_string("\t %s ", per_atom_variables[var]);
+      	    header += onika::format_string("\t %s ", per_atom_variables[var]);
       	  }
-      	header += format_string("\n");	
+      	header += onika::format_string("\n");	
       } else {
-	header = format_string("%ld\nLattice=\"%10.12e %10.12e %10.12e %10.12e %10.12e %10.12e %10.12e %10.12e %10.12e\"\n",total_particle_number, lot.m11, lot.m12, lot.m13, lot.m21, lot.m22, lot.m23, lot.m31, lot.m32, lot.m33);
+	header = onika::format_string("%ld\nLattice=\"%10.12e %10.12e %10.12e %10.12e %10.12e %10.12e %10.12e %10.12e %10.12e\"\n",total_particle_number, lot.m11, lot.m12, lot.m13, lot.m21, lot.m22, lot.m23, lot.m31, lot.m32, lot.m33);
       }
 
       offset_header = strlen(header.c_str());
@@ -245,20 +245,20 @@ namespace exaStamp
 		      {
 			if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), per_atom_variables[var]) and (per_atom_variables[var] == "pe"))
 			  {
-			    local_metrics_chain += format_string("\t % .10e", conv_energy*local_metrics[c].pe[pos]);
+			    local_metrics_chain += onika::format_string("\t % .10e", conv_energy*local_metrics[c].pe[pos]);
 			  }
 			if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), per_atom_variables[var]) and (per_atom_variables[var] == "f"))
 			  {
-			    local_metrics_chain += format_string("\t % .10e \t % .10e \t % .10e", conv_force*local_metrics[c].f[pos].x, conv_force*local_metrics[c].f[pos].y, conv_force*local_metrics[c].f[pos].z);
+			    local_metrics_chain += onika::format_string("\t % .10e \t % .10e \t % .10e", conv_force*local_metrics[c].f[pos].x, conv_force*local_metrics[c].f[pos].y, conv_force*local_metrics[c].f[pos].z);
 			  }
 			if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), per_atom_variables[var]) and (per_atom_variables[var] == "v"))
 			  {
-			    local_metrics_chain += format_string("\t % .10e \t % .10e \t % .10e", local_metrics[c].v[pos].x, local_metrics[c].v[pos].y, local_metrics[c].v[pos].z);
+			    local_metrics_chain += onika::format_string("\t % .10e \t % .10e \t % .10e", local_metrics[c].v[pos].x, local_metrics[c].v[pos].y, local_metrics[c].v[pos].z);
 			  }
 			if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), per_atom_variables[var]) and (per_atom_variables[var] == "F"))
 			  {
 			    //			    lout << "Looking for per-atom deformation gradient tensor " << std::endl;
-			    local_metrics_chain += format_string("\t % .10e % .10e % .10e % .10e % .10e % .10e % .10e % .10e % .10e",
+			    local_metrics_chain += onika::format_string("\t % .10e % .10e % .10e % .10e % .10e % .10e % .10e % .10e % .10e",
 								 local_mechanical_metrics[c].F[pos].m11,
 								 local_mechanical_metrics[c].F[pos].m12,
 								 local_mechanical_metrics[c].F[pos].m13,
@@ -272,7 +272,7 @@ namespace exaStamp
 			if (std::binary_search(per_atom_variables.begin(), per_atom_variables.end(), per_atom_variables[var]) and (per_atom_variables[var] == "L"))
 			  {
 			    //			    lout << "Looking for per-atom velocity gradient tensor " << std::endl;
-			    local_metrics_chain += format_string("\t % .10e % .10e % .10e % .10e % .10e % .10e % .10e % .10e % .10e",
+			    local_metrics_chain += onika::format_string("\t % .10e % .10e % .10e % .10e % .10e % .10e % .10e % .10e % .10e",
 								 local_mechanical_metrics[c].L[pos].m11,
 								 local_mechanical_metrics[c].L[pos].m12,
 								 local_mechanical_metrics[c].L[pos].m13,
@@ -288,12 +288,12 @@ namespace exaStamp
 			    //			    lout << "size bs : " << local_structural_metrics[c].bispectrum[pos].size() << std::endl;
 			    for (size_t indbi=0; indbi < local_structural_metrics[c].bispectrum[pos].size(); indbi++)
 			      {
-				local_metrics_chain += format_string(" % .10e",local_structural_metrics[c].bispectrum[pos][indbi]);
+				local_metrics_chain += onika::format_string(" % .10e",local_structural_metrics[c].bispectrum[pos][indbi]);
 			      }
 			  }
 		      }
 				  
-		    xyz_positions = format_string("%-10s \t % .10e \t % .10e \t % .10e", type_name, pos_vec.x, pos_vec.y, pos_vec.z) + local_metrics_chain + format_string(" \n");
+		    xyz_positions = onika::format_string("%-10s \t % .10e \t % .10e \t % .10e", type_name, pos_vec.x, pos_vec.y, pos_vec.z) + local_metrics_chain + onika::format_string(" \n");
 		
 		    offset = offset_header + (pos + nb_particles_cell + nb_particles_offset) * strlen(xyz_positions.c_str());
 		    MPI_File_write_at( mpiFile, offset, xyz_positions.data(), xyz_positions.length() , MPI_CHAR , &status );
@@ -334,7 +334,7 @@ namespace exaStamp
 		    if( types != nullptr ) atom_type = types[pos];
 		    type_name = species->at(atom_type).m_name;
 		    pos_vec = xform * pos_vec;
-		    xyz_positions = format_string("%-10s \t % .10e \t % .10e \t % .10e \n", type_name, pos_vec.x, pos_vec.y, pos_vec.z);
+		    xyz_positions = onika::format_string("%-10s \t % .10e \t % .10e \t % .10e \n", type_name, pos_vec.x, pos_vec.y, pos_vec.z);
 		    offset = offset_header + (pos + nb_particles_cell + nb_particles_offset) * strlen(xyz_positions.c_str());
 		    MPI_File_write_at( mpiFile, offset, xyz_positions.data(), xyz_positions.length() , MPI_CHAR , &status );
 		  }

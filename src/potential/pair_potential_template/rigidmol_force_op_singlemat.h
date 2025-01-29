@@ -11,7 +11,7 @@
 #include <onika/physics/units.h>
 #include <onika/math/basic_types_yaml.h>
 #include <onika/math/basic_types_operators.h>
-#include <exanb/core/quaternion_to_matrix.h>
+#include <onika/math/quaternion_to_matrix.h>
 
 #ifndef PRIV_NAMESPACE_NAME
 #define PRIV_NAMESPACE_NAME USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_details)

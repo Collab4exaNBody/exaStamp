@@ -11,7 +11,7 @@
 #include <onika/log.h>
 #include <exanb/core/cpp_utils.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/file_utils.h>
+#include <onika/file_utils.h>
 
 #include <exaStamp/potential/snap/snap_params.h>
 
@@ -95,8 +95,8 @@ namespace exaStamp
 
       if( m_rcut == 0.0 )
       {
-        std::string lammps_param = data_file_path( parameters->lammps_param );
-        std::string lammps_coef = data_file_path( parameters->lammps_coef ); 
+        std::string lammps_param = onika::data_file_path( parameters->lammps_param );
+        std::string lammps_coef = onika::data_file_path( parameters->lammps_coef ); 
         ldbg << "Snap: read lammps files "<<lammps_param<<" and "<<lammps_coef<<std::endl;
         snap_legacy_read_lammps(lammps_param, lammps_coef, m_config);
         ldbg <<"rfac0="<<m_config.rfac0() <<", rmin0="<<m_config.rmin0() <<", rcutfac="<<m_config.rcutfac() <<", twojmax="<<m_config.twojmax()<<", nmat="<<m_config.materials().size()<<std::endl;

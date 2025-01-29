@@ -13,7 +13,7 @@
 #include <exaStamp/particle_species/particle_specie.h>
 //#include "exanb/container_utils.h"
 #include <onika/log.h>
-#include <exanb/core/file_utils.h>
+#include <onika/file_utils.h>
 
 #include "lchbop_potpar.h"
 #include "lchbop_FATP.h"
@@ -68,7 +68,7 @@ struct VLCHBOP
 
 inline void VLCHBOP::initVCC(MPI_Comm comm)
 {
-  const std::string vCC_filename = data_file_path( "vCC.par" );
+  const std::string vCC_filename = onika::data_file_path( "vCC.par" );
 
   newparfile=1;
 
@@ -357,7 +357,7 @@ inline void VLCHBOP::initVCC(MPI_Comm comm)
 
 inline void VLCHBOP::initVHH(MPI_Comm comm)
 {
-  const std::string vHH_filename = data_file_path( "vHH.par" );
+  const std::string vHH_filename = onika::data_file_path( "vHH.par" );
 
   FILE *VHH;
   char texte[256];
@@ -543,7 +543,7 @@ inline void VLCHBOP::initVHH(MPI_Comm comm)
 
 inline void VLCHBOP::initVCH(MPI_Comm comm)
 {
-  const std::string vCH_filename = data_file_path( "vCH.par" );
+  const std::string vCH_filename = onika::data_file_path( "vCH.par" );
 
   FILE *VCH;
   char texte[256];

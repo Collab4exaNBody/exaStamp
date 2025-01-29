@@ -35,9 +35,10 @@ namespace exaStamp
   // === register factories ===  
   ONIKA_AUTORUN_INIT(grid_flavor)
   {
+    // just an alias to multimat
 	  OperatorNodeFactory::instance()->register_factory(
         "grid_flavor_minimal",
-        make_compatible_operator< InitGridFlavorNode< GridFromFieldSet<MinimalFieldSet> > >
+        make_compatible_operator< InitGridFlavorNode< GridFromFieldSet<MultiMatFieldSet> > >
         );
 
       OperatorNodeFactory::instance()->register_factory(

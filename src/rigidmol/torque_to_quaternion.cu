@@ -26,8 +26,8 @@
 #include <exanb/compute/compute_cell_particles.h>
 
 //#include "quaternion_rotation.h"
-#include <exanb/core/quaternion_operators.h>
-#include <exanb/core/quaternion_to_matrix.h>
+#include <onika/math/quaternion_operators.h>
+#include <onika/math/quaternion_to_matrix.h>
 
 namespace exaStamp
 {

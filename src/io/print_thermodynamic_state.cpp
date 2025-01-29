@@ -2,7 +2,7 @@
 #include <onika/scg/operator_slot.h>
 #include <onika/scg/operator_factory.h>
 #include <onika/log.h>
-#include <exanb/core/string_utils.h>
+#include <onika/string_utils.h>
 #include <exaStamp/compute/thermodynamic_state.h>
 #include <onika/physics/constants.h>
 #include <exanb/core/domain.h>

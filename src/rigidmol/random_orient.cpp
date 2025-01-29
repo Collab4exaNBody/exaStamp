@@ -6,7 +6,7 @@
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <onika/log.h>
 #include <onika/parallel/random.h>
-#include <exanb/core/quaternion_operators.h>
+#include <onika/math/quaternion_operators.h>
 
 namespace exaStamp
 {

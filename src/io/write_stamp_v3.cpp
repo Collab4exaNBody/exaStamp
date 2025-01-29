@@ -11,6 +11,7 @@
 #include <onika/physics/units.h>
 
 #include <exaStamp/io/StampV3LegacyIOStructures.h>
+#include <exaStamp/compute/unit_system.h>
 
 #include <mpi.h>
 #include <fstream>
@@ -54,8 +55,8 @@ namespace exaStamp
       static constexpr bool has_field_id = has_field_id_t();
 
       using ParticleTupleIO = onika::soatl::FieldTuple<field::_rx, field::_ry, field::_rz, field::_vx,field::_vy,field::_vz, field::_fx,field::_fy,field::_fz , field::_virial, field::_id, field::_type>;
-      static const double coord_conv = UnityConverterHelper::convert(1.0, "m"); // conversion factor between stampv3 unit system and ExaStampV2 internal units
-      static const double vel_conv = UnityConverterHelper::convert(1.0, "m/s");
+      static constexpr double coord_conv = EXASTAMP_CONST_QUANTITY(1.0 * m); // conversion factor between stampv3 unit system and ExaStampV2 internal units
+      static constexpr double vel_conv = EXASTAMP_CONST_QUANTITY(1.0 * m/s);
  
       IJK dims = grid->dimension();
       ssize_t gl = grid->ghost_layers();

@@ -23,7 +23,7 @@
 #include <exanb/compute/compute_cell_particles.h>
 
 //#include "quaternion_rotation.h"
-#include <exanb/core/quaternion_operators.h>
+#include <onika/math/quaternion_operators.h>
 
 namespace exaStamp
 {

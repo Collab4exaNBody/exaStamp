@@ -13,8 +13,8 @@
 #include <onika/math/basic_types_stream.h>
 #include <onika/physics/constants.h>
 
-#include <exanb/core/string_utils.h>
-#include <exanb/core/print_utils.h>
+#include <onika/string_utils.h>
+#include <onika/print_utils.h>
 
 #include <sstream>
 

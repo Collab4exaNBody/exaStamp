@@ -7,7 +7,7 @@
 #include <exanb/core/particle_id_codec.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/grid_fields.h>
-#include <exanb/core/thread.h>
+#include <onika/thread.h>
 #include <exanb/core/particle_type_pair.h>
 #include <onika/soatl/field_id.h>
 #include <onika/soatl/field_pointer_tuple.h>
@@ -19,8 +19,8 @@
 #include <functional>
 #include <memory>
 
-#include <exanb/core/quaternion_operators.h>
-#include <exanb/core/quaternion_to_matrix.h>
+#include <onika/math/quaternion_operators.h>
+#include <onika/math/quaternion_to_matrix.h>
 
 namespace exaStamp
 {

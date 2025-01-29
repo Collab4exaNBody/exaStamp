@@ -8,7 +8,7 @@
 #include <exanb/core/particle_id_codec.h>
 #include <exanb/core/particle_id_translation.h>
 #include <onika/memory/allocator.h> // for ONIKA_ASSUME_ALIGNED macro
-#include <exanb/core/thread.h> // for ONIKA_ASSUME_ALIGNED macro
+#include <onika/thread.h> // for ONIKA_ASSUME_ALIGNED macro
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exaStamp/sliplink/sliplink.h>
 

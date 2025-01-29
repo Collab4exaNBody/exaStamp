@@ -11,7 +11,7 @@
 #include <onika/log.h>
 #include <exanb/core/domain.h>
 #include <onika/physics/units.h>
-#include <exanb/core/string_utils.h>
+#include <onika/string_utils.h>
 #include <exanb/core/grid_fields.h>
 
 #include <exanb/defbox/deformation.h>

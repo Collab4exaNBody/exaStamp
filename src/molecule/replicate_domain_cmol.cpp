@@ -8,7 +8,7 @@
 #include <onika/math/basic_types_stream.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <onika/log.h>
-#include <exanb/core/thread.h>
+#include <onika/thread.h>
 #include <exanb/grid_cell_particles/replicate_domain.h>
 
 #include <vector>

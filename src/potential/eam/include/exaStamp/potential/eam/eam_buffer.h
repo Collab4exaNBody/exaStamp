@@ -14,7 +14,7 @@ XSTAMP_DECLARE_FIELD(double          ,rho_dEmb          ,"density or embedding t
 #include <exanb/compute/compute_pair_buffer.h>
 
 #include <exanb/core/config.h>
-#include <exanb/core/thread.h>
+#include <onika/thread.h>
 
 namespace exaStamp
 {

@@ -19,7 +19,7 @@
 #include <onika/physics/units.h>
 
 //#include "quaternion_rotation.h"
-#include <exanb/core/quaternion_operators.h>
+#include <onika/math/quaternion_operators.h>
 
 namespace exaStamp
 {

@@ -1,5 +1,5 @@
 #include "tabulated_eam.h"
-#include <exanb/core/file_utils.h>
+#include <onika/file_utils.h>
 #include <onika/log.h>
 #include <onika/physics/constants.h>
 
@@ -33,7 +33,7 @@ namespace YAML
 
     if( ! file_to_load.empty() )
     {
-      file_to_load = exanb::data_file_path(file_to_load);
+      file_to_load = onika::onika::data_file_path(file_to_load);
       ldbg << "tabulated EAM data from "<<file_to_load<<std::endl;
       node = LoadFile(file_to_load);
     }

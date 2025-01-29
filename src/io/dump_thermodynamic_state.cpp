@@ -2,8 +2,8 @@
 #include <onika/scg/operator_slot.h>
 #include <onika/scg/operator_factory.h>
 #include <onika/log.h>
-#include <exanb/core/string_utils.h>
-#include <exanb/core/print_utils.h>
+#include <onika/string_utils.h>
+#include <onika/print_utils.h>
 #include <exaStamp/compute/thermodynamic_state.h>
 #include <onika/physics/constants.h>
 #include <exanb/core/domain.h>
@@ -81,7 +81,7 @@ namespace exaStamp
       double BETA  = acos(dot(c,a)/(B*C))/acos(-1.)*180. ;
       double GAMMA = acos(dot(a,b)/(B*C))/acos(-1.)*180. ;
 
-      oss <<format_string("%9ld % .6e %13ld  % .10e  % .10e  % .10e  % 9.12f  % 9.12f  % 9.12f  % 9.12f  % 9.12f  % 9.12f % 9.12f % 12.12f % 12.12f % 12.12f % 9.12f % 9.12f % 9.12f % 16.12f % 13.12f ",
+      oss <<onika::format_string("%9ld % .6e %13ld  % .10e  % .10e  % .10e  % 9.12f  % 9.12f  % 9.12f  % 9.12f  % 9.12f  % 9.12f % 9.12f % 12.12f % 12.12f % 12.12f % 9.12f % 9.12f % 9.12f % 16.12f % 13.12f ",
         *timestep,
         *physical_time,
         sim_info.particle_count(),
@@ -105,11 +105,11 @@ namespace exaStamp
 
       if( electronic_energy.has_value() )
       {
-        oss << format_string(" % .7e",(*electronic_energy) * conv_energy / sim_info.particle_count() );
+        oss << onika::format_string(" % .7e",(*electronic_energy) * conv_energy / sim_info.particle_count() );
       }
 
       if( is_dump_virial ) {
-        oss << format_string(" % .7e  % .7e  % .7e % .7e  % .7e  % .7e % .7e  % .7e  % .7e",
+        oss << onika::format_string(" % .7e  % .7e  % .7e % .7e  % .7e  % .7e % .7e  % .7e  % .7e",
           sim_info.stress_tensor().m11 * conv_pressure, 
           sim_info.stress_tensor().m12 * conv_pressure, 
           sim_info.stress_tensor().m13 * conv_pressure,
@@ -122,11 +122,11 @@ namespace exaStamp
       }
       oss << "\n";
 
-      FileAppendWriteBuffer::instance().append_to_file( *file , oss.str(), *force_append_thermo );
+      onika::FileAppendWriteBuffer::instance().append_to_file( *file , oss.str(), *force_append_thermo );
 
       if( *force_flush_file )
       {
-        FileAppendWriteBuffer::instance().flush();
+        onika::FileAppendWriteBuffer::instance().flush();
       }
 
     }

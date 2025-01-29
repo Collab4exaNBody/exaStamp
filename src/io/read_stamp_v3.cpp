@@ -7,7 +7,7 @@
 #include <exanb/core/grid.h>
 #include <onika/math/basic_types_stream.h>
 #include <onika/log.h>
-#include <exanb/core/file_utils.h>
+#include <onika/file_utils.h>
 
 #include <exaStamp/io/read_stamp_v3.h>
 
@@ -43,7 +43,7 @@ namespace exaStamp
 
     inline void execute () override final
     {
-      std::string file_name = data_file_path( *filename );
+      std::string file_name = onika::data_file_path( *filename );
       *physical_time = 0.0;
       read_stamp_v3(*mpi,file_name,*enlarge_bounds,*bounds_mode,*grid,*domain,*timestep,*physical_time, *pbc_adjust_xform);
     }

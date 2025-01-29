@@ -13,8 +13,8 @@
 #include <onika/math/basic_types_stream.h>
 #include <onika/physics/constants.h>
 
-#include <exanb/core/string_utils.h>
-#include <exanb/core/print_utils.h>
+#include <onika/string_utils.h>
+#include <onika/print_utils.h>
 
 #include <sstream>
 
@@ -82,7 +82,7 @@ namespace exaStamp
       double beta  = 180. * asin(norm(cross(b,c)) / (Lb * Lc)) / M_PI;
       double gamma = 180. * asin(norm(cross(c,a)) / (Lc * La)) / M_PI;
 
-      oss << format_string("%9ld % .6e % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e \n",
+      oss << onika::format_string("%9ld % .6e % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e \n",
 			   *timestep,
 			   *physical_time,
 			   La,

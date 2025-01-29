@@ -9,7 +9,7 @@
 
 #include <exanb/io/mpi_file_io.h>
 #include <exaStamp/molecule/stampv4_io.h>
-#include <exanb/mpi/all_value_equal.h>
+#include <onika/mpi/all_value_equal.h>
 #include <onika/oarray.h>
 
 #include <onika/math/basic_types_yaml.h>
@@ -19,7 +19,7 @@
 #include <exanb/core/make_grid_variant_operator.h>
 
 //#include "exanb/vector_utils.h"
-#include <exanb/core/file_utils.h>
+#include <onika/file_utils.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exaStamp/molecule/molecule_species.h>
 
@@ -70,7 +70,7 @@ namespace exaStamp
     inline void execute () override final
     {
       //-------------------------------------------------------------------------------------------
-      std::string file_name = data_file_path( *filename );
+      std::string file_name = onika::data_file_path( *filename );
       std::string basename;
       std::string::size_type p = file_name.rfind("/");
       if( p != std::string::npos ) basename = file_name.substr(p+1);

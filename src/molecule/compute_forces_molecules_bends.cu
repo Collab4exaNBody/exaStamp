@@ -17,7 +17,7 @@
 #include <exanb/core/particle_id_codec.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <onika/log.h>
-#include <exanb/core/thread.h> // GridParticleLocks
+#include <onika/thread.h> // GridParticleLocks
 
 #include <exaStamp/molecule/bends_potentials_parameters.h>
 #include <exaStamp/molecule/periodic_r_delta.h>

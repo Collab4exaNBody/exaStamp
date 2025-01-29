@@ -12,7 +12,7 @@
 #include <onika/log.h>
 #include <exanb/core/cpp_utils.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/file_utils.h>
+#include <onika/file_utils.h>
 
 #include <exaStamp/potential/snaplegacy/SnapLegacyCG.h>
 #include <exaStamp/potential/snaplegacy/SnapLegacyBS.h>

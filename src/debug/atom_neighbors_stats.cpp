@@ -11,7 +11,7 @@
 #include <exanb/particle_neighbors/chunk_neighbors_iterator.h>
 #include <exanb/particle_neighbors/chunk_neighbors_stream_check.h>
 
-#include <exanb/core/string_utils.h>
+#include <onika/string_utils.h>
 #include <exanb/core/particle_type_pair.h>
 #include <exaStamp/particle_species/particle_specie_yaml.h>
 #include <exanb/core/particle_type_id.h>
@@ -284,7 +284,7 @@ namespace exaStamp
                << " : count = " << large_integer_to_string(pair_count[pair_id])
                << " , min = " << pair_min[pair_id]
                << " , max = " << pair_max[pair_id]
-               << " , count<"<<format_string("% .3e",sqrt(pairdist[pair_id])) <<" = [ " << large_integer_to_string(pair_dist_count_min[pair_id])<<" ; "<< large_integer_to_string(pair_dist_count_max[pair_id])<<" ]"
+               << " , count<"<<onika::format_string("% .3e",sqrt(pairdist[pair_id])) <<" = [ " << large_integer_to_string(pair_dist_count_min[pair_id])<<" ; "<< large_integer_to_string(pair_dist_count_max[pair_id])<<" ]"
                << " , avg = " << (pair_sum[pair_id] / pair_count[pair_id]) << std::endl;
         }
       }
