@@ -1,7 +1,3 @@
-//#/* */pragma xstamp
-
-
-
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
 #include <onika/math/basic_types.h>
