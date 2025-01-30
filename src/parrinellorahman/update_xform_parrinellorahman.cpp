@@ -101,7 +101,7 @@ namespace exaStamp
 			   newMat.m32,
 			   newMat.m33);
 
-      FileAppendWriteBuffer::instance().append_to_file( *file , oss.str(), *force_append_thermo);
+      onika::FileAppendWriteBuffer::instance().append_to_file( *file , oss.str(), *force_append_thermo);
 
       //const Mat3d newPM = parrinello_rahman_ctx->h * diag_matrix( reciprocal(newExt) );
       //ldbg << "newPM = "<< newPM << std::endl;

@@ -11,11 +11,11 @@
 #include <exanb/core/domain.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <onika/physics/units.h>
-#include <onika/physics/units.h>
 #include <onika/physics/constants.h>
+#include <exaStamp/unit_system.h>
 #include <exaStamp/compute/thermodynamic_state.h>
 #include <onika/math/basic_types_stream.h>
-#include <exanb/core/value_streamer.h>
+#include <onika/value_streamer.h>
 
 #include <onika/soatl/field_pointer_tuple.h>
 #include <memory>
@@ -70,10 +70,12 @@ namespace exaStamp
   public:
     inline void execute () override final
     {
+      using onika::ValueStreamer;
+
       static constexpr double conv_temperature = 1.e4 * onika::physics::atomicMass / onika::physics::boltzmann ;
-      static const double boltzmann_internal = UnityConverterHelper::convert(onika::physics::boltzmann, "m^2*kg/s^2/K");
-      static const double conv_gammadt = UnityConverterHelper::convert(1.0, "1/m^2");
-      static const double conv_gammanvt = UnityConverterHelper::convert(1.0, "s/m^2");
+      static constexpr double boltzmann_internal = EXASTAMP_CONST_QUANTITY( onika::physics::boltzmann * ( m^2 ) * kg / ( s^2 ) / K );
+      static constexpr double conv_gammadt = EXASTAMP_CONST_QUANTITY( 1.0 / ( m^2 ) );
+      static constexpr double conv_gammanvt = EXASTAMP_CONST_QUANTITY( 1.0 * s / ( m^2 ) );
       // ldbg << "conv_gammanvt = " << conv_gammanvt << std::endl;
 
       const double raw_dt = *(this->dt);
