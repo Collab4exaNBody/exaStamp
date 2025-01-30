@@ -3,8 +3,10 @@
 #include <cmath>
 #include <yaml-cpp/yaml.h>
 #include <onika/physics/units.h>
-#include <exaStamp/potential_factory/pair_potential.h>
+#include <onika/physics/constants.h>
 #include <onika/cuda/cuda.h>
+#include <exaStamp/unit_system.h>
+#include <exaStamp/potential_factory/pair_potential.h>
 
 namespace exaStamp
 {
@@ -18,7 +20,8 @@ namespace exaStamp
   };
 
 //# pragma omp declare simd uniform(p,ppp) notinbranch
-  ONIKA_HOST_DEVICE_FUNC inline void lj_compute_energy(const LennardJonesParms& p, const PairPotentialMinimalParameters&, double r, double& e, double& de)
+  ONIKA_HOST_DEVICE_FUNC
+  inline void lj_compute_energy(const LennardJonesParms& p, const PairPotentialMinimalParameters&, double r, double& e, double& de)
   {
     assert( r > 0. );
     double ratio = p.sigma / r;
@@ -34,7 +37,6 @@ namespace exaStamp
 namespace YAML
 {
   using exaStamp::LennardJonesParms;
-  using exanb::UnityConverterHelper;
   using onika::physics::Quantity;
 
   template<> struct convert<LennardJonesParms>

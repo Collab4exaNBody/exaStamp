@@ -1,16 +1,6 @@
 #include <onika/log.h>
 #include <onika/math/basic_types_operators.h>
 
-${VARIANT:
-#undef USTAMP_POTENTIAL_WITH_VIRIAL
-#define USTAMP_POTENTIAL_WITH_VIRIAL 1
-}
-
-${VARIANT:
-#undef USTAMP_POTENTIAL_WITH_WEIGHTS
-#define USTAMP_POTENTIAL_WITH_WEIGHTS 1
-}
-
 #include "pair_potential_force_op.h"
 
 #ifdef USTAMP_POTENTIAL_WITH_WEIGHTS

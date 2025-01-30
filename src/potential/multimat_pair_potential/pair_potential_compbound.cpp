@@ -1,15 +1,15 @@
 #include <exaStamp/potential_factory/pair_potential_factory.h>
 #include <exaStamp/potential_factory/pair_potential.h>
 #include <onika/physics/units.h>
-#include <exanb/core/cpp_utils.h>
+#include <onika/cpp_utils.h>
 
 #include <yaml-cpp/yaml.h>
 
 #undef USTAMP_POTENTIAL_WITH_VIRIAL
-#include "pair_potential_compbound_operator.h"
+#include "pair_potential_compbound_operator.hxx"
 
 #define USTAMP_POTENTIAL_WITH_VIRIAL 1
-#include "pair_potential_compbound_operator.h"
+#include "pair_potential_compbound_operator.hxx"
 
 namespace exaStamp
 {
@@ -27,6 +27,8 @@ namespace exaStamp
     // factory
     static std::shared_ptr<PairPotential> make_potential(YAML::Node node)
     {
+      using onika::physics::Quantity;
+      
       std::vector< std::pair< double , std::shared_ptr<PairPotential> > > potentials;
 
       // here, node refers to the "parameters" key

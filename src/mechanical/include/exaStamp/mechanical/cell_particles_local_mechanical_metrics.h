@@ -61,7 +61,7 @@ namespace exaStamp
 }
 
 #define MECHANICAL_DECLARE_FIELD(name,member) \
-XSTAMP_DECLARE_FIELD( std::remove_reference_t<decltype(exaStamp::CellParticleLocalMechanicalMetrics{}.member[0])> , name , #name ); \
+XNB_DECLARE_FIELD( std::remove_reference_t<decltype(exaStamp::CellParticleLocalMechanicalMetrics{}.member[0])> , name , #name ); \
 namespace exaStamp { \
   static inline const auto& get_from_mechanical_data( const CellParticleLocalMechanicalMetrics * __restrict__ mech_data, size_t cell_i, size_t p_i, onika::soatl::FieldId<field::_##name> ) \
   { \

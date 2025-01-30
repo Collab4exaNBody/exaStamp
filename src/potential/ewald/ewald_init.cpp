@@ -6,7 +6,7 @@
 #include <onika/scg/operator_slot.h>
 #include <exanb/core/domain.h>
 #include <onika/log.h>
-#include <exanb/core/cpp_utils.h>
+#include <onika/cpp_utils.h>
 #include <exaStamp/potential/ewald/ewald.h>
 
 namespace exaStamp

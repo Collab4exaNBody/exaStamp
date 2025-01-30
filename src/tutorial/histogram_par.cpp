@@ -75,7 +75,7 @@ namespace exaStamp
       if( nprocs > 1 )
       {
         ValueType tmp[2] = { -min_val , max_val };
-        MPI_Allreduce(MPI_IN_PLACE,tmp,2, exanb::mpi_datatype<ValueType>() ,MPI_MAX,comm);
+        MPI_Allreduce(MPI_IN_PLACE,tmp,2, onika::mpi::mpi_datatype<ValueType>() ,MPI_MAX,comm);
         min_val = - tmp[0];
         max_val = tmp[1];
       }

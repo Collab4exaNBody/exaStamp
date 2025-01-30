@@ -1,57 +1,14 @@
-
-
-
-
-#include <exanb/core/grid.h>
-#include <exanb/core/domain.h>
-#include <onika/math/basic_types.h>
-#include <onika/math/basic_types_operators.h>
-#include <exanb/compute/compute_cell_particle_pairs.h>
-#include <exaStamp/particle_species/particle_specie.h>
-#include <onika/scg/operator.h>
-#include <onika/scg/operator_slot.h>
-#include <onika/scg/operator_factory.h>
-#include <exanb/core/make_grid_variant_operator.h>
-#include <onika/log.h>
-#include <exanb/core/compact_grid_pair_weights.h>
-#include <exanb/particle_neighbors/chunk_neighbors.h>
-
-#include <iostream>
-#include <type_traits>
-
-// this allows for parallel compilation of templated operator for different variant functor : singe pair pot, multi-param pair pot, and rigid molecule pair pot
-#define USTAMP_POTENTIAL_KIND_PAIR 0
-#define USTAMP_POTENTIAL_KIND_RIGIDMOL 1
-#define USTAMP_POTENTIAL_KIND_MULTI_PAIR 2
-
-${VARIANT:
-#include "pair_potential_singlemat_simple.h"
-#include "pair_potential_singlemat_multiparam.h"
-#include "pair_potential_singlemat_rigidmol.h"
-}
+#pragma once
 
 // generate object and namespace names
 #define OPERATOR_NAME_STR USTAMP_STR(OPERATOR_NAME)
+
 #define PRIV_NAMESPACE_NAME USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_details)
 
-//----------------------- debugging configuration --------------------------
-/*
-// example of debugging particle ids
-#define DEBUG_ADDITIONAL_FIELDS ,field::_id
-#define DEBUG_ADDITIONAL_PARAMETERS int64_t id,
-#define DEBUG_ADDITIONAL_PARAMETER_NAMES id,
-#define DEBUG_ADDITIONAL_CODE if(id==0) { std::cout<<"id="<<id<<" : nnbh="<<n<<" ep="<<ep<<" _ep="<<_ep<< std::endl; }
-*/
+#define POTENTIAL_REGISTER_INIT() _POTENTIAL_REGISTER_INIT( CONSTRUCTOR_FUNC_NAME )
+#define CONSTRUCTOR_FUNC_NAME USTAMP_CONCAT(OPERATOR_NAME,_init)
+#define _POTENTIAL_REGISTER_INIT(name) CONSTRUCTOR_ATTRIB void MAKE_UNIQUE_NAME(name,_,__LINE__,ONIKA_CURRENT_PACKAGE_NAME) ()
 
-// exemple of debugging particle dr norm with cell/particle indices
-/*#define DEBUG_PER_NBH_ADDITIONAL_CODE if(tab.cell==41 && tab.part==733) { \
-_Pragma("omp critical(dbg_mesg)") std::cout<<tab.cell<<" "<<tab.part<<" "<<tab.count<<" "<<tab.nbh_count<<" "<<i<<" "<<r<< std::endl; }  
-#define DEBUG_ADDITIONAL_CODE if(tab.cell==41 && tab.part==733) { \
-_Pragma("omp critical(dbg_mesg)") \
-std::cout<<tab.cell*10000+tab.part<<" "<<tab.cell<<" "<<tab.part<<" "<<tab.count<<" "<<tab.nbh_count<<" "<<rmin<<" "<<rmax<< std::endl; }
-*/
-
-//--------------------------- end of debug configuration ---------------------------------
 
 
 // enable potential variant code generation only if it is meaningful for this particular potential
@@ -160,7 +117,7 @@ namespace exaStamp
         // inside a task construct, it is legit to access local variables, they're copy captured (i.e. firstprivate) during lambda construction
         if( ! species_has_value )
         {
-          lerr_stream() << "no species input, cannot continue" << std::endl;
+          lerr << "no species input, cannot continue" << std::endl;
           std::abort();
         }
         
@@ -229,8 +186,7 @@ namespace exaStamp
         {
           if( ! chunk_neighbors_has_value )
           {
-            lerr_stream() << "no neighbors, cannot continue" << std::endl;
-            std::abort();
+            fatal_error() << "no neighbors, cannot continue" << std::endl;
           }
 
 #         if defined(USTAMP_POTENTIAL_RIGIDMOL) || defined(USTAMP_POTENTIAL_MULTI_PARAM)
@@ -521,7 +477,8 @@ namespace exaStamp
   }
   
   // === register factories ===  
-  ONIKA_AUTORUN_INIT(pair_potential_singlemat)
+  //ONIKA_AUTORUN_INIT(OPERATOR_NAME)
+  POTENTIAL_REGISTER_INIT()
   {
     OperatorNodeFactory::instance()->register_factory( OPERATOR_NAME_STR , make_grid_variant_operator< TemplateHelper::OPERATOR_NAME > );
   }

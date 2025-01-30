@@ -11,7 +11,7 @@
 #include <onika/physics/units.h>
 
 #include <exaStamp/io/StampV3LegacyIOStructures.h>
-#include <exaStamp/compute/unit_system.h>
+#include <exaStamp/unit_system.h>
 
 #include <mpi.h>
 #include <fstream>

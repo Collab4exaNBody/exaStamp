@@ -3,6 +3,7 @@
 #include <onika/yaml/yaml_utils.h>
 #include <onika/log.h>
 #include <onika/physics/constants.h>
+#include <exaStamp/unit_system.h>
 
 // Yaml conversion operators, allows to read potential parameters from config file
 namespace YAML
@@ -10,12 +11,11 @@ namespace YAML
 
   bool convert<exaStamp::TabPairPotentialParms>::decode(const Node& in_node, exaStamp::TabPairPotentialParms& v)
   {
-    using exanb::UnityConverterHelper;
     using onika::physics::Quantity;
     using exanb::lout;
     using exanb::lerr;
     using exanb::fatal_error;
-    using exanb::yaml_load_file_abort_on_except;
+    using onika::yaml::yaml_load_file_abort_on_except;
     auto& ldbg = exanb::lout; //using exanb::ldbg;
     
     std::string file_to_load;
@@ -40,7 +40,7 @@ namespace YAML
     Node node;
     if( ! file_to_load.empty() )
     {
-      file_to_load = onika::onika::data_file_path(file_to_load);
+      file_to_load = onika::data_file_path(file_to_load);
       ldbg << "tabulated pair data from "<<file_to_load<<std::endl;
       node = yaml_load_file_abort_on_except(file_to_load);
     }
@@ -65,8 +65,8 @@ namespace YAML
       if (node["format"].as<std::string>() == "exastampv1")
       {
         ds = onika::physics::avogadro * 1.e-11 ;
-        ls = exanb::make_quantity(1.0,"m").convert();
-        es = exanb::make_quantity(1.0,"J").convert();
+        ls = EXASTAMP_CONST_QUANTITY( 1.0 * m );
+        es = EXASTAMP_CONST_QUANTITY( 1.0 * J );
         ldbg << "exastampv1 format : ds=" <<ds<<", ls="<<ls<<", es="<<es<< std::endl;
       }
     }

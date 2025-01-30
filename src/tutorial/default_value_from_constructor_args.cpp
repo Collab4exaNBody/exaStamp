@@ -2,7 +2,7 @@
 #include <onika/scg/operator_factory.h>
 #include <onika/scg/operator_slot.h>
 #include <onika/log.h>
-#include <exanb/core/cpp_utils.h>
+#include <onika/cpp_utils.h>
 
 #include <vector>
 

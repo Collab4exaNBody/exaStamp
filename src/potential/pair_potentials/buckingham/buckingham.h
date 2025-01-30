@@ -4,9 +4,8 @@
 #include <yaml-cpp/yaml.h>
 
 #include <onika/physics/units.h>
-#include <exaStamp/potential_factory/pair_potential.h>
-
 #include <onika/cuda/cuda.h>
+#include <exaStamp/potential_factory/pair_potential.h>
 
 namespace exaStamp
 {
@@ -26,9 +25,9 @@ namespace exaStamp
     // A => p.A , R => p.Rho , C => p.C
     // https://www.wolframalpha.com/input/?i=derivative+of+A*exp%28-x%2FR%29-%28C%2Fx%5E6%29
     assert( x > 0. );
-    double x6 = std::pow(x,6);
-    double x7 = std::pow(x,7);
-    e = p.A * std::exp( -x / p.Rho ) - ( p.C / x6 );
+    double x6 = pow(x,6);
+    double x7 = pow(x,7);
+    e = p.A * exp( -x / p.Rho ) - ( p.C / x6 );
     de = ( 6 * p.C / x7 ) - ( p.A * std::exp( -x / p.Rho ) / p.Rho );
   }
 }
@@ -37,7 +36,6 @@ namespace exaStamp
 namespace YAML
 {
   using exaStamp::BuckinghamParms;
-  using exanb::UnityConverterHelper;
   using onika::physics::Quantity;
 
   template<> struct convert<BuckinghamParms>

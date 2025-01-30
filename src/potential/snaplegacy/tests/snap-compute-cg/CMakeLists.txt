@@ -4,5 +4,5 @@ target_include_directories(snap-compute-cg-cpp PRIVATE ${CMAKE_CURRENT_SOURCE_DI
 target_compile_options(snap-compute-cg-cpp PRIVATE -DDEBUG_SNAP_CG)
 
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/snap-compute-cg.sh" "${CMAKE_CURRENT_BINARY_DIR}/snap-compute-cg.sh")
-xstamp_add_test(unit-snap-compute-cg ${CMAKE_CURRENT_BINARY_DIR}/snap-compute-cg.sh)
+onika_add_test(unit-snap-compute-cg ${CMAKE_CURRENT_BINARY_DIR}/snap-compute-cg.sh)
 

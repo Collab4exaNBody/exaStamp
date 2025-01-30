@@ -7,11 +7,6 @@
 #include <onika/math/basic_types_operators.h>
 #include <onika/flat_tuple.h>
 
-${VARIANT:
-#undef USTAMP_POTENTIAL_WITH_VIRIAL
-#define USTAMP_POTENTIAL_WITH_VIRIAL 1
-}
-
 #include "pair_potential_force_op.h"
 
 namespace exaStamp

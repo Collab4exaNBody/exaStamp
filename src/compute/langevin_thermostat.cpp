@@ -14,6 +14,7 @@
 #include <onika/memory/allocator.h>
 #include <onika/parallel/random.h>
 #include <exanb/grid_cell_particles/particle_region.h>
+#include <exaStamp/unit_system.h>
 
 namespace exaStamp
 {
@@ -91,7 +92,7 @@ namespace exaStamp
     // -----------------------------------------------
     inline void execute ()  override final
     {
-      const double k = onika::physics::make_quantity( onika::physics::boltzmann , "J/K" );
+      static constexpr double k = EXASTAMP_CONST_QUANTITY( onika::physics::boltzmann * J / K );
 
       if( grid->number_of_cells() == 0 ) return;
 

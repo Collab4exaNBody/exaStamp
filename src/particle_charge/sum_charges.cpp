@@ -4,7 +4,7 @@
 #include <onika/scg/operator_slot.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <onika/log.h>
-#include <exanb/core/cpp_utils.h>
+#include <onika/cpp_utils.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exaStamp/particle_species/particle_specie.h>
 

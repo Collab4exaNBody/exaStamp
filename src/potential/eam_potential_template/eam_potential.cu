@@ -14,7 +14,7 @@
 #include <onika/scg/operator_slot.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <onika/log.h>
-#include <exanb/core/cpp_utils.h>
+#include <onika/cpp_utils.h>
 
 #include <exanb/particle_neighbors/chunk_neighbors.h>
 #include <exanb/compute/compute_cell_particle_pairs.h>

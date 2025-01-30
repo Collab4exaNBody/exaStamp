@@ -280,6 +280,7 @@ namespace exanb
 namespace YAML
 {
   using exaStamp::PRIV_NAMESPACE_NAME::RigidMolPotentialParameters;
+  using onika::lerr;
 
   template<> struct convert< RigidMolPotentialParameters >
   {
@@ -290,19 +291,19 @@ namespace YAML
       using UserPotParams = RigidMolPotentialParameters::UserPotParams;
       if( ! node.IsSequence() )
       {
-        ::exanb::lerr_stream() << "RigidMolPotentialParameters is not a sequence as expected"<<std::endl;
+        lerr << "RigidMolPotentialParameters is not a sequence as expected"<<std::endl;
         return false;
       }
       for(auto pp: node)
       {
         if( ! pp.IsMap() )
         {
-          ::exanb::lerr_stream() << "RigidMolPotentialParameters item is not a map as expected"<<std::endl;
+          lerr << "RigidMolPotentialParameters item is not a map as expected"<<std::endl;
           return false;
         }
         if( ! pp["type_a"] || ! pp["type_b"] || ! pp["rcut"] || ! pp["parameters"] )
         {
-          ::exanb::lerr_stream() << "RigidMolPotentialParameters : missing informations. required information keys are : type_a, type_b, rcut and parameters."<<std::endl;
+          lerr << "RigidMolPotentialParameters : missing informations. required information keys are : type_a, type_b, rcut and parameters."<<std::endl;
           return false;
         }
         auto type_a =  pp["type_a"].as<std::string>();

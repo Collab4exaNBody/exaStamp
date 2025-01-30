@@ -4,7 +4,7 @@
 #include <onika/scg/operator.h>
 #include <onika/scg/operator_slot.h>
 #include <onika/scg/operator_factory.h>
-#include <exanb/core/cpp_utils.h>
+#include <onika/cpp_utils.h>
 #include <exaStamp/potential_factory/pair_potential.h>
 #include <exaStamp/potential_factory/pair_potential_yaml.h>
 #include <exanb/core/particle_type_pair.h>

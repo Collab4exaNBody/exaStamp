@@ -13,7 +13,7 @@
 #include <exanb/compute/compute_cell_particles.h>
 #include <exanb/compute/compute_pair_optional_args.h>
 
-#include <exaStamp/compute/unit_system.h>
+#include <exaStamp/unit_system.h>
 
 #include <cmath>
 

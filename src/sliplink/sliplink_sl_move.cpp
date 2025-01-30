@@ -348,7 +348,7 @@ namespace exaStamp
         MPI_Allreduce(MPI_IN_PLACE,sl_positions.data(),total_regen_count*3,MPI_DOUBLE,MPI_MAX,comm);
 
 #       ifndef NDEBUG
-        MPI_Allreduce(MPI_IN_PLACE,&n_resolved_positions,1,exanb::mpi_datatype<size_t>(),MPI_SUM,comm);
+        MPI_Allreduce(MPI_IN_PLACE,&n_resolved_positions,1,onika::mpi::mpi_datatype<size_t>(),MPI_SUM,comm);
         ldbg << "total resolved positions = "<< n_resolved_positions << std::endl;
         assert( n_resolved_positions == total_regen_count );
         for(size_t i=0;i<total_regen_count;i++)

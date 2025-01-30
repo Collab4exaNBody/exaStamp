@@ -13,6 +13,7 @@
 #include <onika/physics/units.h>
 #include <onika/math/basic_types_yaml.h>
 #include <exaStamp/particle_species/particle_specie_yaml.h>
+#include <exaStamp/unit_system.h>
 
 #include <yaml-cpp/yaml.h>
 #include <string>
@@ -77,7 +78,7 @@ namespace exaStamp
     // -----------------------------------------------
     inline void execute ()  override final
     {
-      const double k = onika::physics::make_quantity( onika::physics::boltzmann , "J/K" );
+      static constexpr double k = EXASTAMP_CONST_QUANTITY( onika::physics::boltzmann * J / K );
 
       ldbg << "per material langevin: dt="<<*dt<<std::endl;
 

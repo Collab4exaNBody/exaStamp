@@ -15,7 +15,7 @@
 #include <exanb/mpi/grid_update_ghosts.h>
 
 #include <exanb/core/grid_fields.h>
-XSTAMP_DECLARE_FIELD( exanb::Vec3d, molufpos, "molecule unfolded particle position" );
+XNB_DECLARE_FIELD( exanb::Vec3d, molufpos, "molecule unfolded particle position" );
 
 namespace exaStamp
 {

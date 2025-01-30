@@ -17,7 +17,7 @@
 #include <exanb/core/domain.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exanb/core/check_particles_inside_cell.h>
-#include <exaStamp/compute/unit_system.h>
+#include <exaStamp/unit_system.h>
 
 namespace exaStamp
 {
