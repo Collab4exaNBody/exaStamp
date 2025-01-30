@@ -10,6 +10,7 @@
 #include <onika/scg/operator_factory.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <onika/physics/units.h>
+#include <exaStamp/unit_system.h>
 
 #include <exanb/io/mpi_file_io.h>
 #include <exaStamp/molecule/stampv4_io.h>
@@ -121,10 +122,10 @@ namespace exaStamp
                                                 field::_type>;
       
       //static const double coord_conv = UnityConverterHelper::convert(1.0, "m"); // conversion factor between stampv4 unit system and ExaStampV2 internal units
-      static const double vel_conv = UnityConverterHelper::convert(1.0, "m/s");
-      static const double coord_conv = UnityConverterHelper::convert(1.0, "m");
-      static const double time_conv = UnityConverterHelper::convert(1.0, "s");
-      static const double e_conv = UnityConverterHelper::convert(1.0, "J");
+      static constexpr double vel_conv = EXASTAMP_CONST_QUANTITY( 1.0 * m/s );
+      static constexpr double coord_conv = EXASTAMP_CONST_QUANTITY( 1.0 * m );
+      static constexpr double time_conv = EXASTAMP_CONST_QUANTITY( 1.0 * s );
+      static constexpr double e_conv = EXASTAMP_CONST_QUANTITY( 1.0 * J );
 
       ldbg << "vel_conv="<<vel_conv<<std::endl;
       ldbg << "coord_conv="<<coord_conv<<std::endl;
@@ -214,9 +215,9 @@ namespace exaStamp
       double C = norm(c) ;
 
       //on convertit les distances en m
-      entete.long_a          = A / UnityConverterHelper::convert(1,"m") ;
-      entete.long_b          = B / UnityConverterHelper::convert(1,"m") ;
-      entete.long_c          = C / UnityConverterHelper::convert(1,"m") ;
+      entete.long_a          = A / coord_conv;
+      entete.long_b          = B / coord_conv;
+      entete.long_c          = C / coord_conv;
 
       //on convertit les angles en degres
       entete.angle_a         = acos(dot(b,c)/(B*C))/acos(-1.)*180. ;
@@ -261,8 +262,8 @@ namespace exaStamp
 
       /* donnees temporelles */
       entete.NumeroIterationAbsolu = *timestep ;
-      entete.tempsPhysique         = (*physical_time) / UnityConverterHelper::convert(1,"s") ;
-      entete.dt_adaptatif          = *dt / UnityConverterHelper::convert(1,"s") ;
+      entete.tempsPhysique         = (*physical_time) / time_conv ;
+      entete.dt_adaptatif          = *dt / time_conv ;
 
       /* donnees energetiques */
       /* CONSTANTES A HOMOGENEISER AVEC LE CODE */

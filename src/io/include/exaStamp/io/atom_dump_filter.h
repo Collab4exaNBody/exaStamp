@@ -23,6 +23,13 @@ namespace exaStamp
     template<class ReadFuncT> inline size_t read_optional_header( ReadFuncT ) { return 0; }
   };
 
+  template<class T>
+  struct FieldStatisticsTraits
+  {
+    static constexpr bool has_sum_div = std::is_arithmetic_v< T > || std::is_same_v< T , Vec3d > || std::is_same_v< T , Mat3d > || std::is_same_v< T , Quaternion >;
+    static constexpr bool has_min_max = std::is_arithmetic_v< T > || std::is_same_v< T , Vec3d > ;
+  };
+
   template< class GridT , class DumpFieldSet , class LDBG, class OptionalHeaderIO=NullOptionalHeaderIO >
   struct AtomDumpFilter
   {
@@ -85,8 +92,8 @@ namespace exaStamp
       AtomDumpFilter& m_ref;
       template<class F , class T> inline void operator () ( F f, T value )
       {
-        static constexpr bool has_sum_div = std::is_arithmetic_v< typename F::value_type > || std::is_same_v< typename F::value_type , Vec3d > || std::is_same_v< typename F::value_type , Mat3d > || std::is_same_v< typename F::value_type , Quaternion >;
-        static constexpr bool has_min_max = std::is_arithmetic_v< typename F::value_type > || std::is_same_v< typename F::value_type , Vec3d > ;
+        static constexpr bool has_sum_div = FieldStatisticsTraits< typename F::value_type >::has_sum_div;
+        static constexpr bool has_min_max = FieldStatisticsTraits< typename F::value_type >::has_min_max;
         if constexpr ( has_sum_div )
         {
           m_ref.m_tuple_avg[f] = m_ref.m_tuple_avg[f] + value;
@@ -116,16 +123,21 @@ namespace exaStamp
       template<class F , class T> inline void operator () ( F f, T value )
       {
         using FiledPrintType = std::conditional_t< std::is_integral_v<typename F::value_type> , int64_t , typename F::value_type >;
-        static constexpr bool has_sum_div = std::is_arithmetic_v< typename F::value_type > || std::is_same_v< typename F::value_type , Vec3d > || std::is_same_v< typename F::value_type , Mat3d > || std::is_same_v< typename F::value_type , Quaternion >;
+        static constexpr bool has_sum_div = FieldStatisticsTraits< typename F::value_type >::has_sum_div;
+        static constexpr bool has_min_max = FieldStatisticsTraits< typename F::value_type >::has_min_max;
+        out << f.short_name() << ": " << std::scientific << std::setprecision(6);
         if constexpr ( has_sum_div )
         {
           if( m_ref.m_n_tuples > 0 ) m_ref.m_tuple_avg[f] = m_ref.m_tuple_avg[f] / double(m_ref.m_n_tuples);
+          out << " avg="<< static_cast<FiledPrintType>( m_ref.m_tuple_avg[f] );
         }
-        out << f.short_name() << ": " << std::scientific << std::setprecision(6) 
-            << static_cast<FiledPrintType>( m_ref.m_tuple_avg[f] ) << " / "
-            << static_cast<FiledPrintType>( m_ref.m_tuple_min[f] ) << " / "
-            << static_cast<FiledPrintType>( m_ref.m_tuple_max[f] ) << std::endl;
-       }
+        if constexpr ( has_min_max )
+        {
+          out <<" min="<< static_cast<FiledPrintType>( m_ref.m_tuple_min[f] ) << " / "
+              <<" max="<< static_cast<FiledPrintType>( m_ref.m_tuple_max[f] ) ;
+        }
+        out << std::endl;
+      }
     };
     template<class StreamT> StatsPrinter<StreamT> stats_printer(StreamT & out) { return StatsPrinter<StreamT>{*this,out}; }
 

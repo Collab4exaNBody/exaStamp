@@ -6,6 +6,7 @@
 #include <onika/math/basic_types_stream.h>
 #include <onika/log.h>
 #include <onika/physics/units.h>
+#include <exaStamp/unit_system.h>
 #include <exanb/core/particle_id_codec.h>
 
 #include <exanb/io/mpi_file_io.h>
@@ -175,13 +176,13 @@ namespace exaStamp
 
     // conversion of the cell parameters to the deformation matrix
     // https://en.wikipedia.org/wiki/Fractional_coordinates
-    double alpha = UnityConverterHelper::convert(entete->angle_a, "degree");
-    double beta  = UnityConverterHelper::convert(entete->angle_b, "degree");
-    double gamma = UnityConverterHelper::convert(entete->angle_g, "degree");
+    double alpha = EXASTAMP_QUANTITY( entete->angle_a * degree );
+    double beta  = EXASTAMP_QUANTITY( entete->angle_b * degree );
+    double gamma = EXASTAMP_QUANTITY( entete->angle_g * degree );
 
-    double ma = UnityConverterHelper::convert(entete->long_a, "m");
-    double mb = UnityConverterHelper::convert(entete->long_b, "m");
-    double mc = UnityConverterHelper::convert(entete->long_c, "m");
+    double ma = EXASTAMP_QUANTITY( entete->long_a * m );
+    double mb = EXASTAMP_QUANTITY( entete->long_b * m );
+    double mc = EXASTAMP_QUANTITY( entete->long_c * m );
 
     Vec3d a{ma, 0, 0};
     Vec3d b{mb * std::cos(gamma), mb * std::sin(gamma), 0};
@@ -237,8 +238,8 @@ namespace exaStamp
 
     // get general informations about the dynamics
     iteration_number = entete->NumeroIterationAbsolu ;
-    phystime         = UnityConverterHelper::convert(entete->tempsPhysique, "s") ;
-    dt               = UnityConverterHelper::convert(entete->dt_adaptatif, "s") ;
+    phystime         = EXASTAMP_QUANTITY( entete->tempsPhysique * s );
+    dt               = EXASTAMP_QUANTITY( entete->dt_adaptatif * s );
 
     MPI_Barrier(comm);
     // --------- entete -------------
@@ -524,7 +525,7 @@ namespace exaStamp
     std::vector<MoleculeConOpt> mol_con_opt;
     std::vector<uint64_t> particle_optional_place;
 
-    static const double vel_conv = UnityConverterHelper::convert(1.0, "m/s");
+    static constexpr double vel_conv = EXASTAMP_CONST_QUANTITY( 1.0 * m/s );
     Vec3d SumVelocity = {0.,0.,0.};
     //Gestion des blocs de donnees, mise en commun dans la grid
     for (size_t i = 0;i<count; i++)
