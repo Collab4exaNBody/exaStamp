@@ -13,6 +13,7 @@
 #include <onika/cpp_utils.h>
 #include <exanb/compute/compute_cell_particles.h>
 #include <exaStamp/potential/coul_wolf/coul_wolf.h>
+#include <exaStamp/unit_system.h>
 
 namespace exaStamp
 {
@@ -30,7 +31,7 @@ namespace exaStamp
       double e_self = -(m_params.e_shift / 2.0 + m_params.alpha / sqrt(M_PI) ) * C * C * m_params.qqrd2e;
 
       double _ep=0.;
-      _ep = UnityConverterHelper::convert(e_self, "eV");
+      _ep = EXASTAMP_QUANTITY( e_self * eV );
       ep += _ep;
     }
   };

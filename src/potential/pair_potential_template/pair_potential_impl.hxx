@@ -374,13 +374,25 @@ namespace exaStamp
           if( compute_pair_scratch.has_weight ) { compute_pair_scratch.has_weight = ! compact_nbh_weight.empty(); }
           compute_pair_scratch.compute_ghosts = ghost;
 
+#         if ! EXASTAMP_ENABLE_PAIR_WEIGHTING
+          if( compute_pair_scratch.has_weight )
+          {
+            fatal_error() << "Support for pair weighting has been disbaled in this build. set cmake variable EXASTAMP_ENABLE_PAIR_WEIGHTING to ON to enable it." << std::endl;
+          }
+#         endif
+
           int compute_case = ( (!compute_pair_scratch.xform_is_identity) ? 2 : 0 ) | ( compute_pair_scratch.has_weight ? 1 : 0 ) ;
           switch( compute_case )
           {
             case 0 : compute_force(grid,chunk_neighbors,&compact_nbh_weight,compute_pair_scratch,self->parallel_execution_context(), std::false_type{} , std::false_type{} ); break;
-            case 1 : compute_force(grid,chunk_neighbors,&compact_nbh_weight,compute_pair_scratch,self->parallel_execution_context(), std::false_type{} , std::true_type {} ); break;
             case 2 : compute_force(grid,chunk_neighbors,&compact_nbh_weight,compute_pair_scratch,self->parallel_execution_context(), std::true_type {} , std::false_type{} ); break;
+#           if EXASTAMP_ENABLE_PAIR_WEIGHTING
+            case 1 : compute_force(grid,chunk_neighbors,&compact_nbh_weight,compute_pair_scratch,self->parallel_execution_context(), std::false_type{} , std::true_type {} ); break;
             case 3 : compute_force(grid,chunk_neighbors,&compact_nbh_weight,compute_pair_scratch,self->parallel_execution_context(), std::true_type {} , std::true_type {} ); break;
+#           endif
+            default:
+              fatal_error() << "Internal error: unsupported pair potential configuration" << std::endl;
+              break;
           }
         }
     }

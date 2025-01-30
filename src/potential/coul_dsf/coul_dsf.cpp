@@ -169,7 +169,8 @@ namespace exaStamp
 	double f_shift = -(erfcc / cut_coulsq + 2.0 / MY_PIS * m_params.alpha * erfcd / cut_coul);
 	double e_shift = erfcc / cut_coul - f_shift * cut_coul;	
 	double e_self = -(e_shift / 2.0 + m_params.alpha / MY_PIS) * charge * charge * m_params.qqrd2e;
-	_ep = UnityConverterHelper::convert(e_self, "eV");
+	_ep = EXASTAMP_QUANTITY( e_self * eV );
+
 #       pragma omp simd reduction(+:_ep,_fx,_fy,_fz,_vir)
         for(size_t i=0;i<n;i++)
         {

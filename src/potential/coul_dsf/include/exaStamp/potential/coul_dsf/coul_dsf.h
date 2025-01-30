@@ -4,9 +4,9 @@
 #include <yaml-cpp/yaml.h>
 
 #include <onika/physics/units.h>
-#include <onika/physics/units.h>
 #include <exaStamp/potential_factory/pair_potential.h>
 #include <onika/physics/constants.h>
+#include <exaStamp/unit_system.h>
 
 #include <onika/cuda/cuda.h>
 
@@ -56,13 +56,8 @@ namespace exaStamp
     double fpair = -forcecoul / r;
     double ecoul = prefactor * (erfcc - r * e_shift - rsq * f_shift);
     
-#   ifdef EXANB_UNITS_V2
-    e = EXANB_QUANTITY( ecoul * eV ).convert();
-    de = EXANB_QUANTITY( fpair * eV / ang ).convert();
-#   else
-    e = UnityConverterHelper::convert(ecoul, "eV");
-    de = UnityConverterHelper::convert(fpair, "eV/ang");;
-#   endif
+    e = EXASTAMP_QUANTITY( ecoul * eV );
+    de = EXASTAMP_QUANTITY( fpair * eV / ang );
 
   }
 }

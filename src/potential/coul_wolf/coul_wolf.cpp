@@ -162,7 +162,7 @@ namespace exaStamp
         // assert( _vir.m11==0 && _vir.m12==0 && _vir.m13==0 && _vir.m21==0 && _vir.m22==0 && _vir.m23==0 && _vir.m31==0 && _vir.m32==0 && _vir.m33==0);
 
 	double e_self = -(m_params.e_shift / 2.0 + m_params.alpha / sqrt(M_PI)) * charge * charge * m_params.qqrd2e;
-	_ep = UnityConverterHelper::convert(e_self, "eV");
+	_ep = EXASTAMP_QUANTITY( e_self * eV );
 #       pragma omp simd reduction(+:_ep,_fx,_fy,_fz,_vir)
         for(size_t i=0;i<n;i++)
         {
