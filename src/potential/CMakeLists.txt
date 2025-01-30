@@ -12,7 +12,7 @@ add_subdirectory(eam_potential_template)
 add_subdirectory(eam_potentials)
 
 #add_subdirectory(LCHBOP)
-#add_subdirectory(meam)
+add_subdirectory(meam)
 add_subdirectory(coul_dsf)
 add_subdirectory(coul_wolf)
 #add_subdirectory(ewald)
