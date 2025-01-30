@@ -8,7 +8,7 @@
 #include <onika/yaml/yaml_utils.h>
 
 #include <onika/math/basic_types_def.h>
-#include <exanb/core/math_utils.h>
+#include <onika/math/math_utils.h>
 
 #include <iostream>
 #include <iomanip>
