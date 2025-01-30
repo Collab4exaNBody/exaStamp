@@ -1,6 +1,7 @@
 #include "ravelo.h"
 #include <onika/file_utils.h>
 #include <onika/log.h>
+#include <onika/physics/units.h>
 #include <onika/physics/constants.h>
 
 // Yaml conversion operators, allows to read potential parameters from config file
@@ -9,7 +10,6 @@ namespace YAML
 
   bool convert<exaStamp::EamRaveloParameters>::decode(const Node& _node, exaStamp::EamRaveloParameters& v)
   {
-    using exanb::UnityConverterHelper;
     using onika::physics::Quantity;
     using exanb::lout;
     using exanb::lerr;
@@ -33,7 +33,7 @@ namespace YAML
 
     if( ! file_to_load.empty() )
     {
-      file_to_load = onika::onika::data_file_path(file_to_load);
+      file_to_load = onika::data_file_path(file_to_load);
       ldbg << "parameters and tabulated EAM data from "<<file_to_load<<std::endl;
       node = LoadFile(file_to_load);
     }

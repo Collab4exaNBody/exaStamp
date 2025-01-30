@@ -71,7 +71,7 @@ namespace exaStamp
 namespace YAML
 {
   using exaStamp::CoulDsfParms;
-  using exanb::UnityConverterHelper;
+  
   using onika::physics::Quantity;
 
   template<> struct convert<CoulDsfParms>

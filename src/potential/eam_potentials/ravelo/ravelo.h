@@ -3,7 +3,6 @@
 #include <cmath>
 #include <yaml-cpp/yaml.h>
 #include <onika/physics/units.h>
-//#include "exanb/units/unityConverterHelper.h"
 
 #include <exanb/core/spline.h>
 
@@ -109,7 +108,6 @@ namespace exaStamp
 namespace YAML
 {
   using exaStamp::EamRaveloParameters;
-  using exanb::UnityConverterHelper;
   using onika::physics::Quantity;
 
   template<> struct convert<EamRaveloParameters>

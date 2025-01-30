@@ -12,7 +12,7 @@
 namespace YAML
 {
   using exaStamp::NPTConfig;
-  using exanb::UnityConverterHelper;
+  
   using onika::physics::Quantity;
   
   template<> struct convert<NPTConfig>

@@ -53,7 +53,7 @@ namespace exaStamp
 namespace YAML
 {
   using exaStamp::CoulWolfParms;
-  using exanb::UnityConverterHelper;
+  
   using onika::physics::Quantity;
 
   template<> struct convert<CoulWolfParms>

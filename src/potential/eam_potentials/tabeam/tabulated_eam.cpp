@@ -1,7 +1,12 @@
 #include "tabulated_eam.h"
+
 #include <onika/file_utils.h>
 #include <onika/log.h>
+
+#include <onika/physics/units.h>
 #include <onika/physics/constants.h>
+#include <onika/cuda/cuda.h>
+#include <exaStamp/unit_system.h>
 
 // Yaml conversion operators, allows to read potential parameters from config file
 namespace YAML
@@ -9,7 +14,6 @@ namespace YAML
 
   bool convert<exaStamp::TabEAMPotentialParms>::decode(const Node& _node, exaStamp::TabEAMPotentialParms& v)
   {
-    using exanb::UnityConverterHelper;
     using onika::physics::Quantity;
     using exanb::lout;
     using exanb::lerr;
@@ -33,7 +37,7 @@ namespace YAML
 
     if( ! file_to_load.empty() )
     {
-      file_to_load = onika::onika::data_file_path(file_to_load);
+      file_to_load = onika::data_file_path(file_to_load);
       ldbg << "tabulated EAM data from "<<file_to_load<<std::endl;
       node = LoadFile(file_to_load);
     }
@@ -55,7 +59,7 @@ namespace YAML
         dfs = onika::physics::avogadro * 1.e-3 ;
         drhos = 1.e-8; // drho scale factor
         rhos = 1.0;
-        ls = exanb::make_quantity(1.0,"m").convert();
+        ls = EXASTAMP_CONST_QUANTITY( 1.0 * m );
       }
     }
 

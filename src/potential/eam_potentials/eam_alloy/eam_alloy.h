@@ -4,6 +4,8 @@
 #include <yaml-cpp/yaml.h>
 #include <onika/physics/units.h>
 #include <onika/physics/constants.h>
+#include <exaStamp/unit_system.h>
+
 #include <onika/math/basic_types_operators.h>
 #include <onika/cuda/cuda.h>
 #include <onika/cuda/cuda_math.h>
@@ -134,8 +136,8 @@ namespace exaStamp
     const int nrho = 0;
     const int n_types = 0;
 
-    const double conversion_z2r = 0.0;
-    const double conversion_frho = 0.0;
+    static inline constexpr double conversion_z2r = EXASTAMP_CONST_QUANTITY( 1. * eV * ang );
+    static inline constexpr double conversion_frho = EXASTAMP_CONST_QUANTITY( 1.0 * eV );
 
     int8_t type2rhor[MAX_ARRAY_SIZE][MAX_ARRAY_SIZE];
     int8_t type2z2r[MAX_ARRAY_SIZE][MAX_ARRAY_SIZE];
@@ -156,8 +158,6 @@ namespace exaStamp
     , nr( p.nr )
     , nrho( p.nrho )
     , n_types( p.n_types )
-    , conversion_z2r( EXANB_QUANTITY( 1. * eV * ang ) )
-    , conversion_frho( EXANB_QUANTITY( 1.0 * eV ) )
     {
     
       if( static_cast<size_t>(n_types) > MAX_ELEMENTS )

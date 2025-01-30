@@ -55,14 +55,14 @@ namespace YAML
     std::string file_to_load;
     if( node.IsScalar() )
     {
-      file_to_load = onika::onika::data_file_path( node.as<std::string>() );
+      file_to_load = onika::data_file_path( node.as<std::string>() );
     }
     else
     {
       if( !node.IsMap() ) { return false; }
       if( node["file"] )
       {
-        file_to_load = onika::onika::data_file_path( node["file"].as<std::string>() );
+        file_to_load = onika::data_file_path( node["file"].as<std::string>() );
       }
     }
 

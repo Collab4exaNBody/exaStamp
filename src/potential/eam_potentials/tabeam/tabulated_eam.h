@@ -2,8 +2,7 @@
 
 #include <cmath>
 #include <yaml-cpp/yaml.h>
-#include <onika/physics/units.h>
-
+#include <onika/cuda/cuda.h>
 #include <onika/cuda/ro_shallow_copy.h>
 #include <exanb/core/ro_spline.h>
 
@@ -87,8 +86,6 @@ namespace exaStamp
 namespace YAML
 {
   using exaStamp::TabEAMPotentialParms;
-  using exanb::UnityConverterHelper;
-  using onika::physics::Quantity;
 
   template<> struct convert<TabEAMPotentialParms>
   {

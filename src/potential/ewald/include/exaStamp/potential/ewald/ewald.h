@@ -342,7 +342,7 @@ namespace onika { namespace cuda {
 namespace YAML
 {
   using exaStamp::EwaldParms;
-  using exanb::UnityConverterHelper;
+  
   using onika::physics::Quantity;
   using exanb::Vec3d;
   using exaStamp::ewald_init_parameters;

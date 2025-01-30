@@ -1,15 +1,29 @@
-# =================================
-# === micro-stamp core library  ===
-# =================================
+
+###
+# Pair potential template replicated for all simple pair potentials
+###
 
 set(PAIR_POTENTIAL_TEMPALE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/pair_potential_template)
 file(GLOB PAIR_POTENTIAL_TEMPALE_SRCS ${PAIR_POTENTIAL_TEMPALE_DIR}/*.cpp ${PAIR_POTENTIAL_TEMPALE_DIR}/*.cu)
+
 macro(AddPairPotential PairPotDir PluginName)
   list(APPEND ${PluginName}_LINK_LIBRARIES exaStampPotential exanbParticleNeighbors)
-  #  list(APPEND ${PluginName}_INCLUDE_DIRS ${PAIR_POTENTIAL_TEMPALE_DIR})
   list(APPEND ${PluginName}_EXTERNAL_SRCS ${PAIR_POTENTIAL_TEMPALE_SRCS})
   onika_add_plugin(${PluginName} ${PairPotDir})
 endmacro()
+
+###
+# EAM potential template replicated for all simple EAM potentials
+###
+set(EAM_POTENTIAL_TEMPALE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/eam_potential_template)
+file(GLOB EAM_POTENTIAL_TEMPALE_SRCS ${EAM_POTENTIAL_TEMPALE_DIR}/*.cpp ${EAM_POTENTIAL_TEMPALE_DIR}/*.cu)
+
+macro(AddEAMPotential EamPotDir PluginName)
+  list(APPEND ${PluginName}_LINK_LIBRARIES exaStampEAM exaStampPotential exanbParticleNeighbors)
+  list(APPEND ${PluginName}_EXTERNAL_SRCS ${EAM_POTENTIAL_TEMPALE_SRCS})
+  onika_add_plugin(${PluginName} ${EamPotDir})
+endmacro()
+
 
 add_subdirectory(reaction_field)
 add_subdirectory(ljexp6rf)
@@ -19,8 +33,8 @@ add_subdirectory(pair_potentials)
 add_subdirectory(multimat_pair_potential)
 
 # EAM potentials
-#add_subdirectory(eam)
-#add_subdirectory(eam_potentials)
+add_subdirectory(eam)
+add_subdirectory(eam_potentials)
 
 #add_subdirectory(LCHBOP)
 #add_subdirectory(meam)
@@ -32,7 +46,4 @@ add_subdirectory(multimat_pair_potential)
 #add_subdirectory(snaplmp)
 #add_subdirectory(range_potential)
 #add_subdirectory(n2p2)
-
-#GenerateAllPairPotentials()
-#GenerateAllEAMPotentials()
 

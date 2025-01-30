@@ -149,7 +149,6 @@ namespace exaStamp
 namespace YAML
 {
   using exaStamp::EamVniitfParameters;
-  using exanb::UnityConverterHelper;
   using onika::physics::Quantity;
 
   template<> struct convert<EamVniitfParameters>

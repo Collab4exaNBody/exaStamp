@@ -8,7 +8,7 @@
 namespace YAML
 {
   using exaStamp::ParrinelloRahmanConfig;
-  using exanb::UnityConverterHelper;
+  
   using onika::physics::Quantity;
     
   template<> struct convert<ParrinelloRahmanConfig>

@@ -154,7 +154,6 @@ namespace exaStamp
 namespace YAML
 {
   using exaStamp::EamJohnsonParameters;
-  using exanb::UnityConverterHelper;
   using onika::physics::Quantity;
 
   template<> struct convert<EamJohnsonParameters>
