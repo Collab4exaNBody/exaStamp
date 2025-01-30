@@ -1,6 +1,8 @@
 #pragma once
 
+#include <onika/physics/units.h>
 #include <onika/physics/constants.h>
+#include <exaStamp/unit_system.h>
 #include <exanb/core/concurent_add_contributions.h>
 #include <onika/cuda/cuda.h>
 
@@ -313,7 +315,7 @@ namespace exaStamp
     
     // exaStamp conversion specific falgs
     const bool conv_energy_units = true;
-    const double conv_energy_factor = UnityConverterHelper::convert(1., "eV");
+    static constexpr double conv_energy_factor = EXASTAMP_CONST_QUANTITY( 1. * eV );
 
     template<class ComputeBufferT, class CellParticlesT>
     ONIKA_HOST_DEVICE_FUNC

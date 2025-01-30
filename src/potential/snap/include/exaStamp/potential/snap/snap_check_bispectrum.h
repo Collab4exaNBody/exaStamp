@@ -16,6 +16,8 @@ namespace exaStamp
   template<class GridT>
   static inline void snap_check_bispectrum(MPI_Comm comm, const GridT& grid, const std::string& file_name, long ncoeff, const double* bispectrum, double max_l2_error = 1.e-12 )
   {
+    using onika::yaml::yaml_load_file_abort_on_except;
+
     std::map< long , std::vector<double> > id_bispectrum_map;
     bool write_check_file = false;
     if( std::ifstream(file_name).good() )
