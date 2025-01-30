@@ -1,4 +1,5 @@
-#pragma once
+#ifndef LMP_ERROR_H
+#define LMP_ERROR_H
 
 #include <onika/log.h>
 
@@ -26,4 +27,6 @@ namespace LAMMPS_NS
   };
 
 }
+
+#endif
 

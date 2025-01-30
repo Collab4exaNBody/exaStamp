@@ -1,4 +1,5 @@
-#pragma once
+#ifndef LMP_POINTERS_H
+#define LMP_POINTERS_H
 
 #include <memory>
 #include <cstdint>
@@ -49,4 +50,6 @@ namespace LAMMPS_NS
 	};
 	
 }
+
+#endif
 
