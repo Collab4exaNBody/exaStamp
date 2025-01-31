@@ -14,9 +14,10 @@
 #include <onika/log.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <onika/parallel/random.h>
+
 #include <onika/physics/units.h>
 #include <onika/physics/constants.h>
-#include <onika/physics/units.h>
+#include <exaStamp/unit_system.h>
 
 #include <onika/math/quaternion_operators.h>
 
@@ -67,7 +68,7 @@ namespace exaStamp
       double nddl_y=0.;
       double nddl_z=0.;
 
-      static const double k = UnityConverterHelper::convert(onika::physics::boltzmann, "J/K");
+      static constexpr double k = EXASTAMP_CONST_QUANTITY( onika::physics::boltzmann * J / K );
       const double T           = *(this->T);
       //double sum_nrj=0.0;
 

@@ -16,9 +16,8 @@
 #include <onika/parallel/random.h>
 #include <onika/physics/units.h>
 #include <onika/physics/constants.h>
-#include <onika/physics/units.h>
+#include <exaStamp/unit_system.h>
 
-//#include "quaternion_rotation.h"
 #include <onika/math/quaternion_operators.h>
 
 namespace exaStamp
@@ -43,7 +42,7 @@ namespace exaStamp
   public:
     inline void execute () override final
     {
-      static const double k = UnityConverterHelper::convert(onika::physics::boltzmann, "J/K");
+      static constexpr double k = EXASTAMP_CONST_QUANTITY( onika::physics::boltzmann * J / K );
     
       auto cells = grid->cells();
       IJK dims = grid->dimension();

@@ -12,13 +12,17 @@
 #include <exanb/core/grid.h>
 #include <onika/math/basic_types_stream.h>
 #include <onika/log.h>
-//#include "exanb/vector_utils.h"
+#include <onika/math/quaternion_operators.h>
 #include <onika/file_utils.h>
+#include <onika/physics/units.h>
+#include <onika/physics/constants.h>
+
 #include <exanb/core/domain.h>
-#include <exaStamp/particle_species/particle_specie.h>
 #include <exanb/core/check_particles_inside_cell.h>
 
-#include <onika/math/quaternion_operators.h>
+#include <exaStamp/particle_species/particle_specie.h>
+#include <exaStamp/unit_system.h>
+
 
 namespace exaStamp
 {
@@ -43,7 +47,7 @@ namespace exaStamp
     double& min_x, double& min_y, double& min_z, 
     double& max_x, double& max_y, double& max_z )
   {
-    static const double coord_conv = UnityConverterHelper::convert(1.0, "ang"); // conversion factor between input unity to exaStamp internal unity
+    static constexpr double coord_conv = EXASTAMP_CONST_QUANTITY( 1.0 * ang ); // conversion factor between input unity to exaStamp internal unity
     using MoleculeTupleIO = onika::soatl::FieldTuple<field::_rx, field::_ry, field::_rz, field::_type>;
     using LocalParticleTuple = onika::soatl::FieldTuple<field::_rx, field::_ry, field::_rz, field::_id, field::_type, field::_orient >;
 
