@@ -3,6 +3,9 @@
 
 #include "pair_potential_force_op.h"
 
+ // do we need pair Weighting version ?
+#if ! defined(USTAMP_POTENTIAL_WITH_WEIGHTS) || EXASTAMP_ENABLE_PAIR_WEIGHTING
+
 #ifdef USTAMP_POTENTIAL_WITH_WEIGHTS
 #define UseWeights true
 #else
@@ -41,4 +44,7 @@ namespace exaStamp
 #undef _CLASS_NAME
 #undef _CLASS_BASE
 #undef UseWeights
+
+#endif // do we need pair Weighting version ?
+
 

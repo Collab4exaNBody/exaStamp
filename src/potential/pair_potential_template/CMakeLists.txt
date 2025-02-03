@@ -3,7 +3,7 @@
 # Pair potential template replicated for all simple pair potentials
 ###
 
-option(EXASTAMP_ENABLE_PAIR_WEIGHTING "Enables support for weighted pair potential" OFF)
+option(EXASTAMP_ENABLE_PAIR_WEIGHTING "Enables support for weighted pair potential" ON)
 
 if(EXASTAMP_ENABLE_PAIR_WEIGHTING)
   set(PAIR_POTENTIAL_TEMPALE_SRCS
