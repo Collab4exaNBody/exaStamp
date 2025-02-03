@@ -122,7 +122,7 @@ namespace exaStamp
     std::unique_ptr<IOEntete> entete = std::make_unique<IOEntete>();
     file.read( entete.get() );
     file.increment_offset( entete.get() );
-    assert( exanb::all_value_equal(comm, *entete.get()) );
+    assert( onika::mpi::all_value_equal(comm, *entete.get()) );
 
     //AABB file_bounds = { Vec3d{ entete.xmin , entete.ymin , entete.zmin } * coord_conv , Vec3d{ entete.xmax , entete.ymax , entete.zmax } * coord_conv };
 
@@ -748,7 +748,7 @@ namespace exaStamp
     IOVersion version = { 1 };
     file.read( &version );
     file.increment_offset( &version );
-    assert( exanb::all_value_equal(comm, version ) );
+    assert( onika::mpi::all_value_equal(comm, version ) );
     ldbg << "\t\tversion = " << version.version << "\n" << std::endl;
     if( force_version != -1 )
     {

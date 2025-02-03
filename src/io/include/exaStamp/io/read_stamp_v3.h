@@ -80,7 +80,7 @@ namespace exaStamp
     mpiioDumpFile.open(file_name.c_str());
     mpiioDumpFile.readHeader(entete);
 
-    assert( exanb::all_value_equal(comm,entete) );
+    assert( onika::mpi::all_value_equal(comm,entete) );
 
     iteration_number = entete.iterationNumber;
     AABB file_bounds = { Vec3d{ entete.xmin , entete.ymin , entete.zmin } * coord_conv , Vec3d{ entete.xmax , entete.ymax , entete.zmax } * coord_conv };
