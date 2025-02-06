@@ -1,6 +1,5 @@
-#
-# Ubuntu 22.04 g++-11.4.0 X Cuda 12
-# Ubuntu 22.04 g++-11.4.0 (no Cuda)
+# Tested with 
+# Ubuntu 24.04 , g++-13.4.0 and Cuda 12.8
 #
 XNB_INSTALL_DIR=${HOME}/local/exaNBody
 EXASTAMP_SRC_DIR=${HOME}/dev/exaStamp
@@ -10,29 +9,12 @@ cmake -DCMAKE_BUILD_TYPE=Release \
       -DexaNBody_DIR=${XNB_INSTALL_DIR} \
       ${EXASTAMP_SRC_DIR}
 
-
-#
-# Rhel_8__x86_64 X Intel-24.2.0 X gcc-11.2.0 X Cuda 12.4
-#
-XNB_INSTALL_DIR=/ccc/home/cont001/xstampdev/xstampdev/releases/exaNBody
-EXASPH_SRC_DIR=${HOME}/dev/exaSPH
-EXASPH_INSTALL_DIR=/ccc/home/cont001/xstampdev/xstampdev/releases/exaSPH-2.0
-CXX_COMPILER=`which icpx`
-C_COMPILER=`which icx`
-cmake -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_INSTALL_PREFIX=${EXASPH_INSTALL_DIR} \
-      -DCMAKE_C_COMPILER=${C_COMPILER} \
-      -DCMAKE_CXX_COMPILER=${CXX_COMPILER} \
-      -DCMAKE_CXX_FLAGS=-diag-disable=15518,15552 \
-      -DexaNBody_DIR=${XNB_INSTALL_DIR} \
-	    ${EXASPH_SRC_DIR}
-
-#
-# Rhel_8__x86_64 X gcc-12.3.0 X Cuda 12.4
-# Rhel_8__x86_64 X gcc-11.2.0 X Cuda 12.4
-#
-
-
 # common build and cleanup
-make -j4 install
+make -j20 install
+
+# first time environment setup so you can use raw executable without wrapper script
+source ./exaStamp
+
+# run executable, with or without profiling tools
+/home/carrardt/local/onika/bin/onika-exec multi_WBe.msp
 
