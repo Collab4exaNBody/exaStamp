@@ -13,10 +13,10 @@
 #include <exaStamp/particle_species/particle_specie.h>
 #include <onika/file_utils.h>
 
-#include <exaStamp/potential/snap/snap_params.h>
-#include <exaStamp/potential/snap/snap_read_lammps.h>
-#include <exaStamp/potential/snap/snap_config.h>
-#include <exaStamp/potential/snap/snap_check_bispectrum.h>
+#include <md/snap/snap_params.h>
+#include <md/snap/snap_read_lammps.h>
+#include <md/snap/snap_config.h>
+#include <md/snap/snap_check_bispectrum.h>
 
 #include <exanb/particle_neighbors/chunk_neighbors.h>
 

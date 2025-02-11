@@ -3,17 +3,21 @@
 #include <onika/math/basic_types.h>
 #include <onika/math/basic_types_operators.h>
 #include <exanb/compute/compute_cell_particle_pairs.h>
-#include <exaStamp/particle_species/particle_specie.h>
 #include <onika/scg/operator.h>
 #include <onika/scg/operator_factory.h>
 #include <onika/scg/operator_slot.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <onika/log.h>
 #include <onika/cpp_utils.h>
-#include <exaStamp/particle_species/particle_specie.h>
 #include <onika/file_utils.h>
 
-#include <exaStamp/potential/snap/snap_params.h>
+#include <exanb/core/particle_type_id.h>
+#include <md/snap/snap_params.h>
+
+namespace exaStamp
+{
+  using namespace md;
+}
 
 #include <exaStamp/potential/snaplegacy/SnapLegacyCG.h>
 #include <exaStamp/potential/snaplegacy/SnapLegacyBS.h>
@@ -136,7 +140,7 @@ namespace exaStamp
         const SnapMaterial& mat = m_config.materials()[0];
 
         // temporay, enable mutiple species if they all have weight=1. modifications needed for true multimaterial
-        m_factor.assign( MAX_PARTICLE_SPECIES, 1.0 );
+        m_factor.assign( exanb::MAX_PARTICLE_TYPES , 1.0 );
         m_factor[0] = mat.weight();
 
         m_coefs.resize( mat.number_of_coefficients() );

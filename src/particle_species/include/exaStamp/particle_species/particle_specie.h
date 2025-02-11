@@ -13,6 +13,7 @@
 //#include <exaStamp/atom_bond_connectivity.h>
 
 #include <onika/memory/allocator.h>
+#include <exanb/core/particle_type_id.h>
 
 #ifndef XSTAMP_MAX_RIGID_MOLECULE_ATOMS
 #define XSTAMP_MAX_RIGID_MOLECULE_ATOMS 4
@@ -20,7 +21,7 @@
 
 namespace exaStamp
 {
-  static constexpr size_t MAX_PARTICLE_SPECIES = 256;
+  static constexpr size_t MAX_PARTICLE_SPECIES = exanb::MAX_PARTICLE_TYPES;
   static constexpr size_t MAX_ATOM_NAME_LEN = 16;
   static constexpr size_t LEGACY_MAX_RIGID_MOLECULE_ATOMS = 16; // WARNING, changing this constant will make the dump reader fail
   static constexpr size_t MAX_RIGID_MOLECULE_ATOMS = XSTAMP_MAX_RIGID_MOLECULE_ATOMS;

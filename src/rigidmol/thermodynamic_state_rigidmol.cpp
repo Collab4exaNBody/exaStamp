@@ -193,7 +193,7 @@ namespace exaStamp
         ndof.z = tmp[23];
       }
 
-      double conv_temperature = 1.e4 * onika::physics::atomicMass / onika::physics::boltzmann ;
+      ///double conv_temperature = 1.e4 * onika::physics::atomicMass / onika::physics::boltzmann ;
       Vec3d kinetic_temperature = 2. * ( kinetic_energy - 0.5 * momentum * momentum / masstotale) / total_particles ;
 
       Vec3d rotational_temperature = {0., 0., 0.};
