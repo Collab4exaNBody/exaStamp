@@ -1,6 +1,9 @@
 # Tested with 
 # Ubuntu 24.04 , g++-13.4.0 and Cuda 12.8
 #
+# Note: cofigure exaNBody with EXANB_BUILD_CONTRIB_MD=ON to enable contributed MD potentials
+# in exaStamp (i.e ML SNAP)
+#
 XNB_INSTALL_DIR=${HOME}/local/exaNBody
 EXASTAMP_SRC_DIR=${HOME}/dev/exaStamp
 EXASTAMP_INSTALL_DIR=${HOME}/local/exaStamp

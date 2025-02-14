@@ -1,3 +1,4 @@
+# message(STATUS "XNB_BUILD_mdSnap = ${XNB_BUILD_mdSnap}")
 if(XNB_BUILD_mdSnap)
   set(exaStampSnapLegacy_COMPILE_DEFINITIONS -DLAMMPS=1 ${KMP_ALIGNED_ALLOCATOR_DEFINITIONS})
   set(exaStampSnapLegacy_INCLUDE_DIRS ${SNAP_INCLUDE_DIRS})
