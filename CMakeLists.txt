@@ -41,18 +41,6 @@ endif()
 # ======================================
 find_package(exaNBody)
 
-# ====================================
-# === CCC supercomputing facility  ===
-# ====================================
-option(EXASTAMP_CCC_USER "Use CCC job resource interface" OFF)
-if(EXASTAMP_CCC_USER)
-  set(CCC_USER_DEFINITIONS "-D__use_lib_ccc_user=1" CACHE STRING "ccc_user macro definitions") 
-  set(CCC_USER_INCLUDE_DIRS "" CACHE STRING "ccc_user include dir") 
-  set(CCC_USER_LIBRARIES "ccc_user" CACHE STRING "ccc_user lib") 
-  set(XNB_APP_DEFINITIONS ${XNB_APP_DEFINITIONS} ${CCC_USER_DEFINITIONS})
-  set(XNB_APP_INCLUDE_DIRS ${XNB_APP_INCLUDE_DIRS} ${CCC_USER_INCLUDE_DIRS})
-  set(XNB_APP_LIBRARIES ${XNB_APP_LIBRARIES} ${CCC_USER_LIBRARIES})
-endif()
 
 # ==========================================
 # === build application plugins and libs ===
