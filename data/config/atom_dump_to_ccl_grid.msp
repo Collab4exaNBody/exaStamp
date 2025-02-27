@@ -17,7 +17,6 @@ global:
   ghost_dist: 10.0 ang
   inputfile: microjet.dump
   outputfile: ccl
-  enable_cell_values: true # crucial so that cell values are updated even where there are no particles
 
 read_dump_atoms:
   periodic: [ true , true , true ]
@@ -26,7 +25,6 @@ cc_label:
   grid_cell_field: mass
   grid_cell_threshold: 100.0
   cc_count_threshold: 15
-  cc_ordered: true
 
 atom_cell_projection:
   splat_size: 1.0 ang
@@ -47,7 +45,7 @@ simulation:
   - simple_cost_model
   - load_balance_rcb
   - migrate_cell_particles
-  - ghost_comm_scheme
+  - ghost_comm_scheme: { enable_cell_values: true }
   - ghost_update_all
   - simulation_thermodynamic_state
   - print_thermodynamic_state
