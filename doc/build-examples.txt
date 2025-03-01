@@ -21,3 +21,6 @@ source ./exaStamp
 # run executable, with or without profiling tools
 /home/carrardt/local/onika/bin/onika-exec multi_WBe.msp
 
+
+# with intel compiler add compiler cmake variables :
+# -DCMAKE_CXX_COMPILER=/ccc/products/icx-24.2.0/system/default/24.2.0/bin/icpx -DCMAKE_C_COMPILER=/ccc/products/icx-24.2.0/system/default/24.2.0/bin/icx

@@ -6,7 +6,7 @@
 
 configuration:
   logging:
-    debug: true
+    debug: false
 #    parallel: true
   debug:
     filter: [ ".*cc_label" , ".*write_cc_table" ]
@@ -59,5 +59,5 @@ simulation:
       rebind: { filename: outputfile }
       body:
         - write_grid_vtk
-        - write_cc_table
+        - write_cc_table: { write_stats: true }
 
