@@ -15,6 +15,7 @@ configuration:
 
 global:
   ghost_dist: 10.0 ang
+  cc_enable_stats: false
   inputfile: microjet.dump
   outputfile: ccl
 
@@ -34,7 +35,6 @@ cc_label:
   cc_avg_fields: [ velocity ]             # among user defined fields, those which quantity muste be divided by number of cells
 
 write_cc_table:
-  write_stats: false                        # writes ccl_stats.csv, wich contains performance statistics
   write_rank: false                         # writes MPI process id of CC owner during write
   write_gyration: false                     # writes gyration tensor
   write_custom_fields: [ velocity , mv2 ]   # writes user defined custom fields
