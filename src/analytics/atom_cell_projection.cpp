@@ -54,6 +54,8 @@ namespace exaStamp
       int rank=0;
       MPI_Comm_rank(*mpi, &rank);
 
+      VelocityVec3Combiner velocity = {};
+      ForceVec3Combiner force = {};
       VelocityNormCombiner vnorm = {};
       ParticleCountCombiner count = {};
       KineticEnergyCombiner mv2 = { { species->data() , 0 } };
@@ -61,7 +63,7 @@ namespace exaStamp
       MomentumCombiner momentum = { { species->data() , 0 } };
       KineticEnergyTensorCombiner mv2tensor = { { species->data() , 0 } };
       
-      auto proj_fields = make_field_tuple_from_field_set( grid->field_set, count, vnorm, mv2, mass, momentum, mv2tensor );
+      auto proj_fields = make_field_tuple_from_field_set( grid->field_set, count, vnorm, mv2, mass, momentum, mv2tensor, velocity, force );
       auto field_selector = [flist = *fields] ( const std::string& name ) -> bool { for(const auto& f:flist) if( std::regex_match(name,std::regex(f)) ) return true; return false; } ;
       project_particle_fields_to_grid( ldbg, *grid, *grid_cell_values, *grid_subdiv, *splat_size, field_selector, proj_fields );
     }

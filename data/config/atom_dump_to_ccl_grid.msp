@@ -6,7 +6,7 @@
 
 configuration:
   logging:
-    debug: true
+    debug: false
 #    parallel: true
   debug:
     filter: [ ".*cc_label" , ".*write_cc_table" ]
@@ -21,15 +21,23 @@ global:
 read_dump_atoms:
   periodic: [ true , true , true ]
 
-cc_label:
-  grid_cell_field: mass
-  grid_cell_threshold: 100.0
-  cc_count_threshold: 15
-
 atom_cell_projection:
-  splat_size: 1.0 ang
-  grid_subdiv: 3
-  fields: [ mass , mv2 , processor_id ]
+  splat_size: 1.0 ang                              # projection kernel size
+  grid_subdiv: 3                                   # cell subdivision, here 3x3x3
+  fields: [ velocity , mass , mv2 , processor_id ] # fields to project on grid
+
+cc_label:
+  grid_cell_field: mass                   # value used for threshold test
+  grid_cell_threshold: 100.0              # value threshold to build boolean CC flag
+  cc_count_threshold: 15                  # minimal number of cells in CC
+  cc_custom_fields: [ velocity , mv2 ]    # user defnied fields to be aggregated over CC cells
+  cc_avg_fields: [ velocity ]             # among user defined fields, those which quantity muste be divided by number of cells
+
+write_cc_table:
+  write_stats: false                        # writes ccl_stats.csv, wich contains performance statistics
+  write_rank: false                         # writes MPI process id of CC owner during write
+  write_gyration: false                     # writes gyration tensor
+  write_custom_fields: [ velocity , mv2 ]   # writes user defined custom fields
 
 simulation:
   - mpi_comm_world
