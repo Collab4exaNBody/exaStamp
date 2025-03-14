@@ -29,6 +29,12 @@
 
 #include "eam_force_op_multimat_flat.h"
 
+// avoids name conflicts in resulting dynamic libraries
+#define POTENTIAL_REGISTER_INIT() _POTENTIAL_REGISTER_INIT( CONSTRUCTOR_FUNC_NAME )
+#define CONSTRUCTOR_FUNC_NAME USTAMP_CONCAT(EamPotentialOperatorName,_init_multimat_flat)
+#define _POTENTIAL_REGISTER_INIT(name) CONSTRUCTOR_ATTRIB void MAKE_UNIQUE_NAME(name,_,__LINE__,ONIKA_CURRENT_PACKAGE_NAME) ()
+
+
 namespace exaStamp
 {
   using namespace exanb;
@@ -214,15 +220,16 @@ namespace exaStamp
 
   };
 
-  namespace tmplhelper
+  namespace PRIV_NAMESPACE_NAME
   {
     template<class GridT> using EamPotentialFlatName  = ::exaStamp::EamPotentialFlatName<GridT>;
   }
 
   // === register factories ===  
-  ONIKA_AUTORUN_INIT(eam_potential_multimat_flat)
+  //ONIKA_AUTORUN_INIT(eam_potential_multimat_flat)
+  POTENTIAL_REGISTER_INIT()
   {
-    OperatorNodeFactory::instance()->register_factory( EamPotentialFlatStr , make_grid_variant_operator< tmplhelper::EamPotentialFlatName > );
+    OperatorNodeFactory::instance()->register_factory( EamPotentialFlatStr , make_grid_variant_operator< PRIV_NAMESPACE_NAME::EamPotentialFlatName > );
   }
 
 }

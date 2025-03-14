@@ -29,14 +29,28 @@
 #define EamPotentialOperatorName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_force)
 #define EamPotentialComputeEmbNoGhostName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_emb)
 #define EamPotentialComputeForceOnlyName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_force_reuse_emb)
+#define EamPotentialInitName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_init)
 
 #define EamPotentialStr USTAMP_STR(EamPotentialOperatorName)
 #define EamPotentialEmbNoGhostStr USTAMP_STR(EamPotentialComputeEmbNoGhostName)
 #define EamPotentialForceOnlyStr USTAMP_STR(EamPotentialComputeForceOnlyName)
+#define EamParameterInitStr USTAMP_STR(EamParameterInitName)
+
+// avoids name conflicts in resulting dynamic libraries
+#define POTENTIAL_REGISTER_INIT() _POTENTIAL_REGISTER_INIT( CONSTRUCTOR_FUNC_NAME )
+#define CONSTRUCTOR_FUNC_NAME USTAMP_CONCAT(EamPotentialOperatorName,_init)
+#define _POTENTIAL_REGISTER_INIT(name) CONSTRUCTOR_ATTRIB void MAKE_UNIQUE_NAME(name,_,__LINE__,ONIKA_CURRENT_PACKAGE_NAME) ()
 
 namespace exaStamp
 {
   using namespace exanb;
+
+  class EamParameterInitName : public OperatorNode
+  {  
+    ADD_SLOT( USTAMP_POTENTIAL_PARMS, parameters       , OUTPUT , REQUIRED );
+  public:
+    inline void execute () override final {}
+  };
 
   template<
     class GridT,
@@ -139,7 +153,7 @@ namespace exaStamp
 
   };
 
-  namespace tmplhelper
+  namespace PRIV_NAMESPACE_NAME
   {
     template<class GridT> using EamPotentialOperatorName          = ::exaStamp::EamPotentialOperatorName<GridT,true,true,true>;
     template<class GridT> using EamPotentialComputeEmbNoGhostName = ::exaStamp::EamPotentialOperatorName<GridT,true,false,false>;
@@ -147,11 +161,13 @@ namespace exaStamp
   }
 
   // === register factories ===  
-  ONIKA_AUTORUN_INIT(eam_potential)
+  //ONIKA_AUTORUN_INIT(eam_potential)
+  POTENTIAL_REGISTER_INIT()
   {
-    OperatorNodeFactory::instance()->register_factory( EamPotentialStr           , make_grid_variant_operator< tmplhelper::EamPotentialOperatorName          > );
-    OperatorNodeFactory::instance()->register_factory( EamPotentialEmbNoGhostStr , make_grid_variant_operator< tmplhelper::EamPotentialComputeEmbNoGhostName > );
-    OperatorNodeFactory::instance()->register_factory( EamPotentialForceOnlyStr  , make_grid_variant_operator< tmplhelper::EamPotentialComputeForceOnlyName  > );
+    OperatorNodeFactory::instance()->register_factory( EamPotentialStr           , make_grid_variant_operator< PRIV_NAMESPACE_NAME::EamPotentialOperatorName          > );
+    OperatorNodeFactory::instance()->register_factory( EamPotentialEmbNoGhostStr , make_grid_variant_operator< PRIV_NAMESPACE_NAME::EamPotentialComputeEmbNoGhostName > );
+    OperatorNodeFactory::instance()->register_factory( EamPotentialForceOnlyStr  , make_grid_variant_operator< PRIV_NAMESPACE_NAME::EamPotentialComputeForceOnlyName  > );
+    OperatorNodeFactory::instance()->register_factory( EamParameterInitStr       , make_simple_operator< EamParameterInitName > );
   }
 
 }

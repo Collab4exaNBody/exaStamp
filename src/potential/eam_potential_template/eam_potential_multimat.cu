@@ -1,7 +1,3 @@
-//  // DO NOT REMOVE THIS LINE
-
-//  // DO NOT REMOVE THIS LINE
-
 #include <exanb/core/grid.h>
 #include <onika/math/basic_types.h>
 #include <onika/math/basic_types_operators.h>
@@ -31,6 +27,11 @@
 #ifndef USTAMP_POTENTIAL_EAM_MM_INIT_TYPES
 #define USTAMP_POTENTIAL_EAM_MM_INIT_TYPES(p,nt,pe) /**/
 #endif
+
+// avoids name conflicts in resulting dynamic libraries
+#define POTENTIAL_REGISTER_INIT() _POTENTIAL_REGISTER_INIT( CONSTRUCTOR_FUNC_NAME )
+#define CONSTRUCTOR_FUNC_NAME USTAMP_CONCAT(EamPotentialOperatorName,_init_multimat)
+#define _POTENTIAL_REGISTER_INIT(name) CONSTRUCTOR_ATTRIB void MAKE_UNIQUE_NAME(name,_,__LINE__,ONIKA_CURRENT_PACKAGE_NAME) ()
 
 namespace exaStamp
 {
@@ -239,17 +240,17 @@ namespace exaStamp
 
   };
 
-  namespace tmplhelper
+  namespace PRIV_NAMESPACE_NAME
   {
     template<class GridT> using EamPotentialOperatorName  = ::exaStamp::EamPotentialOperatorName<GridT>;
   }
 
   // === register factories ===  
-  ONIKA_AUTORUN_INIT(eam_potential_multimat)
+  //ONIKA_AUTORUN_INIT(eam_potential_multimat)
+  POTENTIAL_REGISTER_INIT()
   {
-    OperatorNodeFactory::instance()->register_factory( EamPotentialStr , make_grid_variant_operator< tmplhelper::EamPotentialOperatorName > );
+    OperatorNodeFactory::instance()->register_factory( EamPotentialStr     , make_grid_variant_operator< PRIV_NAMESPACE_NAME::EamPotentialOperatorName > );    
     OperatorNodeFactory::instance()->register_factory( EamParameterInitStr , make_simple_operator< EamParameterInitName > );
-    
   }
 
 }
