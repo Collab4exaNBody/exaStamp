@@ -23,7 +23,9 @@ under the License.
 #include <exanb/io/write_xyz.h>
 #include <exanb/compute/field_combiners.h>
 #include <exaStamp/compute/field_combiners.h>
-
+#include <exaStamp/particle_species/particle_specie.h>
+#include <exaStamp/mechanical/cell_particles_local_mechanical_metrics.h>
+#include <exaStamp/mechanical/cell_particles_local_structural_metrics.h>
 
 namespace exaStamp
 {
@@ -49,6 +51,7 @@ namespace exaStamp
     ADD_SLOT( StringMap       , units    , INPUT , StringMap( { {"position","ang"} , {"velocity","m/s"} , {"force","m/s/g"} } ) , DocString{"Units to be used for specific fields."} );
     ADD_SLOT( ParticleSpecies , species  , INPUT , REQUIRED );
     ADD_SLOT( double          , physical_time  , INPUT , 0.0 );
+    ADD_SLOT( GridParticleLocalStructuralMetrics, local_structural_data , INPUT );
       
     template<class... fid>
     inline void execute_on_field_set( FieldSet<fid...> ) 
@@ -105,9 +108,14 @@ namespace exaStamp
       field_formatter.m_field_name_map["couple"] = "torque";
       field_formatter.m_field_name_map["idmol"] = "molecule";
 
-      
+      // structural fields
+      const CellParticleLocalStructuralMetrics * __restrict__ struct_data = nullptr;      
+      if( local_structural_data.has_value() ) struct_data = local_structural_data->data();
+      auto nneigh = structural_field(struct_data,field::numneighbors);
+      auto csp    = structural_field(struct_data,field::csp);
+
       write_xyz_details::write_xyz_grid_fields( ldbg, *mpi, *grid, *domain, flist, *filename, particle_type_func, field_formatter, *ghost, *physical_time
-                                              , position, velocity, force, processor_id, vnorm2, mv2, mass, momentum, onika::soatl::FieldId<fid>{} ... );
+                                                , position, velocity, force, processor_id, vnorm2, mv2, mass, momentum, nneigh, csp, onika::soatl::FieldId<fid>{} ... );
     }
 
     public:

@@ -162,13 +162,15 @@ namespace exaStamp
 
 	  lout << "Bispectrum computed" << std::endl;
 	  
-	}
+  }
 
       // Computation of per-atom bispectrum only if asked TODO
-      if (std::binary_search(per_atom_data.begin(), per_atom_data.end(), "steinhardt"))
-	{
-	  lerr << "Steinhardt parameters not yet implemented (ongoing: Paul Lafourcade)" << std::endl;
-	}
+      if (std::binary_search(per_atom_data.begin(), per_atom_data.end(), "centro"))
+        {
+          lerr << "Steinhardt parameters not yet implemented (ongoing: Paul Lafourcade)" << std::endl;
+          /* ... */
+          
+        }
       
     }
 

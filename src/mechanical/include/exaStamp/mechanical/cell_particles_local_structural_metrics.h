@@ -17,6 +17,8 @@ namespace exaStamp
 
     // Crystal structure assigned using logistic regression (ML model)
     std::vector< int > crystal_structure;
+    std::vector< int > numneighbors;
+    std::vector< double > csp;
     
   };
 
@@ -58,5 +60,5 @@ namespace exaStamp { \
 STRUCTURAL_DECLARE_FIELD(bispectrum,bispectrum)
 STRUCTURAL_DECLARE_FIELD(steinhart,steinhart)
 STRUCTURAL_DECLARE_FIELD(crystal,crystal_structure)
-
-
+STRUCTURAL_DECLARE_FIELD(numneighbors,numneighbors)
+STRUCTURAL_DECLARE_FIELD(csp,csp)
