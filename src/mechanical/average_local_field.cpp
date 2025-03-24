@@ -43,7 +43,7 @@ namespace exaStamp
     // ========= I/O slots =======================
     ADD_SLOT( double                , rcut_max            , INPUT_OUTPUT , 0.0 );
     ADD_SLOT( exanb::GridChunkNeighbors                   , chunk_neighbors   , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
-    ADD_SLOT( bool                  , ghost               , INPUT , false );
+    //    ADD_SLOT( bool                  , ghost               , INPUT , false );
     ADD_SLOT( GridT                 , grid                , INPUT );
     ADD_SLOT( Domain                , domain              , INPUT , REQUIRED );
     ADD_SLOT( double                , rcut                , INPUT , REQUIRED);
@@ -73,7 +73,6 @@ namespace exaStamp
 
       auto pecfunc = [self=this](auto ... args) { return self->parallel_execution_context(args...); };
       auto pesfunc = [self=this](unsigned int i) { return self->parallel_execution_stream(i); };
-
       
       assert( chunk_neighbors->number_of_cells() == grid->number_of_cells() );
       bool has_chunk_neighbors = chunk_neighbors.has_value();
@@ -114,13 +113,13 @@ namespace exaStamp
         {
           NullXForm cp_xform;
           auto optional = make_compute_pair_optional_args( nbh_it, cp_weight, cp_xform, cp_locks, cpu_cell_filter, cpu_particle_filter, nbh_fields );
-          compute_cell_particle_pairs( *grid, rrPotential, *ghost, optional, local_op_buf, local_op , local_op_fields, parallel_execution_context() );	  	  
+          compute_cell_particle_pairs( *grid, rrPotential, false, optional, local_op_buf, local_op , local_op_fields, parallel_execution_context() );	  	  
         }
       else
         {
           LinearXForm cp_xform { domain->xform() };
           auto optional = make_compute_pair_optional_args( nbh_it, cp_weight, cp_xform, cp_locks, cpu_cell_filter, cpu_particle_filter, nbh_fields  );
-          compute_cell_particle_pairs( *grid, rrPotential, *ghost, optional, local_op_buf, local_op , local_op_fields, parallel_execution_context() );	  	  
+          compute_cell_particle_pairs( *grid, rrPotential, false, optional, local_op_buf, local_op , local_op_fields, parallel_execution_context() );	  	  
         }
 
     }

@@ -26,6 +26,7 @@ under the License.
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exaStamp/mechanical/cell_particles_local_mechanical_metrics.h>
 #include <exaStamp/mechanical/cell_particles_local_structural_metrics.h>
+#include <exaStamp/mechanical/average_local_field.h>
 
 namespace exaStamp
 {
@@ -113,9 +114,10 @@ namespace exaStamp
       if( local_structural_data.has_value() ) struct_data = local_structural_data->data();
       auto nneigh = structural_field(struct_data,field::numneighbors);
       auto csp    = structural_field(struct_data,field::csp);
-
+      auto local_field = grid->field_accessor( field::local_field );
+        
       write_xyz_details::write_xyz_grid_fields( ldbg, *mpi, *grid, *domain, flist, *filename, particle_type_func, field_formatter, *ghost, *physical_time
-                                                , position, velocity, force, processor_id, vnorm2, mv2, mass, momentum, nneigh, csp, onika::soatl::FieldId<fid>{} ... );
+                                                , position, velocity, force, processor_id, vnorm2, mv2, mass, momentum, nneigh, csp, local_field, onika::soatl::FieldId<fid>{} ... );
     }
 
     public:
