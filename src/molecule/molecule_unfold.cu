@@ -55,7 +55,8 @@ namespace exaStamp
 
       // those two lambdas are used to launch parallel kernels within a function exterior to this OperatorNode's implementation
       auto pecfunc = [self=this](auto ... args) { return self->parallel_execution_context(args ...); };
-      auto pesfunc = [self=this](unsigned int i) { return self->parallel_execution_stream(i); }; 
+      //      auto pesfunc = [self=this](unsigned int i) { return self->parallel_execution_stream(i); };
+      auto peqfunc = [self=this](int i) { return self->parallel_execution_custom_queue(i); };       
 
       // map of molecule id (identical to owner's particle id) to owner particle location ( encoded cell / position in cell )
       std::unordered_map<uint64_t , uint64_t> molecule_owner;
@@ -79,7 +80,7 @@ namespace exaStamp
       {
         const auto ghost_update_fields = onika::make_flat_tuple( idmol_field ); 
         grid_update_ghosts( exanb::ldbg, *mpi, *ghost_comm_scheme, *grid, *domain, nullptr,
-                            *ghost_comm_buffers, pecfunc,pesfunc, ghost_update_fields,
+                            *ghost_comm_buffers, pecfunc, peqfunc, ghost_update_fields,
                             *mpi_tag, true, true, true, true, false, std::false_type{} );
         update_count = 0;
         for(size_t cell_i=0;cell_i<n_cells;cell_i++) if( ! grid->is_ghost_cell(cell_i) )
@@ -239,7 +240,7 @@ namespace exaStamp
         // propagate ghost updates
         const auto ghost_update_fields = onika::make_flat_tuple( idmol_field, ufpos_field );
         grid_update_ghosts( exanb::ldbg, *mpi, *ghost_comm_scheme, *grid, *domain, nullptr,
-                            *ghost_comm_buffers, pecfunc,pesfunc, ghost_update_fields,
+                            *ghost_comm_buffers, pecfunc,peqfunc, ghost_update_fields,
                             *mpi_tag, true, true, true, true, false, std::false_type{} );        
 
         // gather updates from ghosts (from neighbor sub-domains)
