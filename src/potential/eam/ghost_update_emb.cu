@@ -43,6 +43,7 @@ namespace exaStamp
       if( grid->number_of_particles() == 0 ) return;
     
       auto pecfunc = [self=this](auto ... args) { return self->parallel_execution_context(args...); };
+      //      auto pesfunc = [self=this](unsigned int i) { return self->parallel_execution_stream(i); };
       auto peqfunc = [self=this](int i) { return self->parallel_execution_custom_queue(i); };
 
       auto rho_emb_field = grid->field_accessor( field::rho_dEmb );
