@@ -167,7 +167,7 @@ namespace exaStamp
       delete[] typevec;
       delete[] jlist;
       
-      // double fij[3];
+      double fij[3];
       // for (int jj = 0; jj < jnum; ++jj) {
       //   fij[0]=0.;
       //   fij[1]=0.;
