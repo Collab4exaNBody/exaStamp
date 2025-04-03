@@ -45,8 +45,8 @@ namespace exaStamp
       if( grid->number_of_particles() == 0 ) return;
 
       auto pecfunc = [self=this](const char* stag) { return self->parallel_execution_context(stag); };
-      //      auto pesfunc = [self=this](unsigned int i) { return self->parallel_execution_stream(i); };
-      auto peqfunc = [self=this](int i) { return self->parallel_execution_custom_queue(i); };      
+      auto peqfunc = [self=this](unsigned int i) { return self->parallel_execution_stream(i); };
+      //auto peqfunc = [self=this](int i) { return self->parallel_execution_custom_queue(i); };      
 
       auto rho_emb_field = grid->field_accessor( field::rho_dEmb );
       auto update_fields = onika::make_flat_tuple( rho_emb_field );

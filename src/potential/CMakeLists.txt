@@ -19,6 +19,7 @@ add_subdirectory(ewald)
 add_subdirectory(snap)
 add_subdirectory(snaplegacy)
 add_subdirectory(snaplmp)
+add_subdirectory(pace)
 add_subdirectory(range_potential)
 add_subdirectory(n2p2)
 
