@@ -117,8 +117,8 @@ namespace exaStamp
       
       size_t tid = omp_get_thread_num();
       assert( tid < n_thread_ctx );
-      PaceThreadContext & pace_ctx = m_thread_ctx[tid];
-      auto aceimplptr = pace_ctx.aceimpl;
+      PaceThreadContext & pace_ctx_loc = m_thread_ctx[tid];
+      ACEImpl * aceimplptr = pace_ctx_loc.aceimpl;
       aceimplptr->ace->resize_neighbours_cache(jnum);
 
       double **x = new double*[jnum + 1];
@@ -157,7 +157,7 @@ namespace exaStamp
       // std::cout << "xlas = " << x[jnum][0] << "," << x[jnum][1] << "," << x[jnum][2] << std::endl;
       
       // std::cout << "coucou" << std::endl;
-      //      aceimplptr->ace->compute_atom(0, x, typevec, jnum, jlist);
+      aceimplptr->ace->compute_atom(0, x, typevec, jnum, jlist);
       
       // Clean up allocated memory
       for (int jj = 0; jj < jnum + 1; ++jj) {
@@ -168,34 +168,34 @@ namespace exaStamp
       delete[] jlist;
       
       double fij[3];
-      // for (int jj = 0; jj < jnum; ++jj) {
-      //   fij[0]=0.;
-      //   fij[1]=0.;
-      //   fij[2]=0.;
-      //   fij[0] = aceimplptr->ace->neighbours_forces(jj,0);
-      //   fij[1] = aceimplptr->ace->neighbours_forces(jj,1);
-      //   fij[2] = aceimplptr->ace->neighbours_forces(jj,2);
-      //   fij[0] *= conv_energy_factor;
-      //   fij[1] *= conv_energy_factor;
-      //   fij[2] *= conv_energy_factor;
+      for (int jj = 0; jj < jnum; ++jj) {
+        fij[0]=0.;
+        fij[1]=0.;
+        fij[2]=0.;
+        fij[0] = aceimplptr->ace->neighbours_forces(jj,0);
+        fij[1] = aceimplptr->ace->neighbours_forces(jj,1);
+        fij[2] = aceimplptr->ace->neighbours_forces(jj,2);
+        fij[0] *= conv_energy_factor;
+        fij[1] *= conv_energy_factor;
+        fij[2] *= conv_energy_factor;
         
-      //   Mat3d v_contrib = tensor( Vec3d{ fij[0] , fij[1] , fij[2] }, Vec3d{ buf.drx[jj], buf.dry[jj], buf.drz[jj] } );
-      //   if constexpr ( compute_virial ) { _vir += v_contrib * -1.0; }
+        Mat3d v_contrib = tensor( Vec3d{ fij[0] , fij[1] , fij[2] }, Vec3d{ buf.drx[jj], buf.dry[jj], buf.drz[jj] } );
+        if constexpr ( compute_virial ) { _vir += v_contrib * -1.0; }
         
-      //   _fx += fij[0];
-      //   _fy += fij[1];
-      //   _fz += fij[2];
+        _fx += fij[0];
+        _fy += fij[1];
+        _fz += fij[2];
 
-      //   //        _en += aceimplptr->ace->e_atom * conv_energy_factor;
-      //   size_t cell_b=0, p_b=0;
-      //   buf.nbh.get(jj, cell_b, p_b);
-      //   auto& lock_b = locks[cell_b][p_b];
-      //   lock_b.lock();
-      //   cells[cell_b][field::fx][p_b] -= fij[0];
-      //   cells[cell_b][field::fy][p_b] -= fij[1];
-      //   cells[cell_b][field::fz][p_b] -= fij[2];
-      //   lock_b.unlock();
-      // }
+        //        _en += aceimplptr->ace->e_atom * conv_energy_factor;
+        size_t cell_b=0, p_b=0;
+        buf.nbh.get(jj, cell_b, p_b);
+        auto& lock_b = locks[cell_b][p_b];
+        lock_b.lock();
+        cells[cell_b][field::fx][p_b] -= fij[0];
+        cells[cell_b][field::fy][p_b] -= fij[1];
+        cells[cell_b][field::fz][p_b] -= fij[2];
+        lock_b.unlock();
+      }
       
     }
   };

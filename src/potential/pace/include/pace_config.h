@@ -32,16 +32,14 @@ struct ACEImpl {
   ACERecursiveEvaluator *ace;
 };
 
-class PaceConfig {
-public:
-  
-  struct ACEImpl *m_aceimpl;
-  
-protected:
-  
-  int m_nmax_corerep;
-  double *m_corerep_factor;
-  int m_flag_corerep_factor;
-  bool m_recursive;
-  int m_chunksize;
+
+struct PaceThreadContext
+{
+  ACEImpl * aceimpl = nullptr;
+};
+
+struct PaceContext
+{
+  std::vector<PaceThreadContext> m_thread_ctx;
+  ACEImpl* aceimpl = nullptr;
 };

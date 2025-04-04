@@ -35,7 +35,7 @@
 
 #include "pace_params.h"
 #include "pace_config.h"
-#include "pace_context.h"
+//#include "pace_context.h"
 #include "pace_force_op.h"
 
 namespace exaStamp
@@ -124,127 +124,110 @@ namespace exaStamp
       
       bool recursive = true;
       bool cTildeBasis = false;
-      
-      //      if (! *pace_init) {
-        auto potential_file_name = (*parameters).pace_coef;
-        if ( (*parameters).pace_algo == "recursive" ) recursive = true;
+      PaceContext PaceCtx = *pace_ctx;
+      PaceCtx.aceimpl = new ACEImpl;
+      PaceCtx.aceimpl->basis_set = new ACECTildeBasisSet;
+      PaceCtx.aceimpl->ace = new ACERecursiveEvaluator();
 
-        pace_ctx->m_config.m_aceimpl = new ACEImpl;
-        
+      ACEBBasisSet bBasisSet;
+      ACECTildeBasisSet cTildeBasisSet;
+
+      auto potential_file_name = (*parameters).pace_coef;
+      if ( (*parameters).pace_algo == "recursive" ) recursive = true;
+      
+      if (! *pace_init) {
         if (hasExtension(potential_file_name, ".yaml")) {
-          ACEBBasisSet bBasisSet = ACEBBasisSet(potential_file_name);
-          ACECTildeBasisSet cTildeBasisSet = bBasisSet.to_ACECTildeBasisSet();
-          pace_ctx->m_config.m_aceimpl->basis_set = new ACECTildeBasisSet(cTildeBasisSet);
+          bBasisSet = ACEBBasisSet(potential_file_name);
+          cTildeBasisSet = bBasisSet.to_ACECTildeBasisSet();
+          *PaceCtx.aceimpl->basis_set = cTildeBasisSet;
           cTildeBasis = true;
         } else {
-          pace_ctx->m_config.m_aceimpl->basis_set = new ACECTildeBasisSet(potential_file_name);
-        }
-
-        std::cout << "Total number of basis functions" << std::endl;
-        
-        for (SPECIES_TYPE mu = 0; mu < pace_ctx->m_config.m_aceimpl->basis_set->nelements; mu++) {
-          int n_r1 = pace_ctx->m_config.m_aceimpl->basis_set->total_basis_size_rank1[mu];
-          int n = pace_ctx->m_config.m_aceimpl->basis_set->total_basis_size[mu];
-          std::cout <<"\t"<< pace_ctx->m_config.m_aceimpl->basis_set->elements_name[mu] << ": "<< n_r1 << " (r=1) " << n << " (r>1)" << std::endl;
+          cTildeBasis = false;          
+          *PaceCtx.aceimpl->basis_set = ACECTildeBasisSet(potential_file_name);
         }
         
-        delete pace_ctx->m_config.m_aceimpl->ace;
-        pace_ctx->m_config.m_aceimpl->ace = new ACERecursiveEvaluator();
-        pace_ctx->m_config.m_aceimpl->ace->set_recursive(recursive);
-        pace_ctx->m_config.m_aceimpl->ace->element_type_mapping.init((*parameters).nt + 1);
+        PaceCtx.aceimpl->ace->set_recursive(recursive);
+        PaceCtx.aceimpl->ace->element_type_mapping.init((*parameters).nt + 1);
       
         const auto& sp = *species;
         const int n = (*parameters).nt;
         for (int i = 1; i <= n; i++) {
-          //          std::cout << "Specy = " << sp[i-1].m_name << std::endl;
-          //          std::cout << "Map   = " << (*particle_type_map)[sp[i-1].m_name] << std::endl;
           const char *elemname = sp[i-1].m_name;
           int atomic_number = AtomicNumberByName_pace(elemname);
           if (atomic_number == -1) std::cout << elemname << "is not a valid element" << std::endl;
-          SPECIES_TYPE mu = pace_ctx->m_config.m_aceimpl->basis_set->get_species_index_by_name(elemname);
+          SPECIES_TYPE mu = PaceCtx.aceimpl->basis_set->get_species_index_by_name(elemname);
           if (mu != -1) {
             std::cout << "Mapping LAMMPS atom type #"<< i << "("<<elemname<<") -> ACE species type #"<< mu << std::endl;
-            pace_ctx->m_config.m_aceimpl->ace->element_type_mapping(i) = mu;
+            PaceCtx.aceimpl->ace->element_type_mapping(i) = mu;
           } else {
             std::cout << "Element "<< elemname << " is not supported by ACE-potential from file " << potential_file_name << std::endl;
           }
         }
-        pace_ctx->m_config.m_aceimpl->ace->set_basis(*pace_ctx->m_config.m_aceimpl->basis_set, 1);
-        //        *pace_init = true;
+        PaceCtx.aceimpl->ace->set_basis(*PaceCtx.aceimpl->basis_set, 1);
+        //               *pace_init = true;
 
         double cutoff=0.;
         for (int i = 0; i < n; i++) {
           for (int j = 0; j < n; j++) {
-            *rcut_max = std::max( cutoff, pace_ctx->m_config.m_aceimpl->basis_set->radial_functions->cut(i,j) );
+            *rcut_max = std::max( cutoff, PaceCtx.aceimpl->basis_set->radial_functions->cut(i,j) );
           }
         }
         
-        //      }
+      }
+
+      std::cout << "Total number of basis functions" << std::endl;
+        
+      for (SPECIES_TYPE mu = 0; mu < PaceCtx.aceimpl->basis_set->nelements; mu++) {
+        int n_r1 = PaceCtx.aceimpl->basis_set->total_basis_size_rank1[mu];
+        int n = PaceCtx.aceimpl->basis_set->total_basis_size[mu];
+        std::cout <<"\t"<< PaceCtx.aceimpl->basis_set->elements_name[mu] << ": "<< n_r1 << " (r=1) " << n << " (r>1)" << std::endl;
+      }
       
       size_t n_cells = grid->number_of_cells();
       if( n_cells==0 )
-      {
-        return ;
-      }
+        {
+          return ;
+        }
 
       if( ! particle_locks.has_value() )
-      {
-        fatal_error() << "No particle locks" << std::endl;
-      }
-      //      auto potential_file_name = (*parameters).pace_coef;
+        {
+          fatal_error() << "No particle locks" << std::endl;
+        }
         
       size_t nt = omp_get_max_threads();
       if( nt > pace_ctx->m_thread_ctx.size() )
         {
-          std::cout << "CHANGE number threads here" << std::endl;
-          std::cout << "OLD number = " << pace_ctx->m_thread_ctx.size() << std::endl;
-          std::cout << "NEW number = " << nt << std::endl;
           size_t old_nt = pace_ctx->m_thread_ctx.size();
           pace_ctx->m_thread_ctx.resize( nt );
           for(size_t i=old_nt;i<nt;i++)
             {
               assert( pace_ctx->m_thread_ctx[i].aceimpl == nullptr );
-              pace_ctx->m_thread_ctx[i].aceimpl = new ACEImpl;
-              //              pace_ctx->m_thread_ctx[i].aceimpl->basis_set = new ACECTildeBasisSet(*(pace_ctx->m_config.m_aceimpl->basis_set));              
-              pace_ctx->m_thread_ctx[i].aceimpl->basis_set = new ACECTildeBasisSet();
-              pace_ctx->m_thread_ctx[i].aceimpl->basis_set = pace_ctx->m_config.m_aceimpl->basis_set;
-              //              pace_ctx->m_thread_ctx[i].aceimpl->basis_set = new ACECTildeBasisSet(*(pace_ctx->m_config.m_aceimpl->basis_set));              
-              pace_ctx->m_thread_ctx[i].aceimpl->ace = new ACERecursiveEvaluator();
-              pace_ctx->m_thread_ctx[i].aceimpl->ace = pace_ctx->m_config.m_aceimpl->ace;
-              pace_ctx->m_thread_ctx[i].aceimpl->ace->set_recursive(recursive);
-              pace_ctx->m_thread_ctx[i].aceimpl->ace->element_type_mapping.init((*parameters).nt + 1);
+              pace_ctx->m_thread_ctx[i].aceimpl = PaceCtx.aceimpl;
 
-
-              const auto& sp = *species;
-              const int n = (*parameters).nt;
-              for (int l = 1; l <= n; l++) {
-                //                std::cout << "Specy = "  << sp[l-1].m_name << std::endl;
-                //                std::cout << "Map   = " << (*particle_type_map)[sp[l-1].m_name] << std::endl;
-                const char *elemname = sp[l-1].m_name;
-                int atomic_number = AtomicNumberByName_pace(elemname);
-                if (atomic_number == -1) std::cout << elemname << "is not a valid element" << std::endl;
-                SPECIES_TYPE mu = pace_ctx->m_thread_ctx[i].aceimpl->basis_set->get_species_index_by_name(elemname);
-                if (mu != -1) {
-                  //                  std::cout << "Mapping LAMMPS atom type #"<< l << "("<<elemname<<") -> ACE species type #"<< mu << std::endl;
-                  pace_ctx->m_thread_ctx[i].aceimpl->ace->element_type_mapping(l) = mu;
-                } else {
-                  //                  std::cout << "Element "<< elemname << " is not supported by ACE-potential from file " << potential_file_name << std::endl;
-                }
-              }
-              pace_ctx->m_thread_ctx[i].aceimpl->ace->set_basis(*pace_ctx->m_thread_ctx[i].aceimpl->basis_set, 1);
-              //              std::cout << "TEST TEST TEST " << std::endl;
-              //              std::cout << "MU = " << pace_ctx->m_thread_ctx[i].aceimpl->ace->element_type_mapping(1) << std::endl;
-              //              std::cout << "MU = " << pace_ctx->m_thread_ctx[i].aceimpl->ace->element_type_mapping(0) << std::endl;              
-
-              //              std::cout << "check thread number " << i << std::endl;
-              for (SPECIES_TYPE mu = 0; mu < pace_ctx->m_thread_ctx[i].aceimpl->basis_set->nelements; mu++) {
-                int n_r1 = pace_ctx->m_thread_ctx[i].aceimpl->basis_set->total_basis_size_rank1[mu];
-                int n = pace_ctx->m_thread_ctx[i].aceimpl->basis_set->total_basis_size[mu];
-                std::cout <<"\t"<< pace_ctx->m_thread_ctx[i].aceimpl->basis_set->elements_name[mu] << ": "<< n_r1 << " (r=1) " << n << " (r>1)" << "thread = " << i << std::endl;
-              }
+              // std::cout << "check thread number " << i << std::endl;
+              // for (SPECIES_TYPE mu = 0; mu < pace_ctx->m_thread_ctx[i].aceimpl->basis_set->nelements; mu++) {
+              //   int n_r1 = pace_ctx->m_thread_ctx[i].aceimpl->basis_set->total_basis_size_rank1[mu];
+              //   int n = pace_ctx->m_thread_ctx[i].aceimpl->basis_set->total_basis_size[mu];
+              //   std::cout <<"\t"<< pace_ctx->m_thread_ctx[i].aceimpl->basis_set->elements_name[mu] << ": "<< n_r1 << " (r=1) " << n << " (r>1)" << "thread = " << i << std::endl;
+              // }
               
             }
         }
+
+      // for(size_t i=0;i<nt;i++)
+      //   {
+      //     std::cout << "check thread number " << i << std::endl;
+      //     for (SPECIES_TYPE mu = 0; mu < pace_ctx->m_thread_ctx[i].aceimpl->basis_set->nelements; mu++) {
+      //       int n_r1 = pace_ctx->m_thread_ctx[i].aceimpl->basis_set->total_basis_size_rank1[mu];
+      //       int n = pace_ctx->m_thread_ctx[i].aceimpl->basis_set->total_basis_size[mu];
+      //       std::cout <<"\t"<< pace_ctx->m_thread_ctx[i].aceimpl->basis_set->elements_name[mu] << ": "<< n_r1 << " (r=1) " << n << " (r>1)" << "thread = " << i << std::endl;
+
+
+      //       // PaceThreadContext & pace_ctx_bis = pace_ctx->m_thread_ctx[i];
+      //       // auto aceimplptr = pace_ctx_bis.aceimpl;
+      //       // aceimplptr->ace->resize_neighbours_cache(20);
+      //     }
+      //   }
       
       bool log_energy = false;
       if( trigger_thermo_state.has_value() )
@@ -270,10 +253,10 @@ namespace exaStamp
                                pace_ctx->m_thread_ctx.size(),
                                ! (*conv_coef_units) };
         compute_cell_particle_pairs( *grid, *rcut_max, *ghost, optional, force_buf, force_op , compute_force_field_set , parallel_execution_context() );
-};
+      };
       if( omp_get_max_threads() > 1 ) compute_opt_locks( ComputePairOptionalLocks<true>{ particle_locks->data() } );
       else                            compute_opt_locks( ComputePairOptionalLocks<false>{} );
-
+      
     }
 
   };

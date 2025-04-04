@@ -15,7 +15,7 @@ pace_force:
     nspecies: 1
     coef: "Cu-PBE-core-rep.ace"
 #    algorithm: "product"
-#    algorithm: "recursive"
+    algorithm: "recursive"
 #    chunksize: 2048
 
     
@@ -42,7 +42,7 @@ domain:
   expandable: false
 
 global:
-  simulation_end_iteration: 20
+  simulation_end_iteration: 10
   simulation_log_frequency: 5
   simulation_dump_thermo_frequency: -1
   simulation_dump_frequency: -1
