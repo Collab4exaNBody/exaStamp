@@ -7,28 +7,28 @@
 #include <random>
 #include <cmath>
 
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/fields.h>
+#include <exanb/core/grid_fields.h>
 #include <exanb/core/domain.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exanb/core/simple_block_rcb.h>
 //#include "exanb/container_utils.h"
 
-#include <exanb/core/basic_types_yaml.h>
-#include <exanb/core/basic_types_stream.h>
-#include <exanb/core/log.h>
+#include <onika/math/basic_types_yaml.h>
+#include <onika/math/basic_types_stream.h>
+#include <onika/log.h>
 //#include "exanb/vector_utils.h"
-#include <exanb/core/file_utils.h>
+#include <onika/file_utils.h>
 #include <exanb/core/check_particles_inside_cell.h>
-#include <exanb/core/physics_constants.h>
-#include <exanb/core/parallel_random.h>
+#include <onika/physics/constants.h>
+#include <onika/parallel/random.h>
 
-#include <exanb/core/thread.h>
+#include <onika/thread.h>
 
 namespace exaStamp
 {
@@ -185,7 +185,7 @@ namespace exaStamp
 	  {0.25000000,    0.58333333,    0.75000000} ,
 	  {0.75000000,    0.08333333,    0.75000000} };
 
-	size.y = 2. * size.y * sin(120. * exanb::legacy_constant::pi / 180.);
+	size.y = 2. * size.y * sin(120. * M_PI / 180.);
 	
 	lout << "hcp cell = " << size << std::endl;
       } else if (structure == "DIAMOND" ) {
@@ -488,7 +488,7 @@ namespace exaStamp
 		      
 		      if (is_noise) {
 
-			auto& re = rand::random_engine();
+			auto& re = onika::parallel::random_engine();
 			std::normal_distribution<double> f_rand(0.,sigma_noise);
 			pos.x += f_rand(re);
 			pos.y += f_rand(re);
@@ -613,7 +613,7 @@ namespace exaStamp
   };
 
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(orthorhombic_lattice)
   {
     OperatorNodeFactory::instance()->register_factory("orthorhombic_lattice", make_grid_variant_operator< OrthorhombicLatticeOperator >);
   }

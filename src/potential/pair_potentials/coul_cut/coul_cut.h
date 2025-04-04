@@ -3,10 +3,11 @@
 #include <cmath>
 #include <yaml-cpp/yaml.h>
 
-#include <exanb/core/quantity_yaml.h>
-#include <exanb/core/unityConverterHelper.h>
+#include <onika/physics/units.h>
+#include <onika/physics/units.h>
 #include <exaStamp/potential_factory/pair_potential.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
+#include <exaStamp/unit_system.h>
 
 #include <onika/cuda/cuda.h>
 
@@ -23,15 +24,12 @@ namespace exaStamp
 
   ONIKA_HOST_DEVICE_FUNC inline void coul_cut_energy(const CoulCutParms& p, const PairPotentialMinimalParameters& p_pair, double r, double& e, double& de)
   {
-    assert( r > 0. );
-    double qqr2e = 14.399645; // units = eV.ang/e-^2 from LAMMPS
+    static constexpr double qqr2e = EXASTAMP_CONST_QUANTITY( 14.399645 * eV * ang / (ec^2) ) ; // units = eV.ang/e-^2 from LAMMPS
 
-#   ifdef EXANB_UNITS_V2
-    double qqrd2e = EXANB_QUANTITY( qqr2e * eV * ang / (ec^2) ).convert() / p.dielectric; 
-#   else
-    double qqrd2e = UnityConverterHelper::convert(qqr2e, "eV.ang/e-^2") / p.dielectric;
-#   endif
-    double C = qqrd2e;
+    assert( r > 0. );
+
+    const double C = qqr2e / p.dielectric;
+
     e = C * p_pair.m_atom_a.m_charge * p_pair.m_atom_b.m_charge / r;
     de = -e/r;
   }
@@ -44,7 +42,7 @@ namespace YAML
   {
     static bool decode(const Node& node, exaStamp::CoulCutParms& v)
     {
-      using exanb::Quantity;
+      using onika::physics::Quantity;
 
       if( !node.IsMap() ) { return false; }
       v.dielectric = node["dielectric"].as<Quantity>().convert();

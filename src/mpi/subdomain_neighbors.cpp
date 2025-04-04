@@ -1,9 +1,9 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/log.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/log.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/basic_types.h>
+#include <onika/math/basic_types.h>
 #include <exanb/core/grid_algorithm.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/make_grid_variant_operator.h>
@@ -74,7 +74,7 @@ namespace exanb
   };
 
   // === register factory ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(subdomain_neighbors)
   {
     OperatorNodeFactory::instance()->register_factory( "subdomain_neighbors", make_grid_variant_operator< SubDomainNeighbors > );
   }

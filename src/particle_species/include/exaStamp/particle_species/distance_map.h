@@ -5,7 +5,7 @@
 
 //#include <onika/memory/allocator.h>
 #include <yaml-cpp/yaml.h>
-#include <exanb/core/quantity_yaml.h>
+#include <onika/physics/units.h>
 
 namespace exaStamp
 {
@@ -30,14 +30,14 @@ namespace YAML
     
     static inline bool decode(const Node& node, exaStamp::DistanceMap& dmap)
     {
-      using namespace exanb;
+      using onika::physics::Quantity;
       dmap.clear();
       if( ! node.IsMap() ) return false;
       //std::cout << "convert DistanceMap" << std::endl;
       for(auto p: node)
       {
         //std::cout << p.first.as<std::string>() << " -> " << p.second.as<std::string>() << std::endl;
-        dmap[ p.first.as<std::string>() ] = p.second.as<exanb::Quantity>().convert();
+        dmap[ p.first.as<std::string>() ] = p.second.as<Quantity>().convert();
       }
       return true;
     }

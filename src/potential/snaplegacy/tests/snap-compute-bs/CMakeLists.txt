@@ -10,7 +10,7 @@ target_compile_options(snap-compute-bs-cpp-lammps PRIVATE -DDEBUG_SNAP_BS -DLAMM
 file(COPY atom_positions.ref dbs.ref bs.ref2 Mo_conf.xyz bs_lammps.ref DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/snap-compute-bs.sh" "${CMAKE_CURRENT_BINARY_DIR}/snap-compute-bs.sh")
-xstamp_add_test(utests-snap-compute-bs ${CMAKE_CURRENT_BINARY_DIR}/snap-compute-bs.sh)
+onika_add_test(utests-snap-compute-bs ${CMAKE_CURRENT_BINARY_DIR}/snap-compute-bs.sh)
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/snap-compute-bs-lammps.sh" "${CMAKE_CURRENT_BINARY_DIR}/snap-compute-bs-lammps.sh")
-xstamp_add_test(utests-snap-compute-bs-lammps ${CMAKE_CURRENT_BINARY_DIR}/snap-compute-bs-lammps.sh)
+onika_add_test(utests-snap-compute-bs-lammps ${CMAKE_CURRENT_BINARY_DIR}/snap-compute-bs-lammps.sh)
 

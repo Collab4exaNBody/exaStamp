@@ -7,7 +7,7 @@ namespace exanb
   template<class GridT> using SimpleCostMultimat = SimpleCostModel<GridT,field::_type>;
 
   // === register factory ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(simple_cost_multimat)
   {
     OperatorNodeFactory::instance()->register_factory(
       "simple_cost_multimat",

@@ -1,17 +1,17 @@
-#include <exanb/core/basic_types_yaml.h>
-#include <exanb/core/basic_types.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/math/basic_types_yaml.h>
+#include <onika/math/basic_types.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
-#include <exanb/core/basic_types_stream.h>
+#include <onika/math/basic_types_stream.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/quantity.h>
-#include <exanb/core/string_utils.h>
+#include <onika/physics/units.h>
+#include <onika/string_utils.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/fields.h>
+#include <exanb/core/grid_fields.h>
 
 #include <exanb/defbox/deformation.h>
 #include <exanb/defbox/deformation_stream.h>
@@ -179,7 +179,7 @@ namespace exaStamp
       MPI_Allreduce(MPI_IN_PLACE,&nb_particles_skin_total,1,MPI_UNSIGNED_LONG,MPI_SUM,*mpi);
 
       // header of xyz file containing the total number of skin particles
-      header = format_string("%ld\nLattice=\"%10.12e %10.12e %10.12e %10.12e %10.12e %10.12e %10.12e %10.12e %10.12e\"\n",nb_particles_skin_total, lot.m11, lot.m12, lot.m13, lot.m21, lot.m22, lot.m23, lot.m31, lot.m32, lot.m33);
+      header = onika::format_string("%ld\nLattice=\"%10.12e %10.12e %10.12e %10.12e %10.12e %10.12e %10.12e %10.12e %10.12e\"\n",nb_particles_skin_total, lot.m11, lot.m12, lot.m13, lot.m21, lot.m22, lot.m23, lot.m31, lot.m32, lot.m33);
       offset_header = strlen(header.c_str());
       offset = 0;
 
@@ -229,7 +229,7 @@ namespace exaStamp
               // lout << "offset due to proc    : " << nb_particles_skin_offset << std::endl;         
               // lout << "offset due to cell    : " << nb_particles_cell << std::endl;        
               // lout << "offset due to in cell : " << pos_cell << std::endl;         
-              xyz_positions = format_string("%-10s \t % .10e \t % .10e \t % .10e \n", type_name, pos_vec.x, pos_vec.y, pos_vec.z);
+              xyz_positions = onika::format_string("%-10s \t % .10e \t % .10e \t % .10e \n", type_name, pos_vec.x, pos_vec.y, pos_vec.z);
               offset = offset_header + (pos_cell + nb_particles_cell + nb_particles_skin_offset) * strlen(xyz_positions.c_str());
               MPI_File_write_at( mpiFile, offset, xyz_positions.data() , xyz_positions.length() , MPI_CHAR , &status );
               pos_skin += 1;

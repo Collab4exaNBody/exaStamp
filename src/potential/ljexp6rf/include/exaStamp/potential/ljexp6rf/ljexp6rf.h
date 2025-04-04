@@ -2,7 +2,7 @@
 
 #include <cmath>
 #include <yaml-cpp/yaml.h>
-#include <exanb/core/quantity_yaml.h>
+#include <onika/physics/units.h>
 
 #include <exaStamp/potential_factory/pair_potential.h>
 #include <exaStamp/potential/pair_potentials/exp6/exp6.h>
@@ -211,7 +211,7 @@ namespace YAML
       double rcut = 0.0;
       if( node["rcut"] )
       {
-        rcut = node["rcut"].as<exanb::Quantity>().convert();
+        rcut = node["rcut"].as<onika::physics::Quantity>().convert();
       }
 
       if( node["exp6"] )

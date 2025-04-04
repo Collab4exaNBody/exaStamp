@@ -1,8 +1,8 @@
 #pragma once
 
-#include <exanb/core/basic_types_def.h>
-#include <exanb/core/basic_types_constructors.h>
-#include <exanb/core/basic_types_operators.h>
+#include <onika/math/basic_types_def.h>
+#include <onika/math/basic_types_constructors.h>
+#include <onika/math/basic_types_operators.h>
 
 #include <algorithm>
 #include <cmath>

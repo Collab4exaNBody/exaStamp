@@ -4,21 +4,22 @@
 #include <string>
 #include <numeric>
 
-#include <exanb/core/basic_types_yaml.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/math/basic_types_yaml.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/parallel_grid_algorithm.h>
-#include <exanb/core/log.h>
+#include <onika/log.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/parallel_random.h>
-#include <exanb/core/unityConverterHelper.h>
-#include <exanb/core/physics_constants.h>
-#include <exanb/core/quantity.h>
+#include <onika/parallel/random.h>
 
-#include <exanb/core/quaternion_operators.h>
+#include <onika/physics/units.h>
+#include <onika/physics/constants.h>
+#include <exaStamp/unit_system.h>
+
+#include <onika/math/quaternion_operators.h>
 
 namespace exaStamp
 {
@@ -67,7 +68,7 @@ namespace exaStamp
       double nddl_y=0.;
       double nddl_z=0.;
 
-      static const double k = UnityConverterHelper::convert(legacy_constant::boltzmann, "J/K");
+      static constexpr double k = EXASTAMP_CONST_QUANTITY( onika::physics::boltzmann * J / K );
       const double T           = *(this->T);
       //double sum_nrj=0.0;
 
@@ -75,7 +76,7 @@ namespace exaStamp
 #     pragma omp parallel
       {
         //creation graine pour distribution gaussienne
-        auto& re = rand::random_engine();
+        auto& re = onika::parallel::random_engine();
         GRID_OMP_FOR_BEGIN(dims_no_ghost,_,loc_no_ghosts, reduction(+:sum_mass,sum_vx,sum_vxc,sum_vy,sum_vyc,sum_vz,sum_vzc,sum_wx,sum_wxc,sum_wy,sum_wyc,sum_wz,sum_wzc,sum_mix,sum_miy,sum_miz,N,nddl_x,nddl_y,nddl_z) schedule(dynamic) )
         {
           IJK loc = loc_no_ghosts + ghost_layers;
@@ -315,7 +316,7 @@ namespace exaStamp
   template<class GridT> using InitTemperatureRigidMolTmpl = InitTemperatureRigidMol<GridT>;
 
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(init_temperature_rigidmol)
   {
     OperatorNodeFactory::instance()->register_factory("init_temperature_rigidmol", make_grid_variant_operator< InitTemperatureRigidMolTmpl >);
   }

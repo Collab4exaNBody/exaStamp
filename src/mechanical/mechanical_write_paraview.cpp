@@ -1,11 +1,11 @@
-#include <exanb/core/basic_types_yaml.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/math/basic_types_yaml.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
-#include <exanb/core/basic_types_stream.h>
-#include <exanb/core/log.h>
+#include <onika/math/basic_types_stream.h>
+#include <onika/log.h>
 #include <exanb/core/domain.h>
 
 #include <exanb/compute/field_combiners.h>
@@ -128,7 +128,7 @@ namespace exaStamp
   };
 
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(mechanical_write_paraview)
   {
     OperatorNodeFactory::instance()->register_factory( "mechanical_write_paraview",make_grid_variant_operator<MechanicalParaviewWriter>);
   }

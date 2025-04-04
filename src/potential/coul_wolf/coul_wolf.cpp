@@ -1,17 +1,17 @@
-#pragma xstamp_grid_variant
+
 
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/basic_types.h>
-#include <exanb/core/basic_types_operators.h>
+#include <onika/math/basic_types.h>
+#include <onika/math/basic_types_operators.h>
 #include <exanb/compute/compute_cell_particle_pairs.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/operator_slot.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/scg/operator_slot.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/core/log.h>
-#include <exanb/core/cpp_utils.h>
+#include <onika/log.h>
+#include <onika/cpp_utils.h>
 
 #include <exaStamp/potential/coul_wolf/coul_wolf.h>
 
@@ -162,7 +162,7 @@ namespace exaStamp
         // assert( _vir.m11==0 && _vir.m12==0 && _vir.m13==0 && _vir.m21==0 && _vir.m22==0 && _vir.m23==0 && _vir.m31==0 && _vir.m32==0 && _vir.m33==0);
 
 	double e_self = -(m_params.e_shift / 2.0 + m_params.alpha / sqrt(M_PI)) * charge * charge * m_params.qqrd2e;
-	_ep = UnityConverterHelper::convert(e_self, "eV");
+	_ep = EXASTAMP_QUANTITY( e_self * eV );
 #       pragma omp simd reduction(+:_ep,_fx,_fy,_fz,_vir)
         for(size_t i=0;i<n;i++)
         {
@@ -197,7 +197,7 @@ namespace exaStamp
   template<class GridT> using CoulWolfPCTmpl = CoulWolfPC<GridT>;
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(coul_wolf)
   {  
     OperatorNodeFactory::instance()->register_factory( "coul_wolf_pc" , make_grid_variant_operator<CoulWolfPCTmpl> );
   }

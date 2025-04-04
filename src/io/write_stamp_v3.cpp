@@ -1,16 +1,17 @@
-#include <exanb/core/basic_types_yaml.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/math/basic_types_yaml.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/basic_types_stream.h>
+#include <onika/math/basic_types_stream.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/log.h>
-#include <exanb/core/unityConverterHelper.h>
+#include <onika/log.h>
+#include <onika/physics/units.h>
 
 #include <exaStamp/io/StampV3LegacyIOStructures.h>
+#include <exaStamp/unit_system.h>
 
 #include <mpi.h>
 #include <fstream>
@@ -54,8 +55,8 @@ namespace exaStamp
       static constexpr bool has_field_id = has_field_id_t();
 
       using ParticleTupleIO = onika::soatl::FieldTuple<field::_rx, field::_ry, field::_rz, field::_vx,field::_vy,field::_vz, field::_fx,field::_fy,field::_fz , field::_virial, field::_id, field::_type>;
-      static const double coord_conv = UnityConverterHelper::convert(1.0, "m"); // conversion factor between stampv3 unit system and ExaStampV2 internal units
-      static const double vel_conv = UnityConverterHelper::convert(1.0, "m/s");
+      static constexpr double coord_conv = EXASTAMP_CONST_QUANTITY(1.0 * m); // conversion factor between stampv3 unit system and ExaStampV2 internal units
+      static constexpr double vel_conv = EXASTAMP_CONST_QUANTITY(1.0 * m/s);
  
       IJK dims = grid->dimension();
       ssize_t gl = grid->ghost_layers();
@@ -256,7 +257,7 @@ namespace exaStamp
   };
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(write_stamp_v3)
   {
     OperatorNodeFactory::instance()->register_factory( "write_stamp_v3", make_grid_variant_operator< WriteStampV3Operator > );
   }

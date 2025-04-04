@@ -1,10 +1,10 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/parallel_random.h>
+#include <onika/parallel/random.h>
 #include <exanb/core/particle_id_codec.h>
 #include <exanb/core/particle_id_constants.h>
 #include <exaStamp/sliplink/sliplink.h>
@@ -84,7 +84,7 @@ namespace exaStamp
       uint64_t bead_id_start = chain_start * n_beads;
       uint64_t bead_id = bead_id_start;
 
-      auto& re = rand::random_engine();
+      auto& re = onika::parallel::random_engine();
 
       for(size_t c=0;c<chain_count;c++)
       {
@@ -149,7 +149,7 @@ Every chain has beads_per_chain beads.
   template<class GridT> using SlipLinkChainInit = SlipLinkChainInitOperator<GridT>;
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(sliplink_chain_init)
   {
     OperatorNodeFactory::instance()->register_factory( "sliplink_chain_init", make_grid_variant_operator< SlipLinkChainInit > );
   }

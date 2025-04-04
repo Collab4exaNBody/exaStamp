@@ -1,12 +1,12 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/histogram.h>
 
-#include <exanb/mpi/data_types.h>
+#include <onika/mpi/data_types.h>
 
 #include <memory>
 #include <vector>
@@ -95,7 +95,7 @@ namespace exaStamp
       if( nprocs > 1 )
       {
         ValueType tmp[2] = { -min_val , max_val };
-        MPI_Allreduce(MPI_IN_PLACE,tmp,2, exanb::mpi_datatype<ValueType>() ,MPI_MAX,comm);
+        MPI_Allreduce(MPI_IN_PLACE,tmp,2, onika::mpi::mpi_datatype<ValueType>() ,MPI_MAX,comm);
         min_val = - tmp[0];
         max_val = tmp[1];
       }
@@ -177,7 +177,7 @@ namespace exaStamp
   template<typename GridT> using HistogramForceNorm = HistogramVecNorm<GridT,field::_fx,field::_fy,field::_fz>;
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(histogram_vecnorm)
   {
    OperatorNodeFactory::instance()->register_factory( "histogram_velocity" , make_grid_variant_operator< HistogramVelocityNorm > );
    OperatorNodeFactory::instance()->register_factory( "histogram_force" , make_grid_variant_operator< HistogramForceNorm > );

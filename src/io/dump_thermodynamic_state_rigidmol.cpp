@@ -1,11 +1,11 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/log.h>
-#include <exanb/core/string_utils.h>
-#include <exanb/core/print_utils.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/log.h>
+#include <onika/string_utils.h>
+#include <onika/print_utils.h>
 #include <exaStamp/compute/thermodynamic_state.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 
 #include <sstream>
 #include <mpi.h>
@@ -28,9 +28,9 @@ namespace exaStamp
     
     inline void execute () override final
     {
-      static const double conv_temperature = 1.e4 * legacy_constant::atomicMass / legacy_constant::boltzmann ;
-      static const double conv_energy = 1.e4 * legacy_constant::atomicMass / legacy_constant::elementaryCharge;
-      static const double conv_pressure = legacy_constant::atomicMass * 1e20;
+      static const double conv_temperature = 1.e4 * onika::physics::atomicMass / onika::physics::boltzmann ;
+      static const double conv_energy = 1.e4 * onika::physics::atomicMass / onika::physics::elementaryCharge;
+      static const double conv_pressure = onika::physics::atomicMass * 1e20;
       static const std::string header = "     Step     Time (ps)     Particles   Tot. E. (eV/part)  Kin. E. (eV/part)  Rot. E. (eV/part)  Pot. E. (eV/part)  Temperature   Pressure     sMises     Volume       Mass  Kin. Tx  Kin. Ty  Kin. Tz  Rot. Tx  Rot. Ty  Rot. Tz ";
 
       // MPI Initialization
@@ -57,7 +57,7 @@ namespace exaStamp
         total_energy_int_unit += *electronic_energy;
       }
 
-      oss << format_string("%9ld % .6e %13ld  % .10e  % .10e  % .10e  % .10e  % 11.3f % .3e % .3e % .3e % .3e % 11.3f % 11.3f % 11.3f % 11.3f % 11.3f % 11.3f /",
+      oss << onika::format_string("%9ld % .6e %13ld  % .10e  % .10e  % .10e  % .10e  % 11.3f % .3e % .3e % .3e % .3e % 11.3f % 11.3f % 11.3f % 11.3f % 11.3f % 11.3f /",
                              *timestep,
                              *physical_time,
                              sim_info.particle_count(),
@@ -79,16 +79,16 @@ namespace exaStamp
                              
       if( electronic_energy.has_value() )
       {
-        oss << format_string(" % .7e",(*electronic_energy) * conv_energy / sim_info.particle_count() );
+        oss << onika::format_string(" % .7e",(*electronic_energy) * conv_energy / sim_info.particle_count() );
       }
       
       oss << "\n";
 
-      FileAppendWriteBuffer::instance().append_to_file( *file , oss.str(), *force_append_thermo );
+      onika::FileAppendWriteBuffer::instance().append_to_file( *file , oss.str(), *force_append_thermo );
 
       if( *force_flush_file )
       {
-        FileAppendWriteBuffer::instance().flush();
+	      onika::FileAppendWriteBuffer::instance().flush();
       }
 
     }
@@ -109,7 +109,7 @@ gnuplot -e 'plot "thermodynamic_state.csv" every ::1 using 2:4' # this plots tot
   };
     
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(dump_thermodynamic_state_rigidmol)
   {
    OperatorNodeFactory::instance()->register_factory( "dump_thermodynamic_state_rigidmol", make_simple_operator<DumpThermodynamicStateRigidmolNode> );
   }

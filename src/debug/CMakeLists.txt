@@ -3,5 +3,5 @@
 # =================================
 
 set(exaStampDebug_LINK_LIBRARIES exanbCore exanbDefBox exanbParticleNeighbors exaStampParticleSpecies exanbCompute)
-xstamp_add_plugin(exaStampDebug ${CMAKE_CURRENT_SOURCE_DIR})
+onika_add_plugin(exaStampDebug ${CMAKE_CURRENT_SOURCE_DIR})
 

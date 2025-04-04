@@ -1,6 +1,6 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/make_grid_variant_operator.h>
@@ -11,7 +11,7 @@
 #include <exanb/particle_neighbors/chunk_neighbors_iterator.h>
 #include <exanb/particle_neighbors/chunk_neighbors_stream_check.h>
 
-#include <exanb/core/string_utils.h>
+#include <onika/string_utils.h>
 #include <exanb/core/particle_type_pair.h>
 #include <exaStamp/particle_species/particle_specie_yaml.h>
 #include <exanb/core/particle_type_id.h>
@@ -281,10 +281,10 @@ namespace exaStamp
         if( pair_min[pair_id] != std::numeric_limits<double>::max() )
         {
           lout << species->at(ta).name() << " / " << species->at(tb).name()
-               << " : count = " << large_integer_to_string(pair_count[pair_id])
+               << " : count = " << onika::large_integer_to_string(pair_count[pair_id])
                << " , min = " << pair_min[pair_id]
                << " , max = " << pair_max[pair_id]
-               << " , count<"<<format_string("% .3e",sqrt(pairdist[pair_id])) <<" = [ " << large_integer_to_string(pair_dist_count_min[pair_id])<<" ; "<< large_integer_to_string(pair_dist_count_max[pair_id])<<" ]"
+               << " , count<"<<onika::format_string("% .3e",sqrt(pairdist[pair_id])) <<" = [ " << onika::large_integer_to_string(pair_dist_count_min[pair_id])<<" ; "<< onika::large_integer_to_string(pair_dist_count_max[pair_id])<<" ]"
                << " , avg = " << (pair_sum[pair_id] / pair_count[pair_id]) << std::endl;
         }
       }
@@ -297,7 +297,7 @@ namespace exaStamp
   template<class GridT> using AtomNeighborsStatsTmpl = AtomNeighborsStats<GridT>;
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(atom_neighbors_stats)
   {
    OperatorNodeFactory::instance()->register_factory("atom_neighbors_stats", make_grid_variant_operator< AtomNeighborsStatsTmpl > );
   }

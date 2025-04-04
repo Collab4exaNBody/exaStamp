@@ -1,5 +1,5 @@
 #include <yaml-cpp/yaml.h>
-#include <exanb/core/quantity_yaml.h>
+#include <onika/physics/units.h>
 #include "meam_parameters_yaml.h"
 
 // Yaml conversion operators, allows to read potential parameters from config file
@@ -7,7 +7,7 @@ namespace YAML
 {
   bool convert<MeamParameters>::decode(const Node& node, MeamParameters& v)
   {
-    using exanb::Quantity;
+    using onika::physics::Quantity;
     if( !node.IsMap() ) { return false; }
 
 #   define MEAM_PARAMETER(x) do{ if(!node[#x]){return false;} v.x = node[#x].as<Quantity>().convert(); }while(0)

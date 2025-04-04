@@ -4,7 +4,7 @@
 #include <cstdint>
 
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/log.h>
+#include <onika/log.h>
 
 #include <onika/memory/allocator.h>
 #include <onika/cuda/ro_shallow_copy.h>

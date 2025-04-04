@@ -1,7 +1,7 @@
 #pragma once
 
-#include <exanb/fields.h>
-#include <exanb/core/basic_types.h>
+#include <exanb/core/grid_fields.h>
+#include <onika/math/basic_types.h>
 #include <exanb/compute/math_functors.h>
 #include <onika/soatl/field_combiner.h>
 #include <exaStamp/compute/physics_functors.h>

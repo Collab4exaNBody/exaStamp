@@ -1,5 +1,5 @@
 #include <exaStamp/molecule/molecule_species.h>
-#include <exanb/core/log.h>
+#include <onika/log.h>
 #include <onika/oarray.h>
 #include <set>
 #include <algorithm>

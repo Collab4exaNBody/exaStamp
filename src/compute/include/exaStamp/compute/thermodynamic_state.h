@@ -1,10 +1,10 @@
 #pragma once
 
-#include <exanb/core/basic_types.h>
-#include <exanb/core/basic_types_operators.h>
+#include <onika/math/basic_types.h>
+#include <onika/math/basic_types_operators.h>
 #include <cstdlib>
 
-#include <exanb/core/physics_constants.h> //NICO
+#include <onika/physics/constants.h> //NICO
 
 namespace exaStamp
 {
@@ -29,8 +29,8 @@ namespace exaStamp
       double kinetic_pressure = temperature_scal() / volume();
       Vec3d virdiag = { m_virial.m11 , m_virial.m22, m_virial.m33 };
       double potential_pressure = ( virdiag.x + virdiag.y + virdiag.z ) / ( 3. * volume() );
-//double conv_P=1.e4 * legacy_constant::atomicMass * 1e30; //NICO
-//double conv_T=1.e4 * legacy_constant::atomicMass / legacy_constant::boltzmann / m_particle_count; //NICO
+//double conv_P=1.e4 * onika::physics::atomicMass * 1e30; //NICO
+//double conv_T=1.e4 * onika::physics::atomicMass / onika::physics::boltzmann / m_particle_count; //NICO
 //printf("PRESS: %lf -> %e + %e = %e \n",temperature_scal()*conv_T,kinetic_pressure*conv_P,potential_pressure*conv_P,(kinetic_pressure+potential_pressure)*conv_P); //NICO
       return kinetic_pressure + potential_pressure;
     }

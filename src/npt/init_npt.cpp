@@ -1,13 +1,16 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/basic_types.h>
-#include <exanb/core/basic_types_operators.h>
-#include <exanb/core/basic_types_yaml.h>
-#include <exanb/core/basic_types_stream.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/math/basic_types.h>
+#include <onika/math/basic_types_operators.h>
+#include <onika/math/basic_types_yaml.h>
+#include <onika/math/basic_types_stream.h>
 #include <exaStamp/npt/npt.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/physics_constants.h>
+
+#include <onika/physics/units.h>
+#include <onika/physics/constants.h>
+#include <exaStamp/unit_system.h>
 
 #include <iostream>
 #include <string>
@@ -71,11 +74,11 @@ namespace exaStamp
 
     inline void execute () override final
     {
-      double pascal_to_bar = 1.e-5;      
+      static constexpr double pascal_to_bar = 1.e-5;      
       *npt_ctx = NPTContext { *algo, *Pmode};
 
-      npt_ctx->boltz = UnityConverterHelper::convert(1, "J/eV") * legacy_constant::boltzmann;
-      npt_ctx->nktv2p = UnityConverterHelper::convert(1, "m^3") * legacy_constant::elementaryCharge * pascal_to_bar;      
+      npt_ctx->boltz = EXASTAMP_CONST_QUANTITY( onika::physics::boltzmann * J / eV );
+      npt_ctx->nktv2p = EXASTAMP_QUANTITY( onika::physics::elementaryCharge * pascal_to_bar * ( m^3 ) );      
       npt_ctx->dthalf = (*dt)/2.;
       npt_ctx->dt4 = (*dt)/4.;
       npt_ctx->dt8 = *dt/8.;
@@ -396,7 +399,7 @@ namespace exaStamp
   };
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(init_npt)
   {
    OperatorNodeFactory::instance()->register_factory( "init_npt", make_compatible_operator< InitNPTNode > );
   }

@@ -6,6 +6,7 @@
 #include <exanb/compute/compute_cell_particles.h>
 #include <exanb/compute/compute_pair_traits.h>
 #include <onika/cuda/cuda.h>
+#include <onika/thread.h>
 #include <onika/cuda/ro_shallow_copy.h>
 #include <onika/parallel/parallel_for.h>
 
@@ -46,7 +47,7 @@ namespace exaStamp
       const double * __restrict__ m_rz = nullptr;
       
       XFormT m_xform;
-      spin_mutex * __restrict__ m_locks = nullptr;
+      onika::spin_mutex * __restrict__ m_locks = nullptr;
 
       ONIKA_HOST_DEVICE_FUNC inline void operator () (size_t i) const
       {
@@ -174,7 +175,7 @@ namespace exaStamp
       double * __restrict__ m_ep = nullptr;
 
       XFormT m_xform;
-      spin_mutex * __restrict__ m_locks = nullptr;
+      onika::spin_mutex * __restrict__ m_locks = nullptr;
 
       ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE void operator () ( size_t i ) const
       {

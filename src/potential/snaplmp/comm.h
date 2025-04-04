@@ -1,4 +1,5 @@
-#pragma once
+#ifndef LMP_COMM_H
+#define LMP_COMM_H
 
 namespace LAMMPS_NS
 {
@@ -11,4 +12,5 @@ namespace LAMMPS_NS
 
 }
 
+#endif
 

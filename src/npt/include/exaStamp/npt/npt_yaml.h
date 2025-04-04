@@ -1,8 +1,8 @@
 #pragma once
 
 #include <exaStamp/npt/npt.h>
-#include <exanb/core/basic_types_yaml.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/math/basic_types_yaml.h>
+#include <onika/physics/constants.h>
 #include <yaml-cpp/yaml.h>
 
 // bool hasValue(const YAML::Node& node) {
@@ -12,8 +12,8 @@
 namespace YAML
 {
   using exaStamp::NPTConfig;
-  using exanb::UnityConverterHelper;
-  using exanb::Quantity;
+  
+  using onika::physics::Quantity;
   
   template<> struct convert<NPTConfig>
   {

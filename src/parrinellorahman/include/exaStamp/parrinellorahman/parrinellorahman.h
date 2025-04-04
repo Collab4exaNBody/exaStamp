@@ -1,9 +1,9 @@
 #pragma once
 
-#include <exanb/core/basic_types.h>
-#include <exanb/core/basic_types_operators.h>
+#include <onika/math/basic_types.h>
+#include <onika/math/basic_types_operators.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/print_utils.h>
+#include <onika/print_utils.h>
 
 namespace exaStamp
 {
@@ -38,7 +38,7 @@ namespace exaStamp
     template<class StreamT>
     inline void print(StreamT& out)
     {
-      out << exanb::default_stream_format;
+      out << onika::default_stream_format;
       out << "Text        = " << this->m_config.m_Text << std::endl;
       out << "masseNVT    = " << this->m_config.m_masseNVT << std::endl;
       out << "Pext        = " << this->m_config.m_Pext << std::endl;
@@ -74,7 +74,7 @@ namespace exaStamp
       G = ht * h;
       Gi = inverse(G);
       Giht = Gi * ht;
-      Gp = diag_matrix({0.,0.,0.}); // this is in stamp and yes it's strange
+      Gp = onika::math::diag_matrix({0.,0.,0.}); // this is in stamp and yes it's strange
       GiGp = Gi * Gp;
     }
 
@@ -88,8 +88,8 @@ namespace exaStamp
       {
         if( is_diagonal(hp) && is_diagonal(hpp) )
         {
-          hp = diag_matrix( m_config.m_hblend * Vec3d{ hp.m11 , hp.m22 , hp.m33 } );
-          hpp = diag_matrix( m_config.m_hblend * Vec3d{ hpp.m11 , hpp.m22 , hpp.m33 } );
+          hp = onika::math::diag_matrix( m_config.m_hblend * Vec3d{ hp.m11 , hp.m22 , hp.m33 } );
+          hpp = onika::math::diag_matrix( m_config.m_hblend * Vec3d{ hpp.m11 , hpp.m22 , hpp.m33 } );
         }
         else
         {

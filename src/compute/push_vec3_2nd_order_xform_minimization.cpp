@@ -1,12 +1,12 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/fields.h>
+#include <exanb/core/grid_fields.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/quantity.h>
+#include <onika/physics/units.h>
 #include <exanb/core/domain.h>
 
 #include <onika/soatl/field_pointer_tuple.h>
@@ -213,7 +213,7 @@ namespace exaStamp
   template<class GridT> using PushAccelVelocityToPositionXFormMIN = PushVec3SecondOrderXFormMIN<GridT, field::_rx,field::_ry,field::_rz, field::_vx,field::_vy,field::_vz , field::_ax,field::_ay,field::_az >;
   
  // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(push_vec3_2nd_order_xform_minimization)
   {
    OperatorNodeFactory::instance()->register_factory( "push_f_v_r_xform_minimization", make_grid_variant_operator< PushAccelVelocityToPositionXFormMIN > );
   }

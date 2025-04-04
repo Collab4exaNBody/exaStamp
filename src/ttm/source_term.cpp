@@ -1,6 +1,6 @@
 #include <exaStamp/ttm/source_term.h>
-#include <exanb/core/log.h>
-#include <exanb/core/basic_types_operators.h>
+#include <onika/log.h>
+#include <onika/math/basic_types_operators.h>
 
 #include <iostream>
 #include <cmath>

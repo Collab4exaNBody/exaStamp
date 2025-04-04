@@ -4,5 +4,5 @@ target_include_directories(snap-compute-gsh-cpp PRIVATE ${CMAKE_CURRENT_SOURCE_D
 target_compile_options(snap-compute-gsh-cpp PRIVATE -DDEBUG_SNAP_GSH)
 
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/snap-compute-gsh.sh" "${CMAKE_CURRENT_BINARY_DIR}/snap-compute-gsh.sh")
-xstamp_add_test(unit-snap-compute-gsh ${CMAKE_CURRENT_BINARY_DIR}/snap-compute-gsh.sh)
+onika_add_test(unit-snap-compute-gsh ${CMAKE_CURRENT_BINARY_DIR}/snap-compute-gsh.sh)
 

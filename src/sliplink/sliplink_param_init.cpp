@@ -1,6 +1,6 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exaStamp/sliplink/sliplink.h>
 
 #include <cmath>
@@ -102,7 +102,7 @@ Initializes Slip-Link parameters and constants.
   };
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(sliplink_param_init)
   {
     OperatorNodeFactory::instance()->register_factory( "sliplink_param_init", make_compatible_operator< SlipLinkParamInitOperator > );
   }

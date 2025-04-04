@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cmath>
-#include <exanb/core/quantity_yaml.h>
+#include <onika/physics/units.h>
 #include <exaStamp/potential_factory/pair_potential.h>
 #include <exaStamp/potential/ewald/ewald.h>
 #include <onika/flat_tuple.h>

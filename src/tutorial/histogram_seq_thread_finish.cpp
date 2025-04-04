@@ -1,11 +1,11 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/histogram.h>
-#include <exanb/mpi/data_types.h>
+#include <onika/mpi/data_types.h>
 
 #include <mpi.h>
 
@@ -37,7 +37,7 @@ namespace exaStamp
   };
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(histogram_seq_thread_finish)
   {
    OperatorNodeFactory::instance()->register_factory( "histoseq_thread_finish" , make_simple_operator< TutorialHistoThreadFinish > );
   }

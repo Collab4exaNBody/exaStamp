@@ -2,15 +2,16 @@
 
 #include <exanb/core/domain.h>
 #include <exanb/core/grid.h>
-#include <exanb/fields.h>
-#include <exanb/core/basic_types_stream.h>
-#include <exanb/core/log.h>
-#include <exanb/core/unityConverterHelper.h>
+#include <exanb/core/grid_fields.h>
+#include <onika/math/basic_types_stream.h>
+#include <onika/log.h>
+#include <onika/physics/units.h>
+#include <exaStamp/unit_system.h>
 #include <exanb/core/particle_id_codec.h>
 
 #include <exanb/io/mpi_file_io.h>
 #include <exaStamp/molecule/stampv4_io.h>
-#include <exanb/mpi/all_value_equal.h>
+#include <onika/mpi/all_value_equal.h>
 #include <onika/oarray.h>
 
 #include <exaStamp/molecule/molecule_species.h>
@@ -121,7 +122,7 @@ namespace exaStamp
     std::unique_ptr<IOEntete> entete = std::make_unique<IOEntete>();
     file.read( entete.get() );
     file.increment_offset( entete.get() );
-    assert( exanb::all_value_equal(comm, *entete.get()) );
+    assert( onika::mpi::all_value_equal(comm, *entete.get()) );
 
     //AABB file_bounds = { Vec3d{ entete.xmin , entete.ymin , entete.zmin } * coord_conv , Vec3d{ entete.xmax , entete.ymax , entete.zmax } * coord_conv };
 
@@ -175,13 +176,13 @@ namespace exaStamp
 
     // conversion of the cell parameters to the deformation matrix
     // https://en.wikipedia.org/wiki/Fractional_coordinates
-    double alpha = UnityConverterHelper::convert(entete->angle_a, "degree");
-    double beta  = UnityConverterHelper::convert(entete->angle_b, "degree");
-    double gamma = UnityConverterHelper::convert(entete->angle_g, "degree");
+    double alpha = EXASTAMP_QUANTITY( entete->angle_a * degree );
+    double beta  = EXASTAMP_QUANTITY( entete->angle_b * degree );
+    double gamma = EXASTAMP_QUANTITY( entete->angle_g * degree );
 
-    double ma = UnityConverterHelper::convert(entete->long_a, "m");
-    double mb = UnityConverterHelper::convert(entete->long_b, "m");
-    double mc = UnityConverterHelper::convert(entete->long_c, "m");
+    double ma = EXASTAMP_QUANTITY( entete->long_a * m );
+    double mb = EXASTAMP_QUANTITY( entete->long_b * m );
+    double mc = EXASTAMP_QUANTITY( entete->long_c * m );
 
     Vec3d a{ma, 0, 0};
     Vec3d b{mb * std::cos(gamma), mb * std::sin(gamma), 0};
@@ -237,8 +238,8 @@ namespace exaStamp
 
     // get general informations about the dynamics
     iteration_number = entete->NumeroIterationAbsolu ;
-    phystime         = UnityConverterHelper::convert(entete->tempsPhysique, "s") ;
-    dt               = UnityConverterHelper::convert(entete->dt_adaptatif, "s") ;
+    phystime         = EXASTAMP_QUANTITY( entete->tempsPhysique * s );
+    dt               = EXASTAMP_QUANTITY( entete->dt_adaptatif * s );
 
     MPI_Barrier(comm);
     // --------- entete -------------
@@ -524,7 +525,7 @@ namespace exaStamp
     std::vector<MoleculeConOpt> mol_con_opt;
     std::vector<uint64_t> particle_optional_place;
 
-    static const double vel_conv = UnityConverterHelper::convert(1.0, "m/s");
+    static constexpr double vel_conv = EXASTAMP_CONST_QUANTITY( 1.0 * m/s );
     Vec3d SumVelocity = {0.,0.,0.};
     //Gestion des blocs de donnees, mise en commun dans la grid
     for (size_t i = 0;i<count; i++)
@@ -747,7 +748,7 @@ namespace exaStamp
     IOVersion version = { 1 };
     file.read( &version );
     file.increment_offset( &version );
-    assert( exanb::all_value_equal(comm, version ) );
+    assert( onika::mpi::all_value_equal(comm, version ) );
     ldbg << "\t\tversion = " << version.version << "\n" << std::endl;
     if( force_version != -1 )
     {

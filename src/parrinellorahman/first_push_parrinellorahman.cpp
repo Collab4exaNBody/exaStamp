@@ -1,8 +1,8 @@
-#pragma xstamp_grid_variant
 
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/grid.h>
@@ -12,17 +12,16 @@
 #include <exaStamp/parrinellorahman/parrinellorahman_stream.h>
 #include <exanb/core/domain.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/unityConverterHelper.h>
-#include <exanb/core/quantity.h>
-#include <exanb/core/physics_constants.h>
-#include <exanb/core/unityConverterHelper.h>
+#include <onika/physics/units.h>
+#include <onika/physics/constants.h>
+#include <exaStamp/unit_system.h>
 
 #include <onika/soatl/field_pointer_tuple.h>
 #include <memory>
 #include <iostream>
 #include <iomanip>
 #include <mpi.h>
-#include <exanb/core/basic_types_stream.h>
+#include <onika/math/basic_types_stream.h>
 
 
 namespace exaStamp
@@ -62,9 +61,9 @@ namespace exaStamp
     
     inline void execute () override final
     {
-      static const double boltzmann_internal = UnityConverterHelper::convert(legacy_constant::boltzmann, "m^2*kg/s^2/K");
-      static const double conv_gnvtv = UnityConverterHelper::convert(1.0,"m^2/s^2");
-      static const double conv_time = UnityConverterHelper::convert(1.0,"1/s^2");
+      static constexpr double boltzmann_internal = EXASTAMP_CONST_QUANTITY( onika::physics::boltzmann * ( m^2 ) * kg / ( s^2 ) / K );
+      static constexpr double conv_gnvtv = EXASTAMP_CONST_QUANTITY (1.0 * ( m^2 ) / ( s^2 ) );
+      static constexpr double conv_time = EXASTAMP_CONST_QUANTITY( 1.0 / ( s^2 ) );
       ParrinelloRahmanContext& data = *parrinello_rahman_ctx;
 
       //ldbg << "ParrinelloRahman::firstPush begin" << std::endl;
@@ -255,7 +254,7 @@ namespace exaStamp
   template<class GridT> using FirstPushParrinelloRahmanTmpl = FirstPushParrinelloRahman<GridT>;
   
  // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(first_push_parrinellorahman)
   {
    OperatorNodeFactory::instance()->register_factory( "first_push_parrinellorahman", make_grid_variant_operator< FirstPushParrinelloRahmanTmpl > );
   }

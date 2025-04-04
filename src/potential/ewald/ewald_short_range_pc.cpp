@@ -1,16 +1,16 @@
-#pragma xstamp_grid_variant
+
 
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/basic_types.h>
-#include <exanb/core/basic_types_operators.h>
+#include <onika/math/basic_types.h>
+#include <onika/math/basic_types_operators.h>
 #include <exanb/compute/compute_cell_particle_pairs.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/operator_slot.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/scg/operator_slot.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/core/log.h>
-#include <exanb/core/cpp_utils.h>
+#include <onika/log.h>
+#include <onika/cpp_utils.h>
 #include <exaStamp/potential/ewald/ewald.h>
 
 #include <exanb/core/config.h> // for MAX_PARTICLE_NEIGHBORS constant
@@ -182,7 +182,7 @@ namespace exaStamp
   template<class GridT> using EwaldShortRangePCTmpl = EwaldShortRangePC<GridT>;
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(ewald_short_range_pc)
   {  
     OperatorNodeFactory::instance()->register_factory( "ewald_short_range_pc" , make_grid_variant_operator< EwaldShortRangePCTmpl > );
   }

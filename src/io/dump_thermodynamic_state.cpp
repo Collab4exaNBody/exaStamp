@@ -1,11 +1,11 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/log.h>
-#include <exanb/core/string_utils.h>
-#include <exanb/core/print_utils.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/log.h>
+#include <onika/string_utils.h>
+#include <onika/print_utils.h>
 #include <exaStamp/compute/thermodynamic_state.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 #include <exanb/core/domain.h>
 
 #include <sstream>
@@ -33,12 +33,12 @@ namespace exaStamp
 
     inline void execute () override final
     {
-      static const double conv_temperature = 1.e4 * legacy_constant::atomicMass / legacy_constant::boltzmann ;	// internal units to Kelvin
-      //static const double conv_energy = 1.e4 * legacy_constant::atomicMass;					// internal units to Joule
-      static const double conv_energy = 1.e4 * legacy_constant::atomicMass / legacy_constant::elementaryCharge;	// internal units to eV
-      //static const double conv_pressure = legacy_constant::atomicMass * 1e20;					// ORIGINAL LINE - NO IDEA WHAT UNITS THIS IS (1e-14 Pascal)
-      static const double conv_pressure = 1.e4 * legacy_constant::atomicMass * 1e30;				// internal units to Pascal
-      static const double conv_density = legacy_constant::atomicMass*1e3*1e24; 					// internal units to g/cm^3
+      static const double conv_temperature = 1.e4 * onika::physics::atomicMass / onika::physics::boltzmann ;	// internal units to Kelvin
+      //static const double conv_energy = 1.e4 * onika::physics::atomicMass;					// internal units to Joule
+      static const double conv_energy = 1.e4 * onika::physics::atomicMass / onika::physics::elementaryCharge;	// internal units to eV
+      //static const double conv_pressure = onika::physics::atomicMass * 1e20;					// ORIGINAL LINE - NO IDEA WHAT UNITS THIS IS (1e-14 Pascal)
+      static const double conv_pressure = 1.e4 * onika::physics::atomicMass * 1e30;				// internal units to Pascal
+      static const double conv_density = onika::physics::atomicMass*1e3*1e24; 					// internal units to g/cm^3
 	
 //     static const std::string header = "###  Step     Time (ps)     Particles  Tot. E. (eV/part)  Kin. E. (eV/part)  Pot. E. (eV/part)  Temp. (K)                     Tx/Ty/Tz (K)    Press. (Pa)                                            Pxx/Pyy/Pzz (Pa) Pxy/Pxz/Pyz (Pa)   sMises (Pa)                            A/B/C (ang)    alpha/beta/gamma (deg)     Vol. (ang^3)  Rho (g/cm^3)";
      static const std::string header = "# Step     Time (ps)     Particles  Tot. E. (eV/part)  Kin. E. (eV/part)  Pot. E. (eV/part)  Temp. (K) Pxx Pyy Pzz Pxy Pxz Pyz (Pa) A/B/C (ang)    alpha/beta/gamma (deg)     Vol. (ang^3)  Rho (g/cm^3)";     
@@ -81,7 +81,7 @@ namespace exaStamp
       double BETA  = acos(dot(c,a)/(B*C))/acos(-1.)*180. ;
       double GAMMA = acos(dot(a,b)/(B*C))/acos(-1.)*180. ;
 
-      oss <<format_string("%9ld % .6e %13ld  % .10e  % .10e  % .10e  % 9.12f  % 9.12f  % 9.12f  % 9.12f  % 9.12f  % 9.12f % 9.12f % 12.12f % 12.12f % 12.12f % 9.12f % 9.12f % 9.12f % 16.12f % 13.12f ",
+      oss <<onika::format_string("%9ld % .6e %13ld  % .10e  % .10e  % .10e  % 9.12f  % 9.12f  % 9.12f  % 9.12f  % 9.12f  % 9.12f % 9.12f % 12.12f % 12.12f % 12.12f % 9.12f % 9.12f % 9.12f % 16.12f % 13.12f ",
         *timestep,
         *physical_time,
         sim_info.particle_count(),
@@ -105,11 +105,11 @@ namespace exaStamp
 
       if( electronic_energy.has_value() )
       {
-        oss << format_string(" % .7e",(*electronic_energy) * conv_energy / sim_info.particle_count() );
+        oss << onika::format_string(" % .7e",(*electronic_energy) * conv_energy / sim_info.particle_count() );
       }
 
       if( is_dump_virial ) {
-        oss << format_string(" % .7e  % .7e  % .7e % .7e  % .7e  % .7e % .7e  % .7e  % .7e",
+        oss << onika::format_string(" % .7e  % .7e  % .7e % .7e  % .7e  % .7e % .7e  % .7e  % .7e",
           sim_info.stress_tensor().m11 * conv_pressure, 
           sim_info.stress_tensor().m12 * conv_pressure, 
           sim_info.stress_tensor().m13 * conv_pressure,
@@ -122,11 +122,11 @@ namespace exaStamp
       }
       oss << "\n";
 
-      FileAppendWriteBuffer::instance().append_to_file( *file , oss.str(), *force_append_thermo );
+      onika::FileAppendWriteBuffer::instance().append_to_file( *file , oss.str(), *force_append_thermo );
 
       if( *force_flush_file )
       {
-        FileAppendWriteBuffer::instance().flush();
+        onika::FileAppendWriteBuffer::instance().flush();
       }
 
     }
@@ -147,7 +147,7 @@ gnuplot -e 'plot "thermodynamic_state.csv" every ::1 using 2:4' # this plots tot
   };
     
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(dump_thermodynamic_state)
   {
    OperatorNodeFactory::instance()->register_factory( "dump_thermodynamic_state", make_simple_operator<DumpThermodynamicStateNode> );
   }

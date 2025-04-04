@@ -4,19 +4,20 @@
 #include <string>
 #include <numeric>
 
-#include <exanb/core/basic_types_yaml.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/math/basic_types_yaml.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
-#include <exanb/core/basic_types_stream.h>
-#include <exanb/core/log.h>
+#include <onika/math/basic_types_stream.h>
+#include <onika/log.h>
 //#include "exanb/vector_utils.h"
-#include <exanb/core/file_utils.h>
+#include <onika/file_utils.h>
 #include <exanb/core/domain.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exanb/core/check_particles_inside_cell.h>
+#include <exaStamp/unit_system.h>
 
 namespace exaStamp
 {
@@ -46,11 +47,11 @@ namespace exaStamp
   public:
     inline void execute () override final
     {
-      static const double coord_conv = UnityConverterHelper::convert(1.0, "ang"); // conversion factor between input unity to exaStamp internal unity
+      static constexpr double coord_conv = EXASTAMP_CONST_QUANTITY(1.0 * ang); // conversion factor between input unity to exaStamp internal unity
 
       //-------------------------------------------------------------------------------------------
       // Reading datas from YAML or previous input
-      std::string file_name = data_file_path( *file );
+      std::string file_name = onika::data_file_path( *file );
       Domain& domain = *(this->domain);
       GridT& grid = *(this->grid);
       

@@ -16,12 +16,11 @@
 #define PRIV_NAMESPACE_NAME USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_details)
 #endif
 
-# define EamPotentialOperatorName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_force)
-# define EamPotentialFlatName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_flat_force)
-# define EamParameterInitName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_init)
-# define EamPotentialStr USTAMP_STR(EamPotentialOperatorName)
-# define EamPotentialFlatStr USTAMP_STR(EamPotentialFlatName)
-# define EamParameterInitStr USTAMP_STR(EamParameterInitName)
+#define EamPotentialOperatorName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_force)
+#define EamPotentialInitName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_init)
+
+#define EamPotentialStr USTAMP_STR(EamPotentialOperatorName)
+#define EamParameterInitStr USTAMP_STR(EamPotentialInitName)
 
 #ifdef USTAMP_POTENTIAL_ENABLE_CUDA
 #define USTAMP_POTENTIAL_CUDA_COMPATIBLE true

@@ -1,13 +1,13 @@
 #pragma once
 
-#include <exanb/fields.h>
-#include <exanb/field_sets.h>
-#include <exanb/core/basic_types.h>
-#include <exanb/core/quaternion.h>
+#include <exanb/core/grid_fields.h>
+#include <exanb/core/grid_fields.h>
+#include <onika/math/basic_types.h>
+#include <onika/math/quaternion.h>
 //#include "exanb/particle_specie.h"
 #include <exaStamp/potential_factory/pair_potential.h>
 
-#include <exanb/core/quaternion_operators.h>
+#include <onika/math/quaternion_operators.h>
 
 namespace exaStamp
 {

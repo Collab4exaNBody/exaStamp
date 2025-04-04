@@ -1,12 +1,12 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/parallel_grid_algorithm.h>
-#include <exanb/core/log.h>
-#include <exanb/core/parallel_random.h>
-#include <exanb/core/quaternion_operators.h>
+#include <onika/log.h>
+#include <onika/parallel/random.h>
+#include <onika/math/quaternion_operators.h>
 
 namespace exaStamp
 {
@@ -29,7 +29,7 @@ namespace exaStamp
 
 #     pragma omp parallel
       {
-        auto& re = rand::random_engine();
+        auto& re = onika::parallel::random_engine();
         std::normal_distribution<double> f_rand(-1.0 , 1.0) ;
         GRID_OMP_FOR_BEGIN(dims_no_ghost,_,loc_no_ghosts, schedule(dynamic) )
         {
@@ -50,7 +50,7 @@ namespace exaStamp
   template<class GridT> using RandomOrientTmpl = RandomOrient<GridT>;
 
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(random_orient)
   {
     OperatorNodeFactory::instance()->register_factory("random_orient", make_grid_variant_operator< RandomOrientTmpl >);
   }

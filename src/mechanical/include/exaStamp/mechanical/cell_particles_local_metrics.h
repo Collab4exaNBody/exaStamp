@@ -4,7 +4,7 @@
 #include <vector>
 #include <cstdlib>
 
-#include <exanb/core/basic_types.h>
+#include <onika/math/basic_types.h>
 
 namespace exaStamp
 {

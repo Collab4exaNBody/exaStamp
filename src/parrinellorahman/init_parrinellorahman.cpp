@@ -1,13 +1,13 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/basic_types.h>
-#include <exanb/core/basic_types_operators.h>
-#include <exanb/core/basic_types_yaml.h>
-#include <exanb/core/basic_types_stream.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/math/basic_types.h>
+#include <onika/math/basic_types_operators.h>
+#include <onika/math/basic_types_yaml.h>
+#include <onika/math/basic_types_stream.h>
 #include <exaStamp/parrinellorahman/parrinellorahman.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 
 #include <iostream>
 #include <string>
@@ -35,7 +35,7 @@ namespace exaStamp
     {
       *parrinello_rahman_ctx = ParrinelloRahmanContext { { *Text, *masseNVT, *Pext, *masseNPT, *hmask, *hblend } };
 
-      static const double conv_pressure = 1.e4 * legacy_constant::atomicMass * 1e30;                            // internal units to Pascal
+      static const double conv_pressure = 1.e4 * onika::physics::atomicMass * 1e30;                            // internal units to Pascal
 
       lout << "=== Parrinello-Rahman scheme ===" << std::endl;
       lout << "  Text     : " << parrinello_rahman_ctx->m_config.m_Text               << " K" << std::endl;
@@ -55,7 +55,7 @@ namespace exaStamp
   };
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(init_parrinellorahman)
   {
    OperatorNodeFactory::instance()->register_factory( "init_parrinellorahman", make_compatible_operator< InitParrinelloRahmanNode > );
   }

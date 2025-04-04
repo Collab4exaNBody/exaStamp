@@ -3,7 +3,7 @@
 #include <exaStamp/potential_factory/pair_potential.h>
 #include <exaStamp/potential_factory/pair_potential_factory.h>
 
-#include <exanb/core/quantity_yaml.h>
+#include <onika/physics/units.h>
 
 #include <yaml-cpp/yaml.h>
 
@@ -19,7 +19,7 @@ namespace YAML
       v.m_type_b = node["type_b"].as<std::string>();
       if( node["rcut"] )
       {
-        v.m_rcut = node["rcut"].as<exanb::Quantity>().convert();
+        v.m_rcut = node["rcut"].as<onika::physics::Quantity>().convert();
       }
       v.m_pair_potential = exaStamp::PairPotentialFactory::make_instance( node );
       return true;

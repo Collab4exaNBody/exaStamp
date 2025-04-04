@@ -8,7 +8,7 @@
 #include <string>
 #include <cassert>
 
-#include <exanb/core/basic_types.h>
+#include <onika/math/basic_types.h>
 #include <onika/memory/allocator.h> // for ONIKA_ASSUME_ALIGNED macro
 
 #include "meam_parameters.h"

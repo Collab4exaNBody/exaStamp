@@ -1,18 +1,18 @@
 #include <memory>
 
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/fields.h>
+#include <exanb/core/grid_fields.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/quantity.h>
-#include <exanb/core/physics_constants.h>
-#include <exanb/core/unityConverterHelper.h>
+#include <onika/physics/units.h>
+#include <onika/physics/constants.h>
+#include <onika/physics/units.h>
 #include <onika/memory/allocator.h>
-#include <exanb/core/parallel_random.h>
+#include <onika/parallel/random.h>
 #include <exanb/grid_cell_particles/particle_region.h>
 #include <exaStamp/compute/thermodynamic_state.h>
 
@@ -102,7 +102,7 @@ namespace exaStamp
       ParticleSpecies& species = *(this->species);
 
       // Getting current temperature
-      static constexpr double conv_temperature = 1.e4 * legacy_constant::atomicMass / legacy_constant::boltzmann;
+      static constexpr double conv_temperature = 1.e4 * onika::physics::atomicMass / onika::physics::boltzmann;
       double Tcurrent = sim_info.temperature_scal() / sim_info.particle_count() * conv_temperature;
 
       // Checking definition of target temperature
@@ -211,7 +211,7 @@ namespace exaStamp
   template<class GridT> using BerendsenThermostatNodeTmpl = BerendsenThermostatNode<GridT>;
 
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(berendsen_thermostat)
   {
    OperatorNodeFactory::instance()->register_factory(
     "berendsen_thermostat",

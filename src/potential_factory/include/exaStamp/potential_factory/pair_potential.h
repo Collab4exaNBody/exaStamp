@@ -2,9 +2,9 @@
 
 #include <exanb/compute/compute_pair_function.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/fields.h>
-#include <exanb/field_sets.h>
-#include <exanb/core/log.h>
+#include <exanb/core/grid_fields.h>
+#include <exanb/core/grid_fields.h>
+#include <onika/log.h>
 #include <exanb/core/particle_type_pair.h>
 #include <onika/flat_tuple.h>
 

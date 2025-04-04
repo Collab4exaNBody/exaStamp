@@ -8,11 +8,12 @@
 #include <cassert>
 #include <iomanip>
 
-#include <exanb/core/basic_types_def.h>
-#include <exanb/core/basic_types_operators.h>
+#include <onika/math/basic_types_def.h>
+#include <onika/math/basic_types_operators.h>
 //#include <exaStamp/atom_bond_connectivity.h>
 
 #include <onika/memory/allocator.h>
+#include <exanb/core/particle_type_id.h>
 
 #ifndef XSTAMP_MAX_RIGID_MOLECULE_ATOMS
 #define XSTAMP_MAX_RIGID_MOLECULE_ATOMS 4
@@ -20,7 +21,7 @@
 
 namespace exaStamp
 {
-  static constexpr size_t MAX_PARTICLE_SPECIES = 256;
+  static constexpr size_t MAX_PARTICLE_SPECIES = exanb::MAX_PARTICLE_TYPES;
   static constexpr size_t MAX_ATOM_NAME_LEN = 16;
   static constexpr size_t LEGACY_MAX_RIGID_MOLECULE_ATOMS = 16; // WARNING, changing this constant will make the dump reader fail
   static constexpr size_t MAX_RIGID_MOLECULE_ATOMS = XSTAMP_MAX_RIGID_MOLECULE_ATOMS;
@@ -110,7 +111,7 @@ namespace exaStamp
   template<class StreamT>
   inline StreamT& print_user_input(const ParticleSpecies& species, StreamT& out, int indent=0)
   {
-    using exanb::norm2;
+    using onika::math::norm2;
     auto space = [indent](unsigned int n) -> std::string { return std::string((indent+n)*2,' '); } ;
     for(const auto & atom : species)
     {

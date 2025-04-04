@@ -1,13 +1,13 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/basic_types.h>
-#include <exanb/core/basic_types_operators.h>
-#include <exanb/core/basic_types_yaml.h>
-#include <exanb/core/basic_types_stream.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/math/basic_types.h>
+#include <onika/math/basic_types_operators.h>
+#include <onika/math/basic_types_yaml.h>
+#include <onika/math/basic_types_stream.h>
 #include <exaStamp/npt/npt.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 #include <exaStamp/compute/thermodynamic_state.h>
 
 #include <iostream>
@@ -29,7 +29,7 @@ namespace exaStamp
     
     inline void execute () override final
     {
-      static const double conv_temperature = 1.e4 * legacy_constant::atomicMass / legacy_constant::boltzmann;
+      static const double conv_temperature = 1.e4 * onika::physics::atomicMass / onika::physics::boltzmann;
       const ThermodynamicState& sim_info = *(this->thermodynamic_state);
       long natoms = sim_info.particle_count();
       npt_ctx->t_current = sim_info.temperature_scal() / natoms * conv_temperature;
@@ -71,7 +71,7 @@ namespace exaStamp
   };
   
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(setup_npt)
   {
    OperatorNodeFactory::instance()->register_factory( "setup_npt", make_compatible_operator< SetupNPTNode > );
   }

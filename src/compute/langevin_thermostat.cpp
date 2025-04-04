@@ -1,19 +1,20 @@
 #include <memory>
 
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/fields.h>
+#include <exanb/core/grid_fields.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/quantity.h>
-#include <exanb/core/physics_constants.h>
-#include <exanb/core/unityConverterHelper.h>
+#include <onika/physics/units.h>
+#include <onika/physics/constants.h>
+#include <onika/physics/units.h>
 #include <onika/memory/allocator.h>
-#include <exanb/core/parallel_random.h>
+#include <onika/parallel/random.h>
 #include <exanb/grid_cell_particles/particle_region.h>
+#include <exaStamp/unit_system.h>
 
 namespace exaStamp
 {
@@ -91,7 +92,7 @@ namespace exaStamp
     // -----------------------------------------------
     inline void execute ()  override final
     {
-      static const double k = UnityConverterHelper::convert(legacy_constant::boltzmann, "J/K");
+      static constexpr double k = EXASTAMP_CONST_QUANTITY( onika::physics::boltzmann * J / K );
 
       if( grid->number_of_cells() == 0 ) return;
 
@@ -164,7 +165,7 @@ namespace exaStamp
 
 #     pragma omp parallel
       {
-        auto& re = rand::random_engine();
+        auto& re = onika::parallel::random_engine();
         std::normal_distribution<double> f_rand(0.0,1.0);
 
         GRID_OMP_FOR_BEGIN(dims-2*gl,_,loc, schedule(dynamic) )
@@ -256,7 +257,7 @@ Note: do not process particles in ghost layers.
   template<class GridT> using LangevinThermostatNodeTmpl = LangevinThermostatNode<GridT>;
 
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(langevin_thermostat)
   {
    OperatorNodeFactory::instance()->register_factory(
     "langevin_thermostat",

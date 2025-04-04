@@ -1,9 +1,9 @@
 #pragma once
 
-#include <exanb/core/basic_types.h>
-#include <exanb/core/basic_types_operators.h>
+#include <onika/math/basic_types.h>
+#include <onika/math/basic_types_operators.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/print_utils.h>
+#include <onika/print_utils.h>
 
 namespace exaStamp
 {
