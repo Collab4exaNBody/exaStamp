@@ -55,8 +55,7 @@ namespace exaStamp
 
       // those two lambdas are used to launch parallel kernels within a function exterior to this OperatorNode's implementation
       auto pecfunc = [self=this](auto ... args) { return self->parallel_execution_context(args ...); };
-      auto peqfunc = [self=this](unsigned int i) { return self->parallel_execution_stream(i); };
-      //auto peqfunc = [self=this](int i) { return self->parallel_execution_custom_queue(i); };       
+      auto peqfunc = [self=this]() -> onika::parallel::ParallelExecutionQueue& { return self->parallel_execution_queue(); };
 
       // map of molecule id (identical to owner's particle id) to owner particle location ( encoded cell / position in cell )
       std::unordered_map<uint64_t , uint64_t> molecule_owner;
