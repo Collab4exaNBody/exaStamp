@@ -43,13 +43,14 @@ namespace exaStamp
       if( grid->number_of_particles() == 0 ) return;
     
       auto pecfunc = [self=this](auto ... args) { return self->parallel_execution_context(args...); };
-      auto pesfunc = [self=this](unsigned int i) { return self->parallel_execution_stream(i); };
+      //      auto pesfunc = [self=this](unsigned int i) { return self->parallel_execution_stream(i); };
+      auto peqfunc = [self=this]() -> onika::parallel::ParallelExecutionQueue& { return self->parallel_execution_queue(); };
 
       auto rho_emb_field = grid->field_accessor( field::rho_dEmb );
       auto ghost_update_fields = onika::make_flat_tuple( rho_emb_field );
 
       grid_update_ghosts( ldbg, *mpi, *ghost_comm_scheme, *grid, *domain, nullptr,
-                          *ghost_comm_buffers, pecfunc, pesfunc, ghost_update_fields,
+                          *ghost_comm_buffers, pecfunc, peqfunc, ghost_update_fields,
                           *mpi_tag, *gpu_buffer_pack, *async_buffer_pack, *staging_buffer,
                           *serialize_pack_send, *wait_all, std::false_type{} );
     }
