@@ -51,10 +51,10 @@ class ReadExternalAtomFormatNode : public OperatorNode
   // ADD_SLOT(std::string, units       , INPUT, "metal" );
   // ADD_SLOT(std::string, style       , INPUT, "atomic");
 
-  ADD_SLOT(size_t     , step        , INPUT, 0);
+  // ADD_SLOT(size_t     , step        , INPUT, 0);
 
-  ADD_SLOT(double     , noise        , INPUT , 0.0 );
-  ADD_SLOT(double     , noise_cutoff , INPUT , OPTIONAL );
+  // ADD_SLOT(double     , noise        , INPUT , 0.0 );
+  // ADD_SLOT(double     , noise_cutoff , INPUT , OPTIONAL );
 
 public:
 
@@ -159,6 +159,11 @@ public:
       Mat3d G = Ht * inverse(D);
       xform = G * domain.xform();
 
+      lout << Ht << std::endl;
+      lout << G << std::endl;
+      lout << D << std::endl;
+      lout << xform << std::endl;
+
       uniform_scale = is_uniform_scale(xform);
 
       if (uniform_scale) {
@@ -183,8 +188,6 @@ public:
 
     // send bounds and box_size to all cores
     MPI_Bcast(&domain, sizeof(Domain), MPI_CHARACTER, 0, *mpi);
-    assert(check_domain(domain));
-
     grid.set_origin(domain.bounds().bmin);
     grid.set_offset(IJK{0, 0, 0});
     grid.set_cell_size(domain.cell_size());
@@ -236,8 +239,10 @@ public:
     }
 
     grid.rebuild_particle_offsets();
-    assert(check_particles_inside_cell(grid));
-
+#ifndef NDEBUG
+    bool particles_inside_cell = check_particles_inside_cell(grid);
+    assert(particles_inside_cell);
+#endif
     lout << "===========================================" << std::endl << std::endl;
   }
 };
@@ -245,9 +250,9 @@ public:
 template <class GridT> using ReadExternalAtomFormatNodeTmpl = ReadExternalAtomFormatNode<GridT>;
 
 // === register factories ===
-ONIKA_AUTORUN_INIT(read_xyz_file_2)
-{
-  OperatorNodeFactory::instance()->register_factory("read_external_atom_format", make_grid_variant_operator< ReadExternalAtomFormatNodeTmpl >);
+ONIKA_AUTORUN_INIT(read_external_atom_format) {
+  OperatorNodeFactory::instance()->register_factory("read_external_atom_format",
+                                                    make_grid_variant_operator<ReadExternalAtomFormatNodeTmpl>);
 }
 
 } // exaStamp

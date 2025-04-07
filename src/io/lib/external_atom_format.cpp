@@ -1241,7 +1241,7 @@ bool ExtendedXYZParser::parse(Context& ctx) {
 
   // get the number of atoms
   ctx.n_particles = static_cast<size_t>(std::stoi(m_matches[0][1].str()));
-  assert(n > 0);
+  assert(ctx.n_particles > 0);
   onika::lout << onika::format_string(" - %-15s = %ld", "particle_count", ctx.n_particles) << std::endl;
 
   // now parse the comment line that contains the lattice and per atom properties
