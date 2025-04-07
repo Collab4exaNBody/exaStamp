@@ -1,28 +1,25 @@
-#include <exanb/core/grid.h>
-#include <exanb/core/domain.h>
 #include <onika/math/basic_types.h>
 #include <onika/math/basic_types_operators.h>
-#include <exaStamp/particle_species/particle_specie.h>
 #include <onika/scg/operator.h>
 #include <onika/scg/operator_factory.h>
 #include <onika/scg/operator_slot.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <onika/log.h>
 #include <onika/cpp_utils.h>
-#include <exaStamp/particle_species/particle_specie.h>
 #include <onika/file_utils.h>
 
-#include <exaStamp/mechanical/cell_particles_local_structural_metrics.h>
-#include <exaStamp/mechanical/compute_local_field.h>
-#include <exaStamp/mechanical/average_local_field.h>
 
+#include <exanb/core/grid.h>
+#include <exanb/core/domain.h>
 #include <exanb/particle_neighbors/chunk_neighbors.h>
 #include <exanb/compute/compute_cell_particle_pairs.h>
 
 #include <exaStamp/compute/thermodynamic_state.h>
+#include <exaStamp/particle_species/particle_specie.h>
+#include <exaStamp/mechanical/cell_particles_local_structural_metrics.h>
+#include <exaStamp/mechanical/average_local_field.h>
+#include <exaStamp/mechanical/compute_local_field.h>
 
-#include <vector>
-#include <memory>
 #include <iostream>
 
 namespace exaStamp
@@ -43,7 +40,8 @@ namespace exaStamp
     ADD_SLOT( bool                  , ghost               , INPUT , false );
     ADD_SLOT( GridT                 , grid                , INPUT );
     ADD_SLOT( Domain                , domain              , INPUT , REQUIRED );
-    ADD_SLOT( double                , rcut                , INPUT , REQUIRED);
+
+    ADD_SLOT( double                , rcut                , INPUT , 0.0);
     
     using ComputeBuffer = ComputePairBuffer2<false,false>;
     using ComputeFields = FieldSet< > ;
@@ -61,8 +59,10 @@ namespace exaStamp
         std::abort();
       }
 
-      //      using ForceCPBuf = SimpleNbhComputeBuffer< FieldSet<field::_local_field> >; /* we want extra neighbor storage space to store these fields */
-      //      ComputePairBufferFactory< ForceCPBuf > local_buf;  
+      lout << "\t- Computing per-atom local field" << std::endl;
+
+       // using ForceCPBuf = SimpleNbhComputeBuffer< FieldSet<field::_local_field> >; /* we want extra neighbor storage space to store these fields */
+       // ComputePairBufferFactory< ForceCPBuf > local_buf;  
       
       auto local_field = grid->field_accessor( field::local_field );
       auto local_op_fields = make_field_tuple_from_field_set( FieldSet<>{}, local_field );
@@ -87,17 +87,17 @@ namespace exaStamp
           auto optional = make_compute_pair_optional_args( nbh_it, cp_weight, cp_xform, cp_locks, cpu_cell_filter  );
           compute_cell_particle_pairs( *grid, rrPotential, *ghost, optional, local_op_buf, local_op , local_op_fields, parallel_execution_context() );	  	  
         }
+      lout << "\t- Computing per-atom local field END" << std::endl;
 
     }
     
   };
   
   template<class GridT> using ComputeLocalFIeldOperatorTmpl = ComputeLocalFIeldOperator<GridT>;
-  
-  // === register factories ===  
-  ONIKA_AUTORUN_INIT(compute_local_field)
-  {
-    OperatorNodeFactory::instance()->register_factory( "compute_local_field", make_grid_variant_operator< ComputeLocalFIeldOperatorTmpl > );
-  }
 
+  // === register factories ===
+  ONIKA_AUTORUN_INIT(compute_local_field) {
+    OperatorNodeFactory::instance()->register_factory("compute_local_field",
+                                                      make_grid_variant_operator<ComputeLocalFIeldOperatorTmpl>);
+  }
 }

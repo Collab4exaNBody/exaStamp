@@ -2,13 +2,9 @@
 
 #include <onika/math/basic_types.h>
 #include <exanb/compute/compute_pair_buffer.h>
-
-#include <vector>
-#include <algorithm>
-
 #include <omp.h>
 
-XNB_DECLARE_FIELD(double          , local_field , "mylocalfield");
+#include <exaStamp/mechanical/compute_local_field.h>
 
 namespace exaStamp
 {
@@ -28,7 +24,7 @@ namespace exaStamp
          ) const	
       {
         
-        std::cout << "My average field calculator over " << n << " neighbors" << std::endl;
+        lout << "My average field calculator over " << n << " neighbors" << std::endl;
 
         double sum_f = 0.;
         for(size_t i=0;i<n;i++)
@@ -37,7 +33,7 @@ namespace exaStamp
             std::cout << "\tneigh val = " << tab.nbh_pt[i][field::local_field] << std::endl;            
           }
         sum_f /= (2.*n);
-        std::cout << "\n\t\t average final value = " << sum_f << std::endl;
+        lout << "\n\t\t average final value = " << sum_f << std::endl;
         
       }
     };
