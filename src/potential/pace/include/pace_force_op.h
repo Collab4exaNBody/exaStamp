@@ -28,11 +28,10 @@ namespace exaStamp
   // Force operator
   struct alignas(onika::memory::DEFAULT_ALIGNMENT) PaceForceOp 
   {
-    PaceThreadContext* m_thread_ctx = nullptr;
-    const size_t n_thread_ctx = 0;
+    PaceContext& m_pace_context;
     const bool conv_energy_units = true;
     static constexpr double conv_energy_factor = EXASTAMP_CONST_QUANTITY( 1. * eV );
-
+    
     template<class ComputeBufferT, class CellParticlesT>
     inline void operator ()
       (
@@ -116,11 +115,10 @@ namespace exaStamp
       double _fz = 0.;
       
       size_t tid = omp_get_thread_num();
-      assert( tid < n_thread_ctx );
-      PaceThreadContext & pace_ctx_loc = m_thread_ctx[tid];
-      ACEImpl * aceimplptr = pace_ctx_loc.aceimpl;
-      aceimplptr->ace->resize_neighbours_cache(jnum);
+      ACEImpl* aceimplptr = m_pace_context.aceimpl;
+      (aceimplptr->ace)->resize_neighbours_cache(jnum);
 
+      // compute_atom needs lammps-like arrays
       double **x = new double*[jnum + 1];
       int *typevec = new int[jnum+1];
       int *jlist = new int[jnum];
@@ -143,23 +141,9 @@ namespace exaStamp
         x[jj][1] = buf.dry[jj-1];
         x[jj][2] = buf.drz[jj-1];
       }
-
-      // for (int jj = 0; jj < jnum; ++jj) {
-      //   int j = jlist[jj];
-      //   int type_j = typevec[j];
-      //   std::cout << " jj = " << jj << ", j = " << j << ", type_j = " << type_j << std::endl;
-      // }
-
-      const double xtmp = x[0][0];
-      const double ytmp = x[0][2];
-      const double ztmp = x[0][1];
-      // std::cout << "xtmp = " << xtmp << "," << ytmp << "," << ztmp << std::endl;
-      // std::cout << "xlas = " << x[jnum][0] << "," << x[jnum][1] << "," << x[jnum][2] << std::endl;
       
-      // std::cout << "coucou" << std::endl;
       aceimplptr->ace->compute_atom(0, x, typevec, jnum, jlist);
       
-      // Clean up allocated memory
       for (int jj = 0; jj < jnum + 1; ++jj) {
         delete[] x[jj];
       }
@@ -167,17 +151,15 @@ namespace exaStamp
       delete[] typevec;
       delete[] jlist;
       
-      double fij[3];
       for (int jj = 0; jj < jnum; ++jj) {
+        double fij[3];
         fij[0]=0.;
         fij[1]=0.;
         fij[2]=0.;
-        fij[0] = aceimplptr->ace->neighbours_forces(jj,0);
-        fij[1] = aceimplptr->ace->neighbours_forces(jj,1);
-        fij[2] = aceimplptr->ace->neighbours_forces(jj,2);
-        fij[0] *= conv_energy_factor;
-        fij[1] *= conv_energy_factor;
-        fij[2] *= conv_energy_factor;
+        
+        fij[0]=aceimplptr->ace->neighbours_forces(jj,0) * conv_energy_factor;
+        fij[1]=aceimplptr->ace->neighbours_forces(jj,1) * conv_energy_factor;
+        fij[2]=aceimplptr->ace->neighbours_forces(jj,2) * conv_energy_factor;
         
         Mat3d v_contrib = tensor( Vec3d{ fij[0] , fij[1] , fij[2] }, Vec3d{ buf.drx[jj], buf.dry[jj], buf.drz[jj] } );
         if constexpr ( compute_virial ) { _vir += v_contrib * -1.0; }
@@ -185,8 +167,7 @@ namespace exaStamp
         _fx += fij[0];
         _fy += fij[1];
         _fz += fij[2];
-
-        //        _en += aceimplptr->ace->e_atom * conv_energy_factor;
+        
         size_t cell_b=0, p_b=0;
         buf.nbh.get(jj, cell_b, p_b);
         auto& lock_b = locks[cell_b][p_b];
@@ -196,6 +177,15 @@ namespace exaStamp
         cells[cell_b][field::fz][p_b] -= fij[2];
         lock_b.unlock();
       }
+
+      lock_a.lock();
+ 
+      en += aceimplptr->ace->e_atom * conv_energy_factor;
+      fx += _fx;
+      fy += _fy;
+      fz += _fz;
+      if constexpr ( compute_virial ) { virial += _vir; }
+      lock_a.unlock();
       
     }
   };
