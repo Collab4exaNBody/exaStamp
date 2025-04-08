@@ -15,24 +15,29 @@ endif()
 set(ONIKA_BUILD_exaStampPace ${ONIKA_BUILD_exaStampPace_FORCED} CACHE BOOL "Build exaStampPace")
 
 if(ONIKA_BUILD_exaStampPace)
-  include_directories(
-    ${PACE_ROOT_DIR}/wigner-cpp/include
-    ${PACE_ROOT_DIR}/cnpy
-    ${PACE_ROOT_DIR}/ML-PACE
-  )
-  message(STATUS "Building cnpy")
-#  add_library(cnpy STATIC ${PACE_ROOT_DIR}/cnpy/cnpy.cpp)
-#  set_target_properties(cnpy PROPERTIES POSITION_INDEPENDENT_CODE ON)
+  set(WIGNER_PATH ${PACE_ROOT_DIR}/wigner-cpp)
+  set(WIGNER_INCLUDE_PATH ${WIGNER_PATH}/include)
+  
   add_library(cnpy SHARED ${PACE_ROOT_DIR}/cnpy/cnpy.cpp)  
   target_include_directories(cnpy PUBLIC ${PACE_ROOT_DIR}/cnpy)
 
   file(GLOB exaStampPace_EXTERNAL_SRCS
-    ${PACE_ROOT_DIR}/ML-PACE/ace/*.cpp
     ${PACE_ROOT_DIR}/ML-PACE/ace-evaluator/*.cpp
+    ${PACE_ROOT_DIR}/ML-PACE/ace/*.cpp
   )
-  add_compile_definitions(EXTRA_C_PROJECTIONS)
-  add_compile_definitions(COMPUTE_B_GRAD)
+  add_library(pace STATIC ${exaStampPace_EXTERNAL_SRCS})
+  target_include_directories(pace PUBLIC ${WIGNER_INCLUDE_PATH})
+  target_include_directories(pace PUBLIC ${PACE_ROOT_DIR}/ML-PACE)
+  target_compile_definitions(pace PUBLIC EXTRA_C_PROJECTIONS)
+  target_compile_definitions(pace PUBLIC COMPUTE_B_GRAD)
+  target_link_libraries(pace PUBLIC cnpy)
+
+  set_target_properties(pace PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
+  )
   
-  set(exaStampPace_LINK_LIBRARIES exaStampPotential exanbParticleNeighbors cnpy)
+  set(exaStampPace_LINK_LIBRARIES exaStampPotential exanbParticleNeighbors cnpy pace)
   onika_add_plugin(exaStampPace ${CMAKE_CURRENT_SOURCE_DIR})
 endif()

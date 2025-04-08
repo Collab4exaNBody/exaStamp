@@ -136,10 +136,10 @@ namespace exaStamp
       x[0][1] = 0.;
       x[0][2] = 0.;
       
-      for (int jj = 1; jj < jnum+1; jj++) {
-        x[jj][0] = buf.drx[jj-1];
-        x[jj][1] = buf.dry[jj-1];
-        x[jj][2] = buf.drz[jj-1];
+      for (int jj = 0; jj < jnum; jj++) {
+        x[jj+1][0] = buf.drx[jj];
+        x[jj+1][1] = buf.dry[jj];
+        x[jj+1][2] = buf.drz[jj];
       }
       
       aceimplptr->ace->compute_atom(0, x, typevec, jnum, jlist);
@@ -151,19 +151,14 @@ namespace exaStamp
       delete[] typevec;
       delete[] jlist;
       
+      double fij[3];
+      fij[0]=0.;
+      fij[1]=0.;
+      fij[2]=0.;      
       for (int jj = 0; jj < jnum; ++jj) {
-        double fij[3];
-        fij[0]=0.;
-        fij[1]=0.;
-        fij[2]=0.;
-        
         fij[0]=aceimplptr->ace->neighbours_forces(jj,0) * conv_energy_factor;
         fij[1]=aceimplptr->ace->neighbours_forces(jj,1) * conv_energy_factor;
         fij[2]=aceimplptr->ace->neighbours_forces(jj,2) * conv_energy_factor;
-        
-        Mat3d v_contrib = tensor( Vec3d{ fij[0] , fij[1] , fij[2] }, Vec3d{ buf.drx[jj], buf.dry[jj], buf.drz[jj] } );
-        if constexpr ( compute_virial ) { _vir += v_contrib * -1.0; }
-        
         _fx += fij[0];
         _fy += fij[1];
         _fz += fij[2];
@@ -177,14 +172,14 @@ namespace exaStamp
         cells[cell_b][field::fz][p_b] -= fij[2];
         lock_b.unlock();
       }
-
+      //      std::cout << "fijloc = " << fijloc[0] << "," <<fijloc[1] << "," <<fijloc[2] << std::endl;
       lock_a.lock();
  
       en += aceimplptr->ace->e_atom * conv_energy_factor;
       fx += _fx;
       fy += _fy;
       fz += _fz;
-      if constexpr ( compute_virial ) { virial += _vir; }
+      //      if constexpr ( compute_virial ) { virial += _vir; }
       lock_a.unlock();
       
     }

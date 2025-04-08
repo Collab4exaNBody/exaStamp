@@ -29,7 +29,7 @@ using namespace exanb;
 struct PaceParams
 {
   std::string pace_coef;
-  std::string pace_algo = "recursive";
+  bool recursive = true;
   int nt = 1;
   int chunksize = 2048;
 };
@@ -44,7 +44,9 @@ namespace YAML
       if( !node.IsMap() ) { return false; }
       if( ! node["coef"] ) { return false; }
       if( node["coef"] ) { v.pace_coef = node["coef"].as<std::string>(); }
-      if( node["algorithm"] ) { v.pace_algo = node["algorithm"].as<std::string>(); }      
+      if( node["algorithm"] ) {
+        v.recursive = ( node["algorithm"].as<std::string>() == "recursive" );
+      }
       if( node["nspecies"] ) { v.nt = node["nspecies"].as<int>(); }
       if( node["chunksize"] ) { v.nt = node["chunksize"].as<int>(); }
       return true;

@@ -19,13 +19,7 @@
 #include <vector>
 #include <memory>
 #include <iostream>
-//#include <fmt/core.h>
-
 #include <mpi.h>
-// #include "cnpy.h"
-// #include "wigner/wigner.hpp"
-// #include "wigner/wigner_3nj.hpp"
-
 
 #include "ace-evaluator/ace_c_basis.h"
 #include "ace-evaluator/ace_evaluator.h"
@@ -78,7 +72,7 @@ namespace exaStamp
     ADD_SLOT( PaceParams            , parameters        , INPUT , REQUIRED );
     ADD_SLOT( double                , rcut_max          , INPUT_OUTPUT , 0.0 );
     ADD_SLOT( exanb::GridChunkNeighbors , chunk_neighbors   , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
-    ADD_SLOT( bool                  , ghost             , INPUT , false );
+    ADD_SLOT( bool                  , ghost             , INPUT , true );
     ADD_SLOT( bool                  , conv_coef_units   , INPUT , true );
     ADD_SLOT( bool                  , trigger_thermo_state, INPUT , OPTIONAL );
     ADD_SLOT( GridT                 , grid              , INPUT_OUTPUT );
@@ -86,33 +80,22 @@ namespace exaStamp
     ADD_SLOT( GridParticleLocks     , particle_locks    , INPUT , OPTIONAL , DocString{"particle spin locks"} );
 
     ADD_SLOT( long                  , timestep          , INPUT , REQUIRED , DocString{"Iteration number"} );
-    //    ADD_SLOT( std::string           , bispectrumchkfile , INPUT , OPTIONAL , DocString{"file with reference values to check bispectrum correctness"} );
     ADD_SLOT( ParticleSpecies       , species           , INPUT        , REQUIRED );
     ADD_SLOT( ParticleTypeMap       , particle_type_map , INPUT        , REQUIRED );    
-
-    ADD_SLOT( PaceContext        , pace_ctx          , PRIVATE );
-    ADD_SLOT( bool               , pace_init          , INPUT_OUTPUT, false );
+    ADD_SLOT( PaceContext           , pace_ctx          , PRIVATE );
 
     // shortcut to the Compute buffer used (and passed to functor) by compute_cell_particle_pairs
     static constexpr bool UseWeights = false;
     static constexpr bool UseNeighbors = true;
-    //static constexpr bool UseLocks = true;
-    //    using ComputeBuffer = ComputePairBuffer2<UseWeights,UseNeighbors>;
     using ComputeBuffer = ComputePairBuffer2<UseWeights,UseNeighbors,PaceComputeBuffer,CopyParticleType>;
 
     using CellParticles = typename GridT::CellParticles;
-
-    // compile time constant indicating if grid has virial field
     static constexpr bool has_virial_field = GridHasField<GridT,field::_virial>::value;
-
-    // attributes processed during computation
-    // using ComputeFieldsWithoutVirial = FieldSet< field::_ep ,field::_fx ,field::_fy ,field::_fz >;
-    // using ComputeFieldsWithVirial    = FieldSet< field::_ep ,field::_fx ,field::_fy ,field::_fz ,field::_virial>;
+    
     using ComputeFieldsWithoutVirial = FieldSet< field::_ep ,field::_fx ,field::_fy ,field::_fz ,field::_type >;
     using ComputeFieldsWithVirial    = FieldSet< field::_ep ,field::_fx ,field::_fy ,field::_fz ,field::_type ,field::_virial >;
     using ComputeFields = std::conditional_t< has_virial_field , ComputeFieldsWithVirial , ComputeFieldsWithoutVirial >;
     static constexpr ComputeFields compute_force_field_set{};
-    static constexpr FieldSet< field::_type> compute_bispectrum_field_set{};
         
   public:
     
@@ -121,7 +104,7 @@ namespace exaStamp
     {
       assert( chunk_neighbors->number_of_cells() == grid->number_of_cells() );
       
-      bool recursive = ( (*parameters).pace_algo == "recursive" );
+      bool recursive = (*parameters).recursive;
       bool cTildeBasis = false;
       PaceContext PaceCtx = *pace_ctx;
       PaceCtx.aceimpl = new ACEImpl;
@@ -142,7 +125,6 @@ namespace exaStamp
         cTildeBasis = false;          
         *PaceCtx.aceimpl->basis_set = ACECTildeBasisSet(potential_file_name);
       }
-      
       PaceCtx.aceimpl->ace->set_recursive(recursive);
       PaceCtx.aceimpl->ace->element_type_mapping.init((*parameters).nt + 1);
       
@@ -161,7 +143,6 @@ namespace exaStamp
         }
       }
       PaceCtx.aceimpl->ace->set_basis(*PaceCtx.aceimpl->basis_set, 1);
-      //               *pace_init = true;
       
       double cutoff=0.;
       for (int i = 0; i < n; i++) {
