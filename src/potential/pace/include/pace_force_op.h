@@ -7,6 +7,30 @@
 namespace exaStamp
 {
 
+  bool hasExtension(const std::string& filename, const std::string& extension) {
+    if (filename.length() >= extension.length()) {
+      return std::equal(extension.rbegin(), extension.rend(), filename.rbegin());
+    }
+    return false;
+  }
+
+  static char const *const elements_pace[] = {
+    "X",  "H",  "He", "Li", "Be", "B",  "C",  "N",  "O",  "F",  "Ne", "Na", "Mg", "Al", "Si",
+    "P",  "S",  "Cl", "Ar", "K",  "Ca", "Sc", "Ti", "V",  "Cr", "Mn", "Fe", "Co", "Ni", "Cu",
+    "Zn", "Ga", "Ge", "As", "Se", "Br", "Kr", "Rb", "Sr", "Y",  "Zr", "Nb", "Mo", "Tc", "Ru",
+    "Rh", "Pd", "Ag", "Cd", "In", "Sn", "Sb", "Te", "I",  "Xe", "Cs", "Ba", "La", "Ce", "Pr",
+    "Nd", "Pm", "Sm", "Eu", "Gd", "Tb", "Dy", "Ho", "Er", "Tm", "Yb", "Lu", "Hf", "Ta", "W",
+    "Re", "Os", "Ir", "Pt", "Au", "Hg", "Tl", "Pb", "Bi", "Po", "At", "Rn", "Fr", "Ra", "Ac",
+    "Th", "Pa", "U",  "Np", "Pu", "Am", "Cm", "Bk", "Cf", "Es", "Fm", "Md", "No", "Lr"};
+  static constexpr int elements_num_pace = sizeof(elements_pace) / sizeof(const char *);
+  
+  static int AtomicNumberByName_pace(const char *elname)
+  {
+    for (int i = 1; i < elements_num_pace; i++)
+      if (strcmp(elname, elements_pace[i]) == 0) return i;
+    return -1;
+  }
+  
   using namespace exanb;
   
   struct alignas(onika::memory::DEFAULT_ALIGNMENT) PaceComputeBuffer
@@ -29,6 +53,7 @@ namespace exaStamp
   struct alignas(onika::memory::DEFAULT_ALIGNMENT) PaceForceOp 
   {
     PaceContext& m_pace_context;
+    //    std::vector< std::shared_ptr<ACEImpl>> & m_pace_interfaces;
     const bool conv_energy_units = true;
     static constexpr double conv_energy_factor = EXASTAMP_CONST_QUANTITY( 1. * eV );
     
@@ -106,7 +131,6 @@ namespace exaStamp
       ) const
     {
       static constexpr bool compute_virial = std::is_same_v< Mat3dT , Mat3d >;
-      //static constexpr double scale[1][1] = { {1.0} };
 
       Mat3dT _vir;
       double _en = 0.;
@@ -117,6 +141,9 @@ namespace exaStamp
       size_t tid = omp_get_thread_num();
       ACEImpl* aceimplptr = m_pace_context.aceimpl;
       (aceimplptr->ace)->resize_neighbours_cache(jnum);
+
+      // ACEImpl& acetest = *m_pace_interfaces[tid];
+      // acetest.ace->resize_neighbours_cache(jnum);
 
       // compute_atom needs lammps-like arrays
       double **x = new double*[jnum + 1];
@@ -143,6 +170,7 @@ namespace exaStamp
       }
       
       aceimplptr->ace->compute_atom(0, x, typevec, jnum, jlist);
+      // acetest.ace->compute_atom(0, x, typevec, jnum, jlist);
       
       for (int jj = 0; jj < jnum + 1; ++jj) {
         delete[] x[jj];
@@ -159,6 +187,10 @@ namespace exaStamp
         fij[0]=aceimplptr->ace->neighbours_forces(jj,0) * conv_energy_factor;
         fij[1]=aceimplptr->ace->neighbours_forces(jj,1) * conv_energy_factor;
         fij[2]=aceimplptr->ace->neighbours_forces(jj,2) * conv_energy_factor;
+        // fij[0]=acetest.ace->neighbours_forces(jj,0) * conv_energy_factor;
+        // fij[1]=acetest.ace->neighbours_forces(jj,1) * conv_energy_factor;
+        // fij[2]=acetest.ace->neighbours_forces(jj,2) * conv_energy_factor;
+        
         _fx += fij[0];
         _fy += fij[1];
         _fz += fij[2];
@@ -172,14 +204,14 @@ namespace exaStamp
         cells[cell_b][field::fz][p_b] -= fij[2];
         lock_b.unlock();
       }
-      //      std::cout << "fijloc = " << fijloc[0] << "," <<fijloc[1] << "," <<fijloc[2] << std::endl;
+
       lock_a.lock();
- 
       en += aceimplptr->ace->e_atom * conv_energy_factor;
+      //      en += acetest.ace->e_atom * conv_energy_factor;
       fx += _fx;
       fy += _fy;
       fz += _fz;
-      //      if constexpr ( compute_virial ) { virial += _vir; }
+      if constexpr ( compute_virial ) { virial += _vir; }
       lock_a.unlock();
       
     }

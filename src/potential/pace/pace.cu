@@ -33,30 +33,6 @@
 
 namespace exaStamp
 {
-
-  bool hasExtension(const std::string& filename, const std::string& extension) {
-    if (filename.length() >= extension.length()) {
-      return std::equal(extension.rbegin(), extension.rend(), filename.rbegin());
-    }
-    return false;
-  }
-
-  static char const *const elements_pace[] = {
-    "X",  "H",  "He", "Li", "Be", "B",  "C",  "N",  "O",  "F",  "Ne", "Na", "Mg", "Al", "Si",
-    "P",  "S",  "Cl", "Ar", "K",  "Ca", "Sc", "Ti", "V",  "Cr", "Mn", "Fe", "Co", "Ni", "Cu",
-    "Zn", "Ga", "Ge", "As", "Se", "Br", "Kr", "Rb", "Sr", "Y",  "Zr", "Nb", "Mo", "Tc", "Ru",
-    "Rh", "Pd", "Ag", "Cd", "In", "Sn", "Sb", "Te", "I",  "Xe", "Cs", "Ba", "La", "Ce", "Pr",
-    "Nd", "Pm", "Sm", "Eu", "Gd", "Tb", "Dy", "Ho", "Er", "Tm", "Yb", "Lu", "Hf", "Ta", "W",
-    "Re", "Os", "Ir", "Pt", "Au", "Hg", "Tl", "Pb", "Bi", "Po", "At", "Rn", "Fr", "Ra", "Ac",
-    "Th", "Pa", "U",  "Np", "Pu", "Am", "Cm", "Bk", "Cf", "Es", "Fm", "Md", "No", "Lr"};
-  static constexpr int elements_num_pace = sizeof(elements_pace) / sizeof(const char *);
-  
-  static int AtomicNumberByName_pace(const char *elname)
-  {
-    for (int i = 1; i < elements_num_pace; i++)
-      if (strcmp(elname, elements_pace[i]) == 0) return i;
-    return -1;
-  }
   
   using namespace exanb;
   using onika::memory::DEFAULT_ALIGNMENT;
@@ -69,7 +45,7 @@ namespace exaStamp
   {
     // ========= I/O slots =======================
     ADD_SLOT( MPI_Comm              , mpi               , INPUT , REQUIRED);
-    ADD_SLOT( PaceParams            , parameters        , INPUT , REQUIRED );
+    //    ADD_SLOT( PaceParams            , parameters        , INPUT , REQUIRED );
     ADD_SLOT( double                , rcut_max          , INPUT_OUTPUT , 0.0 );
     ADD_SLOT( exanb::GridChunkNeighbors , chunk_neighbors   , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
     ADD_SLOT( bool                  , ghost             , INPUT , true );
@@ -82,7 +58,7 @@ namespace exaStamp
     ADD_SLOT( long                  , timestep          , INPUT , REQUIRED , DocString{"Iteration number"} );
     ADD_SLOT( ParticleSpecies       , species           , INPUT        , REQUIRED );
     ADD_SLOT( ParticleTypeMap       , particle_type_map , INPUT        , REQUIRED );    
-    ADD_SLOT( PaceContext           , pace_ctx          , PRIVATE );
+    ADD_SLOT( PaceContext           , pace_ctx          , INPUT_OUTPUT );
 
     // shortcut to the Compute buffer used (and passed to functor) by compute_cell_particle_pairs
     static constexpr bool UseWeights = false;
@@ -103,61 +79,24 @@ namespace exaStamp
     inline void execute () override final
     {
       assert( chunk_neighbors->number_of_cells() == grid->number_of_cells() );
-      
-      bool recursive = (*parameters).recursive;
-      bool cTildeBasis = false;
-      PaceContext PaceCtx = *pace_ctx;
-      PaceCtx.aceimpl = new ACEImpl;
-      PaceCtx.aceimpl->basis_set = new ACECTildeBasisSet;
-      PaceCtx.aceimpl->ace = new ACERecursiveEvaluator();
 
-      ACEBBasisSet bBasisSet;
-      ACECTildeBasisSet cTildeBasisSet;
-
-      auto potential_file_name = (*parameters).pace_coef;
+      // TODO : multi_thread_context ?
       
-      if (hasExtension(potential_file_name, ".yaml")) {
-        bBasisSet = ACEBBasisSet(potential_file_name);
-        cTildeBasisSet = bBasisSet.to_ACECTildeBasisSet();
-        *PaceCtx.aceimpl->basis_set = cTildeBasisSet;
-        cTildeBasis = true;
-      } else {
-        cTildeBasis = false;          
-        *PaceCtx.aceimpl->basis_set = ACECTildeBasisSet(potential_file_name);
-      }
-      PaceCtx.aceimpl->ace->set_recursive(recursive);
-      PaceCtx.aceimpl->ace->element_type_mapping.init((*parameters).nt + 1);
-      
-      const auto& sp = *species;
-      const int n = (*parameters).nt;
-      for (int i = 1; i <= n; i++) {
-        const char *elemname = sp[i-1].m_name;
-        int atomic_number = AtomicNumberByName_pace(elemname);
-        if (atomic_number == -1) std::cout << elemname << "is not a valid element" << std::endl;
-        SPECIES_TYPE mu = PaceCtx.aceimpl->basis_set->get_species_index_by_name(elemname);
-        if (mu != -1) {
-          std::cout << "Mapping LAMMPS atom type #"<< i << "("<<elemname<<") -> ACE species type #"<< mu << std::endl;
-          PaceCtx.aceimpl->ace->element_type_mapping(i) = mu;
-        } else {
-          std::cout << "Element "<< elemname << " is not supported by ACE-potential from file " << potential_file_name << std::endl;
-        }
-      }
-      PaceCtx.aceimpl->ace->set_basis(*PaceCtx.aceimpl->basis_set, 1);
-      
-      double cutoff=0.;
-      for (int i = 0; i < n; i++) {
-        for (int j = 0; j < n; j++) {
-          *rcut_max = std::max( cutoff, PaceCtx.aceimpl->basis_set->radial_functions->cut(i,j) );
-        }
-      }
-
-      std::cout << "Total number of basis functions" << std::endl;
-      
-      for (SPECIES_TYPE mu = 0; mu < PaceCtx.aceimpl->basis_set->nelements; mu++) {
-        int n_r1 = PaceCtx.aceimpl->basis_set->total_basis_size_rank1[mu];
-        int n = PaceCtx.aceimpl->basis_set->total_basis_size[mu];
-        std::cout <<"\t"<< PaceCtx.aceimpl->basis_set->elements_name[mu] << ": "<< n_r1 << " (r=1) " << n << " (r>1)" << std::endl;
-      }
+      // size_t nt = omp_get_max_threads();
+      // if( nt > pace_ctx->m_test.size() )
+      // {
+      //   size_t old_nt = pace_ctx->m_test.size();
+      //   std::cout << "resizing thread context " << std::endl;
+      //   std::cout << "\told size = " << old_nt << ", new size = " << nt << std::endl;
+      //   pace_ctx->m_test.resize( nt );
+      //   for(size_t i=old_nt;i<nt;i++)
+      //     {
+      //       assert( pace_ctx->m_test[i] == nullptr );
+      //       pace_ctx->m_test[i] = std::make_shared<ACEImpl> ();
+      //       pace_ctx->m_test[i]->basis_set = pace_ctx->aceimpl->basis_set;
+      //       pace_ctx->m_test[i]->ace = pace_ctx->aceimpl->ace;
+      //     }
+      // }
       
       size_t n_cells = grid->number_of_cells();
       if( n_cells==0 )
@@ -181,7 +120,6 @@ namespace exaStamp
           ldbg << "trigger_thermo_state missing " << std::endl;
         }
       
-      // exanb objects to perform computations with neighbors      
       ComputePairNullWeightIterator cp_weight{};
       exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
       auto force_buf = make_compute_pair_buffer<ComputeBuffer>();      
@@ -190,7 +128,7 @@ namespace exaStamp
       auto compute_opt_locks = [&](auto cp_locks)
       {
         auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform, cp_locks );
-        PaceForceOp force_op { PaceCtx,
+        PaceForceOp force_op { *pace_ctx, /*pace_ctx->m_test,*/
                                ! (*conv_coef_units) };
         compute_cell_particle_pairs( *grid, *rcut_max, *ghost, optional, force_buf, force_op , compute_force_field_set , parallel_execution_context() );
       };
