@@ -16,36 +16,45 @@ pace_force:
     coef: "Cu-PBE-core-rep.ace"
 #    algorithm: "product"
     algorithm: "recursive"
-#    chunksize: 2048
-
     
 compute_force:
   - pace_force
-  - langevin_thermostat
 
+# input_data:
+#   - domain:
+#       cell_size: 7.230 ang
+#       grid_dims: [5,5,5]
+#       bounds: [[0 ang ,0 ang,0 ang],[36.15 ang, 36.15 ang, 36.15 ang]]
+#       xform: [[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
+#       periodic: [true,true,true]
+#       expandable: false
+#   - init_rcb_grid
+#   - lattice:
+#       structure: FCC
+#       types: [ Cu, Cu, Cu, Cu]
+#       size: [ 3.615 ang , 3.615 ang , 3.615 ang ]
+  
 input_data:
   - read_xyz_file_with_xform:
-      file: Cu_disturbed.xyz      
+      file: Cu_disturbed.xyz        
       pbc_adjust_xform: true
-  # - bulk_lattice:
-  #     structure: CUSTOM
-  #     np: 4
-  #     types: [ Cu, Cu, Cu, Cu]
-  #     positions: [ [0.25,0.25,0.25], [0.75,0.75,0.75] ]
-  #     size: [ 3.615 ang , 3.615 ang , 3.615 ang ]
-  #     repeat: [ 10, 10, 10 ]
-  #     noise: 0.1 ang
 
 domain:
-  cell_size: 5.6 ang
+  cell_size: 7.230 ang
   periodic: [true,true,true]
   expandable: false
 
+dump_data:
+  - timestep_file: "xyz_datas/test_%09d.xyz"
+  - write_xyz:
+      fields: [ "id" , "force"]
+      units: { force: "eV/ang" }
+       
 global:
-  simulation_end_iteration: 10
-  simulation_log_frequency: 5
-  simulation_dump_thermo_frequency: -1
-  simulation_dump_frequency: -1
-  rcut_inc: 1.0 ang
-  dt: 2.0e-3 ps
-  init_temperature: 5. K
+  simulation_end_iteration: 100
+  simulation_log_frequency: 1
+  simulation_dump_thermo_frequency: 1
+  simulation_dump_frequency: 1
+  rcut_inc: 0.3 ang
+  dt: 0.001 ps
+  force_flush_file: true
