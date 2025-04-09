@@ -36,7 +36,8 @@ namespace exaStamp
   
   using namespace exanb;
   using onika::memory::DEFAULT_ALIGNMENT;
-
+  //  using VecPaceThreadContext = std::vector<PaceThreadContext>;
+  
   template<
     class GridT,
     class = AssertGridHasFields< GridT, field::_ep ,field::_fx ,field::_fy ,field::_fz >
@@ -45,7 +46,6 @@ namespace exaStamp
   {
     // ========= I/O slots =======================
     ADD_SLOT( MPI_Comm              , mpi               , INPUT , REQUIRED);
-    //    ADD_SLOT( PaceParams            , parameters        , INPUT , REQUIRED );
     ADD_SLOT( double                , rcut_max          , INPUT_OUTPUT , 0.0 );
     ADD_SLOT( exanb::GridChunkNeighbors , chunk_neighbors   , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
     ADD_SLOT( bool                  , ghost             , INPUT , true );
@@ -58,7 +58,8 @@ namespace exaStamp
     ADD_SLOT( long                  , timestep          , INPUT , REQUIRED , DocString{"Iteration number"} );
     ADD_SLOT( ParticleSpecies       , species           , INPUT        , REQUIRED );
     ADD_SLOT( ParticleTypeMap       , particle_type_map , INPUT        , REQUIRED );    
-    ADD_SLOT( PaceContext           , pace_ctx          , INPUT_OUTPUT );
+    ADD_SLOT( PaceContext           , pace_ctx          , INPUT );
+    //    ADD_SLOT( VecPaceThreadContext  , thread_ctx        , PRIVATE );
 
     // shortcut to the Compute buffer used (and passed to functor) by compute_cell_particle_pairs
     static constexpr bool UseWeights = false;
@@ -79,22 +80,49 @@ namespace exaStamp
     inline void execute () override final
     {
       assert( chunk_neighbors->number_of_cells() == grid->number_of_cells() );
+      size_t nt = omp_get_max_threads();
 
-      // TODO : multi_thread_context ?
-      
-      // size_t nt = omp_get_max_threads();
-      // if( nt > pace_ctx->m_test.size() )
+      // Multi-thread context using std::make_shared<ACEImpl> () and std::shared_ptr<ACEImpl>>
+      if( nt > pace_ctx->m_test.size() )
+      {
+        size_t old_nt = pace_ctx->m_test.size();
+        std::cout << "resizing thread context " << std::endl;
+        std::cout << "\told size = " << old_nt << ", new size = " << nt << std::endl;
+        pace_ctx->m_test.resize( nt );
+        for(size_t i=old_nt;i<nt;i++)
+          {
+            assert( pace_ctx->m_test[i] == nullptr );
+            pace_ctx->m_test[i] = std::make_shared<ACEImpl> ();
+            pace_ctx->m_test[i]->basis_set = new ACECTildeBasisSet(*(pace_ctx->aceimpl->basis_set));
+            pace_ctx->m_test[i]->ace = new ACERecursiveEvaluator();
+            pace_ctx->m_test[i]->ace->set_recursive(true);
+            pace_ctx->m_test[i]->ace->element_type_mapping.init((*pace_ctx).nspecies + 1);
+            for (int j = 1; j <= (*pace_ctx).nspecies; j++) {
+              pace_ctx->m_test[i]->ace->element_type_mapping(j) = (*pace_ctx).aceimpl->ace->element_type_mapping(j);
+            }
+            pace_ctx->m_test[i]->ace->set_basis(*pace_ctx->m_test[i]->basis_set, 1);
+          }
+      }
+
+      // Multi-thread context using std::vector<PaceThreadContext
+      // if( nt > (*thread_ctx).size() )
       // {
-      //   size_t old_nt = pace_ctx->m_test.size();
+      //   size_t old_nt = (*thread_ctx).size();
       //   std::cout << "resizing thread context " << std::endl;
       //   std::cout << "\told size = " << old_nt << ", new size = " << nt << std::endl;
-      //   pace_ctx->m_test.resize( nt );
+      //   (*thread_ctx).resize( nt );
       //   for(size_t i=old_nt;i<nt;i++)
       //     {
-      //       assert( pace_ctx->m_test[i] == nullptr );
-      //       pace_ctx->m_test[i] = std::make_shared<ACEImpl> ();
-      //       pace_ctx->m_test[i]->basis_set = pace_ctx->aceimpl->basis_set;
-      //       pace_ctx->m_test[i]->ace = pace_ctx->aceimpl->ace;
+      //       assert( (*thread_ctx)[i].aceimpl == nullptr );
+      //       (*thread_ctx)[i].aceimpl = new ACEImpl;
+      //       (*thread_ctx)[i].aceimpl->basis_set = new ACECTildeBasisSet(*(pace_ctx->aceimpl->basis_set));
+      //       (*thread_ctx)[i].aceimpl->ace = new ACERecursiveEvaluator();
+      //       (*thread_ctx)[i].aceimpl->ace->set_recursive(true);
+      //       (*thread_ctx)[i].aceimpl->ace->element_type_mapping.init((*pace_ctx).nspecies + 1);
+      //       for (int j = 1; j <= (*pace_ctx).nspecies; j++) {
+      //         (*thread_ctx)[i].aceimpl->ace->element_type_mapping(j) = (*pace_ctx).aceimpl->ace->element_type_mapping(j);
+      //       }
+      //       (*thread_ctx)[i].aceimpl->ace->set_basis(*(*thread_ctx)[i].aceimpl->basis_set, 1);
       //     }
       // }
       
@@ -119,6 +147,7 @@ namespace exaStamp
         {
           ldbg << "trigger_thermo_state missing " << std::endl;
         }
+      bool eflag = log_energy;
       
       ComputePairNullWeightIterator cp_weight{};
       exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
@@ -128,8 +157,8 @@ namespace exaStamp
       auto compute_opt_locks = [&](auto cp_locks)
       {
         auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform, cp_locks );
-        PaceForceOp force_op { *pace_ctx, /*pace_ctx->m_test,*/
-                               ! (*conv_coef_units) };
+        PaceForceOp force_op { /* *thread_ctx,*/ pace_ctx->m_test,
+                               ! (*conv_coef_units), eflag };
         compute_cell_particle_pairs( *grid, *rcut_max, *ghost, optional, force_buf, force_op , compute_force_field_set , parallel_execution_context() );
       };
       if( omp_get_max_threads() > 1 ) compute_opt_locks( ComputePairOptionalLocks<true>{ particle_locks->data() } );

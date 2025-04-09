@@ -14,7 +14,6 @@ init_parameters:
   - species
   - pace_init:
       parameters:
-        nspecies: 1
         coef: "Cu-PBE-core-rep.ace"
         algorithm: "recursive"
     
@@ -41,7 +40,7 @@ input_data:
       pbc_adjust_xform: true
 
 domain:
-  cell_size: 7.230 ang
+  cell_size: 3.6 ang
   periodic: [true,true,true]
   expandable: false
 
@@ -53,8 +52,8 @@ dump_data: nop
        
 global:
   simulation_end_iteration: 100
-  simulation_log_frequency: 1
-  simulation_dump_thermo_frequency: 1
+  simulation_log_frequency: 5
+  simulation_dump_thermo_frequency: 2
   simulation_dump_frequency: 1
   rcut_inc: 0.3 ang
   dt: 0.001 ps

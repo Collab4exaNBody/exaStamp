@@ -69,9 +69,8 @@ namespace exaStamp
     {
 
       std::cout << "Entering ACE potential initialization" << std::endl;
-      bool recursive = (*parameters).recursive;
       bool cTildeBasis = false;
-
+      (*pace_ctx).recursive = (*parameters).recursive;
       (*pace_ctx).aceimpl = new ACEImpl;
       (*pace_ctx).aceimpl->basis_set = new ACECTildeBasisSet;
       (*pace_ctx).aceimpl->ace = new ACERecursiveEvaluator();
@@ -80,6 +79,9 @@ namespace exaStamp
       ACECTildeBasisSet cTildeBasisSet;
 
       auto potential_file_name = (*parameters).pace_coef;
+      const auto& sp = *species;
+      const int nspecies = sp.size();
+      (*pace_ctx).nspecies = nspecies;
       
       if (hasExtension_bis(potential_file_name, ".yaml")) {
         bBasisSet = ACEBBasisSet(potential_file_name);
@@ -90,12 +92,10 @@ namespace exaStamp
         cTildeBasis = false;          
         *(*pace_ctx).aceimpl->basis_set = ACECTildeBasisSet(potential_file_name);
       }
-      (*pace_ctx).aceimpl->ace->set_recursive(recursive);
-      (*pace_ctx).aceimpl->ace->element_type_mapping.init((*parameters).nt + 1);
+      (*pace_ctx).aceimpl->ace->set_recursive((*pace_ctx).recursive);
+      (*pace_ctx).aceimpl->ace->element_type_mapping.init((*pace_ctx).nspecies + 1);
       
-      const auto& sp = *species;
-      const int n = (*parameters).nt;
-      for (int i = 1; i <= n; i++) {
+      for (int i = 1; i <= nspecies; i++) {
         const char *elemname = sp[i-1].m_name;
         int atomic_number = AtomicNumberByName_pace_bis(elemname);
         if (atomic_number == -1) std::cout << elemname << "is not a valid element" << std::endl;
@@ -110,8 +110,8 @@ namespace exaStamp
       (*pace_ctx).aceimpl->ace->set_basis(*(*pace_ctx).aceimpl->basis_set, 1);
       
       double cutoff=0.;
-      for (int i = 0; i < n; i++) {
-        for (int j = 0; j < n; j++) {
+      for (int i = 0; i < nspecies; i++) {
+        for (int j = 0; j < nspecies; j++) {
           *rcut_max = std::max( cutoff, (*pace_ctx).aceimpl->basis_set->radial_functions->cut(i,j) );
         }
       }

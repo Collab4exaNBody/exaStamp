@@ -32,21 +32,17 @@ struct ACEImpl {
   ACERecursiveEvaluator *ace;
 };
 
+struct PaceThreadContext
+{
+  ACEImpl * aceimpl = nullptr;
+};
+
 struct PaceContext
 {
   ACEImpl* aceimpl = nullptr;
 
-
-  
-  // PL : Not sure what to use between this :
-  //  std::vector<PaceThreadContext> m_thread_ctx;
-
-  // and this (for now I tried this but it fails : SIGSEGV on thread)
   std::vector<std::shared_ptr<ACEImpl>> m_test;
-  
-};
 
-struct PaceThreadContext
-{
-  ACEImpl * aceimpl = nullptr;
+  bool recursive = true;
+  int nspecies = 1;
 };
