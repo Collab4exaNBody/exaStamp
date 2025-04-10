@@ -51,12 +51,21 @@ namespace exaStamp
 
     char m_rigid_atom_names[MaxRigidMolAtoms][MAX_STR_LEN];    
     char m_name[MAX_STR_LEN] = {'\0'};
+    char m_FFname[MAX_STR_LEN] = {'\0'};
     char m_molecule_name[MAX_STR_LEN] = {'\0'};
     
+    // intramolecular force field type
+    int m_FFtypeId = 0;
+
     inline void set_name(const std::string& s)
     {
       if( s.length() >= MAX_STR_LEN ) { std::cerr<<"Atom name too long : length="<<s.length()<<", max="<<(MAX_STR_LEN-1)<<"\n"; std::abort(); }
       std::strncpy(m_name,s.c_str(),MAX_STR_LEN); m_name[MAX_STR_LEN-1]='\0';
+    }
+    inline void set_FFname(const std::string& s)
+    {
+      if( s.length() >= MAX_STR_LEN ) { std::cerr<<"Atom FFname too long : length="<<s.length()<<", max="<<(MAX_STR_LEN-1)<<"\n"; std::abort(); }
+      std::strncpy(m_FFname,s.c_str(),MAX_STR_LEN); m_FFname[MAX_STR_LEN-1]='\0';
     }
     inline void set_molecule_name(const std::string& s)
     {
@@ -70,6 +79,7 @@ namespace exaStamp
     }
     
     inline std::string name() const { return m_name; }
+    inline std::string FFname() const { return m_FFname; }
     inline std::string molecule_name() const { return m_molecule_name; }
     inline std::string rigid_atom_name(size_t i) const { return m_rigid_atom_names[i]; }
     

@@ -26,6 +26,7 @@
 #include <exaStamp/molecule/impropers_potentials_parameters.h>
 #include <exaStamp/molecule/intramolecular_pair_weight.h>
 #include <exaStamp/molecule/molecule_optional_header_io.h>
+#include <exaStamp/molecule/iFFname.h>
 
 #include <exaStamp/potential/ljexp6rf/ljexp6rf.h>
 
@@ -88,6 +89,7 @@ namespace exaStamp
     ADD_SLOT( ImpropersPotentialParameters     , potentials_for_impropers , INPUT_OUTPUT, ImpropersPotentialParameters{} );    
     ADD_SLOT( LJExp6RFMultiParms               , potentials_for_pairs     , INPUT_OUTPUT , LJExp6RFMultiParms{} );
     ADD_SLOT( IntramolecularPairWeighting      , mol_pair_weights         , INPUT_OUTPUT , IntramolecularPairWeighting{} );
+    ADD_SLOT( IntraFFtypes                     , ffnameVector             , INPUT_OUTPUT);
 
     ADD_SLOT( double                           , rcut_max                 , INPUT_OUTPUT , 0.0 );
 
@@ -131,6 +133,7 @@ namespace exaStamp
       uint64_t count = 0;      
       int nb_atom_types = 0;
       std::string atom_name;
+      std::string atom_FFname;
       double atom_mass = std::numeric_limits<double>::quiet_NaN();
       double atom_charge = std::numeric_limits<double>::quiet_NaN();
       double Lx=0.0, Ly=0.0, Lz=0.0;
@@ -180,7 +183,8 @@ namespace exaStamp
             while( p != std::string::npos )
             {
               //ldbg << "found "<<r.first<<" @"<<p<<std::endl;
-              if( r.second.find(r.first)!=0 || p != u.find(r.second,p) ) u.replace( p , r.second.length() , r.second );
+              //if( r.second.find(r.first)!=0 || p != u.find(r.second,p) ) u.replace( p , r.second.length() , r.second );
+	      u.replace( p , r.first.length() , r.second );
               p = u.find( r.first , p + r.second.length() );
             }
           }
@@ -202,7 +206,7 @@ namespace exaStamp
           else if( kw == "maille_ref" ) { iss >> tmp; ldbg << "maille_ref = "<<tmp<<std::endl; }
           else if( kw == "nom" ) { iss >> atom_name; ldbg << "nom = "<<atom_name<<std::endl; }
           else if( kw == "nomXYZ" ) { iss >> tmp; ldbg << "nomFF = "<<tmp<<std::endl; }
-          else if( kw == "nomFF" ) { iss >> tmp; ldbg << "nomFF = "<<tmp<<std::endl; }
+          else if( kw == "nomFF" ) { iss >> atom_FFname; ldbg << "nomFF = "<< atom_FFname <<std::endl; }
           else if( kw == "type" ) { iss >> tmp; ldbg << "type = "<<tmp<<std::endl; }
           else if( kw == "masse" )
           {
@@ -221,10 +225,24 @@ namespace exaStamp
           else if( kw == "Potentiel" )
           {
             int ita=0, itb=0;
+	    std::string ta, tb;
             std::string typepot;
-            iss >> ita >> itb >> typepot;
-            std::string ta = species->at(ita).name();
-            std::string tb = species->at(itb).name();
+            iss >> ta >> tb >> typepot;
+
+            // if ta and tb are atom type ids,
+            if (isdigit(ta[0])) {
+              // we convert the string read as an integer (the atom type id)
+              ita = stoi(ta);
+	      // and the type id into the correct string corresponding to the type
+	      ta = species->at(ita).name();
+	    }
+            if (isdigit(tb[0])) {
+              itb = stoi(tb);
+	      tb = species->at(itb).name();
+            }
+
+            //std::string ta = species->at(ita).name();
+            //std::string tb = species->at(itb).name();
             ldbg << "pair potential "<<typepot<<" for pair "<<ta<<" , "<<tb<<std::endl;
             std::map<std::string,double> params;
             LJExp6RFMultiParmsPair pot = { ta, tb }; // declare 'mixed' potential
@@ -319,10 +337,17 @@ namespace exaStamp
         {
           //ldbg << "read atom types : atom_type_count="<<atom_type_count<<std::endl;
           process_kw_line( next_line() );
+	  /* Attention: this line assumes that either nom or masse or charge is the last useful feature read for an atom type */
+	  /* if a feature is located after that, it is not saved. The next "while" goes directly to the next line without saving the piece of info */
           if( !atom_name.empty() && !std::isnan(atom_mass) && !std::isnan(atom_charge) )
           {
             ldbg << "Add atom type "<<atom_name<<" : mass="<<atom_mass<<" , charge="<<atom_charge<<std::endl;
             species->at(atom_type_count).set_name( atom_name );
+	    if (atom_FFname.empty()) species->at(atom_type_count).set_FFname( atom_name );
+	    else {
+              species->at(atom_type_count).set_FFname( atom_FFname );
+
+	    }
             species->at(atom_type_count).m_charge = atom_charge;
             species->at(atom_type_count).m_mass = atom_mass;
             species->at(atom_type_count).m_rigid_atoms[ 0 ] = { Vec3d{0.,0.,0.} , -1 };
@@ -330,11 +355,59 @@ namespace exaStamp
             species->at(atom_type_count).m_rigid_atom_count = 1;
             atom_type_index[atom_name] = atom_type_count;
             atom_name.clear();
+            atom_FFname.clear();
             atom_mass = std::numeric_limits<double>::quiet_NaN();
             atom_charge = std::numeric_limits<double>::quiet_NaN();
             ++ atom_type_count;
           }
         }
+
+	//section to fill in ffnameVector (such that ffnameVector[FFtypeId] = FFname)
+	// The fact that it is a vector is useful to ease the future MPI_broadcast
+	// Locally, we use an equivalent map, ffTypeNameToFFTypeId, encoding the same info
+	std::string FFname_loc;
+
+	// local map
+	std::map< std::string , int > ffTypeNameToFFTypeId;
+
+	// Loop on all (full) atom types
+	for (atom_type_count = 0; atom_type_count < nb_atom_types; atom_type_count++) {
+	  // string correspondig to FFname of the current atomic type
+          FFname_loc = species->at(atom_type_count).FFname();
+
+	  //default value for m_FFtypeId in case FFname is not provided
+	  int ffTypeId = atom_type_count;
+
+          // find or allocate an id for the FFType name string
+	  auto it = ffTypeNameToFFTypeId.find( FFname_loc );
+	  if( it == ffTypeNameToFFTypeId.end() )
+	  {
+	    ffTypeId = ffTypeNameToFFTypeId.size();
+	    ffTypeNameToFFTypeId[FFname_loc] = ffTypeId; // create the entry
+	  }
+	  else
+	  {
+	    ffTypeId = ffTypeNameToFFTypeId[FFname_loc];
+	  }
+
+	  // fill in species with the corresponding ffTypeId
+	  species->at(atom_type_count).m_FFtypeId = ffTypeId;
+
+	  ldbg << "In read_fatomes_mol.cpp full atom type id " <<  atom_type_count << " (" << species->at(atom_type_count).name() << ") corresponds to FFtype name " << species->at(atom_type_count).FFname() << " (ff id = "<< ffTypeId << ")" << std::endl;
+	}
+	
+	// initialize ffnameVector with ffTypeNameToFFTypeId.size() empty strings
+	ffnameVector->clear();
+	ffnameVector->resize( ffTypeNameToFFTypeId.size() ); 
+	for( const auto & ffpair : ffTypeNameToFFTypeId )
+	{
+	  ffnameVector->at( ffpair.second ) = ffpair.first;
+	}
+	for(const auto & ffname : *ffnameVector)
+	{
+	  assert( ! ffname.empty() );
+	}
+	
 
         // read file until section "PositionDesAtomes" and fill all variables corresponding to the sections "TypeAtomes" and "Potentiel" read before
         while( atom_pos_unit.empty() )
@@ -595,9 +668,9 @@ namespace exaStamp
           for(uint64_t cnt=0;cnt<nb_force_fields;cnt++)
           {
             auto iss = next_line();
-            std::string fftype;
-            iss >> fftype;
-            if( fftype == "bond_opls" )
+            std::string ff_pot_kind;
+            iss >> ff_pot_kind;
+            if( ff_pot_kind == "bond_opls" )
             {
               double p1, p2, p3, p4;
               std::string t1, t2;
@@ -607,10 +680,10 @@ namespace exaStamp
               double k  = onika::physics::make_quantity( p2 , read_unit(u2) ).convert(); if( std::isnan(k)  ) k=0.0;
               // p3 = onika::physics::make_quantity( p3 , read_unit(u3) ).convert(); if( std::isnan(p3) ) p3=0.0; // 2nd and 3rd parameter ignored
               // p4 = onika::physics::make_quantity( p4 , read_unit(u4) ).convert(); if( std::isnan(p4) ) p4=0.0;
-              ldbg << "Intramolecular "<<fftype<<" for "<<t1<<","<<t2<<" : r0="<<r0<<" , k="<<k << std::endl;
-              potentials_for_bonds->m_bond_desc.push_back( BondPotential{ fftype , {t1,t2} , std::make_shared<IntraMolecularBondOPLSFunctional>(k,r0) } );
+              ldbg << "Intramolecular "<<ff_pot_kind<<" for "<<t1<<","<<t2<<" : r0="<<r0<<" , k="<<k << std::endl;
+              potentials_for_bonds->m_bond_desc.push_back( BondPotential{ ff_pot_kind , {t1,t2} , std::make_shared<IntraMolecularBondOPLSFunctional>(k,r0) } );
             }
-            else if( fftype == "angle_opls" )
+            else if( ff_pot_kind == "angle_opls" )
             {
               double p1, p2, p3, p4;
               std::string t1, t2, t3;
@@ -620,10 +693,10 @@ namespace exaStamp
               double k    = onika::physics::make_quantity( p2 , read_unit(u2) ).convert(); if( std::isnan(k)    ) k=0.0;
               // p3 = onika::physics::make_quantity( p3 , read_unit(u3) ).convert(); if( std::isnan(p3) ) p3=0.0;  // 2nd and 3rd parameter ignored
               // p4 = onika::physics::make_quantity( p4 , read_unit(u4) ).convert(); if( std::isnan(p4) ) p4=0.0;
-              ldbg << "Intramolecular "<<fftype<<" for "<<t1<<","<<t2<<" : "<<t3<<" : phi0="<<phi0<<" , k="<<k << std::endl;
-              potentials_for_angles->m_potentials.push_back( BendPotential{ fftype , {t1,t2,t3} , std::make_shared<IntraMolecularBondOPLSFunctional>(k,phi0) } );
+              ldbg << "Intramolecular "<<ff_pot_kind<<" for "<<t1<<","<<t2<<" : "<<t3<<" : phi0="<<phi0<<" , k="<<k << std::endl;
+              potentials_for_angles->m_potentials.push_back( BendPotential{ ff_pot_kind , {t1,t2,t3} , std::make_shared<IntraMolecularBondOPLSFunctional>(k,phi0) } );
             }
-            else if( fftype == "torsion_opls" )
+            else if( ff_pot_kind == "torsion_opls" )
             {
               double p1, p2, p3;
               std::string t1, t2, t3, t4;
@@ -632,12 +705,12 @@ namespace exaStamp
               p1 = onika::physics::make_quantity( p1 , read_unit(u1) ).convert(); if( std::isnan(p1) ) p1=0.0;
               p2 = onika::physics::make_quantity( p2 , read_unit(u2) ).convert(); if( std::isnan(p2) ) p2=0.0;
               p3 = onika::physics::make_quantity( p3 , read_unit(u3) ).convert(); if( std::isnan(p3) ) p3=0.0;
-              ldbg << "Intramolecular "<<fftype<<" for "<<t1<<","<<t2<<","<<t3<<","<<t4<<" : p1="<<p1<<" , p2="<<p2<<" , p3="<<p3<< std::endl;
-              potentials_for_torsions->m_potentials.push_back( TorsionPotential{ fftype , {t1,t2,t3,t4} , std::make_shared<IntraMolecularCosOPLSFunctional>(p1,p2,p3) } );
+              ldbg << "Intramolecular "<<ff_pot_kind<<" for "<<t1<<","<<t2<<","<<t3<<","<<t4<<" : p1="<<p1<<" , p2="<<p2<<" , p3="<<p3<< std::endl;
+              potentials_for_torsions->m_potentials.push_back( TorsionPotential{ ff_pot_kind , {t1,t2,t3,t4} , std::make_shared<IntraMolecularCosOPLSFunctional>(p1,p2,p3) } );
             }
             else
             {
-              fatal_error() << "unknown force field type "<<fftype<<std::endl;
+              fatal_error() << "unknown force field type "<<ff_pot_kind<<std::endl;
             }
           }
           process_kw_line( next_line() );
@@ -883,6 +956,30 @@ namespace exaStamp
 //      molecules->m_bridge_molecules.clear();
 //      molecules->m_molecules.resize( nmol );
 //      MPI_Bcast( molecules->m_molecules.data() , sizeof(MoleculeSpecies)*nmol , MPI_CHARACTER , 0 , *mpi );
+
+      // Broadcast of IntraFFtypes
+      int nFFtypes = -1;
+      if( rank == 0) nFFtypes = ffnameVector->size(); // only meaningfull for rank==0
+      MPI_Bcast(&nFFtypes, 1, MPI_INT, 0, *mpi);
+      assert( nFFtypes >= 0 );
+      static constexpr size_t FF_TYPE_NAME_MAX_LEN = 32;
+      std::vector<char> ff_names( nFFtypes * FF_TYPE_NAME_MAX_LEN , '\0' );
+      if( rank == 0)
+      {
+        for(size_t i=0;i<ffnameVector->size();i++)
+        {
+          std::strncpy( & ff_names[i*FF_TYPE_NAME_MAX_LEN] , ffnameVector->at(i).c_str() , FF_TYPE_NAME_MAX_LEN );
+          ff_names[ (i+1)*FF_TYPE_NAME_MAX_LEN -1 ] = '\0';
+        }
+      }
+      MPI_Bcast(ff_names.data(), ff_names.size(), MPI_CHAR, 0, *mpi);
+      ffnameVector->clear();
+      ffnameVector->resize(nFFtypes);
+      for(int i=0;i<nFFtypes;i++)
+      {
+        ffnameVector->at(i) = & ff_names[i*FF_TYPE_NAME_MAX_LEN];
+      }
+
 
       // Broadcast domain parameters computed on MPI rank 0
       MPI_Bcast( domain.get_pointer() , sizeof(Domain), MPI_CHARACTER, 0, *mpi);

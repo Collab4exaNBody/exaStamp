@@ -21,6 +21,7 @@
 #include <exaStamp/molecule/impropers_potentials_parameters.h>
 #include <exaStamp/molecule/id_map.h>
 #include <exanb/core/particle_id_codec.h>
+#include <exaStamp/molecule/iFFname.h>
 
 #include <exaStamp/molecule/intramolecular_pair_weight.h>
 #include <exaStamp/potential/ljexp6rf/ljexp6rf.h>
@@ -49,6 +50,7 @@ namespace exaStamp
     ADD_SLOT( TorsionsPotentialParameters  , potentials_for_torsions  , INPUT, OPTIONAL );
     ADD_SLOT( ImpropersPotentialParameters , potentials_for_impropers , INPUT, OPTIONAL );
     ADD_SLOT( LJExp6RFMultiParms           , potentials_for_pairs     , INPUT, LJExp6RFMultiParms{} );
+    ADD_SLOT( IntraFFtypes                 , ffnameVector             , INPUT, OPTIONAL);
     
     ADD_SLOT( IntramolecularPairWeighting  , mol_pair_weights  , INPUT , IntramolecularPairWeighting{} );
 
@@ -64,6 +66,8 @@ namespace exaStamp
     inline void execute ()  override final
     {
       //static constexpr MoleculeGenericFuncParam null_param = {0.0,0.0,0.0,0.0};
+      
+      std::cout << "Entering intramolecular_setup" << std::endl;
 
       const unsigned int nmol = molecules->m_molecules.size();
       ldbg << "Number of molecule species : "<<nmol<<std::endl;
@@ -170,14 +174,14 @@ namespace exaStamp
         const size_t nb = type_count[tb]; // number of atom of type B
         double Vtot = 1. ; // total volume of the simulation box
         double ecorr = 0.; // basis for the energy correction per atom 
-	      // global formula for the long range energy correction due to the couple (ta, tb) for EACH atom of type ta:
-	      // ecorr = int_rc^(+inf) r^2 * U(r) 4 pi/Vtot 1/2 Nb
-	      double vcorr = 0.; //virial correction
+        // global formula for the long range energy correction due to the couple (ta, tb) for EACH atom of type ta:
+        // ecorr = int_rc^(+inf) r^2 * U(r) 4 pi/Vtot 1/2 Nb
+        double vcorr = 0.; //virial correction
         // global formula for the long range correction to EACH term of the diagonal component of the virial tensor due to the couple (ta, tb) for EACH atom of type ta:
         // vcorr = - int_rc^(+inf) r^3 * dU/dr 4 pi/Vtot 1/6 Nb
 
         // total volume calculation
-	      if( ! domain->xform_is_identity() )
+        if( ! domain->xform_is_identity() )
         {
           Mat3d mat = domain->xform();
           Vec3d a { mat.m11, mat.m21, mat.m31 };
@@ -188,7 +192,7 @@ namespace exaStamp
         Vtot *= bounds_volume( domain->bounds() );
 
 
-	      ldbg << "Compute correction for pair "<<potelem.m_type_a<<" , "<<potelem.m_type_b<<std::endl;
+        ldbg << "Compute correction for pair "<<potelem.m_type_a<<" , "<<potelem.m_type_b<<std::endl;
         if( all_lj )
         {
           const double rcut = pot.m_rcut;
@@ -212,11 +216,11 @@ namespace exaStamp
           // U(r) = A exp(-B*r) - C/r^6 + D (12/(B*r))^12
           // int_rc^(+inf) r^2 * U(r) = A/B  exp(-B*rc) (rc^2 + 2 rc/B + 2/B^2) 
           //                           -C/3 1/rc^3
-	        //                           +D (12/B)^12 1/9 1/rc^9
-	        ecorr = A/B * exp(-B*rc)* (pow(rc, 2) + 2.* rc/B + 2./pow(B, 2)) -C/3. *pow(rc, -3) + D*pow(12./B, 12) *1./9. *pow(rc, -9);
+          //                           +D (12/B)^12 1/9 1/rc^9
+          ecorr = A/B * exp(-B*rc)* (pow(rc, 2) + 2.* rc/B + 2./pow(B, 2)) -C/3. *pow(rc, -3) + D*pow(12./B, 12) *1./9. *pow(rc, -9);
           // - int_rc^(+inf) r^3 * dU/dr = - (A exp(-B*rc) * (rc^3 + 3 rc^2/B + 6 rc/B^2 + 6/B^3)
           //                                  + 2 C / rc^3
-	        //                                  - 4/3 D (12/B)^12 1/rc^9)
+	  //                                  - 4/3 D (12/B)^12 1/rc^9)
           vcorr = - (A* exp(-B*rc) * (pow(rc, 3) + 3.*pow(rc, 2)/B + 6.*rc/pow(B, 2) + 6./pow(B,3))
 		     + 2.*C / pow(rc, 3)
 		     - 4./3. *D *pow(12./B, 12) * pow(rc,-9));
@@ -229,20 +233,20 @@ namespace exaStamp
         }
 
         //multiplication of the energy and virial corrections by factors common to the different potentials
-	      ecorr *= 4. * M_PI / Vtot * 1./2. ;
-	      vcorr *= 4. * M_PI / Vtot * 1./6. ;
-
-	      if (*long_range_correction) {
-	        // addition of the corrections due to the couple [ta, tb] to the corrections of atoms of type ta
-	        molecule_compute_parameters->m_energy_correction[ta] += ecorr *nb;
-	        molecule_compute_parameters->m_virial_correction[ta] += Mat3d{ vcorr*nb, 0.0, 0.0, 0.0, vcorr*nb, 0.0, 0.0, 0.0, vcorr*nb };
-	      } else {
-		      molecule_compute_parameters->m_energy_correction[ta] += 0.;
-		      molecule_compute_parameters->m_virial_correction[ta] += Mat3d{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
-	      }
-
-	      //In the case where ta is different from tb, addition of the corrections to atoms of type tb
-	      // the couple (ta, tb) is encountered only once
+        ecorr *= 4. * M_PI / Vtot * 1./2. ;
+        vcorr *= 4. * M_PI / Vtot * 1./6. ;
+  
+        if (*long_range_correction) {
+          // addition of the corrections due to the couple [ta, tb] to the corrections of atoms of type ta
+          molecule_compute_parameters->m_energy_correction[ta] += ecorr *nb;
+          molecule_compute_parameters->m_virial_correction[ta] += Mat3d{ vcorr*nb, 0.0, 0.0, 0.0, vcorr*nb, 0.0, 0.0, 0.0, vcorr*nb };
+        } else {
+          molecule_compute_parameters->m_energy_correction[ta] += 0.;
+          molecule_compute_parameters->m_virial_correction[ta] += Mat3d{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
+        }
+  
+        //In the case where ta is different from tb, addition of the corrections to atoms of type tb
+        // the couple (ta, tb) is encountered only once
         if (ta != tb) {
           if( *long_range_correction )
           {
@@ -268,12 +272,30 @@ namespace exaStamp
       std::map< MoleculeGenericFuncParam , int > intramol_param_id_map ; // functional parameters to its index
 
       unsigned int parameter_id = 0;
+
+      // bond (angle, torsion and improper).species contains FFname, it is converted to FFtypeId by ffnameVector (constructed such that ffnameVector[FFtypeId] = FFname).
+      // To access the info easily, we construct locally the reverse map, ffnameToFFtypeId
+      std::map< std::string , int64_t > ffnameToFFtypeId;
+      if (ffnameVector.has_value()) {
+        for (int iFF = 0; iFF < ffnameVector->size(); iFF++) {
+          ffnameToFFtypeId[ ffnameVector->at(iFF) ] = iFF;
+        }
+      }
+
+
       
       if( potentials_for_bonds.has_value() )
       for(const auto& bond : potentials_for_bonds->m_bond_desc)
       {
-        int a = str2type( bond.species[0] );
-        int b = str2type( bond.species[1] );
+        int a=0, b=0;
+        std::cout << "In intramolecular_setup, before call to ffnameToFFtypeId read bond "<<bond.species[0]<<","<<bond.species[1] << std::endl;
+        // bond.species contains FFname, it is converted to FFtypeId by ffnameToFFtypeId.
+        assert( ffnameToFFtypeId.find(bond.species[0]) != ffnameToFFtypeId.end() );
+        assert( ffnameToFFtypeId.find(bond.species[1]) != ffnameToFFtypeId.end() );
+        a = ffnameToFFtypeId[ bond.species[0] ];
+        b = ffnameToFFtypeId[ bond.species[1] ];
+
+        //std::cout << "read bond " << bond.species[0] << "("<< a << ")" << "," << bond.species[1] << "("<< b << ")" <<std::endl;
         const auto types = bond_key(a,b);
         ldbg << "read bond "<<bond.species[0]<<","<<bond.species[1]<<" -> "<<(const void*)types<<std::endl;
         auto param = bond.potential->generic_parameters();
@@ -291,9 +313,16 @@ namespace exaStamp
       if( potentials_for_angles.has_value() )
       for(const auto& angle : potentials_for_angles->m_potentials)
       {
-        int a = str2type( angle.species[0] );
-        int b = str2type( angle.species[1] );
-        int c = str2type( angle.species[2] );
+        int a=0, b=0, c=0;
+
+        // angle.species contains FFname, it is converted to FFtypeId by ffnameToFFtypeId.
+        assert( ffnameToFFtypeId.find(angle.species[0]) != ffnameToFFtypeId.end() );
+        assert( ffnameToFFtypeId.find(angle.species[1]) != ffnameToFFtypeId.end() );
+        assert( ffnameToFFtypeId.find(angle.species[2]) != ffnameToFFtypeId.end() );
+        a = ffnameToFFtypeId[ angle.species[0] ];
+        b = ffnameToFFtypeId[ angle.species[1] ];
+        c = ffnameToFFtypeId[ angle.species[2] ];
+
         const auto types = angle_key(a,b,c);
         ldbg << "read angle "<<angle.species[0]<<","<<angle.species[1]<<","<<angle.species[2]<<" -> "<<(const void*)types<<std::endl;
         auto param = angle.m_potential_function->generic_parameters();
@@ -311,10 +340,18 @@ namespace exaStamp
       if( potentials_for_torsions.has_value() )
       for(const auto& torsion : potentials_for_torsions->m_potentials)
       {
-        int a = str2type( torsion.species[0] );
-        int b = str2type( torsion.species[1] );
-        int c = str2type( torsion.species[2] );
-        int d = str2type( torsion.species[3] );
+        int a=0, b=0, c=0, d=0;
+
+        // torsion.species contains FFname, it is converted to FFtypeId by ffnameToFFtypeId.
+        assert( ffnameToFFtypeId.find(torsion.species[0]) != ffnameToFFtypeId.end() );
+        assert( ffnameToFFtypeId.find(torsion.species[1]) != ffnameToFFtypeId.end() );
+        assert( ffnameToFFtypeId.find(torsion.species[2]) != ffnameToFFtypeId.end() );
+        assert( ffnameToFFtypeId.find(torsion.species[3]) != ffnameToFFtypeId.end() );
+        a = ffnameToFFtypeId[ torsion.species[0] ];
+        b = ffnameToFFtypeId[ torsion.species[1] ];
+        c = ffnameToFFtypeId[ torsion.species[2] ];
+        d = ffnameToFFtypeId[ torsion.species[3] ];
+
         const auto types = torsion_key(a,b,c,d);
         ldbg << "read torsion "<<torsion.species[0]<<","<<torsion.species[1]<<","<<torsion.species[2]<<","<<torsion.species[3]<<" -> "<<(const void*)types<<std::endl;
         auto param = torsion.m_potential_function->generic_parameters();
@@ -332,10 +369,18 @@ namespace exaStamp
       if( potentials_for_impropers.has_value() )
       for(const auto& improper : potentials_for_impropers->m_potentials)
       {
-        int a = str2type( improper.species[0] );
-        int b = str2type( improper.species[1] );
-        int c = str2type( improper.species[2] );
-        int d = str2type( improper.species[3] );
+        int a=0, b=0, c=0, d=0;
+
+        // torsion.species contains FFname, it is converted to FFtypeId by ffnameToFFtypeId.
+        assert( ffnameToFFtypeId.find(improper.species[0]) != ffnameToFFtypeId.end() );
+        assert( ffnameToFFtypeId.find(improper.species[1]) != ffnameToFFtypeId.end() );
+        assert( ffnameToFFtypeId.find(improper.species[2]) != ffnameToFFtypeId.end() );
+        assert( ffnameToFFtypeId.find(improper.species[3]) != ffnameToFFtypeId.end() );
+        a = ffnameToFFtypeId[ improper.species[0] ];
+        b = ffnameToFFtypeId[ improper.species[1] ];
+        c = ffnameToFFtypeId[ improper.species[2] ];
+        d = ffnameToFFtypeId[ improper.species[3] ];
+
         const auto types = improper_key(a,b,c,d);
         ldbg << "read improper "<<improper.species[0]<<","<<improper.species[1]<<","<<improper.species[2]<<","<<improper.species[3]<<" -> "<<(const void*)types<<std::endl;
         auto param = improper.m_potential_function->generic_parameters();

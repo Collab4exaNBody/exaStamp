@@ -53,8 +53,14 @@ namespace exaStamp
           auto& b = (*chemical_bonds)[i];
           b[0] = atom_from_idmap( b[0] , *id_map , *id_map_ghosts );
           b[1] = atom_from_idmap( b[1] , *id_map , *id_map_ghosts );
-          decode_cell_particle( b[0], c,p, ta );
-          decode_cell_particle( b[1], c,p, tb );
+          // to get the id of the particles types ta and tb
+          decode_cell_particle( /*IN*/ b[0], /*OUT*/ c,p, ta );
+          decode_cell_particle( /*IN*/ b[1], /*OUT*/ c,p, tb );
+	  //ldbg << "In mol_optimize_connectivity.cpp bond full atome types id ta = " << ta << " tb = " << tb << std::endl;
+          // to convert the ids in particles FFtypes, same name ta and tb
+	  ta = species->at(ta).m_FFtypeId;
+	  tb = species->at(tb).m_FFtypeId;
+	  //ldb << "In mol_optimize_connectivity.cpp bond FF types id ta = " << ta << " tb = " << tb << std::endl;
           const auto it = molecule_compute_parameters->m_intramol_param_map.find( bond_key(ta,tb) );
           intramolecular_parameters->m_bond_param_idx[i] = ( it != molecule_compute_parameters->m_intramol_param_map.end() ) ? it->second : -1;
         }
@@ -66,9 +72,14 @@ namespace exaStamp
           b[0] = atom_from_idmap( b[0] , *id_map , *id_map_ghosts );
           b[1] = atom_from_idmap( b[1] , *id_map , *id_map_ghosts );
           b[2] = atom_from_idmap( b[2] , *id_map , *id_map_ghosts );
+	  // to get the id of the particles types ta, tb, and tc
           decode_cell_particle( b[0], c,p, ta );
           decode_cell_particle( b[1], c,p, tb );
           decode_cell_particle( b[2], c,p, tc );
+	  // to convert the ids in particles FFtypes
+          ta = species->at(ta).m_FFtypeId;
+          tb = species->at(tb).m_FFtypeId;
+          tc = species->at(tc).m_FFtypeId;
           const auto it = molecule_compute_parameters->m_intramol_param_map.find( angle_key(ta,tb,tc) );
           intramolecular_parameters->m_angle_param_idx[i] = ( it != molecule_compute_parameters->m_intramol_param_map.end() ) ? it->second : -1;
         }
@@ -81,10 +92,16 @@ namespace exaStamp
           t[1] = atom_from_idmap( t[1] , *id_map , *id_map_ghosts );
           t[2] = atom_from_idmap( t[2] , *id_map , *id_map_ghosts );
           t[3] = atom_from_idmap( t[3] , *id_map , *id_map_ghosts );
+	  // to get the id of the particles types ta, tb, tc and td
           decode_cell_particle( t[0], c,p, ta );
           decode_cell_particle( t[1], c,p, tb );
           decode_cell_particle( t[2], c,p, tc );
           decode_cell_particle( t[3], c,p, td );
+	  // to convert the ids in particles FFtypes
+          ta = species->at(ta).m_FFtypeId;
+          tb = species->at(tb).m_FFtypeId;
+          tc = species->at(tc).m_FFtypeId;
+          td = species->at(td).m_FFtypeId;
           const auto it = molecule_compute_parameters->m_intramol_param_map.find( torsion_key(ta,tb,tc,td) );
           intramolecular_parameters->m_torsion_param_idx[i] = ( it != molecule_compute_parameters->m_intramol_param_map.end() ) ? it->second : -1;
         }
@@ -97,10 +114,16 @@ namespace exaStamp
           t[1] = atom_from_idmap( t[1] , *id_map , *id_map_ghosts );
           t[2] = atom_from_idmap( t[2] , *id_map , *id_map_ghosts );
           t[3] = atom_from_idmap( t[3] , *id_map , *id_map_ghosts );
+	  // to get the id of the particles types ta, tb, tc and td
           decode_cell_particle( t[0], c,p, ta );
           decode_cell_particle( t[1], c,p, tb );
           decode_cell_particle( t[2], c,p, tc );
           decode_cell_particle( t[3], c,p, td );
+	  // to convert the ids in particles FFtypes
+          ta = species->at(ta).m_FFtypeId;
+          tb = species->at(tb).m_FFtypeId;
+          tc = species->at(tc).m_FFtypeId;
+          td = species->at(td).m_FFtypeId;
           const auto it = molecule_compute_parameters->m_intramol_param_map.find( improper_key(ta,tb,tc,td) );
           intramolecular_parameters->m_improper_param_idx[i] = ( it != molecule_compute_parameters->m_intramol_param_map.end() ) ? it->second : -1;
         }
