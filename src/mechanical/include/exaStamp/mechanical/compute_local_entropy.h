@@ -10,25 +10,22 @@
 #include <algorithm>
 #include <omp.h>
 
-XNB_DECLARE_FIELD(double          , local_entropy , "jesaispascequejefais");
+XNB_DECLARE_FIELD(double, local_entropy, "jesaispascequejefais");
 
-namespace exaStamp
-{
+namespace exaStamp {
 
 using namespace exanb;
 
-using onika::memory::DEFAULT_ALIGNMENT;  
+using onika::memory::DEFAULT_ALIGNMENT;
 
-struct alignas(DEFAULT_ALIGNMENT) LocalEntropyOp
-{
+struct alignas(DEFAULT_ALIGNMENT) LocalEntropyOp {
   const double m_rcut;
-  const ThermodynamicState & m_thermo_state;
+  const ThermodynamicState& m_thermo_state;
 
-  double m_sigma   = 0;
+  double m_sigma = 0;
 
-
-  double m_dr      = 0;
-  size_t m_nbins   = 0;
+  double m_dr = 0;
+  size_t m_nbins = 0;
   double m_2_sigma_sq = 0;
 
   double m_volume = 0;
@@ -85,16 +82,24 @@ private:
 
 public:
   template <class CellParticlesT>
-  inline void operator()(size_t jnum, ComputePairBuffer2<false, false>& buf, double& local_entropy, CellParticlesT) const {
+  inline void operator()(size_t jnum, ComputePairBuffer2<false, false>& buf, double& local_entropy,
+                         CellParticlesT /* cells */) const {
+    
+    lout << "------" << std::endl;
+
+
+
 
     std::vector<double> gm(m_nbins, 0.0);
     std::vector<double> integral(m_nbins, 0.0);
+
+    
 
     for (size_t ii = 0; ii < jnum; ++ii) {
       double r = sqrt(buf.d2[ii]);
       size_t bin = static_cast<size_t>(std::floor(r / m_dr));
       double delta = r - m_rbin[bin];
-      gm[bin] += std::min(std::exp(-1. * (delta * delta) / m_2_sigma_sq) * m_prefactor[bin], 1.e-10);
+      gm[bin] += std::min(std::exp(-1. * (delta * delta) / m_2_sigma_sq) * m_prefactor[bin], 1.0e-10);
     }
 
     for (size_t k = 0; k < m_nbins; ++k) {
@@ -102,16 +107,19 @@ public:
     }
 
     double tmp = 0.;
-    for (size_t k = 1; k < m_nbins - 1; ++k) {
+    for (size_t k = 0; k < m_nbins; ++k) {
+      lout << k << " " << m_rbinsq[k] << " " << integral[k] << std::endl;
       tmp += integral[k];
     }
 
-    tmp += 0.5 * integral[0];
-    tmp += 0.5 * integral[m_nbins - 1];
+    // tmp += 0.5 * integral[0];
+    // tmp += 0.5 * integral[m_nbins - 1];
     tmp *= m_dr;
 
-    local_entropy = -2 * M_PI * m_density * tmp;
-  }
+    lout << -2. * M_PI * m_density * tmp << std::endl;
+    local_entropy = 0.0;
 
+    lout << "------" << std::endl;
+  }
 };
-}  
+} // namespace exaStamp

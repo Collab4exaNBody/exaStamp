@@ -14,6 +14,7 @@
 
 #include <exaStamp/mechanical/cell_particles_local_structural_metrics.h>
 #include <exaStamp/mechanical/average_local_field.h>
+#include <exaStamp/mechanical/compute_local_field.h>
 
 #include <exanb/particle_neighbors/chunk_neighbors.h>
 #include <exanb/compute/compute_cell_particle_pairs.h>
@@ -71,8 +72,9 @@ namespace exaStamp
       if( ! ghost_comm_scheme.has_value() ) return;
       if( grid->number_of_particles() == 0 ) return;
 
-      // auto pecfunc = [self=this](auto ... args) { return self->parallel_execution_context(args...); };
+      auto pecfunc = [self=this](auto ... args) { return self->parallel_execution_context(args...); };
       // auto pesfunc = [self=this](unsigned int i) { return self->parallel_execution_stream(i); };
+      auto peqfunc = [self=this]() -> onika::parallel::ParallelExecutionQueue& { return self->parallel_execution_queue(); };
       
       assert( chunk_neighbors->number_of_cells() == grid->number_of_cells() );
       bool has_chunk_neighbors = chunk_neighbors.has_value();
@@ -89,10 +91,10 @@ namespace exaStamp
       auto local_field = grid->field_accessor( field::local_field );
       auto ghost_update_fields = onika::make_flat_tuple( local_field );
 
-      // grid_update_ghosts( ldbg, *mpi, *ghost_comm_scheme, *grid, *domain, nullptr,
-      //                     *ghost_comm_buffers, pecfunc, pesfunc, ghost_update_fields,
-      //                     *mpi_tag, *gpu_buffer_pack, *async_buffer_pack, *staging_buffer,
-      //                     *serialize_pack_send, *wait_all, std::false_type{} );
+      grid_update_ghosts( ldbg, *mpi, *ghost_comm_scheme, *grid, *domain, nullptr,
+                          *ghost_comm_buffers, pecfunc, peqfunc, ghost_update_fields,
+                          *mpi_tag, *gpu_buffer_pack, *async_buffer_pack, *staging_buffer,
+                          *serialize_pack_send, *wait_all, std::false_type{} );
       
       auto local_op_fields = make_field_tuple_from_field_set( FieldSet<>{}, local_field );
         
