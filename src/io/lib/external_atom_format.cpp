@@ -1,5 +1,4 @@
 #include <filesystem>
-
 #include <exaStamp/io/external_atom_format.h>
 
 namespace exaStamp {
@@ -613,13 +612,9 @@ bool TextParser::operator()(Context& ctx, size_t index) {
 
 ParserFactory::ParserFactory() {
 
-  using namespace lmpdata;
-  using namespace lmpdump;
-  using namespace xyz;
-
-  register_format<LAMMPSDataParser>();
-  register_format<LAMMPSDumpParser>();
-  register_format<ExtendedXYZParser>();
+  register_format<lmpdata::LAMMPSDataParser>();
+  // register_format<LAMMPSDumpParser>();
+  // register_format<ExtendedXYZParser>();
 };
 
 std::string ParserFactory::infos() const {
@@ -647,8 +642,8 @@ const ParserFactory& parser_factory() {
 // Parser for LAMMPS Data format
 
 namespace lmpdata {
-using namespace re;
 
+// LAMMPS Data only contains one frame
 int64_t LAMMPSDataParser::next() {
   if (size_t cursor = m_file.tell(); cursor == 0) {
     m_file.get_line();
@@ -658,697 +653,728 @@ int64_t LAMMPSDataParser::next() {
   }
 }
 
+
 bool LAMMPSDataParser::parse(Context& ctx) {
 
-  onika::lout << "Parsing LAMMPS Data file:" << std::endl;
+  lout << "Parsing LAMMPS Data file (v2):" << std::endl;
+
+  current_line() = m_file.get_line();
 
   while (!m_file.eof()) {
+
+    current_line() = trim_spaces(current_line());
+    if (current_line().empty() || current_line().front() == '#') {
+      current_line() = m_file.get_line();
+      continue;
+    }
+
     switch (m_current_section) {
     case Section::HEADER:
       parse_header(ctx);
       break;
     case Section::MASSES:
       parse_masses();
+      break;
     case Section::ATOMS:
       parse_atoms(ctx);
       break;
-    case Section::VELOCITIES:
-    case Section::END_OF_SECTION:
+    case Section::IGNORED:
       forward_to_next_section();
-      continue; // we don't want to update the line
-      break;
-    case Section::BREAK:
       break;
     default:
-      return false;
       break;
     }
-    m_current_line = m_file.get_line(); // avoid infinit loop :)
+
+    current_line() = m_file.get_line();
   }
+
+  // print some info after parsing
+  lout << onika::format_string("- %-15s = %ld", "particle_count", ctx.n_particles) << std::endl;
+  lout << onika::format_string("- %-15s = %ld", "atom_types", ctx.n_species) << std::endl;
+  lout << onika::format_string("- %-15s = (%.5e, %.5e)", "(xlo, xhi)", ctx.origin.x, ctx.origin.x + ctx.H.m11) << std::endl;
+  lout << onika::format_string("- %-15s = (%.5e, %.5e)", "(ylo, yhi)", ctx.origin.y, ctx.origin.y + ctx.H.m22) << std::endl;
+  lout << onika::format_string("- %-15s = (%.5e, %.5e)", "(zlo, zhi)", ctx.origin.z, ctx.origin.z + ctx.H.m33) << std::endl;
+  lout << onika::format_string("- %-15s = (%.5e, %.5e, %.5e)", "(xy, xz, yz)", ctx.H.m12, ctx.H.m13, ctx.H.m23) << std::endl;
+
   return true;
-}
-
-void LAMMPSDataParser::forward_to_next_section() {
-
-  if (m_current_line.empty())
-    m_current_line = m_file.get_line();
-
-  while (!m_file.eof()) {
-
-    if (std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[0], re_sec_any)) {
-      if (strcmp(m_matches[0][0].str().c_str(), "Masses") == 0) {
-        m_current_section = Section::MASSES;
-      } else if (strcmp(m_matches[0][0].str().c_str(), "Atoms") == 0) {
-        m_current_section = Section::ATOMS;
-      }
-      return;
-    }
-    m_current_line = m_file.get_line();
-  }
-
-  m_current_section = Section::BREAK;
 }
 
 bool LAMMPSDataParser::parse_header(Context& ctx) {
 
-  std::array<Field, 7> fields = {Field::SECTION, Field::NATOM, Field::TYPAT, Field::XAXIS,
-                                 Field::YAXIS,   Field::ZAXIS, Field::TILT};
-
-  if (m_current_line.empty())
-    m_current_line = m_file.get_line();
+  std::array<bool, static_cast<size_t>(Field::END)> matched_field = {};
 
   while (!m_file.eof()) {
 
-    for (size_t i = 0; i < fields.size(); ++i) {
-      Field& field = fields[i];
+    current_line() = trim_spaces(current_line());
+    if (current_line().empty() || current_line().front() == '#') {
+      current_line() = m_file.get_line();
+      continue;
+    }
+    tokenize(current_line(), m_tokens);
 
-      if (field == Field::SKIP)
+    for (size_t i = 0; i < field_readers().size(); ++i) {
+
+      if (matched_field[i])
         continue;
 
-      if (m_pfunc.at(field)(this, m_current_line, ctx)) {
-        field = Field::SKIP;
-        break; // if we parse something, we skip all other parsers
+      // auto& [field, parser] = m_field_parsers[i];
+      auto& [field, parser] = field_readers()[i];
+
+      if (parser(m_tokens, ctx)) {
+        matched_field[i] = true;
+        break;
       }
     }
 
-    // if a new section flag has been parsed, exit
-    if (fields[0] == Field::SKIP) {
-      m_current_section = Section::END_OF_SECTION;
+    // if any section keyword is meet we break from parsing headers
+    // and go to the next section
+    if (matched_field[6]) {
+      m_current_section = get_section(m_tokens[0]);
       break;
     }
-
-    // update the current line
-    m_current_line = m_file.get_line();
+    current_line() = m_file.get_line();
   }
-
   return true;
 }
-
-bool LAMMPSDataParser::parse_header_natom(const std::string_view& line, Context& ctx) {
-
-  if (std::regex_search(line.begin(), line.end(), m_matches[0], re_natom) &&
-      std::regex_search(line.begin(), line.end(), m_matches[1], re_uint)) {
-    ctx.n_particles = static_cast<size_t>(std::stoi(m_matches[1][0].str()));
-    onika::lout << onika::format_string("- %-15s = %ld", "particle_count", ctx.n_particles) << std::endl;
-    return true;
-  }
-  return false;
-}
-
-bool LAMMPSDataParser::parse_header_atom_types(const std::string_view& line, Context& ctx) {
-
-  if (std::regex_search(line.begin(), line.end(), m_matches[0], re_typat) &&
-      std::regex_search(line.begin(), line.end(), m_matches[1], re_uint)) {
-    ctx.n_species = static_cast<size_t>(std::stoi(m_matches[1][0].str()));
-    onika::lout << onika::format_string("- %-15s = %ld", "atom_types", ctx.n_species) << std::endl;
-    return true;
-  }
-  return false;
-}
-
-bool LAMMPSDataParser::parse_header_xbox(const std::string_view& line, Context& ctx) {
-
-  if (std::regex_search(line.begin(), line.end(), m_matches[0], re_xaxis)) {
-    std::regex_search(line.begin(), line.end(), m_matches[1], re_bbox);
-    double xlo = std::stod(m_matches[1][1].str());
-    double xhi = std::stod(m_matches[1][2].str());
-    ctx.H.m11 = xhi - xlo;
-    onika::lout << onika::format_string("- %-15s = (%.5e, %.5e)", "(xlo, xhi)", xlo, xhi) << std::endl;
-    return true;
-  }
-  return false;
-}
-
-bool LAMMPSDataParser::parse_header_ybox(const std::string_view& line, Context& ctx) {
-
-  if (std::regex_search(line.begin(), line.end(), m_matches[0], re_yaxis)) {
-    std::regex_search(line.begin(), line.end(), m_matches[1], re_bbox);
-    double ylo = std::stod(m_matches[1][1].str());
-    double yhi = std::stod(m_matches[1][2].str());
-    ctx.H.m22 = yhi - ylo;
-    onika::lout << onika::format_string("- %-15s = (%.5e, %.5e)", "(ylo, yhi)", ylo, yhi) << std::endl;
-    return true;
-  }
-  return false;
-}
-
-bool LAMMPSDataParser::parse_header_zbox(const std::string_view& line, Context& ctx) {
-  if (std::regex_search(line.begin(), line.end(), m_matches[0], re_zaxis)) {
-    std::regex_search(line.begin(), line.end(), m_matches[1], re_bbox);
-    double zlo = std::stod(m_matches[1][1].str());
-    double zhi = std::stod(m_matches[1][2].str());
-    ctx.H.m33 = zhi - zlo;
-    onika::lout << onika::format_string("- %-15s = (%.5e, %.5e)", "(zlo, zhi)", zlo, zhi) << std::endl;
-    return true;
-  }
-  return false;
-}
-
-bool LAMMPSDataParser::parse_header_tilt(const std::string_view& line, Context& ctx) {
-  if (std::regex_search(line.begin(), line.end(), m_matches[0], re_tilt)) {
-    std::regex_search(line.begin(), line.end(), m_matches[1], re_btilt);
-    double xy = std::stod(m_matches[1][1].str());
-    double xz = std::stod(m_matches[1][2].str());
-    double yz = std::stod(m_matches[1][3].str());
-    ctx.H.m12 = xy;
-    ctx.H.m13 = xz;
-    ctx.H.m23 = yz;
-    onika::lout << onika::format_string("- %-15s = (%.5e, %.5e, %.5e)", "(xy, xz, yz)", xy, xz, yz) << std::endl;
-    return true;
-  }
-  return false;
-}
-
-void LAMMPSDataParser::parse_masses(void) { m_current_section = Section::END_OF_SECTION; }
 
 bool LAMMPSDataParser::parse_atoms(Context& ctx) {
 
-  if (m_current_line.empty())
-    m_current_line = m_file.get_line();
-
-  // if the line contains the section name
-  if (m_pfunc.at(Field::SECTION)(this, m_current_line, ctx) &&
-      std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[1], re_has_style)) {
-    std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[2], re_style_name);
-    std::unordered_map<std::string, AtomStyle>::const_iterator it = m_map_style.find(m_matches[2][1].str());
-    if (it != m_map_style.end()) {
-      m_atom_style = (AtomStyle)it->second;
-      m_current_line = m_file.get_line();
+  // Extract atom style from section header
+  tokenize(section_line(), m_tokens);
+  size_t index;
+  if (match_token_set_any(m_tokens, tok_atom_style, index)) {
+    if (m_tokens[index] == "atomic") {
+      m_atom_style = AtomStyle::ATOMIC;
+    } else {
+      m_atom_style = AtomStyle::NONE;
     }
+  } else {
+    m_atom_style = AtomStyle::NONE;
   }
 
-  while (!m_file.eof()) {
-    if (std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[0], re_lsart_f)) {
-      size_t count = regex_find_all(m_current_line.begin(), m_current_line.end(), re_float);
-      // if the atom style is not specified try to deduce it from the number of field
-      if (m_atom_style == AtomStyle::NONE && count >= 5)
-        m_atom_style = m_list_style[count - 5];
-      break;
+  // Skip empty/comment lines until first atom data line
+  while (current_line().empty() || current_line().front() == '#') {
+    if (m_file.eof()) {
+      lerr() << "Unexpected EOF while searching for atom data." << std::endl;
+      return false;
     }
-    m_current_line = m_file.get_line();
+    current_line() = trim_spaces(m_file.get_line());
   }
 
-  onika::lout << onika::format_string(
-      "- %-15s = %s", "atom_style",
-      std::find_if(m_map_style.begin(), m_map_style.end(),
-                   [this](const std::unordered_map<std::string, AtomStyle>::value_type& pair) {
-                     return pair.second == m_atom_style;
-                   })->first.c_str());
-  onika::lout << std::endl;
+  // Tokenize first data line and validate
+  tokenize(current_line(), m_tokens);
 
-  // // resize the particle_data based on the number of atoms
-  ctx.particle_data.reserve(ctx.n_particles);
+  if (m_atom_style == AtomStyle::NONE) {
+    // TODO: try to guess atom style from
+  } else {
+    // TODO: check that number of arguments are valid for the given style
+  }
+
+  if (m_atom_style == AtomStyle::NONE) {
+    lerr() << "Could not determine atom style." << std::endl;
+    std::abort();
+    return false;
+  }
 
   size_t particle_count = 0;
-  while (!m_file.eof()) {
+  AtomLineReader reader = atom_line_readers().at(m_atom_style);
 
-    if (m_line_readers.at(m_atom_style)(this, m_current_line, ctx)) {
-      particle_count += 1;
-      m_current_line = m_file.get_line();
+  // pre-allocate particle data
+  // ctx.particle_data.reserve(ctx.n_particles);
+  ctx.particle_data.resize(ctx.n_particles);
+
+  while (!m_file.eof() && particle_count < ctx.n_particles) {
+
+    current_line() = trim_spaces(current_line());
+    
+    if (current_line().empty() || current_line().front() == '#') {
+      current_line() = m_file.get_line();
       continue;
     }
 
-    if (m_pfunc.at(Field::SECTION)(this, m_current_line, ctx))
-      break;
+    tokenize(current_line(), m_tokens);
 
-    m_current_line = m_file.get_line();
+    if (!reader(m_tokens, ctx, particle_count)) {
+      lerr() << "Error parsing atom line at particle #" << particle_count << " : " << current_line()
+             << std::endl;
+      break;
+    }
+
+    ++particle_count;
+    current_line() = m_file.get_line();
   }
 
   if (particle_count != ctx.n_particles) {
-    lerr() << "The number of particle do no match" << std::endl;
+    lerr() << "Mismatch in number of particles. Parsed: " << particle_count
+           << " Expected: " << ctx.n_particles << std::endl;
     return false;
   }
 
+  m_current_section = Section::IGNORED;
   return true;
-};
+}
 
-bool LAMMPSDataParser::read_line_atomic(const std::string_view& line, Context& ctx) {
 
-  if (std::regex_search(line.begin(), line.end(), m_matches[0], re_line_atomic)) {
+// TODO:
+bool LAMMPSDataParser::parse_masses() {
+  m_current_section = Section::IGNORED;
+  return true;
+}
 
-    size_t id = static_cast<size_t>(std::stod(m_matches[0][1].str()));
-    size_t type = static_cast<size_t>(std::stod(m_matches[0][2].str())) - 1; // lammps index start at 1
-    double x = std::stod(m_matches[0][3].str());
-    double y = std::stod(m_matches[0][4].str());
-    double z = std::stod(m_matches[0][5].str());
+// TODO:
+bool LAMMPSDataParser::parse_velocities(Context&) {
+  m_current_section = Section::IGNORED;
+  return true;
+}
 
-    ctx.particle_data.push_back(ParticleTupleIO(x, y, z, id, type));
-    return true;
+void LAMMPSDataParser::forward_to_next_section() {
+  while (!m_file.eof()) {
+
+    current_line() = trim_spaces(current_line());
+    if (current_line().empty() || current_line().front() == '#') {
+      current_line() = m_file.get_line();
+      continue;
+    }
+
+    tokenize(current_line(), m_tokens);
+
+    if (match_token_any(m_tokens[0], tok_sections)) {
+      m_current_section = get_section(m_tokens[0]);
+      section_line() = current_line();
+      break;
+    }
+
+    current_line() = m_file.get_line();
+  }
+}
+
+bool read_atom_line_atomic(const TokenSet& tokens, Context& ctx, size_t particle_count) {
+  size_t id, type;
+  double x, y, z;
+  bool ok = tokens_to_num(tokens.at<0>(), id, tokens.at<1>(), type, tokens.at<2>(), x, tokens.at<3>(), y, tokens.at<4>(), z);
+
+  if (ok) {
+    ParticleTupleIO& p = ctx.particle_data[particle_count];
+    p[field::rx] = x;
+    p[field::ry] = y;
+    p[field::rz] = z;
+    p[field::vx] = 0.0;
+    p[field::vy] = 0.0;
+    p[field::vz] = 0.0;
+    p[field::id] = id;
+    p[field::type] = type - 1; // lammps indexing start at one
   }
 
-  return false;
-};
+  return ok;
+}
+
+bool read_field_natom(const TokenSet& tokens, Context& ctx) {
+  return match_token_any(tokens[1], tok_atoms) && (tokens.size() >= 2) &&
+         tokens_to_num(tokens[0], ctx.n_particles);
+}
+
+bool read_field_atom_types(const TokenSet& tokens, Context& ctx) {
+  if (!match_token_sq(tokens, tok_atom_types))
+    return false;
+  return tokens_to_num(tokens[0], ctx.n_species);
+}
+
+bool read_field_xaxis(const TokenSet& tokens, Context& ctx) {
+  double xlo, xhi;
+  bool ok = match_token_sq(tokens, tok_xaxis) && tokens_to_num(tokens[0], xlo, tokens[1], xhi);
+  if (ok) {
+    ctx.H.m11 = xhi - xlo;
+    ctx.origin.x = xlo;
+  }
+  return ok;
+}
+
+bool read_field_yaxis(const TokenSet& tokens, Context& ctx) {
+  double ylo, yhi;
+  bool ok = match_token_sq(tokens, tok_yaxis) && tokens_to_num(tokens[0], ylo, tokens[1], yhi);
+  if (ok) {
+    ctx.H.m22 = yhi - ylo;
+    ctx.origin.y = ylo;
+  }
+  return ok;
+}
+
+bool read_field_zaxis(const TokenSet& tokens, Context& ctx) {
+  double zlo, zhi;
+  bool ok = match_token_sq(tokens, tok_zaxis) && tokens_to_num(tokens[0], zlo, tokens[1], zhi);
+  if (ok) {
+    ctx.H.m33 = zhi - zlo;
+    ctx.origin.z = zlo;
+  }
+  return ok;
+}
+
+bool read_field_tilt(const TokenSet& tokens, Context& ctx) {
+  double xy, xz, yz;
+  bool ok = match_token_sq(tokens, tok_tilt) && (tokens.size() >= 6) &&
+            tokens_to_num(tokens[0], xy, tokens[1], xz, tokens[2], yz);
+  if (ok) {
+    ctx.H.m12 = xy;
+    ctx.H.m13 = xz;
+    ctx.H.m23 = yz;
+  }
+  return ok;
+}
+
+bool read_field_section(const TokenSet& tokens, Context& ctx) { 
+  return match_token_set_any(tokens, tok_sections);
+}
 
 } // namespace lmpdata
 
-/* ------------------------------------------------------------------------- */
-
-namespace lmpdump {
-using namespace re;
-
-int64_t LAMMPSDumpParser::next() {
-  if (size_t cursor = m_file.tell(); cursor == 0) {
-    m_file.get_line();
-    return static_cast<int64_t>(cursor);
-  } else {
-    return -1;
-  }
-}
-
-bool LAMMPSDumpParser::parse(Context& ctx) {
-
-  onika::lout << "Parsing LAMMPS Dump file:" << std::endl;
-
-  AtomFields atom_fields;
-
-  // forward to the first valid 'ITEM: NUMBER OF ATOMS'
-  while ((!m_file.eof() &&
-          !std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[0], re_item_natom))) {
-    m_current_line = m_file.get_line();
-  }
-
-  // expect to have the number of atom in the next line
-  m_current_line = m_file.get_line();
-  if (!std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[0], re_uint))
-    return false;
-  ctx.n_particles = static_cast<size_t>(std::stoi(m_matches[0][1].str()));
-  onika::lout << onika::format_string(" - %-15s = %ld", "particle_count", ctx.n_particles) << std::endl;
-
-  // 'ITEM: BOX BOUNDS' is expected just after NUMBER OF ATOMS
-  m_current_line = m_file.get_line();
-  if (!std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[0], re_item_bbox))
-    return false;
-
-  // parsing will be different for orthogonal vs triclinic
-  double xlo, xhi, ylo, yhi, zlo, zhi, xy, xz, yz;
-  if (std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[1], re_item_tilt)) {
-
-    atom_fields.triclinic = true;
-
-    for (size_t i = 0; i < 3; ++i) {
-      m_current_line = m_file.get_line();
-      if (!std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[1 + i], re_vec3d))
-        return false;
-    }
-
-    xlo = std::stod(m_matches[1][1].str());
-    xhi = std::stod(m_matches[1][2].str());
-
-    ylo = std::stod(m_matches[2][1].str());
-    yhi = std::stod(m_matches[2][2].str());
-
-    zlo = std::stod(m_matches[3][1].str());
-    zhi = std::stod(m_matches[3][2].str());
-
-    xy = std::stod(m_matches[1][3].str());
-    xz = std::stod(m_matches[2][3].str());
-    yz = std::stod(m_matches[3][3].str());
-
-  } else {
-
-    for (size_t i = 0; i < 3; ++i) {
-      m_current_line = m_file.get_line();
-      if (!std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[1 + i], re_vec2d))
-        return false;
-    }
-
-    xlo = std::stod(m_matches[1][1].str());
-    xhi = std::stod(m_matches[1][2].str());
-
-    ylo = std::stod(m_matches[2][1].str());
-    yhi = std::stod(m_matches[2][2].str());
-
-    zlo = std::stod(m_matches[3][1].str());
-    zhi = std::stod(m_matches[3][2].str());
-
-    xy = 0.0;
-    xz = 0.0;
-    yz = 0.0;
-  }
-
-  onika::lout << onika::format_string(" - %-15s = ", "triclinic") << atom_fields.triclinic << std::endl;
-
-  xlo -= std::min(xy + xz, std::min(xz, std::min(0., xy)));
-  xhi -= std::max(xy + xz, std::max(xz, std::max(0., xy)));
-  ylo -= std::min(0., yz);
-  yhi -= std::max(0., yz);
-
-  // vector a
-  ctx.H.m11 = (xhi - xlo);
-  ctx.H.m21 = 0.0;
-  ctx.H.m31 = 0.0;
-  // vector b
-  ctx.H.m12 = xy;
-  ctx.H.m22 = (yhi - ylo);
-  ctx.H.m32 = 0.0;
-  // vector c
-  ctx.H.m13 = xz;
-  ctx.H.m23 = yz;
-  ctx.H.m33 = (zhi - zlo);
+// /* ------------------------------------------------------------------------- */
+
+// namespace lmpdump {
+// using namespace re;
+
+// int64_t LAMMPSDumpParser::next() {
+//   if (size_t cursor = m_file.tell(); cursor == 0) {
+//     m_file.get_line();
+//     return static_cast<int64_t>(cursor);
+//   } else {
+//     return -1;
+//   }
+// }
+
+// bool LAMMPSDumpParser::parse(Context& ctx) {
+
+//   onika::lout << "Parsing LAMMPS Dump file:" << std::endl;
+
+//   AtomFields atom_fields;
+
+//   // forward to the first valid 'ITEM: NUMBER OF ATOMS'
+//   while ((!m_file.eof() &&
+//           !std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[0], re_item_natom))) {
+//     m_current_line = m_file.get_line();
+//   }
+
+//   // expect to have the number of atom in the next line
+//   m_current_line = m_file.get_line();
+//   if (!std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[0], re_uint))
+//     return false;
+//   ctx.n_particles = static_cast<size_t>(std::stoi(m_matches[0][1].str()));
+//   onika::lout << onika::format_string(" - %-15s = %ld", "particle_count", ctx.n_particles) << std::endl;
+
+//   // 'ITEM: BOX BOUNDS' is expected just after NUMBER OF ATOMS
+//   m_current_line = m_file.get_line();
+//   if (!std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[0], re_item_bbox))
+//     return false;
+
+//   // parsing will be different for orthogonal vs triclinic
+//   double xlo, xhi, ylo, yhi, zlo, zhi, xy, xz, yz;
+//   if (std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[1], re_item_tilt)) {
+
+//     atom_fields.triclinic = true;
+
+//     for (size_t i = 0; i < 3; ++i) {
+//       m_current_line = m_file.get_line();
+//       if (!std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[1 + i], re_vec3d))
+//         return false;
+//     }
+
+//     xlo = std::stod(m_matches[1][1].str());
+//     xhi = std::stod(m_matches[1][2].str());
+
+//     ylo = std::stod(m_matches[2][1].str());
+//     yhi = std::stod(m_matches[2][2].str());
+
+//     zlo = std::stod(m_matches[3][1].str());
+//     zhi = std::stod(m_matches[3][2].str());
+
+//     xy = std::stod(m_matches[1][3].str());
+//     xz = std::stod(m_matches[2][3].str());
+//     yz = std::stod(m_matches[3][3].str());
+
+//   } else {
+
+//     for (size_t i = 0; i < 3; ++i) {
+//       m_current_line = m_file.get_line();
+//       if (!std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[1 + i], re_vec2d))
+//         return false;
+//     }
+
+//     xlo = std::stod(m_matches[1][1].str());
+//     xhi = std::stod(m_matches[1][2].str());
+
+//     ylo = std::stod(m_matches[2][1].str());
+//     yhi = std::stod(m_matches[2][2].str());
+
+//     zlo = std::stod(m_matches[3][1].str());
+//     zhi = std::stod(m_matches[3][2].str());
+
+//     xy = 0.0;
+//     xz = 0.0;
+//     yz = 0.0;
+//   }
+
+//   onika::lout << onika::format_string(" - %-15s = ", "triclinic") << atom_fields.triclinic << std::endl;
+
+//   xlo -= std::min(xy + xz, std::min(xz, std::min(0., xy)));
+//   xhi -= std::max(xy + xz, std::max(xz, std::max(0., xy)));
+//   ylo -= std::min(0., yz);
+//   yhi -= std::max(0., yz);
+
+//   // vector a
+//   ctx.H.m11 = (xhi - xlo);
+//   ctx.H.m21 = 0.0;
+//   ctx.H.m31 = 0.0;
+//   // vector b
+//   ctx.H.m12 = xy;
+//   ctx.H.m22 = (yhi - ylo);
+//   ctx.H.m32 = 0.0;
+//   // vector c
+//   ctx.H.m13 = xz;
+//   ctx.H.m23 = yz;
+//   ctx.H.m33 = (zhi - zlo);
 
-  ctx.origin.x = xlo;
-  ctx.origin.y = ylo;
-  ctx.origin.z = zlo;
+//   ctx.origin.x = xlo;
+//   ctx.origin.y = ylo;
+//   ctx.origin.z = zlo;
 
-  {
-    // 'ITEM: ATOMS' is expected just after BOX BOUNDS
-    m_current_line = m_file.get_line();
-    if (!std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[0], re_item_atoms))
-      return false;
-
-    // parse the properties.
-    // ensure at least x(su) y(su) and z(su) are defined.
-    // if type is not defined we assume type = 0
-    // if id is not defined assume atoms are sorted
-    std::string_view buffer(m_matches[0][0].second, m_current_line.end());
-
-    // if fields processing fails return
-    if (!process_fields(atom_fields, buffer))
-      return false;
-
-    onika::lout << onika::format_string(" - %-15s = ", "scaled") << atom_fields.scaled << std::endl;
-    onika::lout << onika::format_string(" - %-15s = ", "unwrapped") << atom_fields.unwrapped << std::endl;
-
-    // build line regex
-    std::regex re_line_reader = std::regex(build_line_regex_pattern(atom_fields.size));
-
-    size_t particle_count = 0;
-    ctx.particle_data.reserve(ctx.n_particles);
-
-    while (!m_file.eof()) {
-      m_current_line = m_file.get_line();
-
-      if (!std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[0], re_line_reader))
-        break;
-
-      size_t type = 0;
-      if (atom_fields.has_type) {
-        size_t index = atom_fields.indices.find(lmpdump::Field::TYPE)->second;
-        type = static_cast<size_t>(std::stod(m_matches[0][1 + index].str())) - 1;
-      }
-
-      size_t atom_id = particle_count;
-      if (atom_fields.has_id) {
-        size_t index = atom_fields.indices.find(lmpdump::Field::ID)->second;
-        atom_id = static_cast<size_t>(std::stod(m_matches[0][1 + index].str())) - 1;
-      }
+//   {
+//     // 'ITEM: ATOMS' is expected just after BOX BOUNDS
+//     m_current_line = m_file.get_line();
+//     if (!std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[0], re_item_atoms))
+//       return false;
+
+//     // parse the properties.
+//     // ensure at least x(su) y(su) and z(su) are defined.
+//     // if type is not defined we assume type = 0
+//     // if id is not defined assume atoms are sorted
+//     std::string_view buffer(m_matches[0][0].second, m_current_line.end());
+
+//     // if fields processing fails return
+//     if (!process_fields(atom_fields, buffer))
+//       return false;
+
+//     onika::lout << onika::format_string(" - %-15s = ", "scaled") << atom_fields.scaled << std::endl;
+//     onika::lout << onika::format_string(" - %-15s = ", "unwrapped") << atom_fields.unwrapped << std::endl;
+
+//     // build line regex
+//     std::regex re_line_reader = std::regex(build_line_regex_pattern(atom_fields.size));
+
+//     size_t particle_count = 0;
+//     ctx.particle_data.reserve(ctx.n_particles);
+
+//     while (!m_file.eof()) {
+//       m_current_line = m_file.get_line();
+
+//       if (!std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[0], re_line_reader))
+//         break;
+
+//       size_t type = 0;
+//       if (atom_fields.has_type) {
+//         size_t index = atom_fields.indices.find(lmpdump::Field::TYPE)->second;
+//         type = static_cast<size_t>(std::stod(m_matches[0][1 + index].str())) - 1;
+//       }
+
+//       size_t atom_id = particle_count;
+//       if (atom_fields.has_id) {
+//         size_t index = atom_fields.indices.find(lmpdump::Field::ID)->second;
+//         atom_id = static_cast<size_t>(std::stod(m_matches[0][1 + index].str())) - 1;
+//       }
 
-      double x = std::stod(m_matches[0][1 + atom_fields.indices.find(atom_fields.xfield())->second].str());
-      double y = std::stod(m_matches[0][1 + atom_fields.indices.find(atom_fields.yfield())->second].str());
-      double z = std::stod(m_matches[0][1 + atom_fields.indices.find(atom_fields.zfield())->second].str());
+//       double x = std::stod(m_matches[0][1 + atom_fields.indices.find(atom_fields.xfield())->second].str());
+//       double y = std::stod(m_matches[0][1 + atom_fields.indices.find(atom_fields.yfield())->second].str());
+//       double z = std::stod(m_matches[0][1 + atom_fields.indices.find(atom_fields.zfield())->second].str());
 
-      xyz_fields(x, y, z, atom_fields, ctx);
+//       xyz_fields(x, y, z, atom_fields, ctx);
 
-      ctx.particle_data.push_back(ParticleTupleIO(x, y, z, atom_id, type));
+//       ctx.particle_data.push_back(ParticleTupleIO(x, y, z, atom_id, type));
 
-      ++particle_count;
-      if (particle_count == ctx.n_particles)
-        break;
-    }
+//       ++particle_count;
+//       if (particle_count == ctx.n_particles)
+//         break;
+//     }
 
-    if (particle_count != ctx.n_particles)
-      return false;
-  }
+//     if (particle_count != ctx.n_particles)
+//       return false;
+//   }
 
-  return true;
-}
+//   return true;
+// }
 
-void LAMMPSDumpParser::xyz_fields(double& x, double& y, double& z, const AtomFields& fields, const Context& ctx) {
+// void LAMMPSDumpParser::xyz_fields(double& x, double& y, double& z, const AtomFields& fields, const Context& ctx) {
 
-  if (!fields.scaled) {
-    return;
+//   if (!fields.scaled) {
+//     return;
 
-  } else if (!fields.triclinic) {
-    x = x * ctx.H.m11 + ctx.origin.x;
-    y = y * ctx.H.m22 + ctx.origin.y;
-    z = z * ctx.H.m33 + ctx.origin.z;
+//   } else if (!fields.triclinic) {
+//     x = x * ctx.H.m11 + ctx.origin.x;
+//     y = y * ctx.H.m22 + ctx.origin.y;
+//     z = z * ctx.H.m33 + ctx.origin.z;
 
-  } else {
-    // x = lx * x + xy * y + xz * z + xlo
-    // y = ly * y + xz * z + ylo
-    // z = lz * z + zlo;
-    x = x * ctx.H.m11 + ctx.H.m12 * y + ctx.H.m13 * z + ctx.origin.x;
-    y = y * ctx.H.m22 + ctx.H.m13 * z + ctx.origin.y;
-    z = z * ctx.H.m33 + ctx.origin.z;
-  }
-}
+//   } else {
+//     // x = lx * x + xy * y + xz * z + xlo
+//     // y = ly * y + xz * z + ylo
+//     // z = lz * z + zlo;
+//     x = x * ctx.H.m11 + ctx.H.m12 * y + ctx.H.m13 * z + ctx.origin.x;
+//     y = y * ctx.H.m22 + ctx.H.m13 * z + ctx.origin.y;
+//     z = z * ctx.H.m33 + ctx.origin.z;
+//   }
+// }
 
-bool LAMMPSDumpParser::process_fields(AtomFields& fields, const std::string_view& buffer) {
-  sv_regex_iterator it_begin(buffer.begin(), buffer.end(), re_item_fields);
-  sv_regex_iterator it_end = sv_regex_iterator();
+// bool LAMMPSDumpParser::process_fields(AtomFields& fields, const std::string_view& buffer) {
+//   sv_regex_iterator it_begin(buffer.begin(), buffer.end(), re_item_fields);
+//   sv_regex_iterator it_end = sv_regex_iterator();
 
-  FieldMap::const_iterator ifield;
+//   FieldMap::const_iterator ifield;
 
-  size_t index = 0;
-  for (; it_begin != it_end; ++it_begin, ++index) {
-    m_matches[1] = *it_begin;
+//   size_t index = 0;
+//   for (; it_begin != it_end; ++it_begin, ++index) {
+//     m_matches[1] = *it_begin;
 
-    ifield = field_map().find(m_matches[1][0].str());
+//     ifield = field_map().find(m_matches[1][0].str());
 
-    if (ifield != field_map().end()) {
-      fields.indices.insert({ifield->second, index});
-    }
+//     if (ifield != field_map().end()) {
+//       fields.indices.insert({ifield->second, index});
+//     }
 
-    fields.size++;
-  }
+//     fields.size++;
+//   }
 
-  // check if type and id field are defined
-  fields.has_type = (fields.indices.find(lmpdump::Field::TYPE) != fields.indices.end());
-  fields.has_type = (fields.indices.find(lmpdump::Field::ID) != fields.indices.end());
+//   // check if type and id field are defined
+//   fields.has_type = (fields.indices.find(lmpdump::Field::TYPE) != fields.indices.end());
+//   fields.has_type = (fields.indices.find(lmpdump::Field::ID) != fields.indices.end());
 
-  // check the how the position are given
-  for (size_t i = 0; i < x_priority_groups.size(); ++i) {
-    const auto& group = x_priority_groups[i];
-    if (std::all_of(group.first.begin(), group.first.end(),
-                    [&](const lmpdump::Field& f) { return fields.indices.find(f) != fields.indices.end(); })) {
-      fields.x = group.second;
-      fields.xfields = group.first;
-
-      if ((fields.x & (X::XS | X::XSU)) != X::NONE)
-        fields.scaled = true;
-
-      if ((fields.x & (X::XU | X::XSU)) != X::NONE)
-        fields.unwrapped = true;
-
-      break; // stop at the first valid group
-    }
-  }
+//   // check the how the position are given
+//   for (size_t i = 0; i < x_priority_groups.size(); ++i) {
+//     const auto& group = x_priority_groups[i];
+//     if (std::all_of(group.first.begin(), group.first.end(),
+//                     [&](const lmpdump::Field& f) { return fields.indices.find(f) != fields.indices.end(); })) {
+//       fields.x = group.second;
+//       fields.xfields = group.first;
+
+//       if ((fields.x & (X::XS | X::XSU)) != X::NONE)
+//         fields.scaled = true;
+
+//       if ((fields.x & (X::XU | X::XSU)) != X::NONE)
+//         fields.unwrapped = true;
+
+//       break; // stop at the first valid group
+//     }
+//   }
 
-  if (fields.x == X::NONE) {
-    lerr() << "No valid positions field founds in 'ITEM: ATOM': " << buffer << std::endl;
-    return false;
-  }
-
-  // everything went fine x)
-  return true;
-}
-
-} // namespace lmpdump
+//   if (fields.x == X::NONE) {
+//     lerr() << "No valid positions field founds in 'ITEM: ATOM': " << buffer << std::endl;
+//     return false;
+//   }
+
+//   // everything went fine x)
+//   return true;
+// }
+
+// } // namespace lmpdump
 
-/* ------------------------------------------------------------------------- */
-
-namespace xyz {
-using namespace re;
+// /* ------------------------------------------------------------------------- */
+
+// namespace xyz {
+// using namespace re;
 
-int64_t ExtendedXYZParser::next() {
-
-  size_t cursor = m_file.tell();
-  std::string_view line = m_file.get_line();
-
-  // first line of the file should be a valid int
-  if (line.empty() || m_file.eof())
-    return -1;
-  if (!std::regex_search(line.begin(), line.end(), m_matches[0], re_lstart_i)) {
-    return -1;
-  };
-
-  size_t n = static_cast<size_t>(std::stoi(m_matches[0][1].str()));
-
-  for (size_t i = 0; i < n; ++i) {
-    if (m_file.eof())
-      return -1;
-    m_file.get_line();
-  }
-
-  return static_cast<int64_t>(cursor);
-}
-
-bool Properties::add(const std::string& field, const std::string& type, size_t size) {
-
-  FieldMap::const_iterator ifield = field_map().find(field);
-  TypeMap::const_iterator itype = type_map().find(type);
-
-  // check if the label is known
-  if (ifield == field_map().end()) {
-    ifield = field_map().find("nil");
-  }
-
-  if (itype == type_map().end()) {
-    lerr() << onika::format_string("Invalid XYZ type: %s", type.c_str()) << std::endl;
-    return false;
-  }
-
-  // validate known field
-  if (ifield->second != Field::NIL) {
-    ValidatorMap::const_iterator ival = validators().find(ifield->second);
-
-    if ((ival->second.first & itype->second) == Type::N || size != ival->second.second) {
-      lerr() << onika::format_string("health = %s:%s:%ld", field.c_str(), type.c_str(), size) << std::endl;
-      return false;
-    }
-  }
-
-  if (indices.find(ifield->second) == indices.end()) {
-    indices.insert({ifield->second, properties.size()});
-  }
-
-  properties.push_back({.field = ifield->second, .type = itype->second, .size = size, .begin = index});
-
-  index += size;
-  return true;
-}
-
-std::string Properties::build_line_regex_pattern(void) {
-
-  size_t size = properties.size();
-  std::string pattern = "";
-  std::string tmp;
-
-  size_t count = 0;
-  for (size_t i = 0; i < size; ++i) {
-    const auto& p = properties[i];
-    tmp = type_regex().find(p.type)->second;
-    for (size_t k = 0; k < p.size; ++k) {
-      pattern += tmp;
-      if (count < index - 1)
-        pattern += str_space;
-      count++;
-    }
-  }
-  return pattern;
-}
-
-bool ExtendedXYZParser::parse(Context& ctx) {
-
-  onika::lout << "Parsing Extended XYZ file:" << std::endl;
-
-  // xyz files should start with the number of atom but might have a comment at the top
-  // so we search for the first non commented line
-
-  while ((!m_file.eof()) && !std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[0], re_lstart_i)) {
-    m_current_line = m_file.get_line();
-  }
-
-  // get the number of atoms
-  ctx.n_particles = static_cast<size_t>(std::stoi(m_matches[0][1].str()));
-  assert(ctx.n_particles > 0);
-  onika::lout << onika::format_string(" - %-15s = %ld", "particle_count", ctx.n_particles) << std::endl;
-
-  // now parse the comment line that contains the lattice and per atom properties
-  m_current_line = m_file.get_line();
-
-  // Parse Lattice="ax ay az bx by bz cx cy cz" atomsk ordering
-  if (!std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[0], re_lattice)) {
-    return false;
-  }
+// int64_t ExtendedXYZParser::next() {
+
+//   size_t cursor = m_file.tell();
+//   std::string_view line = m_file.get_line();
+
+//   // first line of the file should be a valid int
+//   if (line.empty() || m_file.eof())
+//     return -1;
+//   if (!std::regex_search(line.begin(), line.end(), m_matches[0], re_lstart_i)) {
+//     return -1;
+//   };
+
+//   size_t n = static_cast<size_t>(std::stoi(m_matches[0][1].str()));
+
+//   for (size_t i = 0; i < n; ++i) {
+//     if (m_file.eof())
+//       return -1;
+//     m_file.get_line();
+//   }
+
+//   return static_cast<int64_t>(cursor);
+// }
+
+// bool Properties::add(const std::string& field, const std::string& type, size_t size) {
+
+//   FieldMap::const_iterator ifield = field_map().find(field);
+//   TypeMap::const_iterator itype = type_map().find(type);
+
+//   // check if the label is known
+//   if (ifield == field_map().end()) {
+//     ifield = field_map().find("nil");
+//   }
+
+//   if (itype == type_map().end()) {
+//     lerr() << onika::format_string("Invalid XYZ type: %s", type.c_str()) << std::endl;
+//     return false;
+//   }
+
+//   // validate known field
+//   if (ifield->second != Field::NIL) {
+//     ValidatorMap::const_iterator ival = validators().find(ifield->second);
+
+//     if ((ival->second.first & itype->second) == Type::N || size != ival->second.second) {
+//       lerr() << onika::format_string("health = %s:%s:%ld", field.c_str(), type.c_str(), size) << std::endl;
+//       return false;
+//     }
+//   }
+
+//   if (indices.find(ifield->second) == indices.end()) {
+//     indices.insert({ifield->second, properties.size()});
+//   }
+
+//   properties.push_back({.field = ifield->second, .type = itype->second, .size = size, .begin = index});
+
+//   index += size;
+//   return true;
+// }
+
+// std::string Properties::build_line_regex_pattern(void) {
+
+//   size_t size = properties.size();
+//   std::string pattern = "";
+//   std::string tmp;
+
+//   size_t count = 0;
+//   for (size_t i = 0; i < size; ++i) {
+//     const auto& p = properties[i];
+//     tmp = type_regex().find(p.type)->second;
+//     for (size_t k = 0; k < p.size; ++k) {
+//       pattern += tmp;
+//       if (count < index - 1)
+//         pattern += str_space;
+//       count++;
+//     }
+//   }
+//   return pattern;
+// }
+
+// bool ExtendedXYZParser::parse(Context& ctx) {
+
+//   onika::lout << "Parsing Extended XYZ file:" << std::endl;
+
+//   // xyz files should start with the number of atom but might have a comment at the top
+//   // so we search for the first non commented line
+
+//   while ((!m_file.eof()) && !std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[0], re_lstart_i)) {
+//     m_current_line = m_file.get_line();
+//   }
+
+//   // get the number of atoms
+//   ctx.n_particles = static_cast<size_t>(std::stoi(m_matches[0][1].str()));
+//   assert(ctx.n_particles > 0);
+//   onika::lout << onika::format_string(" - %-15s = %ld", "particle_count", ctx.n_particles) << std::endl;
+
+//   // now parse the comment line that contains the lattice and per atom properties
+//   m_current_line = m_file.get_line();
+
+//   // Parse Lattice="ax ay az bx by bz cx cy cz" atomsk ordering
+//   if (!std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[0], re_lattice)) {
+//     return false;
+//   }
 
-  {
-    std::string_view buffer(m_matches[0][0].first, m_matches[0][0].second);
-    std::regex_search(buffer.begin(), buffer.end(), m_matches[1], re_mat3d);
-    // vector a
-    ctx.H.m11 = std::stod(m_matches[0][1].str());
-    ctx.H.m21 = std::stod(m_matches[0][2].str());
-    ctx.H.m31 = std::stod(m_matches[0][3].str());
-    // vector b
-    ctx.H.m12 = std::stod(m_matches[0][4].str());
-    ctx.H.m22 = std::stod(m_matches[0][5].str());
-    ctx.H.m32 = std::stod(m_matches[0][6].str());
-    // vector c
-    ctx.H.m13 = std::stod(m_matches[0][7].str());
-    ctx.H.m23 = std::stod(m_matches[0][8].str());
-    ctx.H.m33 = std::stod(m_matches[0][9].str());
-  }
+//   {
+//     std::string_view buffer(m_matches[0][0].first, m_matches[0][0].second);
+//     std::regex_search(buffer.begin(), buffer.end(), m_matches[1], re_mat3d);
+//     // vector a
+//     ctx.H.m11 = std::stod(m_matches[0][1].str());
+//     ctx.H.m21 = std::stod(m_matches[0][2].str());
+//     ctx.H.m31 = std::stod(m_matches[0][3].str());
+//     // vector b
+//     ctx.H.m12 = std::stod(m_matches[0][4].str());
+//     ctx.H.m22 = std::stod(m_matches[0][5].str());
+//     ctx.H.m32 = std::stod(m_matches[0][6].str());
+//     // vector c
+//     ctx.H.m13 = std::stod(m_matches[0][7].str());
+//     ctx.H.m23 = std::stod(m_matches[0][8].str());
+//     ctx.H.m33 = std::stod(m_matches[0][9].str());
+//   }
 
 
-  // Parse Properties=....
-  lout << onika::format_string(" - properties:") << std::endl;
+//   // Parse Properties=....
+//   lout << onika::format_string(" - properties:") << std::endl;
 
-  if (!std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[0], re_props)) {
-    return false;
-  }
-  
-  {
-    std::string_view buffer(m_matches[0][0].first, m_matches[0][0].second);
-    sv_regex_iterator it_begin(buffer.begin(), buffer.end(), re_prop);
-    sv_regex_iterator it_end = sv_regex_iterator();
+//   if (!std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[0], re_props)) {
+//     return false;
+//   }
+//   
+//   {
+//     std::string_view buffer(m_matches[0][0].first, m_matches[0][0].second);
+//     sv_regex_iterator it_begin(buffer.begin(), buffer.end(), re_prop);
+//     sv_regex_iterator it_end = sv_regex_iterator();
 
-    // properties container
-    Properties properties;
+//     // properties container
+//     Properties properties;
 
-    for (;it_begin != it_end; ++it_begin) {
-      m_matches[1] = *it_begin;
-      std::string_view tmp(m_matches[1][0].first, m_matches[1][0].second);
+//     for (;it_begin != it_end; ++it_begin) {
+//       m_matches[1] = *it_begin;
+//       std::string_view tmp(m_matches[1][0].first, m_matches[1][0].second);
 
-      std::regex_search(tmp.begin(), tmp.end(), m_matches[2], re_pp);
+//       std::regex_search(tmp.begin(), tmp.end(), m_matches[2], re_pp);
 
-      std::string p_label = std::string(m_matches[2][1].str());
-      std::string p_type  = std::string(m_matches[2][2].str()); 
-      size_t p_size = static_cast<size_t>(std::stoi(m_matches[2][3].str()));
+//       std::string p_label = std::string(m_matches[2][1].str());
+//       std::string p_type  = std::string(m_matches[2][2].str()); 
+//       size_t p_size = static_cast<size_t>(std::stoi(m_matches[2][3].str()));
 
 
-      // something went wrongs
-      if (!properties.add(p_label, p_type, p_size)) return false;
+//       // something went wrongs
+//       if (!properties.add(p_label, p_type, p_size)) return false;
 
-      lout << onika::format_string("  + (%s) %-8s: %ld", p_type.c_str(), p_label.c_str(), p_size) << std::endl;
-    }
+//       lout << onika::format_string("  + (%s) %-8s: %ld", p_type.c_str(), p_label.c_str(), p_size) << std::endl;
+//     }
 
-    // TODO: ensure that we have at leat species x y z
+//     // TODO: ensure that we have at leat species x y z
 
-    // build the regex pattern from the parsed properties
-    const std::regex re_line = std::regex(properties.build_line_regex_pattern());
+//     // build the regex pattern from the parsed properties
+//     const std::regex re_line = std::regex(properties.build_line_regex_pattern());
 
-    // Start atom parsing
-    ctx.particle_data.reserve(ctx.n_particles);
-    size_t particle_count = 0;
-    Property p;
+//     // Start atom parsing
+//     ctx.particle_data.reserve(ctx.n_particles);
+//     size_t particle_count = 0;
+//     Property p;
 
-    while (!m_file.eof()) {
+//     while (!m_file.eof()) {
 
-      m_current_line = m_file.get_line();
-      
-      if (!std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[0], re_line)) {
-        break;
-      }
+//       m_current_line = m_file.get_line();
+//       
+//       if (!std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[0], re_line)) {
+//         break;
+//       }
 
-      // parse atom type
-      p = properties.get( Field::SPECIES );
+//       // parse atom type
+//       p = properties.get( Field::SPECIES );
 
-      if( ctx.species.find( m_matches[0][1 + p.begin].str() ) == ctx.species.end() ) {
-        ctx.species.insert({ std::string(m_matches[0][1 + p.begin].str()), ctx.next_type_id });
-        ctx.next_type_id++;
-      }
+//       if( ctx.species.find( m_matches[0][1 + p.begin].str() ) == ctx.species.end() ) {
+//         ctx.species.insert({ std::string(m_matches[0][1 + p.begin].str()), ctx.next_type_id });
+//         ctx.next_type_id++;
+//       }
 
-      size_t type = ctx.species.at(m_matches[0][1 + p.begin].str());
+//       size_t type = ctx.species.at(m_matches[0][1 + p.begin].str());
 
-      // parse xyz positions
-      p = properties.get( xyz::Field::POSITIONS );
-      double x = std::stod(m_matches[0][1 + p.begin + 0].str());
-      double y = std::stod(m_matches[0][1 + p.begin + 1].str());
-      double z = std::stod(m_matches[0][1 + p.begin + 2].str());
+//       // parse xyz positions
+//       p = properties.get( xyz::Field::POSITIONS );
+//       double x = std::stod(m_matches[0][1 + p.begin + 0].str());
+//       double y = std::stod(m_matches[0][1 + p.begin + 1].str());
+//       double z = std::stod(m_matches[0][1 + p.begin + 2].str());
 
-      ctx.particle_data.push_back(ParticleTupleIO( x, y, z, particle_count, type ));
-      particle_count += 1;
+//       ctx.particle_data.push_back(ParticleTupleIO( x, y, z, particle_count, type ));
+//       particle_count += 1;
 
-      if (particle_count == ctx.n_particles) break;
-    }
+//       if (particle_count == ctx.n_particles) break;
+//     }
 
-    if (particle_count != ctx.n_particles) return false;
-  }
+//     if (particle_count != ctx.n_particles) return false;
+//   }
 
-  return true;
-}
+//   return true;
+// }
 
-} // namespace xyz
+// } // namespace xyz
 
 /* ------------------------------------------------------------------------- */
 
