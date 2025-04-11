@@ -20,7 +20,7 @@ zbl_multi_force:
     - { type_a: Be , type_b: Be , rcut: 4.8 ang , parameters: { r1: 4.0 ang , rc: 4.8 ang } }
   
 snaplmp_force: &snapconfig
-  bispectrumchkfile: "snap_multi_WBe.bs"
+#  bispectrumchkfile: "snap_multi_WBe.bs"
   parameters:
     nt: 2
     param: "WBe_Wood_PRB2019.snapparam"
@@ -44,7 +44,7 @@ chunk_neighbors:
     chunk_size: 1
 
 replicate_domain:
-  repeat: [ 1 , 1 , 1 ]
+  repeat: [ 2 , 2 , 2 ]
 
 input_data:
   - read_xyz_file_with_xform:
@@ -68,7 +68,7 @@ domain:
   periodic: [true,true,true]
 
 global:
-  simulation_end_iteration: 3
+  simulation_end_iteration: 10
   simulation_log_frequency: 10
   rcut_inc: 2.0 ang
   dt: 1.0e-3 ps
@@ -77,7 +77,7 @@ global:
 
 final_dump: nop
 
-simulation_epilog:
+xxx_simulation_epilog:
   - check_values:
       file: snap_multi_WBe_3it.dat
       threshold: 1.e-9
