@@ -3,7 +3,8 @@ includes:
 
 configuration:
   onika:
-    gpu_block_size: 64
+    gpu_block_size: 32
+    gpu_block_dims: [ 32 , 1 , 1 ]
   profiling:
     summary: true
   logging:
