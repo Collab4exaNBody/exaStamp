@@ -173,7 +173,7 @@ namespace exaStamp
       	{
       	  cpbuf.process_neighbor.m_cells_t0 = grid_t0->cells();
       	};
-      auto cp_force_buf = make_compute_pair_buffer( cp_init_func );
+      auto cp_force_buf = make_compute_pair_buffer<CPBufT>( cp_init_func );
 
       DeformationGradientComputeOp<GridT> deformation_gradient_compute_op { grid_t0->cells() , local_mechanical_data, compute_static_measures, compute_dynamic_measures, xform_t0, xform, lattice, rrDef, weight_function_mode};
 	
