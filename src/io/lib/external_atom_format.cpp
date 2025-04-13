@@ -614,7 +614,7 @@ ParserFactory::ParserFactory() {
 
   register_format<lmpdata::LAMMPSDataParser>();
   // register_format<LAMMPSDumpParser>();
-  // register_format<ExtendedXYZParser>();
+  register_format<xyz::ExtendedXYZParser>();
 };
 
 std::string ParserFactory::infos() const {
@@ -1173,208 +1173,91 @@ bool read_field_section(const TokenSet& tokens, Context& ctx) {
 
 // /* ------------------------------------------------------------------------- */
 
-// namespace xyz {
-// using namespace re;
+namespace xyz {
 
-// int64_t ExtendedXYZParser::next() {
+//TODO: Change this
+int64_t ExtendedXYZParser::next() {
+  if (size_t cursor = m_file.tell(); cursor == 0) {
+    m_file.get_line();
+    return static_cast<int64_t>(cursor);
+  } else {
+    return -1;
+  }
+}
 
-//   size_t cursor = m_file.tell();
-//   std::string_view line = m_file.get_line();
+bool ExtendedXYZParser::parse(Context& ctx) {
+  onika::lout << "Parsing Extended XYZ file (v2):" << std::endl;
 
-//   // first line of the file should be a valid int
-//   if (line.empty() || m_file.eof())
-//     return -1;
-//   if (!std::regex_search(line.begin(), line.end(), m_matches[0], re_lstart_i)) {
-//     return -1;
-//   };
+  // xyz files should start with the number of atom but might have a comment at the top
+  // so we search for the first non commented line
+  while (current_line().empty() || current_line().front() == '#') {
+    if (m_file.eof()) {
+      lerr() << "Unexpected EOF while searching for atom data." << std::endl;
+      return false;
+    }
+    current_line() = trim_spaces(m_file.get_line());
+  }
 
-//   size_t n = static_cast<size_t>(std::stoi(m_matches[0][1].str()));
+  // check if the first non comented line is a valid number
+  tokenize(current_line(), m_tokens);
+  if (!tokens_to_num(m_tokens[0], ctx.n_particles))
+    return false;
 
-//   for (size_t i = 0; i < n; ++i) {
-//     if (m_file.eof())
-//       return -1;
-//     m_file.get_line();
-//   }
+  // next line should be the comment line with lattice and properties definitions
+  current_line() = trim_spaces(m_file.get_line());
+  if (!read_exyz_comment_line(current_line(), m_tokens, m_ptokens))
+    return false;
 
-//   return static_cast<int64_t>(cursor);
-// }
+  if (!(parse_exyz_lattice(m_tokens, ctx) && parse_exyz_properties(m_ptokens, m_properties)))
+    return false;
 
-// bool Properties::add(const std::string& field, const std::string& type, size_t size) {
+  // Skip empty/comment lines until first atom data line
+  while (current_line().empty() || current_line().front() == '#') {
+    if (m_file.eof()) {
+      lerr() << "Unexpected EOF while searching for atom data." << std::endl;
+      return false;
+    }
+    current_line() = trim_spaces(m_file.get_line());
+  }
 
-//   FieldMap::const_iterator ifield = field_map().find(field);
-//   TypeMap::const_iterator itype = type_map().find(type);
+  size_t particle_count = 0;
+  ctx.particle_data.resize(ctx.n_particles);
 
-//   // check if the label is known
-//   if (ifield == field_map().end()) {
-//     ifield = field_map().find("nil");
-//   }
+  while (!m_file.eof() && particle_count < ctx.n_particles) {
 
-//   if (itype == type_map().end()) {
-//     lerr() << onika::format_string("Invalid XYZ type: %s", type.c_str()) << std::endl;
-//     return false;
-//   }
+    current_line() = trim_spaces(current_line());
+    
+    if (current_line().empty() || current_line().front() == '#') {
+      current_line() = m_file.get_line();
+      continue;
+    }
 
-//   // validate known field
-//   if (ifield->second != Field::NIL) {
-//     ValidatorMap::const_iterator ival = validators().find(ifield->second);
+    tokenize(current_line(), m_tokens);
 
-//     if ((ival->second.first & itype->second) == Type::N || size != ival->second.second) {
-//       lerr() << onika::format_string("health = %s:%s:%ld", field.c_str(), type.c_str(), size) << std::endl;
-//       return false;
-//     }
-//   }
+    if (!parse_line(ctx, m_properties, m_tokens, particle_count))
+      break;
 
-//   if (indices.find(ifield->second) == indices.end()) {
-//     indices.insert({ifield->second, properties.size()});
-//   }
+    ++particle_count;
+    current_line() = m_file.get_line();
+  }
 
-//   properties.push_back({.field = ifield->second, .type = itype->second, .size = size, .begin = index});
+  if (particle_count != ctx.n_particles) {
+    lerr() << "Mismatch in number of particles. Parsed: " << particle_count
+           << " Expected: " << ctx.n_particles << std::endl;
+    return false;
+  }
 
-//   index += size;
-//   return true;
-// }
+  // print some info after parsing
+  lout << onika::format_string("- %-15s = %ld", "particle_count", ctx.n_particles) << std::endl;
+  lout << onika::format_string("- %-15s = %ld", "atom_types", ctx.n_species) << std::endl;
+  lout << onika::format_string("- %-15s = (%.5e, %.5e)", "(xlo, xhi)", ctx.origin.x, ctx.origin.x + ctx.H.m11) << std::endl;
+  lout << onika::format_string("- %-15s = (%.5e, %.5e)", "(ylo, yhi)", ctx.origin.y, ctx.origin.y + ctx.H.m22) << std::endl;
+  lout << onika::format_string("- %-15s = (%.5e, %.5e)", "(zlo, zhi)", ctx.origin.z, ctx.origin.z + ctx.H.m33) << std::endl;
+  lout << onika::format_string("- %-15s = (%.5e, %.5e, %.5e)", "(xy, xz, yz)", ctx.H.m12, ctx.H.m13, ctx.H.m23) << std::endl;
+  return true;
+}
 
-// std::string Properties::build_line_regex_pattern(void) {
-
-//   size_t size = properties.size();
-//   std::string pattern = "";
-//   std::string tmp;
-
-//   size_t count = 0;
-//   for (size_t i = 0; i < size; ++i) {
-//     const auto& p = properties[i];
-//     tmp = type_regex().find(p.type)->second;
-//     for (size_t k = 0; k < p.size; ++k) {
-//       pattern += tmp;
-//       if (count < index - 1)
-//         pattern += str_space;
-//       count++;
-//     }
-//   }
-//   return pattern;
-// }
-
-// bool ExtendedXYZParser::parse(Context& ctx) {
-
-//   onika::lout << "Parsing Extended XYZ file:" << std::endl;
-
-//   // xyz files should start with the number of atom but might have a comment at the top
-//   // so we search for the first non commented line
-
-//   while ((!m_file.eof()) && !std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[0], re_lstart_i)) {
-//     m_current_line = m_file.get_line();
-//   }
-
-//   // get the number of atoms
-//   ctx.n_particles = static_cast<size_t>(std::stoi(m_matches[0][1].str()));
-//   assert(ctx.n_particles > 0);
-//   onika::lout << onika::format_string(" - %-15s = %ld", "particle_count", ctx.n_particles) << std::endl;
-
-//   // now parse the comment line that contains the lattice and per atom properties
-//   m_current_line = m_file.get_line();
-
-//   // Parse Lattice="ax ay az bx by bz cx cy cz" atomsk ordering
-//   if (!std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[0], re_lattice)) {
-//     return false;
-//   }
-
-//   {
-//     std::string_view buffer(m_matches[0][0].first, m_matches[0][0].second);
-//     std::regex_search(buffer.begin(), buffer.end(), m_matches[1], re_mat3d);
-//     // vector a
-//     ctx.H.m11 = std::stod(m_matches[0][1].str());
-//     ctx.H.m21 = std::stod(m_matches[0][2].str());
-//     ctx.H.m31 = std::stod(m_matches[0][3].str());
-//     // vector b
-//     ctx.H.m12 = std::stod(m_matches[0][4].str());
-//     ctx.H.m22 = std::stod(m_matches[0][5].str());
-//     ctx.H.m32 = std::stod(m_matches[0][6].str());
-//     // vector c
-//     ctx.H.m13 = std::stod(m_matches[0][7].str());
-//     ctx.H.m23 = std::stod(m_matches[0][8].str());
-//     ctx.H.m33 = std::stod(m_matches[0][9].str());
-//   }
-
-
-//   // Parse Properties=....
-//   lout << onika::format_string(" - properties:") << std::endl;
-
-//   if (!std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[0], re_props)) {
-//     return false;
-//   }
-//   
-//   {
-//     std::string_view buffer(m_matches[0][0].first, m_matches[0][0].second);
-//     sv_regex_iterator it_begin(buffer.begin(), buffer.end(), re_prop);
-//     sv_regex_iterator it_end = sv_regex_iterator();
-
-//     // properties container
-//     Properties properties;
-
-//     for (;it_begin != it_end; ++it_begin) {
-//       m_matches[1] = *it_begin;
-//       std::string_view tmp(m_matches[1][0].first, m_matches[1][0].second);
-
-//       std::regex_search(tmp.begin(), tmp.end(), m_matches[2], re_pp);
-
-//       std::string p_label = std::string(m_matches[2][1].str());
-//       std::string p_type  = std::string(m_matches[2][2].str()); 
-//       size_t p_size = static_cast<size_t>(std::stoi(m_matches[2][3].str()));
-
-
-//       // something went wrongs
-//       if (!properties.add(p_label, p_type, p_size)) return false;
-
-//       lout << onika::format_string("  + (%s) %-8s: %ld", p_type.c_str(), p_label.c_str(), p_size) << std::endl;
-//     }
-
-//     // TODO: ensure that we have at leat species x y z
-
-//     // build the regex pattern from the parsed properties
-//     const std::regex re_line = std::regex(properties.build_line_regex_pattern());
-
-//     // Start atom parsing
-//     ctx.particle_data.reserve(ctx.n_particles);
-//     size_t particle_count = 0;
-//     Property p;
-
-//     while (!m_file.eof()) {
-
-//       m_current_line = m_file.get_line();
-//       
-//       if (!std::regex_search(m_current_line.begin(), m_current_line.end(), m_matches[0], re_line)) {
-//         break;
-//       }
-
-//       // parse atom type
-//       p = properties.get( Field::SPECIES );
-
-//       if( ctx.species.find( m_matches[0][1 + p.begin].str() ) == ctx.species.end() ) {
-//         ctx.species.insert({ std::string(m_matches[0][1 + p.begin].str()), ctx.next_type_id });
-//         ctx.next_type_id++;
-//       }
-
-//       size_t type = ctx.species.at(m_matches[0][1 + p.begin].str());
-
-//       // parse xyz positions
-//       p = properties.get( xyz::Field::POSITIONS );
-//       double x = std::stod(m_matches[0][1 + p.begin + 0].str());
-//       double y = std::stod(m_matches[0][1 + p.begin + 1].str());
-//       double z = std::stod(m_matches[0][1 + p.begin + 2].str());
-
-//       ctx.particle_data.push_back(ParticleTupleIO( x, y, z, particle_count, type ));
-//       particle_count += 1;
-
-//       if (particle_count == ctx.n_particles) break;
-//     }
-
-//     if (particle_count != ctx.n_particles) return false;
-//   }
-
-//   return true;
-// }
-
-// } // namespace xyz
+} // namespace xyz
 
 /* ------------------------------------------------------------------------- */
 

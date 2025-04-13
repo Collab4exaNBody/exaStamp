@@ -17,6 +17,8 @@
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
 
+#include <exaStamp/io/tokenizer_utils.h>
+
 #define IOEXTRA_FILE_BUFFER_SIZE 8192
 #define IOEXTRA_NULL_CHAR '\0'
 #define IOEXTRA_LZMA_STREAM_BUF_SIZE 8192
@@ -44,339 +46,7 @@ using ParticleData = std::vector<ParticleTupleIO>;
 
 namespace ioextra {
 
-/* ------------------------------------------------------------------------- */
-// Tokenizer utilities
-
-using sv_span = std::span<const std::string_view>;
-
-template <size_t Size>
-struct TokenSetTmpl {
-
-  using sv = std::string_view;
-
-  alignas(64) std::array<sv, Size> tokens;
-  size_t len = 0;
-
-  // reset token count
-  inline void clear() noexcept { len = 0; }
-
-  inline sv* data() noexcept { return tokens.data(); }
-  inline const sv* data() const noexcept { return tokens.data(); }
-
-  inline sv& operator[](size_t i) noexcept {
-    return tokens[i];
-  }
-
-  inline const sv& operator[](size_t i) const noexcept {
-    return tokens[i];
-  }
-
-  template<size_t index>
-  inline constexpr sv& at() noexcept {
-    static_assert(index < Size);
-    return tokens[index];
-  }
-
-  template<size_t index>
-  inline constexpr const sv& at() const noexcept {
-    static_assert(index < Size);
-    return tokens[index];
-  }
-
-  constexpr size_t size() const noexcept { return len; }
-  constexpr size_t capacity() const noexcept { return Size; }
-  inline bool full() const noexcept { return len >= Size; }
-
-  inline void push_back(sv token) noexcept {
-    // TODO: Check if full ?
-    tokens[len++] = token;
-  } 
-
-  // iteration accessor
-  auto begin() const noexcept { return tokens.begin(); }
-  auto end() const noexcept { return tokens.begin() + len; }
-  auto begin() noexcept { return tokens.begin(); }
-  auto end() noexcept { return tokens.begin() + len; }
-};
-
-using TokenSet = TokenSetTmpl<32>; // rather never exceeding 32 token per line
-using TokenSet64 = TokenSetTmpl<64>; 
-
-/* ------------------------------------------------------------------------- */
-
-// Convert a strinv_view token to numeric type
-template <typename T>
-bool token_to_num(const std::string_view token, T& rval) {
-  auto [p, rc] = std::from_chars(token.begin(), token.begin() + token.size(), rval);
-  return rc == std::errc();
-}
-
-// Dark magic that expand to tokens_to_num with automatic type infering
-#define parb ()
-#define IOexpand(...) IOexpandB(IOexpandB(IOexpandB(IOexpandB(__VA_ARGS__))))
-#define IOexpandB(...) IOexpandA(IOexpandA(IOexpandA(IOexpandA(__VA_ARGS__))))
-#define IOexpandA(...) __VA_ARGS__
-
-#define call_parse(token, value) token_to_num<decltype(value)>(token, value)
-#define IOfor_each(macro, ...) __VA_OPT__(IOexpand(IOfor_each_helper(macro, __VA_ARGS__)))
-#define IOfor_each_helper(macro, token, value, ...) macro(token, value) __VA_OPT__(IOfor_each_again parb (macro, __VA_ARGS__))
-#define IOfor_each_again() && IOfor_each_helper
-#define tokens_to_num(...) IOfor_each(call_parse, __VA_ARGS__)
-
-/* ------------------------------------------------------------------------- */
-
-inline bool is_space(char c) noexcept { return std::isspace(c); }
-
-struct IsSpace {
-  constexpr bool operator()(char c) const noexcept {
-    return c == ' ' || c == '\t' || c == '\n' || c == '\r';
-  }
-};
-
-struct SpaceDelimiter {
-  constexpr bool operator()(char c) const noexcept { return c == ' ' || c == '\t'; }
-};
-
-struct CommaDelimiter {
-  constexpr bool operator()(char c) const noexcept { return c == ','; }
-};
-
-template <typename Predicate>
-inline std::string_view trim(std::string_view str, Predicate&& is_trim_char) noexcept {
-  while (!str.empty() && is_trim_char(str.front()))
-    str.remove_prefix(1);
-  while (!str.empty() && is_trim_char(str.back()))
-    str.remove_suffix(1);
-  return str;
-}
-
-template <typename Predicate>
-inline std::string_view ltrim(std::string_view str, Predicate&& is_trim_char) noexcept {
-  while (!str.empty() && is_trim_char(str.front()))
-    str.remove_prefix(1);
-  return str;
-}
-
-template <typename Predicate>
-inline std::string_view rtrim(std::string_view str, Predicate&& is_trim_char) noexcept {
-  while (!str.empty() && is_trim_char(str.back()))
-    str.remove_suffix(1);
-  return str;
-}
-
-inline std::string_view trim_spaces(std::string_view str) noexcept {
-  return trim(str, IsSpace{});
-}
-
-// Old version of split function
-// template <typename Callback, typename Predicated>
-// inline void split(std::string_view str, Predicated&& is_delimiter, Callback&& callback) noexcept {
-//   std::size_t pos = 0;
-//   while (pos < str.size()) {
-//     auto const next_pos = std::find_if(str.begin() + pos, str.end(), is_delimiter) - str.begin();
-//     callback(str.substr(pos, next_pos - pos));
-//     pos = static_cast<std::size_t>(next_pos) == str.size() ? str.size() : next_pos + 1;
-//   }
-// }
-
-// new split function
-template <typename Callback, typename Delimiter>
-inline void split(std::string_view str, Delimiter&& is_delimiter, Callback&& callback) noexcept {
-  const char* data = str.data();
-  const char* end = data + str.size();
-  while (data < end) {
-    while (data < end && is_delimiter(*data))
-      ++data;
-    const char* token_start = data;
-    while (data < end && !is_delimiter(*data))
-      ++data;
-    if (token_start != data)
-      callback(std::string_view(token_start, data - token_start));
-  }
-}
-
-//TODO: tokenize function that tokenize up to a maximum number of token
-
-template <typename Delimiter>
-inline void tokenizer_tmpl(const std::string_view str, TokenSet& tokens, Delimiter&& delimiter) {
-  tokens.clear(); // reset the token set
-  split(str, delimiter, [&tokens](std::string_view token) {
-    if (!token.empty() && token.front() != '#') {
-      tokens.push_back(token);
-    }
-  });
-}
-
-inline void tokenize(const std::string_view str, TokenSet& tokens) {
-  return tokenizer_tmpl(str, tokens, SpaceDelimiter{});
-}
-
-
-template<size_t N> using TokenNeedles = std::array<std::string_view, N>;
-
-// return true at the first needle that the given token
-inline bool _token_match_any(std::string_view t, sv_span n) {
-  const size_t nc = n.size();
-  if (nc == 0)
-    return false;
-  for (size_t i = 0; i < nc; ++i)
-    if (t == n[i])
-      return true;
-  return false;
-}
-
-// return true at the first needle that the given token with the needle index
-inline bool _token_match_any(std::string_view t, sv_span n, size_t& in) {
-  const size_t nc = n.size();
-  if (nc == 0)
-    return false;
-  for (size_t i = 0; i < nc; ++i)
-    if (t == n[i]) {
-      in = i;
-      return true;
-    }
-  return false;
-}
-
-// return true at the first needle that match a token in the set
-inline bool _token_set_match_any(sv_span t /*tokens*/, sv_span n /*needles*/) {
-  const size_t tc = t.size();
-  const size_t nc = n.size();
-
-  if (nc == 0)
-    return false;
-
-  for (size_t i = 0; i < tc; ++i)
-    for (size_t j = 0; j < nc; ++j)
-      if (t[i] == n[j])
-        return true;
-  return false;
-}
-
-// return true at the first needle that match a token in the set
-inline bool _token_set_match_any(sv_span t /*tokens*/, sv_span n /*needles*/, size_t& it, size_t in) {
-  const size_t tc = t.size();
-  const size_t nc = n.size();
-
-  if (nc == 0)
-    return false;
-
-  for (size_t i = 0; i < tc; ++i)
-    for (size_t j = 0; j < nc; ++j)
-      if (t[i] == n[j]) {
-        it = i; // token index
-        in = j; // needle index
-        return true;
-      }
-  return false;
-}
-
-inline bool _token_match_sequence(sv_span t, sv_span n) {
-  const size_t tc = t.size();
-  const size_t nc = n.size();
-
-  if (nc == 0 || tc < nc) return false;
-
-  for (size_t i = 0; i <= tc - nc; ++i) {
-      bool match = true;
-      for (size_t j = 0; j < nc; ++j) {
-          if (t[i + j] != n[j]) {
-              match = false;
-              break;
-          }
-      }
-      if (match) return true;
-  }
-  return false;
-}
-
-template <size_t N>
-inline bool match_token_any(const std::string_view token, const TokenNeedles<N>& needles) {
-  return _token_match_any(token, sv_span(needles.data(), N));
-}
-
-template <size_t N>
-inline bool match_token_any(const std::string_view token, const TokenNeedles<N>& needles, size_t& i) {
-  return _token_match_any(token, sv_span(needles.data(), N), i);
-}
-
-template <size_t N>
-inline bool match_token_set_any(const TokenSet& tokens, const TokenNeedles<N>& needles) {
-  return _token_set_match_any(sv_span(tokens.data(), tokens.size()), sv_span(needles.data(), N));
-}
-
-template <size_t N>
-inline bool match_token_set_any(const TokenSet& tokens, const TokenNeedles<N>& needles, size_t& i, size_t& j) {
-  return _token_set_match_any(sv_span(tokens.data(), tokens.size()), sv_span(needles.data(), N), i, j);
-}
-
-template <size_t N>
-inline bool match_token_set_any(const TokenSet& tokens, const TokenNeedles<N>& needles, size_t& i) {
-  size_t j = 0;
-  return _token_set_match_any(sv_span(tokens.data(), tokens.size()), sv_span(needles.data(), N), i, j);
-}
-
-template <size_t N>
-inline bool match_token_sq(const TokenSet& tokens, const TokenNeedles<N>& needles) {
-  return _token_match_sequence(sv_span(tokens.data(), tokens.size()), sv_span(needles.data(), N));
-}
-
-/* ------------------------------------------------------------------------- */
-
-// namespace re {
-
-// using match_str = std::match_results<std::string::const_iterator>;
-// using match_strv = std::match_results<std::string_view::const_iterator>;
-
-// // regex iterator for string view
-// using sv_regex_iterator = std::regex_iterator<std::string_view::const_iterator>;
-
-// template <typename T> struct RegexMatches {
-
-//   inline T& operator[](size_t i) {
-//     assert(i < m_data.size());
-//     return m_data[i];
-//   }
-
-// private:
-//   std::array<T, 10> m_data;
-// };
-
-// using RegexMatchesStringView = RegexMatches<match_strv>;
-
-// inline size_t regex_find_all(const char* begin, const char* end, const std::regex& re_pattern) {
-
-//   size_t count = 0;
-//   sv_regex_iterator it_begin = sv_regex_iterator(begin, end, re_pattern);
-//   sv_regex_iterator it_end = sv_regex_iterator();
-
-//   for (; it_begin != it_end; ++it_begin) {
-//     ++count;
-//   }
-//   return count;
-// };
-
-// static const std::string str_word = std::string("([a-zA-Z]+)");
-// static const std::string str_uint = std::string("([0-9]+)");
-// static const std::string str_int = std::string("([+-]?[0-9]+)");
-// static const std::string str_float = std::string("([+-]?\\d*[.]?\\d*[Eefd]?[+-]?\\d+)");
-// static const std::string str_any = std::string("(\\S+)");
-// static const std::string str_space = std::string("\\s+");
-// static const std::string str_lstart_f = std::string("^(?!#)\\s*") + str_float;
-// static const std::string str_lstart_i = std::string("^(?!#)\\s*") + str_int;
-// static const std::string str_vec2d = str_float + str_space + str_float;
-// static const std::string str_vec3d = str_float + str_space + str_float + str_space + str_float;
-// static const std::string str_mat3d = str_vec3d + str_space + str_vec3d + str_space + str_vec3d;
-
-// const std::regex re_uint = std::regex(str_uint);
-// const std::regex re_float = std::regex(str_float);
-// const std::regex re_lsart_f = std::regex(str_lstart_f);
-// const std::regex re_lstart_i = std::regex(str_lstart_i);
-// const std::regex re_vec2d = std::regex(str_vec2d);
-// const std::regex re_vec3d = std::regex(str_vec3d);
-// const std::regex re_mat3d = std::regex(str_mat3d);
-
-// } // namespace re
+using namespace tokens; // tokenizer utilities
 
 /* ------------------------------------------------------------------------- */
 
@@ -716,7 +386,7 @@ protected:
   inline std::string_view& current_line(void) { return line_buffer[0]; };
 
   std::string_view m_current_line;
-  TokenSet m_tokens;
+  TokenSet m_tokens{};
 
 public:
   TextParser(std::string filepath, FileMode mode, FileCompression compression)
@@ -1052,135 +722,183 @@ template<> inline const Metadata get_parser_metadata<lmpdata::LAMMPSDataParser>(
 /* ------------------------------------------------------------------------- */
 // Extended XYZ Format parser
 
-// namespace xyz {
-// using namespace re;
+namespace xyz {
 
-// static const std::string str_lattice = std::string("Lattice=.") + str_mat3d; // we accept any quote "' or none
-// static const std::string str_props = std::string("Properties=\\S+");
-// static const std::string str_prop = std::string("([a-z]+:[SR]:[0-9])");
-// static const std::string str_pp = std::string("([^:]+):([^:]+):([^:]+)");
+enum class FieldType : uint8_t {
+  N = 0,
+  R = 1 << 0,
+  S = 1 << 1,
+  I = 1 << 2
+};
 
-// static const std::regex re_lattice = std::regex(str_lattice, std::regex_constants::icase);
-// static const std::regex re_props = std::regex(str_props, std::regex_constants::icase);
-// static const std::regex re_prop = std::regex(str_prop);
-// static const std::regex re_pp = std::regex(str_pp);
+inline constexpr FieldType operator|(FieldType lhs, FieldType rhs) {
+  return static_cast<FieldType>(static_cast<uint8_t>(lhs) | static_cast<uint8_t>(rhs));
+}
 
-// enum class Type : uint8_t {
-//   N = 0,
-//   R = 1 << 0,
-//   S = 1 << 1,
-//   I = 1 << 2
-// };
+inline constexpr FieldType operator&(FieldType lhs, FieldType rhs) {
+  return static_cast<FieldType>(static_cast<uint8_t>(lhs) & static_cast<uint8_t>(rhs));
+}
 
-// inline constexpr Type operator|(Type lhs, Type rhs) {
-//   return static_cast<Type>(static_cast<uint8_t>(lhs) | static_cast<uint8_t>(rhs));
-// }
+inline constexpr FieldType operator~(FieldType f) { return static_cast<FieldType>(~static_cast<uint8_t>(f)); }
 
-// inline constexpr Type operator&(Type lhs, Type rhs) {
-//   return static_cast<Type>(static_cast<uint8_t>(lhs) & static_cast<uint8_t>(rhs));
-// }
+inline constexpr FieldType& operator|=(FieldType& lhs, FieldType rhs) {
+  lhs = lhs | rhs;
+  return lhs;
+}
 
-// inline constexpr Type operator~(Type f) { return static_cast<Type>(~static_cast<uint8_t>(f)); }
+inline constexpr FieldType& operator&=(FieldType& lhs, FieldType rhs) {
+  lhs = lhs & rhs;
+  return lhs;
+}
 
-// inline constexpr Type& operator|=(Type& lhs, Type rhs) {
-//   lhs = lhs | rhs;
-//   return lhs;
-// }
+enum class Field { SPECIES, POSITIONS, VELOCITIES, ID, TYPE, NIL };
 
-// inline constexpr Type& operator&=(Type& lhs, Type rhs) {
-//   lhs = lhs & rhs;
-//   return lhs;
-// }
+struct AtomicProperty {
+  Field field = Field::NIL;
+  FieldType type = FieldType::N;
+  size_t size = 0;
+  size_t index = 0;
+};
 
-// enum class Field {
-//   SPECIES,
-//   POSITIONS,
-//   VELOCITIES,
-//   ID,
-//   TYPE,
-//   NIL
-// };
+struct Properties {
+  size_t index = 0;
+  std::array<AtomicProperty, 4> data{};
+};
 
-// using FieldMap = std::unordered_map<std::string, Field>;
-// using TypeMap = std::unordered_map<std::string, Type>;
-// using ValidatorMap = std::unordered_map<Field, std::pair<Type, size_t>>;
+constexpr TokenNeedles<4> tok_props{"species", "pos", "velo", "id"};
+constexpr std::array<Field, 4> props_list{Field::SPECIES, Field::POSITIONS, Field::VELOCITIES, Field::ID};
 
-// inline const FieldMap& field_map() {
-//   static const FieldMap map = {
-//     {"species", Field::SPECIES},
-//     {"pos"    , Field::POSITIONS},
-//     {"id"     , Field::ID},
-//     {"vel"    , Field::VELOCITIES},
-//     {"type"   , Field::TYPE},
-//     {"nil"    , Field::NIL}
-//   };
-//   return map;
-// }
+constexpr TokenNeedles<3> tok_field_type = {"R", "S", "I"};
+constexpr std::array<FieldType, 3> type_list = {FieldType::R, FieldType::S, FieldType::I};
 
-// inline const TypeMap& type_map() {
-//   static const TypeMap map = {
-//       {"R", Type::R},
-//       {"S", Type::S},
-//       {"I", Type::I},
-//   };
-//   return map;
-// }
+template<size_t N1, size_t N2>
+bool read_exyz_comment_line(std::string_view line, TokenSetTmpl<N1>& tok_lattice, TokenSetTmpl<N2>& tok_props) {
+  constexpr std::string_view lattice_key = "Lattice=\"";
+  constexpr size_t lattice_key_len = 9; 
+  constexpr std::string_view prop_key = "Properties=";
+  constexpr size_t prop_key_len = 11;
 
-// inline const std::unordered_map<Type, std::string>& type_regex() {
-//   static const std::unordered_map<Type, std::string> map = {
-//       {Type::R, str_float},
-//       {Type::S, str_word},
-//       {Type::I, str_int},
-//   };
-//   return map;
-// }
+  const char* begin = line.data();
+  const char* end = line.data() + line.size();
+  const char* it = begin;
 
-// inline const ValidatorMap& validators() {
-//   static const ValidatorMap map = {
-//     {Field::SPECIES   , {Type::S, 1}},
-//     {Field::POSITIONS , {Type::R, 3}},
-//     {Field::ID        , {Type::I, 1}},
-//     {Field::VELOCITIES, {Type::R, 3}},
-//     {Field::TYPE      , {Type::R | Type::I, 1} },
-//   };
-//   return map;
-// }
+  if (!starts_with(line, lattice_key))
+    return false;
 
-// struct Property {
-//   Field field = Field::NIL;
-//   Type type = Type::N;
-//   size_t size = 0;
-//   size_t begin = 0;
-// };
+  const char* val_start = begin + lattice_key_len;
+  const char* val_end = val_start;
 
-// struct Properties {
-//   size_t index = 0;
-//   std::vector<Property> properties;
-//   std::unordered_map<Field, size_t> indices;
+  while (val_end < end && *val_end != '"') ++val_end;
+  if (val_end >= end) return false;
 
-//   bool add(const std::string&, const std::string&, size_t);
-//   std::string build_line_regex_pattern(void);
-//   inline Property& get(Field f) { return properties[indices.find(f)->second]; };
-// };
+  std::string_view lattice_view = std::string_view(val_start, val_end);
+  tokenize(lattice_view, tok_lattice);
 
-// class ExtendedXYZParser : public TextParser {
-// public:
-//   ExtendedXYZParser(std::string filepath, FileMode mode, FileCompression compression)
-//       : TextParser(filepath, mode, compression) {}
+  const char* prop_it = val_end;
+  while (prop_it + prop_key_len <= end) {
 
-//   int64_t next() override;
-//   bool parse(Context& ctx) override;
-// };
+    if (std::memcmp(prop_it, prop_key.data(), prop_key_len) == 0) {
+      prop_it += prop_key_len;
+      const char* prop_end = prop_it;
+      while (prop_end < end && *prop_end != ' ') ++prop_end;
+      std::string_view ppt = std::string_view(prop_it, prop_end);
+      tokenizer_tmpl(ppt, tok_props, ColumnDelimiter{});
+      break;
+    }
+    ++prop_it;
+  }
 
-// } // namespace xyz
+  if (tok_props.size() == 0 || tok_props.size() % 3 != 0) return false;
 
-// template<> inline const Metadata get_parser_metadata<xyz::ExtendedXYZParser>() {
-//   return {
-//     .name        = "Extended XYZ",
-//     .aliases     = { "xyz" },
-//     .description = "Extended XYZ"
-//   };
-// }
+  return true;
+};
+
+inline bool parse_exyz_lattice(const TokenSet& tokens, IOContext& ctx) {
+  return tokens_to_num(
+    tokens.at<0>(), ctx.H.m11,
+    tokens.at<1>(), ctx.H.m12,
+    tokens.at<2>(), ctx.H.m13,
+    tokens.at<3>(), ctx.H.m21,
+    tokens.at<4>(), ctx.H.m22,
+    tokens.at<5>(), ctx.H.m23,
+    tokens.at<6>(), ctx.H.m31,
+    tokens.at<7>(), ctx.H.m32,
+    tokens.at<8>(), ctx.H.m33
+  );
+}
+
+template <size_t N> inline bool parse_exyz_properties(const TokenSetTmpl<N>& tokens, Properties& properties) {
+  size_t begin = 0;
+  size_t size = 0;
+  for (size_t i = 0; i < tokens.size(); i += 3) {
+    size_t j = i + 1;
+    size_t k = i + 2;
+
+    tokens_to_num(tokens[k], size);
+
+    size_t index_field;
+    size_t index_type;
+
+    if (match_token_any(tokens[i], tok_props, index_field) && match_token_any(tokens[j], tok_field_type, index_type)) {
+      properties.data[index_field] = {
+          .field = props_list[index_field], .type = type_list[index_type], .size = size, .index = begin};
+    }
+    // TODO: validate type and size
+    begin += size;
+  }
+
+  return true;
+}
+
+inline bool parse_line(IOContext& ctx, const Properties& properties, const TokenSet& tokens, size_t particle_count) {
+
+  std::string_view type_as_string;
+  double x, y, z;
+  size_t type, id, index;
+    
+  type_as_string = tokens[properties.data[0].index];
+  if (!ctx.species.get_type_from_sv(type_as_string, type))
+    return false;
+
+  // position
+  index = properties.data[1].index;
+  bool ok = tokens_to_num(tokens[index], x, tokens[index+1], y, tokens[index+2], z, tokens[properties.data[3].index], id);
+  if (ok) {
+    ParticleTupleIO& p = ctx.particle_data[particle_count];
+    p[field::rx] = x;
+    p[field::ry] = y;
+    p[field::rz] = z;
+    p[field::vx] = 0.0;
+    p[field::vy] = 0.0;
+    p[field::vz] = 0.0;
+    p[field::id] = id;
+    p[field::type] = type;
+  }
+  return ok;
+}
+
+class ExtendedXYZParser : public TextParser {
+public:
+  ExtendedXYZParser(std::string filepath, FileMode mode, FileCompression compression)
+      : TextParser(filepath, mode, compression) {}
+
+  int64_t next() override;
+  bool parse(IOContext& ctx) override;
+
+private:
+  TokenSet64 m_ptokens;
+  Properties m_properties;
+};
+
+}
+
+template<> inline const Metadata get_parser_metadata<xyz::ExtendedXYZParser>() {
+  return {
+    .name        = "Extended XYZ",
+    .aliases     = { "xyz" },
+    .description = "Extended XYZ"
+  };
+}
 
 /* ------------------------------------------------------------------------- */
 
