@@ -87,9 +87,9 @@ struct alignas(DEFAULT_ALIGNMENT) LocalEntropyOp {
     for (size_t k = 0; k < nbins; ++k) {
       double gk = std::exp(-rbinsq[k] * inv_sigmasq2);
       if (gk < 1.0e-5) {
-        deltabin = k;
         break;
       }
+      deltabin++;
     }
   }
 
