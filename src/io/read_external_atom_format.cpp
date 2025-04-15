@@ -30,6 +30,12 @@ namespace exaStamp {
 using namespace exanb;
 using namespace ioextra;
 
+struct PBC {
+  bool x;
+  bool y;
+  bool z;
+};
+
 template<
   class GridT,
   class = AssertGridHasFields< GridT, field::_rx, field::_ry, field::_rz, field::_vx, field::_vy, field::_vz, field::_id, field::_type >
@@ -43,11 +49,14 @@ class ReadExternalAtomFormatNode : public OperatorNode
   // optional. if no species given, type ids are allocated automatically
   ADD_SLOT( ParticleSpecies , species      , INPUT ); 
 
-  ADD_SLOT( ReadBoundsSelectionMode, bounds_mode     , INPUT , ReadBoundsSelectionMode::FILE_BOUNDS );
+  ADD_SLOT( ReadBoundsSelectionMode, bounds_mode     , INPUT , ReadBoundsSelectionMode::COMPUTED_BOUNDS );
 
   ADD_SLOT(std::string, file        , INPUT, REQUIRED );
   ADD_SLOT(std::string, format      , INPUT, "");
   ADD_SLOT(std::string, compression , INPUT, "");
+  
+  ADD_SLOT(PBC, pbc , INPUT, PBC{true, true, true});
+
   // ADD_SLOT(std::string, units       , INPUT, "metal" );
   // ADD_SLOT(std::string, style       , INPUT, "atomic");
 
@@ -71,6 +80,11 @@ public:
     GridT& grid = *(this->grid);
     ParticleSpecies species = *(this->species);
     ParticleData particle_data;
+    PBC& pbc = *(this->pbc);
+
+    domain.set_expandable(false);
+    domain.set_periodic_boundary(pbc.x, pbc.y, pbc.z);
+    domain.set_xform(make_identity_matrix());
 
     // if the number of particule > 0, then the system has already be defined
     if (!grid.number_of_particles() == 0) {
@@ -119,7 +133,6 @@ public:
 
       // ----------------------------------------- 
       // Now do exastamp stuff
-      
       ctx.init_domain(domain, *bounds_mode);
 
       lout << std::endl;
@@ -143,59 +156,40 @@ public:
 
     if (rank == 0) {
 
-      spin_mutex_array cell_locks;
-      cell_locks.resize(grid.number_of_cells());
       auto cells = grid.cells();
 
-      #pragma omp parallel for
       for (size_t i = 0; i < particle_data.size(); ++i) {
-
         ParticleTupleIO& p = particle_data[i];
-
         Vec3d r = {p[field::rx], p[field::ry], p[field::rz]};
-        r = ctx.invM * r;
 
-        if (r.x < 0.)
-          r.x += 1.;
-        if (r.y < 0.)
-          r.y += 1.;
-        if (r.z < 0.)
-          r.z += 1.;
-
-        if (r.x >= 1.)
-          r.x -= 1.;
-        if (r.y >= 1.)
-          r.y -= 1.;
-        if (r.z >= 1.)
-          r.z -= 1.;
-
-        r.x *= ctx.boxlen.x;
-        r.y *= ctx.boxlen.y;
-        r.z *= ctx.boxlen.z;
-
+        // TODO:: Move this directly into the parse ?
+        // transform position to domain coordinates.
         r = ctx.invXform * r;
-
-        if (ctx.uniform_scale)
-          r = r * ctx.domainXform.m11;
+        wrap_to_domain(r, ctx);
 
         p[field::rx] = r.x;
         p[field::ry] = r.y;
         p[field::rz] = r.z;
 
+        // assigne the particle to a cell
         IJK loc = domain_periodic_location(domain, r);
         size_t cell_index = grid_ijk_to_index(domain.grid_dimension(), loc);
-
-        cell_locks[cell_index].lock();
         cells[cell_index].push_back(p);
-        cell_locks[cell_index].unlock();
       }
     }
 
     grid.rebuild_particle_offsets();
-#ifndef NDEBUG
-    bool particles_inside_cell = check_particles_inside_cell(grid);
-    assert(particles_inside_cell);
-#endif
+
+    // Sanity check on the grid
+    if (!check_domain(domain)) {
+      lout << "domain = " << domain << std::endl;
+      fatal_error() << "Invalid domain configuration" << std::endl;
+    }
+
+    if (!check_particles_inside_cell(grid)) {
+      fatal_error() << "Particles outside cells" << std::endl;
+    }
+
     lout << "===========================================" << std::endl << std::endl;
   }
 };

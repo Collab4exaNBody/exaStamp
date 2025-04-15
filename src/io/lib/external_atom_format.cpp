@@ -1211,6 +1211,9 @@ bool ExtendedXYZParser::parse(Context& ctx) {
   if (!(parse_exyz_lattice(m_tokens, ctx) && parse_exyz_properties(m_ptokens, m_properties)))
     return false;
 
+  // got to atoms lines
+  current_line() = m_file.get_line();
+
   // Skip empty/comment lines until first atom data line
   while (current_line().empty() || current_line().front() == '#') {
     if (m_file.eof()) {
@@ -1234,8 +1237,10 @@ bool ExtendedXYZParser::parse(Context& ctx) {
 
     tokenize(current_line(), m_tokens);
 
-    if (!parse_line(ctx, m_properties, m_tokens, particle_count))
+    if (!parse_line(ctx, m_properties, m_tokens, particle_count)) {
+      lerr() << "Error parsing atom line at particle #" << particle_count << " : " << current_line() << std::endl;
       break;
+    }
 
     ++particle_count;
     current_line() = m_file.get_line();

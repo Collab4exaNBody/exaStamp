@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
+#include <utility>
 
 #include <onika/math/basic_types_operators.h>
 #include <onika/math/basic_types_stream.h>
@@ -33,7 +34,6 @@
                                       std::to_string(__LINE__).c_str())
 
 #define lwarn() onika::lout << "[WARNING] "
-
 
 namespace exaStamp {
 
@@ -70,25 +70,29 @@ struct Context {
 
   Mat3d H = make_identity_matrix(); // lattice vector
   Vec3d origin{0., 0., 0.};         // box origin
-  Mat3d M = Mat3d{};                // transpose(H)
-  Mat3d invM = Mat3d{};             // Ht^-1
+
+  Mat3d Hinv{};
+  Mat3d D{};
+  Mat3d D2{};
+  Mat3d Dinv{};
+  
   Mat3d Xform = Mat3d{};            // initial xform (likely == I)
   Mat3d invXform = Mat3d{};         // intial xform^-1
-  Mat3d domainXform = Mat3d{};      // new xform
   Vec3d boxlen{};                   // box len in x, y, z
-  bool uniform_scale;               // ?
+
+  bool uniform_scale;               //
 
   // for timing purpose
   size_t elapsed_time_ms = 0;
   size_t elapsed_time_ys = 0;
   size_t elapsed_time_ns = 0;
 
-  // TODO: Move this out
   inline void init_domain(Domain& domain, ReadBoundsSelectionMode bounds_mode) {
 
-    Vec3d a{H.m11, H.m12, H.m13};
-    Vec3d b{H.m21, H.m22, H.m23};
-    Vec3d c{H.m31, H.m32, H.m33};
+    // assume H follow column vector convention
+    Vec3d a{H.m11, H.m21, H.m31};
+    Vec3d b{H.m12, H.m22, H.m32};
+    Vec3d c{H.m13, H.m23, H.m33};
 
     boxlen.x = norm(a);
     boxlen.y = norm(b);
@@ -98,32 +102,50 @@ struct Context {
     lout << "b = " << b << onika::format_string(" , norm = %10.5f ", boxlen.y) << std::endl;
     lout << "c = " << c << onika::format_string(" , norm = %10.5f ", boxlen.z) << std::endl;
 
-    if (!domain.xform_is_identity()) {
-      lout << std::endl << "Init initial xform to identity" << std::endl;
-      domain.set_xform(make_identity_matrix());
-    }
+    D = diag_matrix(boxlen);
+    Dinv = inverse(D);
+    Mat3d F1 = H * Dinv;
 
-    AABB domain_bounds = {{0., 0., 0.}, boxlen};
+    double cellsize = domain.cell_size();
+
+    // check for grid dims. If grid dims is not provided by the use, 
+    // it will be deducde from box lengths and cellsize.
+    IJK grid_dim = domain.grid_dimension();
+    size_t nx = static_cast<ssize_t>(boxlen.x / cellsize);
+    size_t ny = static_cast<ssize_t>(boxlen.y / cellsize);
+    size_t nz = static_cast<ssize_t>(boxlen.z / cellsize);
+    nx = (grid_dim.i > 0 && cmp::ne(grid_dim.i, nx)) ? grid_dim.i : nx;
+    ny = (grid_dim.j > 0 && cmp::ne(grid_dim.j, ny)) ? grid_dim.j : ny;
+    nz = (grid_dim.k > 0 && cmp::ne(grid_dim.k, nz)) ? grid_dim.k : nz;
+
+    D2 = diag_matrix(Vec3d{nx * cellsize, ny * cellsize, nz * cellsize});
+    Mat3d D2inv = inverse(D2);
+    Mat3d F2 = D * D2inv;
+
+    Xform = F1 * F2;
+    invXform = inverse(Xform);
+
+    AABB domain_bounds = {{0., 0., 0.}, {D2.m11, D2.m22, D2.m33}};
     compute_domain_bounds(domain, bounds_mode, 0.0, domain_bounds, domain_bounds, true);
-
-    M = transpose(H);
-    invM = inverse(M);
-
-    invXform = (domain.xform_is_identity()) ? make_identity_matrix() : domain.inv_xform();
-    domainXform = M * inverse(diag_matrix(boxlen)) * domain.xform();
-    uniform_scale = is_uniform_scale(domainXform);
+    uniform_scale = is_uniform_scale(Xform);
 
     if (uniform_scale) {
       domain.set_xform(make_identity_matrix());
-      domain.set_cell_size(domain.cell_size() * domainXform.m11);
-      domain.set_bounds({domain.origin() * domainXform.m11, domain.extent() * domainXform.m11});
+      domain.set_cell_size(domain.cell_size() * Xform.m11);
+      domain.set_bounds({domain.origin() * Xform.m11, domain.extent() * Xform.m11});
     } else {
-      domain.set_xform(domainXform);
+      domain.set_xform(Xform);
     }
   }
 };
 
 using IOContext = Context;
+
+inline void wrap_to_domain(Vec3d& r, const IOContext& ctx) {
+    r.x = wrap(r.x, ctx.D2.m11);
+    r.y = wrap(r.y, ctx.D2.m22);
+    r.z = wrap(r.z, ctx.D2.m33);
+}
 
 /* ------------------------------------------------------------------------- */
 
@@ -763,24 +785,34 @@ struct AtomicProperty {
 struct Properties {
   size_t index = 0;
   std::array<AtomicProperty, 4> data{};
+
+  constexpr inline const AtomicProperty& species() const { return *(data.data() + 0); }
+  constexpr inline const AtomicProperty& positions() const { return *(data.data() + 1); }
+  constexpr inline const AtomicProperty& velo() const { return *(data.data() + 2); }
+  constexpr inline const AtomicProperty& id() const { return *(data.data() + 3); }
+
+  constexpr inline const bool has_species() const { return species().field == Field::SPECIES; }
+  constexpr inline const bool has_positions() const { return positions().field == Field::POSITIONS; }
+  constexpr inline const bool has_velo() const { return velo().field == Field::VELOCITIES; }
+  constexpr inline const bool has_id() const { return positions().field == Field::ID; }
 };
 
+// order matter - same order as in Properties
 constexpr TokenNeedles<4> tok_props{"species", "pos", "velo", "id"};
 constexpr std::array<Field, 4> props_list{Field::SPECIES, Field::POSITIONS, Field::VELOCITIES, Field::ID};
 
 constexpr TokenNeedles<3> tok_field_type = {"R", "S", "I"};
 constexpr std::array<FieldType, 3> type_list = {FieldType::R, FieldType::S, FieldType::I};
 
-template<size_t N1, size_t N2>
+template <size_t N1, size_t N2>
 bool read_exyz_comment_line(std::string_view line, TokenSetTmpl<N1>& tok_lattice, TokenSetTmpl<N2>& tok_props) {
   constexpr std::string_view lattice_key = "Lattice=\"";
-  constexpr size_t lattice_key_len = 9; 
+  constexpr size_t lattice_key_len = 9;
   constexpr std::string_view prop_key = "Properties=";
   constexpr size_t prop_key_len = 11;
 
   const char* begin = line.data();
   const char* end = line.data() + line.size();
-  const char* it = begin;
 
   if (!starts_with(line, lattice_key))
     return false;
@@ -788,8 +820,10 @@ bool read_exyz_comment_line(std::string_view line, TokenSetTmpl<N1>& tok_lattice
   const char* val_start = begin + lattice_key_len;
   const char* val_end = val_start;
 
-  while (val_end < end && *val_end != '"') ++val_end;
-  if (val_end >= end) return false;
+  while (val_end < end && *val_end != '"')
+    ++val_end;
+  if (val_end >= end)
+    return false;
 
   std::string_view lattice_view = std::string_view(val_start, val_end);
   tokenize(lattice_view, tok_lattice);
@@ -800,11 +834,13 @@ bool read_exyz_comment_line(std::string_view line, TokenSetTmpl<N1>& tok_lattice
     if (std::memcmp(prop_it, prop_key.data(), prop_key_len) == 0) {
       prop_it += prop_key_len;
       const char* prop_end = prop_it;
-      while (prop_end < end && *prop_end != ' ') ++prop_end;
+      while (prop_end < end && *prop_end != ' ')
+        ++prop_end;
       std::string_view ppt = std::string_view(prop_it, prop_end);
       tokenizer_tmpl(ppt, tok_props, ColumnDelimiter{});
       break;
     }
+
     ++prop_it;
   }
 
@@ -814,15 +850,16 @@ bool read_exyz_comment_line(std::string_view line, TokenSetTmpl<N1>& tok_lattice
 };
 
 inline bool parse_exyz_lattice(const TokenSet& tokens, IOContext& ctx) {
+  // read (ax ay az) (bx by bz) (cx cy cz)
   return tokens_to_num(
     tokens.at<0>(), ctx.H.m11,
-    tokens.at<1>(), ctx.H.m12,
-    tokens.at<2>(), ctx.H.m13,
-    tokens.at<3>(), ctx.H.m21,
+    tokens.at<1>(), ctx.H.m21,
+    tokens.at<2>(), ctx.H.m31,
+    tokens.at<3>(), ctx.H.m12,
     tokens.at<4>(), ctx.H.m22,
-    tokens.at<5>(), ctx.H.m23,
-    tokens.at<6>(), ctx.H.m31,
-    tokens.at<7>(), ctx.H.m32,
+    tokens.at<5>(), ctx.H.m32,
+    tokens.at<6>(), ctx.H.m13,
+    tokens.at<7>(), ctx.H.m23,
     tokens.at<8>(), ctx.H.m33
   );
 }
@@ -853,28 +890,41 @@ template <size_t N> inline bool parse_exyz_properties(const TokenSetTmpl<N>& tok
 inline bool parse_line(IOContext& ctx, const Properties& properties, const TokenSet& tokens, size_t particle_count) {
 
   std::string_view type_as_string;
-  double x, y, z;
-  size_t type, id, index;
-    
-  type_as_string = tokens[properties.data[0].index];
-  if (!ctx.species.get_type_from_sv(type_as_string, type))
-    return false;
+  double x;
+  double y;
+  double z;
+  size_t type;
+  size_t id;
 
-  // position
-  index = properties.data[1].index;
-  bool ok = tokens_to_num(tokens[index], x, tokens[index+1], y, tokens[index+2], z, tokens[properties.data[3].index], id);
-  if (ok) {
-    ParticleTupleIO& p = ctx.particle_data[particle_count];
-    p[field::rx] = x;
-    p[field::ry] = y;
-    p[field::rz] = z;
-    p[field::vx] = 0.0;
-    p[field::vy] = 0.0;
-    p[field::vz] = 0.0;
-    p[field::id] = id;
-    p[field::type] = type;
+  // parse type
+  if (!ctx.species.get_type_from_sv(tokens[properties.species().index], type)) {
+    lerr << "Undefined type: " << type_as_string << std::endl;
+    return false;
   }
-  return ok;
+
+  // parse positions
+  size_t index = properties.positions().index;
+  if (!(tokens_to_num(tokens[index], x, tokens[index + 1], y, tokens[index + 2], z))) {
+    lerr << "Unable to parse positions..." << std::endl;
+    return false;
+  }
+
+  // optional atom id
+  (properties.has_id()) ? tokens_to_num(tokens[properties.id().index], id) : id = particle_count;
+
+  // TODO: optional velocity
+
+  ParticleTupleIO& p = ctx.particle_data[particle_count];
+  p[field::rx] = x;
+  p[field::ry] = y;
+  p[field::rz] = z;
+  p[field::vx] = 0.0;
+  p[field::vy] = 0.0;
+  p[field::vz] = 0.0;
+  p[field::id] = id;
+  p[field::type] = type;
+
+  return true;
 }
 
 class ExtendedXYZParser : public TextParser {

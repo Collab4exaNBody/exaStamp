@@ -5,13 +5,13 @@
 #include <cstring>
 #include <span>
 #include <string_view>
+#include <utility>
 
 namespace tokens {
 
 using sv_span = std::span<const std::string_view>;
 
-template <size_t Size>
-struct TokenSetTmpl {
+template <size_t Size> struct TokenSetTmpl {
 
   using sv = std::string_view;
 
@@ -24,22 +24,16 @@ struct TokenSetTmpl {
   inline sv* data() noexcept { return tokens.data(); }
   inline const sv* data() const noexcept { return tokens.data(); }
 
-  inline sv& operator[](size_t i) noexcept {
-    return tokens[i];
-  }
+  inline sv& operator[](size_t i) noexcept { return tokens[i]; }
 
-  inline const sv& operator[](size_t i) const noexcept {
-    return tokens[i];
-  }
+  inline const sv& operator[](size_t i) const noexcept { return tokens[i]; }
 
-  template<size_t index>
-  inline constexpr sv& at() noexcept {
+  template <size_t index> inline constexpr sv& at() noexcept {
     static_assert(index < Size);
     return tokens[index];
   }
 
-  template<size_t index>
-  inline constexpr const sv& at() const noexcept {
+  template <size_t index> inline constexpr const sv& at() const noexcept {
     static_assert(index < Size);
     return tokens[index];
   }
@@ -51,7 +45,7 @@ struct TokenSetTmpl {
   inline void push_back(sv token) noexcept {
     // TODO: Check if full ?
     tokens[len++] = token;
-  } 
+  }
 
   // iteration accessor
   auto begin() const noexcept { return tokens.begin(); }
@@ -61,15 +55,14 @@ struct TokenSetTmpl {
 };
 
 using TokenSet = TokenSetTmpl<32>; // rather never exceeding 32 token per line
-using TokenSet64 = TokenSetTmpl<64>; 
+using TokenSet64 = TokenSetTmpl<64>;
 
 /* ------------------------------------------------------------------------- */
 
 // Convert a strinv_view token to numeric type
-template <typename T>
-bool token_to_num(const std::string_view token, T& rval) {
+template <typename T> bool token_to_num(const std::string_view token, T& rval) {
   auto [p, rc] = std::from_chars(token.begin(), token.begin() + token.size(), rval);
-  return rc == std::errc();
+  return (rc == std::errc() && p == token.end());
 }
 
 // Dark magic that expand to tokens_to_num with automatic type infering
@@ -80,8 +73,9 @@ bool token_to_num(const std::string_view token, T& rval) {
 
 #define call_parse(token, value) token_to_num<decltype(value)>(token, value)
 #define IOfor_each(macro, ...) __VA_OPT__(IOexpand(IOfor_each_helper(macro, __VA_ARGS__)))
-#define IOfor_each_helper(macro, token, value, ...) macro(token, value) __VA_OPT__(IOfor_each_again parb (macro, __VA_ARGS__))
-#define IOfor_each_again() && IOfor_each_helper
+#define IOfor_each_helper(macro, token, value, ...)                                                                    \
+  macro(token, value) __VA_OPT__(IOfor_each_again parb(macro, __VA_ARGS__))
+#define IOfor_each_again() &&IOfor_each_helper
 #define tokens_to_num(...) IOfor_each(call_parse, __VA_ARGS__)
 
 /* ------------------------------------------------------------------------- */
@@ -89,9 +83,7 @@ bool token_to_num(const std::string_view token, T& rval) {
 inline bool is_space(char c) noexcept { return std::isspace(c); }
 
 struct IsSpace {
-  constexpr bool operator()(char c) const noexcept {
-    return c == ' ' || c == '\t' || c == '\n' || c == '\r';
-  }
+  constexpr bool operator()(char c) const noexcept { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
 };
 
 struct SpaceDelimiter {
@@ -106,8 +98,7 @@ struct ColumnDelimiter {
   constexpr bool operator()(char c) const noexcept { return c == ':'; }
 };
 
-template <typename Predicate>
-inline std::string_view trim(std::string_view str, Predicate&& is_trim_char) noexcept {
+template <typename Predicate> inline std::string_view trim(std::string_view str, Predicate&& is_trim_char) noexcept {
   while (!str.empty() && is_trim_char(str.front()))
     str.remove_prefix(1);
   while (!str.empty() && is_trim_char(str.back()))
@@ -115,23 +106,19 @@ inline std::string_view trim(std::string_view str, Predicate&& is_trim_char) noe
   return str;
 }
 
-template <typename Predicate>
-inline std::string_view ltrim(std::string_view str, Predicate&& is_trim_char) noexcept {
+template <typename Predicate> inline std::string_view ltrim(std::string_view str, Predicate&& is_trim_char) noexcept {
   while (!str.empty() && is_trim_char(str.front()))
     str.remove_prefix(1);
   return str;
 }
 
-template <typename Predicate>
-inline std::string_view rtrim(std::string_view str, Predicate&& is_trim_char) noexcept {
+template <typename Predicate> inline std::string_view rtrim(std::string_view str, Predicate&& is_trim_char) noexcept {
   while (!str.empty() && is_trim_char(str.back()))
     str.remove_suffix(1);
   return str;
 }
 
-inline std::string_view trim_spaces(std::string_view str) noexcept {
-  return trim(str, IsSpace{});
-}
+inline std::string_view trim_spaces(std::string_view str) noexcept { return trim(str, IsSpace{}); }
 
 // Old version of split function
 // template <typename Callback, typename Predicated>
@@ -160,8 +147,8 @@ inline void split(std::string_view str, Delimiter&& is_delimiter, Callback&& cal
   }
 }
 
-//TODO: tokenize function that tokenize up to a maximum number of token
-
+// TODO: tokenize function that tokenize up to a maximum number of token
+//
 // template <typename Delimiter>
 // inline void tokenizer_tmpl(const std::string_view str, TokenSet& tokens, Delimiter&& delimiter) {
 //   tokens.clear(); // reset the token set
@@ -186,8 +173,7 @@ inline void tokenize(const std::string_view str, TokenSet& tokens) {
   return tokenizer_tmpl(str, tokens, SpaceDelimiter{});
 }
 
-
-template<size_t N> using TokenNeedles = std::array<std::string_view, N>;
+template <size_t N> using TokenNeedles = std::array<std::string_view, N>;
 
 // return true at the first needle that the given token
 inline bool _token_match_any(std::string_view t, sv_span n) {
@@ -250,23 +236,24 @@ inline bool _token_match_sequence(sv_span t, sv_span n) {
   const size_t tc = t.size();
   const size_t nc = n.size();
 
-  if (nc == 0 || tc < nc) return false;
+  if (nc == 0 || tc < nc)
+    return false;
 
   for (size_t i = 0; i <= tc - nc; ++i) {
-      bool match = true;
-      for (size_t j = 0; j < nc; ++j) {
-          if (t[i + j] != n[j]) {
-              match = false;
-              break;
-          }
+    bool match = true;
+    for (size_t j = 0; j < nc; ++j) {
+      if (t[i + j] != n[j]) {
+        match = false;
+        break;
       }
-      if (match) return true;
+    }
+    if (match)
+      return true;
   }
   return false;
 }
 
-template <size_t N>
-inline bool match_token_any(const std::string_view token, const TokenNeedles<N>& needles) {
+template <size_t N> inline bool match_token_any(const std::string_view token, const TokenNeedles<N>& needles) {
   return _token_match_any(token, sv_span(needles.data(), N));
 }
 
@@ -275,8 +262,7 @@ inline bool match_token_any(const std::string_view token, const TokenNeedles<N>&
   return _token_match_any(token, sv_span(needles.data(), N), i);
 }
 
-template <size_t N>
-inline bool match_token_set_any(const TokenSet& tokens, const TokenNeedles<N>& needles) {
+template <size_t N> inline bool match_token_set_any(const TokenSet& tokens, const TokenNeedles<N>& needles) {
   return _token_set_match_any(sv_span(tokens.data(), tokens.size()), sv_span(needles.data(), N));
 }
 
@@ -285,14 +271,12 @@ inline bool match_token_set_any(const TokenSet& tokens, const TokenNeedles<N>& n
   return _token_set_match_any(sv_span(tokens.data(), tokens.size()), sv_span(needles.data(), N), i, j);
 }
 
-template <size_t N>
-inline bool match_token_set_any(const TokenSet& tokens, const TokenNeedles<N>& needles, size_t& i) {
+template <size_t N> inline bool match_token_set_any(const TokenSet& tokens, const TokenNeedles<N>& needles, size_t& i) {
   size_t j = 0;
   return _token_set_match_any(sv_span(tokens.data(), tokens.size()), sv_span(needles.data(), N), i, j);
 }
 
-template <size_t N>
-inline bool match_token_sq(const TokenSet& tokens, const TokenNeedles<N>& needles) {
+template <size_t N> inline bool match_token_sq(const TokenSet& tokens, const TokenNeedles<N>& needles) {
   return _token_match_sequence(sv_span(tokens.data(), tokens.size()), sv_span(needles.data(), N));
 }
 
@@ -300,4 +284,30 @@ inline bool starts_with(std::string_view line, std::string_view prefix) {
   return ((line.size() >= prefix.size()) && (std::memcmp(line.data(), prefix.data(), prefix.size()) == 0));
 }
 
+} // namespace tokens
+
+namespace cmp {
+
+template <class T, class U> constexpr inline bool eq(T t, U u) noexcept { return std::cmp_equal(t, u); }
+template <class T, class U> constexpr inline bool ne(T t, U u) noexcept { return std::cmp_not_equal(t, u); }
+template <class T, class U> constexpr inline bool lt(T t, U u) noexcept { return std::cmp_less(t, u); }
+template <class T, class U> constexpr inline bool le(T t, U u) noexcept { return std::cmp_less_equal(t, u); }
+template <class T, class U> constexpr inline bool gt(T t, U u) noexcept { return std::cmp_greater(t, u); }
+template <class T, class U> constexpr inline bool ge(T t, U u) noexcept { return std::cmp_greater_equal(t, u); }
+
+template <class T, class U> constexpr auto min(const T& a, const U& b) { return lt(b, a) ? b : a; }
+template <class T, class U> constexpr auto max(const T& a, const U& b) { return lt(b, a) ? a : b; }
+
+template <typename T> constexpr T floor(T x) {
+  static_assert(std::is_floating_point_v<T>, "constexpr_floor: T must be floating-point");
+  long long xi = static_cast<long long>(x); // truncates toward zero
+  return (x < static_cast<T>(xi)) ? static_cast<T>(xi - 1) : static_cast<T>(xi);
+}
+
+} // namespace cmp
+
+template <typename T> constexpr T wrap(T x, T max) {
+  static_assert(std::is_floating_point_v<T>);
+  T r = x - max * cmp::floor(x / max);
+  return (r < T(0)) ? r + max : r;
 }
