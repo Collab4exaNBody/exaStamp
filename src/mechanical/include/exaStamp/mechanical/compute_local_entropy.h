@@ -1,16 +1,18 @@
 #pragma once
 
 #include <onika/math/basic_types.h>
+#include <onika/string_utils.h>
 #include <exanb/compute/compute_pair_buffer.h>
 
 #include <exaStamp/compute/thermodynamic_state.h>
 #include <exaStamp/mechanical/cell_particles_local_structural_metrics.h>
 
 #include <vector>
-#include <algorithm>
+#include <chrono>
 #include <omp.h>
 
-XNB_DECLARE_FIELD(double, local_entropy, "jesaispascequejefais");
+XNB_DECLARE_FIELD(double, local_entropy, "jesaispascequejefais")
+
 
 namespace exaStamp {
 
@@ -19,107 +21,112 @@ using namespace exanb;
 using onika::memory::DEFAULT_ALIGNMENT;
 
 struct alignas(DEFAULT_ALIGNMENT) LocalEntropyOp {
-  const double m_rcut;
-  const ThermodynamicState& m_thermo_state;
 
-  double m_sigma = 0;
+  double rcut;
+  double sigma;
+  size_t nbins;
+  bool local;
 
-  double m_dr = 0;
-  size_t m_nbins = 0;
-  double m_2_sigma_sq = 0;
+  double inv_sigma = 0.;
+  double drm = 0.;
+  double inv_drm = 0.;
 
-  double m_volume = 0;
-  size_t m_particle_count = 0;
-  double m_density = 0;
+  size_t particle_count = 0;
+  double volume = 0;
+  double rho_global = 0;
+  double local_volume = 0;
+  double inv_local_volume = 0;
 
-  std::vector<double> m_rbin = {0};
-  std::vector<double> m_rbinsq = {0};
-  std::vector<double> m_prefactor = {0};
+  double sigmasq2 = 0;
+  double inv_sigmasq2 = 0;
+  double deltabin = 0;
 
-  bool m_allocated = false;
+  constexpr static double gtol = 1.0e-10;
+  constexpr static double eps = 1.0e-8;
 
-  LocalEntropyOp(const double rcut, const ThermodynamicState& thermo) : m_rcut(rcut), m_thermo_state(thermo) {
-    if (!m_allocated)
-      allocate();
-  };
+  std::vector<double> rbin = {0};
+  std::vector<double> rbinsq = {0};
+  std::vector<double> prefactor = {0};
 
-private:
-  void allocate() {
-    if (m_allocated)
-      return;
+  void initialize(const ThermodynamicState& thermo_state) {
 
-    m_sigma = 0.15;
-    m_nbins = static_cast<size_t>(m_rcut / m_sigma) + 1;
-    m_dr = m_sigma;
-
-    m_volume = m_thermo_state.volume();
-    m_particle_count = m_thermo_state.particle_count();
-    m_density = static_cast<double>(m_particle_count) / m_volume;
-
-    m_rbin.resize(m_nbins);
-    m_rbinsq.resize(m_nbins);
-    m_prefactor.resize(m_nbins);
-
-    std::memset(m_rbin.data(), 0., sizeof(double));
-    std::memset(m_rbinsq.data(), 0., sizeof(double));
-    std::memset(m_prefactor.data(), 0., sizeof(double));
-
-    for (size_t i = 0; i < m_nbins; ++i) {
-      m_rbin[i] = i * m_dr;
-      m_rbinsq[i] = m_rbin[i] * m_rbin[i];
+    if (!(nbins > 0)) {
+      nbins = static_cast<size_t>(rcut / sigma) + 1;
     }
 
-    for (size_t i = 1; i < m_nbins; ++i) {
-      m_prefactor[i] = 1. / ((4. * M_PI * m_density * sqrt(2. * M_PI) * m_sigma) * m_rbinsq[i]);
+    drm = rcut / (nbins - 1);
+    inv_drm = 1. / drm;
+
+    volume = thermo_state.volume();
+    particle_count = thermo_state.particle_count();
+    rho_global = static_cast<double>(particle_count) / volume;
+    local_volume = (4. / 3.) * M_PI * rcut * rcut * rcut;
+    inv_local_volume = 1. / local_volume;
+
+    // precompute some variables
+    sigmasq2 = 2. * sigma * sigma;
+    inv_sigmasq2 = 1. / sigmasq2;
+
+    rbin.resize(nbins);
+    rbinsq.resize(nbins);
+    prefactor.resize(nbins);
+
+    std::memset(rbin.data(), 0., sizeof(double));
+    std::memset(rbinsq.data(), 0., sizeof(double));
+    std::memset(prefactor.data(), 0., sizeof(double));
+
+    // at k = 0, r = r^2 = 0.0
+    for (size_t k = 1; k < nbins; ++k) {
+      rbin[k] = k * drm;
+      rbinsq[k] = k * k * drm * drm;
+      prefactor[k] = 1. / ((4. * M_PI * rho_global * sqrt(2. * M_PI) * sigma) * rbinsq[k]);
     }
-    m_prefactor[0] = m_prefactor[1];
+    prefactor[0] = prefactor[1]; // ensure no division by zero
 
-    // precompute some constants
-    m_2_sigma_sq = 2 * m_sigma * m_sigma;
-
-    m_allocated = true;
+    // evaluate exponential term to compute detltabin
+    for (size_t k = 0; k < nbins; ++k) {
+      double gk = std::exp(-rbinsq[k] * inv_sigmasq2);
+      if (gk < 1.0e-5) {
+        deltabin = k;
+        break;
+      }
+    }
   }
 
-public:
   template <class CellParticlesT>
-  inline void operator()(size_t jnum, ComputePairBuffer2<false, false>& buf, double& local_entropy,
+  inline void operator()(size_t n, ComputePairBuffer2<false, false>& buf, double& local_entropy,
                          CellParticlesT /* cells */) const {
-    
-    lout << "------" << std::endl;
 
+    double rho = local ? (static_cast<double>(n) / local_volume) : rho_global;
+    double rhofac = rho_global / rho;
 
+    std::vector<double> gm(nbins, 0.0);
 
+    for (size_t i = 0; i < n; ++i) {
+      double rij = std::sqrt(buf.d2[i]);
+      size_t bin = static_cast<size_t>(rij * inv_drm + eps);
 
-    std::vector<double> gm(m_nbins, 0.0);
-    std::vector<double> integral(m_nbins, 0.0);
+      size_t minbin = (bin > deltabin) ? bin - deltabin : 0;
+      size_t maxbin = (nbins < bin + deltabin) ? nbins : bin + deltabin;
 
-    
-
-    for (size_t ii = 0; ii < jnum; ++ii) {
-      double r = sqrt(buf.d2[ii]);
-      size_t bin = static_cast<size_t>(std::floor(r / m_dr));
-      double delta = r - m_rbin[bin];
-      gm[bin] += std::min(std::exp(-1. * (delta * delta) / m_2_sigma_sq) * m_prefactor[bin], 1.0e-10);
+      for (size_t k = minbin; k < maxbin; ++k) {
+        double dr = rbin[k] - rij;
+        gm[k] += std::exp(-dr * dr * inv_sigmasq2) * prefactor[k] * rhofac;
+      }
     }
 
-    for (size_t k = 0; k < m_nbins; ++k) {
-      integral[k] = (gm[k] * std::log(gm[k]) - gm[k] + 1.) * m_rbinsq[k];
-    }
-
+    // compute the intergral with trapzeoid rule
     double tmp = 0.;
-    for (size_t k = 0; k < m_nbins; ++k) {
-      lout << k << " " << m_rbinsq[k] << " " << integral[k] << std::endl;
-      tmp += integral[k];
+    for (size_t k = 0; k < nbins; ++k) {
+      double g = gm[k];
+      double f = (g >= gtol) ? (g * std::log(g) - g + 1.0) : 1.0;
+      double w = (k == 0 || k == nbins - 1) ? 0.5 : 1.0;
+      tmp += f * rbinsq[k] * w;
     }
 
-    // tmp += 0.5 * integral[0];
-    // tmp += 0.5 * integral[m_nbins - 1];
-    tmp *= m_dr;
-
-    lout << -2. * M_PI * m_density * tmp << std::endl;
-    local_entropy = 0.0;
-
-    lout << "------" << std::endl;
+    // don't forget to mulitply the integral by dr
+    local_entropy = -2. * M_PI * rho * tmp * drm;
   }
 };
+
 } // namespace exaStamp

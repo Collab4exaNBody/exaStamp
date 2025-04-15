@@ -25,9 +25,8 @@ using namespace exanb;
 
 using onika::memory::DEFAULT_ALIGNMENT;
 
-template< class GridT,  class = AssertGridHasFields< GridT, field::_ep ,field::_fx ,field::_fy ,field::_fz > >
-class ComputeLocalEntropyOperator : public OperatorNode
-{    
+template <class GridT, class = AssertGridHasFields<GridT, field::_ep, field::_fx, field::_fy, field::_fz>>
+class ComputeLocalEntropyOperator : public OperatorNode {
 
   // ========= I/O slots =======================
   ADD_SLOT( double                , rcut_max          , INPUT_OUTPUT , 0.0 );
@@ -38,64 +37,66 @@ class ComputeLocalEntropyOperator : public OperatorNode
   ADD_SLOT( ThermodynamicState    , thermodynamic_state, INPUT, REQUIRED );
 
   ADD_SLOT(double, rcut, INPUT, 0.);
+  ADD_SLOT(double, sigma, INPUT, REQUIRED);
+  ADD_SLOT(size_t, nbins, INPUT, 0);
+  ADD_SLOT(bool, local, INPUT, false);
 
-  using ComputeBuffer = ComputePairBuffer2< false, false >;
-  using ComputeFields = FieldSet< > ; 
+  using ComputeBuffer = ComputePairBuffer2<false, false>;
+  using ComputeFields = FieldSet<>;
   static constexpr ComputeFields compute_force_field_set{};
 
 public:
 
   inline void execute () override final 
   {
-    assert( chunk_neighbors->number_of_cells() == grid->number_of_cells() );
+    assert(chunk_neighbors->number_of_cells() == grid->number_of_cells());
     bool has_chunk_neighbors = chunk_neighbors.has_value();
-    if( !has_chunk_neighbors )
-    {
+    if (!has_chunk_neighbors) {
       lerr << "No neighbors input data available" << std::endl;
       std::abort();
     }
 
-    // double rcut_max = *(this->rcut_max);
-    // double rcut_op   = std::max(rcut_max, *rcut);
-    double rcut_max = *rcut;
+    double cutoff = *rcut;
     const ThermodynamicState& thermo_state = *thermodynamic_state;
 
-    lout << "\t- Computing per-atom local entropy" << std::endl;
+    lout << onika::format_string("  - Computing per-atom local entropy:\n")
+         << onika::format_string("      rcut  = %.5f\n", cutoff)
+         << onika::format_string("      sigma = %.5f\n", *sigma)
+         << onika::format_string("      local = %s\n", *local ? "true" : "false") << std::endl;
 
-    LocalEntropyOp local_op(*rcut, thermo_state);
+    LocalEntropyOp local_op{cutoff, *sigma, *nbins, *local};
+    local_op.initialize(thermo_state);
 
     auto local_entropy = grid->field_accessor(field::local_entropy);
     auto local_op_fields = make_field_tuple_from_field_set(FieldSet<>{}, local_entropy);
 
     ComputePairNullWeightIterator cp_weight{};
-    ComputePairOptionalLocks<false> cp_locks {};
-    exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
+    ComputePairOptionalLocks<false> cp_locks{};
+    exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{*chunk_neighbors};
     auto local_op_buf = make_compute_pair_buffer<ComputeBuffer>();
-    ComputePairTrivialCellFiltering cpu_cell_filter = {};     
-  
-    if( domain->xform_is_identity() )
-    {
+    ComputePairTrivialCellFiltering cpu_cell_filter = {};
+
+    if (domain->xform_is_identity()) {
       NullXForm cp_xform;
-      auto optional = make_compute_pair_optional_args( nbh_it, cp_weight, cp_xform, cp_locks, cpu_cell_filter );
-      compute_cell_particle_pairs( *grid, rcut_max, *ghost, optional, local_op_buf,  local_op, local_op_fields, parallel_execution_context() );
-    }
-    else
-    {
-      LinearXForm cp_xform { domain->xform() };
-      auto optional = make_compute_pair_optional_args( nbh_it, cp_weight, cp_xform, cp_locks, cpu_cell_filter  );
-      compute_cell_particle_pairs( *grid, rcut_max, *ghost, optional, local_op_buf, local_op , local_op_fields, parallel_execution_context() );
+      auto optional = make_compute_pair_optional_args(nbh_it, cp_weight, cp_xform, cp_locks, cpu_cell_filter);
+      compute_cell_particle_pairs(*grid, cutoff, *ghost, optional, local_op_buf, local_op, local_op_fields,
+                                  parallel_execution_context());
+    } else {
+      LinearXForm cp_xform{domain->xform()};
+      auto optional = make_compute_pair_optional_args(nbh_it, cp_weight, cp_xform, cp_locks, cpu_cell_filter);
+      compute_cell_particle_pairs(*grid, cutoff, *ghost, optional, local_op_buf, local_op, local_op_fields,
+                                  parallel_execution_context());
     }
 
     lout << "\t- Computing per-atom local entropy END" << std::endl;
   }
 };
 
-template<class GridT> using ComputeLocalEntropyOperatorTmpl = ComputeLocalEntropyOperator<GridT>;
+template <class GridT> using ComputeLocalEntropyOperatorTmpl = ComputeLocalEntropyOperator<GridT>;
 
-// === register factories ===  
-ONIKA_AUTORUN_INIT(compute_local_centrosymmetry)
-{
-  OperatorNodeFactory::instance()->register_factory( "compute_local_entropy" , make_grid_variant_operator< ComputeLocalEntropyOperatorTmpl > );
+// === register factories ===
+ONIKA_AUTORUN_INIT(compute_local_entropy) {
+  OperatorNodeFactory::instance()->register_factory("compute_local_entropy",
+                                                    make_grid_variant_operator<ComputeLocalEntropyOperatorTmpl>);
 }
-
 }
