@@ -7,6 +7,7 @@
 #include <onika/cpp_utils.h>
 #include <onika/file_utils.h>
 #include <onika/yaml/yaml_enum.h>
+#include <onika/string_utils.h>
 
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
@@ -16,7 +17,6 @@
 
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exaStamp/compute/thermodynamic_state.h>
-
 #include <exaStamp/mechanical/compute_local_centrosymmetry.h>
 
 namespace exaStamp
@@ -38,14 +38,14 @@ class ComputeCSPOperator : public OperatorNode
   ADD_SLOT( GridT                 , grid                , INPUT );
   ADD_SLOT( Domain                , domain              , INPUT , REQUIRED );
 
-  ADD_SLOT(double           , rcut  , INPUT, 0.);
-  ADD_SLOT(uint64_t         , nnn   , INPUT, 12);
+  ADD_SLOT(double, rcut, INPUT, 0.);
+  ADD_SLOT(uint64_t, nnn, INPUT, 12);
   ADD_SLOT(LocalCentroMethod, method, INPUT, LocalCentroMethod::GES);
 
-  using ComputeBuffer = ComputePairBuffer2<false,false>;
-  using ComputeFields = FieldSet< > ;
+  using ComputeBuffer = ComputePairBuffer2<false, false>;
+  using ComputeFields = FieldSet<>;
   static constexpr ComputeFields compute_force_field_set{};
-  
+
 public:
 
   inline void execute () override final
@@ -58,35 +58,41 @@ public:
       std::abort();
     }
 
-         // using ForceCPBuf = SimpleNbhComputeBuffer< FieldSet<field::_local_field> >; /* we want extra neighbor storage space to store these fields */
-         // ComputePairBufferFactory< ForceCPBuf > local_buf;  
-    
-   //  auto local_field = grid->field_accessor( field::local_field );
-   //  auto local_op_fields = make_field_tuple_from_field_set( FieldSet<>{}, local_field );
-   //    
-   //  double rrPotential = *(this->rcut_max);
-   //  LocalFieldOp local_op { *rcut};
-   //  ComputePairNullWeightIterator cp_weight{};
-   //  ComputePairOptionalLocks<false> cp_locks {};
-   //  exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
-   //  auto local_op_buf = make_compute_pair_buffer<ComputeBuffer>();
-   //  ComputePairTrivialCellFiltering cpu_cell_filter = {}; 	  
-   // 
-   //  if( domain->xform_is_identity() )
-   //    {
-   //      NullXForm cp_xform;
-   //      auto optional = make_compute_pair_optional_args( nbh_it, cp_weight, cp_xform, cp_locks, cpu_cell_filter );
-   //      compute_cell_particle_pairs( *grid, rrPotential, *ghost, optional, local_op_buf, local_op , local_op_fields, parallel_execution_context() );	  	  
-   //    }
-   //  else
-   //    {
-   //      LinearXForm cp_xform { domain->xform() };
-   //      auto optional = make_compute_pair_optional_args( nbh_it, cp_weight, cp_xform, cp_locks, cpu_cell_filter  );
-   //      compute_cell_particle_pairs( *grid, rrPotential, *ghost, optional, local_op_buf, local_op , local_op_fields, parallel_execution_context() );	  	  
-   //    }
+    double cutoff = *rcut;
+    lout << onika::format_string("\t- Computing centrosymmetry:\n") << std::endl;
 
+    // check if number of nearest neighbor is even
+    if (( *nnn % 2 ) != 0) {
+      lerr << "ComputeCentrosymmetryOperator: the number of nearest neighbors (nnn = " << *nnn << ") must be even" << std::endl;
+      std::abort();
+    }
+
+    CentroSymmetryOp local_op{cutoff, *nnn, *method};
+
+    auto field_csp = grid->field_accessor(field::csp);
+    auto local_op_fields = make_field_tuple_from_field_set(FieldSet<>{}, field_csp);
+    
+    ComputePairNullWeightIterator cp_weight{};
+    ComputePairOptionalLocks<false> cp_locks{};
+    exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{*chunk_neighbors};
+    auto local_op_buf = make_compute_pair_buffer<ComputeBuffer>();
+    ComputePairTrivialCellFiltering cpu_cell_filter = {};
+
+    if (domain->xform_is_identity()) {
+      NullXForm cp_xform;
+      auto optional = make_compute_pair_optional_args(nbh_it, cp_weight, cp_xform, cp_locks, cpu_cell_filter);
+      compute_cell_particle_pairs(*grid, cutoff, *ghost, optional, local_op_buf, local_op, local_op_fields,
+                                  parallel_execution_context());
+    } else {
+      LinearXForm cp_xform{domain->xform()};
+      auto optional = make_compute_pair_optional_args(nbh_it, cp_weight, cp_xform, cp_locks, cpu_cell_filter);
+      compute_cell_particle_pairs(*grid, cutoff, *ghost, optional, local_op_buf, local_op, local_op_fields,
+                                  parallel_execution_context());
+    }
+
+    lout << "\t- Computing centrosymmetry END" << std::endl;
   }
-  
+
 };
 
 template <class GridT> using ComputeCSPOperatorTmpl = ComputeCSPOperator<GridT>;
@@ -96,4 +102,4 @@ ONIKA_AUTORUN_INIT(compute_local_csp) {
   OperatorNodeFactory::instance()->register_factory("compute_local_csp",
                                                     make_grid_variant_operator<ComputeCSPOperatorTmpl>);
 }
-}
+} // namespace exaStamp
