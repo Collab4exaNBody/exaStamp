@@ -29,7 +29,7 @@ template <class GridT, class = AssertGridHasFields<GridT, field::_ep, field::_fx
 class ComputeLocalEntropyOperator : public OperatorNode {
 
   // ========= I/O slots =======================
-  ADD_SLOT( double                , rcut_max          , INPUT_OUTPUT , 0.0 );
+  //  ADD_SLOT( double                , rcut_max          , INPUT_OUTPUT , 0.0 );
   ADD_SLOT( exanb::GridChunkNeighbors    , chunk_neighbors   , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
   ADD_SLOT( bool                  , ghost              , INPUT , false );
   ADD_SLOT( GridT                 , grid               , INPUT );
@@ -59,10 +59,10 @@ public:
     double cutoff = *rcut;
     const ThermodynamicState& thermo_state = *thermodynamic_state;
 
-    lout << onika::format_string("  - Computing per-atom local entropy:\n")
-         << onika::format_string("      rcut  = %.5f\n", cutoff)
-         << onika::format_string("      sigma = %.5f\n", *sigma)
-         << onika::format_string("      local = %s\n", *local ? "true" : "false") << std::endl;
+    lout << onika::format_string("\t- Computing per-atom local entropy:\n")
+         << onika::format_string("\t    rcut  = %.5f\n", cutoff)
+         << onika::format_string("\t    sigma = %.5f\n", *sigma)
+         << onika::format_string("\t    local = %s\n", *local ? "true" : "false");
 
     LocalEntropyOp local_op{cutoff, *sigma, *nbins, *local};
     local_op.initialize(thermo_state);
@@ -88,7 +88,7 @@ public:
                                   parallel_execution_context());
     }
 
-    lout << "\t- Computing per-atom local entropy END" << std::endl;
+    lout << onika::format_string("\t- Computing per-atom local entropy END\n");
   }
 };
 

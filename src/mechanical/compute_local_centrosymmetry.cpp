@@ -32,7 +32,7 @@ class ComputeCSPOperator : public OperatorNode
 {    
 
   // ========= I/O slots =======================
-  ADD_SLOT( double                , rcut_max            , INPUT_OUTPUT , 0.0 );
+  //  ADD_SLOT( double                , rcut_max            , INPUT_OUTPUT , 0.0 );
   ADD_SLOT( exanb::GridChunkNeighbors                   , chunk_neighbors   , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
   ADD_SLOT( bool                  , ghost               , INPUT , false );
   ADD_SLOT( GridT                 , grid                , INPUT );
@@ -59,7 +59,9 @@ public:
     }
 
     double cutoff = *rcut;
-    lout << onika::format_string("\t- Computing centrosymmetry:\n") << std::endl;
+    lout << onika::format_string("\t- Computing per-atom centrosymmetry:\n")
+         << onika::format_string("\t    rcut = %.5f\n", cutoff)
+         << onika::format_string("\t    nnn  = %d\n", *nnn);
 
     // check if number of nearest neighbor is even
     if (( *nnn % 2 ) != 0) {
@@ -90,7 +92,7 @@ public:
                                   parallel_execution_context());
     }
 
-    lout << "\t- Computing centrosymmetry END" << std::endl;
+    lout << onika::format_string("\t- Computing per-atom centrosymmetry END\n");    
   }
 
 };
