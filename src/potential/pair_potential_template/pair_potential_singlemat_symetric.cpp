@@ -38,6 +38,10 @@
 #define DEBUG_ADDITIONAL_CODE /**/
 #endif
 
+#define POTENTIAL_REGISTER_INIT() _POTENTIAL_REGISTER_INIT( CONSTRUCTOR_FUNC_NAME )
+#define CONSTRUCTOR_FUNC_NAME USTAMP_CONCAT(OPERATOR_NAME,_init)
+#define _POTENTIAL_REGISTER_INIT(name) CONSTRUCTOR_ATTRIB void MAKE_UNIQUE_NAME(name,_,__LINE__,ONIKA_CURRENT_PACKAGE_NAME) ()
+
 namespace exaStamp
 {
   using namespace exanb;
@@ -428,7 +432,8 @@ namespace exaStamp
   }
   
   // === register factories ===  
-  ONIKA_AUTORUN_INIT(OPERATOR_NAME)
+  // ONIKA_AUTORUN_INIT(OPERATOR_NAME)
+  POTENTIAL_REGISTER_INIT()
   {
     OperatorNodeFactory::instance()->register_factory( OPERATOR_NAME_STR , make_grid_variant_operator< TemplateHelper::OPERATOR_NAME > );
   }
