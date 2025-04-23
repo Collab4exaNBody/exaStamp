@@ -9,6 +9,10 @@
 #define USTAMP_POTENTIAL_WITH_VIRIAL 1
 #include "pair_potential_force_op.h"
 
+#define POTENTIAL_REGISTER_INIT() _POTENTIAL_REGISTER_INIT( CONSTRUCTOR_FUNC_NAME )
+#define CONSTRUCTOR_FUNC_NAME USTAMP_CONCAT(USTAMP_POTENTIAL_CLASS,_init)
+#define _POTENTIAL_REGISTER_INIT(name) CONSTRUCTOR_ATTRIB void MAKE_UNIQUE_NAME(name,_,__LINE__,ONIKA_CURRENT_PACKAGE_NAME) ()
+
 namespace exaStamp
 {
   using namespace exanb;
@@ -43,7 +47,8 @@ namespace exaStamp
   };
 
   // === register potential factory ===  
-  ONIKA_AUTORUN_INIT(pair_potential_class)
+  // ONIKA_AUTORUN_INIT(pair_potential_class)
+  POTENTIAL_REGISTER_INIT()
   {
     PairPotentialFactory::register_factory( USTAMP_POTENTIAL_STRING , USTAMP_POTENTIAL_CLASS::make_potential );
   }
