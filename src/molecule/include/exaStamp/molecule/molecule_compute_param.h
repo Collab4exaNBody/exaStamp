@@ -39,6 +39,7 @@ namespace exaStamp
     assert( t2 >= 0 && t2 < (1<<15) );
     assert( t3 >= 0 && t3 < (1<<15) );
     if( t0 > t3 ) { std::swap( t0 , t3 ); std::swap( t1 , t2 ); }
+    else if (t0 == t3 && t1 > t2 ) {std::swap( t0 , t3 ); std::swap( t1 , t2 ); }
     return ( uint64_t(t0)<<48 ) | ( uint64_t(t1)<<32 ) | ( uint64_t(t2)<<16 ) | uint64_t(t3);
   }
 

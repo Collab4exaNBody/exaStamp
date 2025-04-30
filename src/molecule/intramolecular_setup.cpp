@@ -67,8 +67,6 @@ namespace exaStamp
     {
       //static constexpr MoleculeGenericFuncParam null_param = {0.0,0.0,0.0,0.0};
       
-      std::cout << "Entering intramolecular_setup" << std::endl;
-
       const unsigned int nmol = molecules->m_molecules.size();
       ldbg << "Number of molecule species : "<<nmol<<std::endl;
       if( nmol == 1 && molecules->m_molecules.front().name().empty() ) molecules->m_molecules.front().set_name("MOL");
@@ -288,7 +286,6 @@ namespace exaStamp
       for(const auto& bond : potentials_for_bonds->m_bond_desc)
       {
         int a=0, b=0;
-        std::cout << "In intramolecular_setup, before call to ffnameToFFtypeId read bond "<<bond.species[0]<<","<<bond.species[1] << std::endl;
         // bond.species contains FFname, it is converted to FFtypeId by ffnameToFFtypeId.
         assert( ffnameToFFtypeId.find(bond.species[0]) != ffnameToFFtypeId.end() );
         assert( ffnameToFFtypeId.find(bond.species[1]) != ffnameToFFtypeId.end() );
@@ -297,7 +294,7 @@ namespace exaStamp
 
         //std::cout << "read bond " << bond.species[0] << "("<< a << ")" << "," << bond.species[1] << "("<< b << ")" <<std::endl;
         const auto types = bond_key(a,b);
-        ldbg << "read bond "<<bond.species[0]<<","<<bond.species[1]<<" -> "<<(const void*)types<<std::endl;
+        ldbg << "read bond " << bond.species[0] << ","<< bond.species[1] <<" -> "<<(const void*)types<<std::endl;
         auto param = bond.potential->generic_parameters();
         if( ! param.is_null() )
         {
