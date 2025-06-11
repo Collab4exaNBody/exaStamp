@@ -20,7 +20,6 @@ input_data:
   - init_rcb_grid
   - lattice:
       structure: CUSTOM
-      np: 4
       types: [ Ta, Ta, Ta, Ta ]
       positions: [ [0.0,0.0,0.0], [0.5,0.0,0.5], [0.0,0.5,0.5], [0.5,0.5,0.0] ]
       size: [ 4 ang , 4 ang , 4 ang ]

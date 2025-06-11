@@ -43,7 +43,6 @@ input_data:
       cell_size: 5.0 ang
   - bulk_lattice:
       structure: CUSTOM
-      np: 2
       types: [ Ta, Ta]
       positions: [ [0.25,0.25,0.25], [0.75,0.75,0.75] ]
       size: [ 3.3024 ang , 3.3024 ang , 3.3024 ang ]
