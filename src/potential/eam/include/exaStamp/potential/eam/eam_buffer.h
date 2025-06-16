@@ -3,10 +3,6 @@
 
 #include <exanb/core/grid_fields.h>
 
-// EAM package specific fields
-XNB_DECLARE_FIELD(double          ,rho_dEmb          ,"density or embedding term");
-
-
 #include <onika/memory/allocator.h>
 #include <onika/cuda/cuda.h>
 #include <vector>

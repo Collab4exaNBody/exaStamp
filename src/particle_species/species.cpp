@@ -7,6 +7,7 @@
 #include <onika/log.h>
 #include <onika/yaml/yaml_utils.h>
 #include <exanb/core/particle_type_id.h>
+#include <exanb/core/particle_type_properties.h>
 
 #include <iostream>
 #include <iomanip>

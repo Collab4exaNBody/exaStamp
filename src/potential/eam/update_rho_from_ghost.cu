@@ -48,7 +48,7 @@ namespace exaStamp
       //      auto pesfunc = [self=this](unsigned int i) { return self->parallel_execution_stream(i); };
       auto peqfunc = [self=this]() -> onika::parallel::ParallelExecutionQueue& { return self->parallel_execution_queue(); };
 
-      auto rho_emb_field = grid->field_accessor( field::rho_dEmb );
+      auto rho_emb_field = grid->field_accessor( field::generic_real{"rho_dEmb"} );
       auto update_fields = onika::make_flat_tuple( rho_emb_field );
 
       grid_update_from_ghosts( ldbg, *mpi, *ghost_comm_scheme, *grid, *domain, nullptr,
