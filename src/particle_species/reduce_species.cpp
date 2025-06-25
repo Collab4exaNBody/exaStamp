@@ -1,11 +1,11 @@
 #include <exaStamp/particle_species/particle_specie_yaml.h>
 
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/operator_slot.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/scg/operator_slot.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/core/log.h>
-#include <exanb/core/yaml_utils.h>
+#include <onika/log.h>
+#include <onika/yaml/yaml_utils.h>
 #include <exanb/core/particle_type_id.h>
 
 #include <iostream>
@@ -124,7 +124,7 @@ namespace exaStamp
   template<class GridT> using ReduceSpeciesTmpl = ReduceSpecies<GridT>;
 
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(reduce_species)
   {
     OperatorNodeFactory::instance()->register_factory( "reduce_species", make_grid_variant_operator<ReduceSpeciesTmpl> );
   }

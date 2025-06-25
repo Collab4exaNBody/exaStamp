@@ -1,20 +1,20 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/log.h>
+#include <onika/log.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exaStamp/compute/thermodynamic_state.h>
-#include <exanb/fields.h>
-#include <exanb/core/basic_types.h>
+#include <exanb/core/grid_fields.h>
+#include <onika/math/basic_types.h>
 
 #include <mpi.h>
 #include <cstring>
 
-#include <exanb/core/quaternion_operators.h>
+#include <onika/math/quaternion_operators.h>
 namespace exaStamp
 {
 
@@ -193,7 +193,7 @@ namespace exaStamp
         ndof.z = tmp[23];
       }
 
-      double conv_temperature = 1.e4 * legacy_constant::atomicMass / legacy_constant::boltzmann ;
+      ///double conv_temperature = 1.e4 * onika::physics::atomicMass / onika::physics::boltzmann ;
       Vec3d kinetic_temperature = 2. * ( kinetic_energy - 0.5 * momentum * momentum / masstotale) / total_particles ;
 
       Vec3d rotational_temperature = {0., 0., 0.};
@@ -250,7 +250,7 @@ namespace exaStamp
   template<class GridT> using ThermodynamicStateRigidmolNodeTmpl = ThermodynamicStateRigidmolNode<GridT>;
     
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(thermodynamic_state_rigidmol)
   {
    OperatorNodeFactory::instance()->register_factory( "simulation_thermodynamic_state_rigidmol", make_grid_variant_operator< ThermodynamicStateRigidmolNodeTmpl > );
   }

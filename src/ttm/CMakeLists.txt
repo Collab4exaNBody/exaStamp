@@ -3,5 +3,5 @@
 # ====================================================================
 
 set(exaStampTTM_LINK_LIBRARIES exaStampParticleSpecies exanbGridCellParticles exanbCompute)
-xstamp_add_plugin(exaStampTTM ${CMAKE_CURRENT_SOURCE_DIR})
+onika_add_plugin(exaStampTTM ${CMAKE_CURRENT_SOURCE_DIR})
 

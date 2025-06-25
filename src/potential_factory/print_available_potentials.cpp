@@ -1,7 +1,7 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/log.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/log.h>
 
 #include <exaStamp/potential_factory/pair_potential_factory.h>
 
@@ -34,7 +34,7 @@ namespace exaStamp
   };
     
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(print_available_potentials)
   {
     OperatorNodeFactory::instance()->register_factory( "print_available_potentials", make_simple_operator<PrintAvailablePotentials> );
   }

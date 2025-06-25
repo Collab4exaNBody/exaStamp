@@ -2,14 +2,15 @@
 
 #include <exanb/core/domain.h>
 #include <exanb/core/grid.h>
-#include <exanb/fields.h>
-#include <exanb/core/basic_types_stream.h>
-#include <exanb/core/log.h>
-#include <exanb/core/thread.h>
-#include <exanb/core/unityConverterHelper.h>
+#include <exanb/core/grid_fields.h>
+#include <onika/math/basic_types_stream.h>
+#include <onika/log.h>
+#include <onika/thread.h>
+#include <onika/physics/units.h>
 
 #include <exaStamp/io/StampV3LegacyIOStructures.h>
-#include <exanb/mpi/all_value_equal.h>
+#include <exaStamp/unit_system.h>
+#include <onika/mpi/all_value_equal.h>
 
 #include <iostream>
 #include <cstdlib>
@@ -56,8 +57,8 @@ namespace exaStamp
     static constexpr size_t io_chunk_size = 1048576;
 
     // conversion constants
-    static const double coord_conv = UnityConverterHelper::convert(1.0, "m"); // conversion factor between input unity to exaStamp internal unity
-    static const double vel_conv = UnityConverterHelper::convert(1.0, "m/s");
+    static constexpr double coord_conv = EXASTAMP_CONST_QUANTITY( 1.0 * m ); // conversion factor between input unity to exaStamp internal unity
+    static constexpr double vel_conv = EXASTAMP_CONST_QUANTITY( 1.0 * m/s );
 
     // MPI Initialization
     int rank=0, np=1;
@@ -79,7 +80,7 @@ namespace exaStamp
     mpiioDumpFile.open(file_name.c_str());
     mpiioDumpFile.readHeader(entete);
 
-    assert( exanb::all_value_equal(comm,entete) );
+    assert( onika::mpi::all_value_equal(comm,entete) );
 
     iteration_number = entete.iterationNumber;
     AABB file_bounds = { Vec3d{ entete.xmin , entete.ymin , entete.zmin } * coord_conv , Vec3d{ entete.xmax , entete.ymax , entete.zmax } * coord_conv };

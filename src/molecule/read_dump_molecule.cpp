@@ -1,13 +1,13 @@
-#include <exanb/core/basic_types_yaml.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/math/basic_types_yaml.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
-#include <exanb/core/basic_types_stream.h>
-#include <exanb/core/log.h>
+#include <onika/math/basic_types_stream.h>
+#include <onika/log.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/file_utils.h>
+#include <onika/file_utils.h>
 
 #include <iostream>
 #include <fstream>
@@ -60,7 +60,7 @@ namespace exaStamp
       {
       using DumpFieldSet = FieldSet< field::_rx,field::_ry,field::_rz, field::_vx,field::_vy,field::_vz, field::_charge, field::_virial, field::_id, field::_idmol, field::_cmol, field::_type >;
       using MolIOExt = MoleculeOptionalHeaderIO<decltype(ldbg)>;
-      std::string file_name = data_file_path( *filename );
+      std::string file_name = onika::data_file_path( *filename );
 
       double reader_bond_max_dist = 0.0;
       double reader_bond_max_stretch = 0.0;
@@ -113,15 +113,15 @@ namespace exaStamp
         dump_filter.override_mirroring = true;
         for(auto m : *mirror)
         {
-          if( exanb::str_tolower(m) == "x-" ) { dump_filter.mirror_x_min=true; }
-          if( exanb::str_tolower(m) == "x+" ) { dump_filter.mirror_x_max=true; }
-          if( exanb::str_tolower(m) == "x" )  { dump_filter.mirror_x_min=true; dump_filter.mirror_x_max=true; }
-          if( exanb::str_tolower(m) == "y-" ) { dump_filter.mirror_y_min=true; }
-          if( exanb::str_tolower(m) == "y+" ) { dump_filter.mirror_y_max=true; }
-          if( exanb::str_tolower(m) == "y" )  { dump_filter.mirror_y_min=true; dump_filter.mirror_y_max=true; }
-          if( exanb::str_tolower(m) == "z-" ) { dump_filter.mirror_z_min=true; }
-          if( exanb::str_tolower(m) == "z+" ) { dump_filter.mirror_z_max=true; }
-          if( exanb::str_tolower(m) == "z" )  { dump_filter.mirror_z_min=true; dump_filter.mirror_z_max=true; }
+          if( onika::str_tolower(m) == "x-" ) { dump_filter.mirror_x_min=true; }
+          if( onika::str_tolower(m) == "x+" ) { dump_filter.mirror_x_max=true; }
+          if( onika::str_tolower(m) == "x" )  { dump_filter.mirror_x_min=true; dump_filter.mirror_x_max=true; }
+          if( onika::str_tolower(m) == "y-" ) { dump_filter.mirror_y_min=true; }
+          if( onika::str_tolower(m) == "y+" ) { dump_filter.mirror_y_max=true; }
+          if( onika::str_tolower(m) == "y" )  { dump_filter.mirror_y_min=true; dump_filter.mirror_y_max=true; }
+          if( onika::str_tolower(m) == "z-" ) { dump_filter.mirror_z_min=true; }
+          if( onika::str_tolower(m) == "z+" ) { dump_filter.mirror_z_max=true; }
+          if( onika::str_tolower(m) == "z" )  { dump_filter.mirror_z_min=true; dump_filter.mirror_z_max=true; }
         }
       }
 
@@ -139,7 +139,7 @@ namespace exaStamp
   };
 
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(read_dump_molecule)
   {
     OperatorNodeFactory::instance()->register_factory( "read_dump_molecule" , make_grid_variant_operator<ReadDumpMolecule> );
   }

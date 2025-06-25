@@ -1,10 +1,10 @@
 
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/log.h>
-#include <exanb/core/basic_types.h>
-#include <exanb/core/basic_types_stream.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/log.h>
+#include <onika/math/basic_types.h>
+#include <onika/math/basic_types_stream.h>
 #include <exanb/grid_cell_particles/particle_region.h>
 #include <exaStamp/particle_species/particle_specie_yaml.h>
 #include <exanb/core/make_grid_variant_operator.h>
@@ -106,7 +106,7 @@ namespace exaStamp
   template<class GridT> using TrackSpeciesAsRegionsTmpl = TrackSpeciesAsRegions< GridT >;
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(track_species_regions)
   {
     OperatorNodeFactory::instance()->register_factory( "track_species_regions", make_grid_variant_operator<TrackSpeciesAsRegionsTmpl> );
   }

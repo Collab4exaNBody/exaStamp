@@ -1,6 +1,6 @@
 #include <exaStamp/potential_factory/pair_potential.h>
 
-#include <exanb/core/log.h>
+#include <onika/log.h>
 
 #include <memory>
 

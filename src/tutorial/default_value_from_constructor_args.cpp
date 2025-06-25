@@ -1,8 +1,8 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/log.h>
-#include <exanb/core/cpp_utils.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/log.h>
+#include <onika/cpp_utils.h>
 
 #include <vector>
 
@@ -34,7 +34,7 @@ namespace exaStamp
   };
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(default_value_from_constructor_args)
   {  
     OperatorNodeFactory::instance()->register_factory( "default_slot_value_from_ctor_args" , make_simple_operator< DefaultValueFromCTorArgs > );
   }

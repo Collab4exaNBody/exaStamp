@@ -1,6 +1,6 @@
 #pragma once
 
-#include <exanb/core/basic_types.h>
+#include <onika/math/basic_types.h>
 #include <exanb/compute/compute_pair_buffer.h>
 
 #include <exaStamp/mechanical/cell_particles_local_structural_metrics.h>

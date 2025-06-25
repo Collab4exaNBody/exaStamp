@@ -1,6 +1,6 @@
 #pragma once
 
-#include <exanb/core/basic_types.h>
+#include <onika/math/basic_types.h>
 #include <vector>
 #include <string>
 #include <memory>

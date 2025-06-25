@@ -3,10 +3,10 @@
 #include <cmath>
 #include <yaml-cpp/yaml.h>
 
-#include <exanb/core/quantity_yaml.h>
-#include <exanb/core/unityConverterHelper.h>
+#include <onika/physics/units.h>
+#include <onika/physics/constants.h>
 #include <exaStamp/potential_factory/pair_potential.h>
-#include <exanb/core/physics_constants.h>
+#include <exaStamp/unit_system.h>
 
 #include <onika/cuda/cuda.h>
 
@@ -38,13 +38,8 @@ namespace exaStamp
     double forcecoul = dvdrr * r * r * prefactor;
     double fpair = -forcecoul / r;
     
-#   ifdef EXANB_UNITS_V2
-    e = EXANB_QUANTITY( v_sh * eV ).convert();
-    de = EXANB_QUANTITY( fpair * eV / ang ).convert();
-#   else
-    e = UnityConverterHelper::convert(v_sh, "eV"); // WARNING : not Cuda compatible
-    de = UnityConverterHelper::convert(fpair, "eV/ang");
-#   endif
+    e = EXASTAMP_QUANTITY( v_sh * eV );
+    de = EXASTAMP_QUANTITY( fpair * eV / ang );
     
   }
 }
@@ -53,8 +48,8 @@ namespace exaStamp
 namespace YAML
 {
   using exaStamp::CoulWolfParms;
-  using exanb::UnityConverterHelper;
-  using exanb::Quantity;
+  
+  using onika::physics::Quantity;
 
   template<> struct convert<CoulWolfParms>
   {

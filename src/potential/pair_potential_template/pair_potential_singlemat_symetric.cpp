@@ -1,15 +1,15 @@
-#pragma xstamp_grid_variant
+
 
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/basic_types.h>
-#include <exanb/core/basic_types_operators.h>
+#include <onika/math/basic_types.h>
+#include <onika/math/basic_types_operators.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/core/log.h>
+#include <onika/log.h>
 #include <exanb/core/compact_grid_pair_weights.h>
 #include <exanb/particle_neighbors/chunk_neighbors.h>
 #include <exanb/compute/compute_pair_optional_args.h>
@@ -37,6 +37,10 @@
 #define DEBUG_ADDITIONAL_PARAMETERS /**/
 #define DEBUG_ADDITIONAL_CODE /**/
 #endif
+
+#define POTENTIAL_REGISTER_INIT() _POTENTIAL_REGISTER_INIT( CONSTRUCTOR_FUNC_NAME )
+#define CONSTRUCTOR_FUNC_NAME USTAMP_CONCAT(OPERATOR_NAME,_init)
+#define _POTENTIAL_REGISTER_INIT(name) CONSTRUCTOR_ATTRIB void MAKE_UNIQUE_NAME(name,_,__LINE__,ONIKA_CURRENT_PACKAGE_NAME) ()
 
 namespace exaStamp
 {
@@ -342,12 +346,12 @@ namespace exaStamp
       size_t specy_index = 0; 
       if( ! species.has_value() )
       {
-        lerr_stream() << "no species input, cannot continue" << std::endl;
+        lerr << "no species input, cannot continue" << std::endl;
         std::abort();
       }
       if( species->size() != 1 && ! type.has_value() )
       {
-        lerr_stream() <<"Error: exactly 1 atom type expected (single material) but found "<<species->size()<<std::endl;
+        lerr <<"Error: exactly 1 atom type expected (single material) but found "<<species->size()<<std::endl;
         std::abort();
       }
       if( type.has_value() )
@@ -357,7 +361,7 @@ namespace exaStamp
         {
           if( species->at(s).m_name == specy_name ) { specy_index = s; }
         }
-        ldbg_stream() << "specy_name="<<specy_name<< ", specy_index = "<<specy_index<<std::endl;
+        ldbg << "specy_name="<<specy_name<< ", specy_index = "<<specy_index<<std::endl;
       }
       PairPotentialParameters pair_params { species->at(specy_index) , species->at(specy_index) };
       
@@ -428,7 +432,8 @@ namespace exaStamp
   }
   
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  // ONIKA_AUTORUN_INIT(OPERATOR_NAME)
+  POTENTIAL_REGISTER_INIT()
   {
     OperatorNodeFactory::instance()->register_factory( OPERATOR_NAME_STR , make_grid_variant_operator< TemplateHelper::OPERATOR_NAME > );
   }

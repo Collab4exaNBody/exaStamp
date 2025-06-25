@@ -1,7 +1,7 @@
 #pragma once
 
 #include <exanb/core/grid.h>
-#include <exanb/fields.h>
+#include <exanb/core/grid_fields.h>
 #include <exanb/core/particle_id_constants.h>
 #include <onika/soatl/field_tuple.h>
 

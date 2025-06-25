@@ -5,7 +5,7 @@
 #include <array>
 #include <cstdint>
 
-#include <exanb/core/basic_types_def.h>
+#include <onika/math/basic_types_def.h>
 #include <exaStamp/atom_bond_connectivity.h>
 
 #include <onika/memory/allocator.h>

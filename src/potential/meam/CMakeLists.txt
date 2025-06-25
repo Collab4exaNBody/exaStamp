@@ -24,5 +24,5 @@ endif()
 
 set(exaStampMEAM_LINK_LIBRARIES exaStampPotential exanbParticleNeighbors lennard_jones)
 
-xstamp_add_plugin(exaStampMEAM ${CMAKE_CURRENT_SOURCE_DIR})
+onika_add_plugin(exaStampMEAM ${CMAKE_CURRENT_SOURCE_DIR})
 

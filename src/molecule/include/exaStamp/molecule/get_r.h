@@ -2,7 +2,7 @@
 
 #include <cmath>
 
-#include <exanb/core/basic_types.h>
+#include <onika/math/basic_types.h>
 //#include "exanb/container_utils.h"
 #include <exaStamp/molecule/id_map.h>
 

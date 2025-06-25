@@ -1,6 +1,6 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/grid.h>
@@ -10,12 +10,12 @@
 #include <exaStamp/parrinellorahman/parrinellorahman_stream.h>
 #include <exanb/core/domain.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/unityConverterHelper.h>
-#include <exanb/core/quantity.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/units.h>
+#include <onika/physics/constants.h>
+#include <exaStamp/unit_system.h>
 #include <exaStamp/compute/thermodynamic_state.h>
-#include <exanb/core/basic_types_stream.h>
-#include <exanb/core/value_streamer.h>
+#include <onika/math/basic_types_stream.h>
+#include <onika/value_streamer.h>
 
 #include <onika/soatl/field_pointer_tuple.h>
 #include <memory>
@@ -70,10 +70,12 @@ namespace exaStamp
   public:
     inline void execute () override final
     {
-      static constexpr double conv_temperature = 1.e4 * legacy_constant::atomicMass / legacy_constant::boltzmann ;
-      static const double boltzmann_internal = UnityConverterHelper::convert(legacy_constant::boltzmann, "m^2*kg/s^2/K");
-      static const double conv_gammadt = UnityConverterHelper::convert(1.0, "1/m^2");
-      static const double conv_gammanvt = UnityConverterHelper::convert(1.0, "s/m^2");
+      using onika::ValueStreamer;
+
+      static constexpr double conv_temperature = 1.e4 * onika::physics::atomicMass / onika::physics::boltzmann ;
+      static constexpr double boltzmann_internal = EXASTAMP_CONST_QUANTITY( onika::physics::boltzmann * ( m^2 ) * kg / ( s^2 ) / K );
+      static constexpr double conv_gammadt = EXASTAMP_CONST_QUANTITY( 1.0 / ( m^2 ) );
+      static constexpr double conv_gammanvt = EXASTAMP_CONST_QUANTITY( 1.0 * s / ( m^2 ) );
       // ldbg << "conv_gammanvt = " << conv_gammanvt << std::endl;
 
       const double raw_dt = *(this->dt);
@@ -127,7 +129,7 @@ namespace exaStamp
         //const auto gammaNVTp_old = data.m_gammaNVTp;
         //const auto hp_old = data.hp;
 /*
-        ldbg << default_stream_format
+        ldbg << onika::default_stream_format
              << "iteration "<< count <<" / "<<maxIter<<std::endl
              << "temp_old="<<temperature_old<<" gammaNVT_old="<<gammaNVT_old<<" gammaNVTp_old="<<gammaNVTp_old<<std::endl
              << "hp_old="<<hp_old <<std::endl;
@@ -365,7 +367,7 @@ namespace exaStamp
   template<class GridT> using ConvergencePushParrinelloRahmanTmpl = ConvergencePushParrinelloRahman<GridT>;
   
  // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(convergence_push_parrinellorahman)
   {
    OperatorNodeFactory::instance()->register_factory( "convergence_push_parrinellorahman", make_grid_variant_operator< ConvergencePushParrinelloRahmanTmpl > );
   }

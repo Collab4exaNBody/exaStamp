@@ -2,7 +2,7 @@
 
 #include <cmath>
 #include <yaml-cpp/yaml.h>
-#include <exanb/core/quantity_yaml.h>
+#include <onika/physics/units.h>
 
 #include <exaStamp/potential_factory/pair_potential.h>
 #include <exaStamp/potential/pair_potentials/lennard_jones/lennard_jones.h>
@@ -56,7 +56,7 @@ namespace YAML
   using exaStamp::LJWOLFParms;
   using exaStamp::LennardJonesParms;
   using exaStamp::CoulWolfParms;
-  using exanb::Quantity;
+  using onika::physics::Quantity;
   using exaStamp::lj_compute_energy;
   using exaStamp::PairPotentialMinimalParameters;
 

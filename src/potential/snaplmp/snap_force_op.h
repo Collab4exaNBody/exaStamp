@@ -1,6 +1,8 @@
 #pragma once
 
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/units.h>
+#include <onika/physics/constants.h>
+#include <exaStamp/unit_system.h>
 
 namespace exaStamp
 {
@@ -54,8 +56,8 @@ namespace exaStamp
     
     // exaStamp conversion specific falgs
     const bool conv_energy_units = true;
-    //    static inline constexpr double conv_energy_factor = 1e-4 * exanb::legacy_constant::elementaryCharge / exanb::legacy_constant::atomicMass;
-    double conv_energy_factor = UnityConverterHelper::convert(1., "eV");
+    //    static inline constexpr double conv_energy_factor = 1e-4 * onika::physics::elementaryCharge / onika::physics::atomicMass;
+    static constexpr double conv_energy_factor = EXASTAMP_CONST_QUANTITY( 1. * eV );
 
     template<class ComputeBufferT, class CellParticlesT>
     inline void operator ()

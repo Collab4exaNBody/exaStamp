@@ -1,12 +1,12 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/grid_cell_particles/grid_cell_values.h>
 
 #include <exaStamp/compute/physics_functors.h>
-#include <exanb/grid_cell_particles/particle_cell_projection.h>
+#include <exanb/analytics/particle_cell_projection.h>
 #include <exanb/core/grid_particle_field_accessor.h>
 
 #include <exaStamp/compute/physics_functors.h>
@@ -54,6 +54,8 @@ namespace exaStamp
       int rank=0;
       MPI_Comm_rank(*mpi, &rank);
 
+      VelocityVec3Combiner velocity = {};
+      ForceVec3Combiner force = {};
       VelocityNormCombiner vnorm = {};
       ParticleCountCombiner count = {};
       KineticEnergyCombiner mv2 = { { species->data() , 0 } };
@@ -61,7 +63,7 @@ namespace exaStamp
       MomentumCombiner momentum = { { species->data() , 0 } };
       KineticEnergyTensorCombiner mv2tensor = { { species->data() , 0 } };
       
-      auto proj_fields = make_field_tuple_from_field_set( grid->field_set, count, vnorm, mv2, mass, momentum, mv2tensor );
+      auto proj_fields = make_field_tuple_from_field_set( grid->field_set, count, vnorm, mv2, mass, momentum, mv2tensor, velocity, force );
       auto field_selector = [flist = *fields] ( const std::string& name ) -> bool { for(const auto& f:flist) if( std::regex_match(name,std::regex(f)) ) return true; return false; } ;
       project_particle_fields_to_grid( ldbg, *grid, *grid_cell_values, *grid_subdiv, *splat_size, field_selector, proj_fields );
     }
@@ -76,7 +78,7 @@ namespace exaStamp
   };
 
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(atom_cell_projection)
   {
     OperatorNodeFactory::instance()->register_factory("atom_cell_projection", make_grid_variant_operator< AtomCellProjection > );
   }

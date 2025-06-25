@@ -1,8 +1,8 @@
-#include <exanb/core/basic_types_yaml.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/log.h>
+#include <onika/math/basic_types_yaml.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/log.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/particle_id_codec.h>
@@ -112,7 +112,9 @@ namespace exaStamp
             [cells,cell_a,no_intramolecular,field_idmol,&cgpw,idmol_a,id_a,type_a,&molid_weight_map,&sp ,&n_total_nbh, &n_positive_weights, &chemPotMap, &mcp]
             ( unsigned int p_a, size_t cell_b, unsigned int p_b , size_t p_nbh_index )
             {
+#             ifndef NDEBUG            
               const uint64_t* idmol_b = cells[cell_b].field_pointer_or_null(field_idmol);
+#             endif
               const uint64_t* id_b    = cells[cell_b][field::id];
 
               // assert( cell_a>=0 && cell_a<n_cells );
@@ -177,7 +179,7 @@ namespace exaStamp
   template<class GridT> using MoleculePairWeightChunkTmpl = MoleculePairWeightChunk<GridT>;
 
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(molecule_pair_weight)
   {
     /* ', field::_idmol' : this ensures that only grids with idmol field will be accepted to instantiate this operator */
     OperatorNodeFactory::instance()->register_factory( "molecule_pair_weight", make_grid_variant_operator< MoleculePairWeightChunkTmpl > );

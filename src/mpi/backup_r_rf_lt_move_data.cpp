@@ -1,15 +1,15 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/grid.h>
-#include <exanb/core/basic_types.h>
+#include <onika/math/basic_types.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/fields.h>
+#include <exanb/core/grid_fields.h>
 #include <exanb/core/position_long_term_backup.h>
 
 #include <onika/soatl/packed_field_arrays.h>
-#include <exanb/mpi/xs_data_move.h>
+#include <onika/mpi/xs_data_move.h>
 
 #include <mpi.h>
 
@@ -88,12 +88,12 @@ namespace exaStamp
       std::vector<int> recv_indices;     // resized to localElementCountAfter
       std::vector<int> recv_count;       // resized to number of processors in comm, unit data element count (not byte size)
       std::vector<int> recv_displ;       // resized to number of processors in comm, unit data element count (not byte size)
-      XsDataMove::communication_scheme_from_ids(*mpi, idMin, idMax /*exclusive max(ids)+1*/, backup_n_ids, backup_r_rf_lt->m_ids.data(), total_particles, current_ids.data(),
+      onika::mpi::communication_scheme_from_ids(*mpi, idMin, idMax /*exclusive max(ids)+1*/, backup_n_ids, backup_r_rf_lt->m_ids.data(), total_particles, current_ids.data(),
                                                 send_indices, send_count, send_displ, recv_indices, recv_count, recv_displ );
 
 #     ifndef NDEBUG
       backup_r_rf_lt->m_ids.resize( std::max( backup_r_rf_lt->m_ids.size(), current_ids.size() ) );
-      XsDataMove::data_move(*mpi, send_indices, send_count, send_displ, recv_indices, recv_count, recv_displ, backup_r_rf_lt->m_ids.data(), backup_r_rf_lt->m_ids.data() );
+      onika::mpi::data_move(*mpi, send_indices, send_count, send_displ, recv_indices, recv_count, recv_displ, backup_r_rf_lt->m_ids.data(), backup_r_rf_lt->m_ids.data() );
       backup_r_rf_lt->m_ids.resize(total_particles);
       for(size_t i=0;i<total_particles;i++)
       {
@@ -109,8 +109,8 @@ namespace exaStamp
       backup_r_rf_lt->m_filtered_positions.resize( std::max(backup_n_ids,total_particles) );      
 
       // move position data across processors
-      XsDataMove::data_move(*mpi, send_indices, send_count, send_displ, recv_indices, recv_count, recv_displ, backup_r_rf_lt->m_positions.data(), backup_r_rf_lt->m_positions.data() );
-      XsDataMove::data_move(*mpi, send_indices, send_count, send_displ, recv_indices, recv_count, recv_displ, backup_r_rf_lt->m_filtered_positions.data(), backup_r_rf_lt->m_filtered_positions.data() );      
+      onika::mpi::data_move(*mpi, send_indices, send_count, send_displ, recv_indices, recv_count, recv_displ, backup_r_rf_lt->m_positions.data(), backup_r_rf_lt->m_positions.data() );
+      onika::mpi::data_move(*mpi, send_indices, send_count, send_displ, recv_indices, recv_count, recv_displ, backup_r_rf_lt->m_filtered_positions.data(), backup_r_rf_lt->m_filtered_positions.data() );      
       backup_r_rf_lt->m_positions.resize( total_particles );
       backup_r_rf_lt->m_filtered_positions.resize( total_particles );      
 
@@ -151,7 +151,7 @@ namespace exaStamp
   template<class GridT> using FilteredPositionBackupLongTermMoveDataTmpl = FilteredPositionBackupLongTermMoveData<GridT>;  
 
  // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(backup_r_rf_lt_move_data)
   {
    OperatorNodeFactory::instance()->register_factory( "backup_r_rf_lt_move_data", make_grid_variant_operator< FilteredPositionBackupLongTermMoveDataTmpl > );
   }

@@ -1,10 +1,10 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/parallel_random.h>
+#include <onika/parallel/random.h>
 #include <exanb/core/particle_id_codec.h>
 #include <exanb/core/particle_id_constants.h>
 #include <exaStamp/sliplink/sliplink.h>
@@ -72,7 +72,7 @@ namespace exaStamp
         std::vector< SLBeadPlacement > sl_positions(sl_count);
         #pragma omp parallel
         {
-          auto& re = rand::random_engine();
+          auto& re = onika::parallel::random_engine();
           std::uniform_int_distribution<size_t> random_chain( 0 , nc-1 );
           std::uniform_int_distribution<size_t> random_bead( 0 , n_beads-2 );
           std::uniform_real_distribution<double> uniform_01( 0.0 , 1.0 );
@@ -149,7 +149,7 @@ namespace exaStamp
       auto sl_cells = sl_grid->cells();
   
       // random distributions for sliplinks' anchors
-      auto& all_re = rand::random_engine();
+      auto& all_re = onika::parallel::random_engine();
       std::normal_distribution<double> gaussian_anchor_displ(0.0, sigma3);
 
       for( const auto & random_sl : locally_assigned_sliplinks )
@@ -228,7 +228,7 @@ Every chain has beads_per_chain beads.
   };
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(sliplink_sl_init)
   {
     OperatorNodeFactory::instance()->register_factory( "sliplink_sl_init", make_grid_variant_operator< SlipLinkInitOperator > );
   }

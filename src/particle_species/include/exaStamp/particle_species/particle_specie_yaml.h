@@ -2,9 +2,9 @@
 
 #include <yaml-cpp/yaml.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/quantity_yaml.h>
-#include <exanb/core/basic_types_yaml.h>
-#include <exanb/core/log.h>
+#include <onika/physics/units.h>
+#include <onika/math/basic_types_yaml.h>
+#include <onika/log.h>
 
 #include <cassert>
 

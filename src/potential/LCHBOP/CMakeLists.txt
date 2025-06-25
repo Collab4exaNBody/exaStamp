@@ -3,5 +3,5 @@
 # =================================
 
 set(exaStampLCHBOP_LINK_LIBRARIES exaStampPotential exaStampParticleSpecies)
-xstamp_add_plugin(exaStampLCHBOP ${CMAKE_CURRENT_SOURCE_DIR})
+onika_add_plugin(exaStampLCHBOP ${CMAKE_CURRENT_SOURCE_DIR})
 

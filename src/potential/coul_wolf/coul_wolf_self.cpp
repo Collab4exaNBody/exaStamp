@@ -1,18 +1,19 @@
-#pragma xstamp_grid_variant
+
 
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/basic_types.h>
-#include <exanb/core/basic_types_operators.h>
+#include <onika/math/basic_types.h>
+#include <onika/math/basic_types_operators.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/operator_slot.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/scg/operator_slot.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/core/log.h>
-#include <exanb/core/cpp_utils.h>
+#include <onika/log.h>
+#include <onika/cpp_utils.h>
 #include <exanb/compute/compute_cell_particles.h>
 #include <exaStamp/potential/coul_wolf/coul_wolf.h>
+#include <exaStamp/unit_system.h>
 
 namespace exaStamp
 {
@@ -30,7 +31,7 @@ namespace exaStamp
       double e_self = -(m_params.e_shift / 2.0 + m_params.alpha / sqrt(M_PI) ) * C * C * m_params.qqrd2e;
 
       double _ep=0.;
-      _ep = UnityConverterHelper::convert(e_self, "eV");
+      _ep = EXASTAMP_QUANTITY( e_self * eV );
       ep += _ep;
     }
   };
@@ -80,7 +81,7 @@ namespace exaStamp
   template<class GridT> using CoulWolfSelfTmpl = CoulWolfSelf<GridT>;
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(coul_wolf_self)
   {  
     OperatorNodeFactory::instance()->register_factory( "coul_wolf_self" , make_grid_variant_operator<CoulWolfSelfTmpl> );
   }

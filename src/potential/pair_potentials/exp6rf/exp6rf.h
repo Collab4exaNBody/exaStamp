@@ -2,7 +2,7 @@
 
 #include <cmath>
 #include <yaml-cpp/yaml.h>
-#include <exanb/core/quantity_yaml.h>
+#include <onika/physics/units.h>
 #include <exaStamp/potential_factory/pair_potential.h>
 
 #include <exaStamp/potential/pair_potentials/exp6/exp6.h>
@@ -52,7 +52,7 @@ namespace YAML
   using exaStamp::Exp6RFParms;
   using exaStamp::Exp6Parms;
   using exaStamp::ReactionFieldParms;
-  using exanb::Quantity;
+  using onika::physics::Quantity;
   using exaStamp::exp6_compute_energy;
   using exaStamp::PairPotentialMinimalParameters;
 

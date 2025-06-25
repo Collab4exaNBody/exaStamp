@@ -263,9 +263,9 @@ namespace YAML
       if( !node.IsMap() ) { return false; }
       v.type_a = node["type_a"].as<std::string>();
       v.type_b = node["type_b"].as<std::string>();
-      v.lj.lj.epsilon = node["epsilon"].as<exanb::Quantity>().convert();
-      v.lj.lj.sigma = node["sigma"].as<exanb::Quantity>().convert();
-      v.rcut = node["rcut"].as<exanb::Quantity>().convert();
+      v.lj.lj.epsilon = node["epsilon"].as<onika::physics::Quantity>().convert();
+      v.lj.lj.sigma = node["sigma"].as<onika::physics::Quantity>().convert();
+      v.rcut = node["rcut"].as<onika::physics::Quantity>().convert();
       double e=0.0, de=0.0;
       if( v.rcut > 0.0 ) exaStamp::lj_compute_energy( v.lj.lj , exaStamp::PairPotentialMinimalParameters{} , v.rcut , e , de );    
       v.lj.ecut = e;

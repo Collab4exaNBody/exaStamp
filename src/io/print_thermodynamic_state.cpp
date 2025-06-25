@@ -1,10 +1,10 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/log.h>
-#include <exanb/core/string_utils.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/log.h>
+#include <onika/string_utils.h>
 #include <exaStamp/compute/thermodynamic_state.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 #include <exanb/core/domain.h>
 
 #include <exaStamp/io/thermodynamic_log_config.h>
@@ -203,12 +203,12 @@ namespace exaStamp
         log_config->m_active_items.push_back( ThermodynamicLogConfig::ELECTRON_E );
       }
     
-      double conv_temperature = 1.e4 * legacy_constant::atomicMass / legacy_constant::boltzmann ;       // internal units to Kelvin
-      //double conv_energy = 1.e4 * legacy_constant::atomicMass / legacy_constant::elementaryCharge;    // internal units to Joule
-      double conv_energy = 1.e4 * legacy_constant::atomicMass / legacy_constant::elementaryCharge;      // internal units to eV
-//      double conv_pressure = legacy_constant::atomicMass * 1e20;					// ORIGINAL LINE - NO IDEA WHAT UNITS THIS IS (1e-14 Pascal)
-      double conv_pressure = 1.e4 * legacy_constant::atomicMass * 1e30;                                 // internal units to Pascal
-      double conv_density = legacy_constant::atomicMass*1e3*1e24;                                       // internal units to g/cm^3
+      double conv_temperature = 1.e4 * onika::physics::atomicMass / onika::physics::boltzmann ;       // internal units to Kelvin
+      //double conv_energy = 1.e4 * onika::physics::atomicMass / onika::physics::elementaryCharge;    // internal units to Joule
+      double conv_energy = 1.e4 * onika::physics::atomicMass / onika::physics::elementaryCharge;      // internal units to eV
+//      double conv_pressure = onika::physics::atomicMass * 1e20;					// ORIGINAL LINE - NO IDEA WHAT UNITS THIS IS (1e-14 Pascal)
+      double conv_pressure = 1.e4 * onika::physics::atomicMass * 1e30;                                 // internal units to Pascal
+      double conv_density = onika::physics::atomicMass*1e3*1e24;                                       // internal units to g/cm^3
 
             
       if( *internal_units )
@@ -257,12 +257,18 @@ namespace exaStamp
       values[ThermodynamicLogConfig::Ty]           = sim_info.temperature().y       / sim_info.particle_count() * conv_temperature;
       values[ThermodynamicLogConfig::Tz]           = sim_info.temperature().z       / sim_info.particle_count() * conv_temperature;
       values[ThermodynamicLogConfig::PRESSURE]     = sim_info.pressure_scal()                                   * conv_pressure;
-      values[ThermodynamicLogConfig::Px]           = sim_info.pressure().x                                      * conv_pressure;
-      values[ThermodynamicLogConfig::Py]           = sim_info.pressure().y                                      * conv_pressure;
-      values[ThermodynamicLogConfig::Pz]           = sim_info.pressure().z                                      * conv_pressure;
-      values[ThermodynamicLogConfig::Pxy]          = sim_info.stress_tensor().m12                               * conv_pressure;
-      values[ThermodynamicLogConfig::Pxz]          = sim_info.stress_tensor().m13                               * conv_pressure;
-      values[ThermodynamicLogConfig::Pyz]          = sim_info.stress_tensor().m23                               * conv_pressure;
+      values[ThermodynamicLogConfig::Px]           = sim_info.stress_tensor().m11                          * conv_pressure;
+      values[ThermodynamicLogConfig::Py]           = sim_info.stress_tensor().m22                          * conv_pressure;
+      values[ThermodynamicLogConfig::Pz]           = sim_info.stress_tensor().m33                          * conv_pressure;
+      values[ThermodynamicLogConfig::Pxy]          = sim_info.full_stress_tensor().m12                          * conv_pressure;
+      values[ThermodynamicLogConfig::Pxz]          = sim_info.full_stress_tensor().m13                          * conv_pressure;                  
+      values[ThermodynamicLogConfig::Pyz]          = sim_info.full_stress_tensor().m23                          * conv_pressure;                  
+      // values[ThermodynamicLogConfig::Px]           = sim_info.pressure().x                                      * conv_pressure;
+      // values[ThermodynamicLogConfig::Py]           = sim_info.pressure().y                                      * conv_pressure;
+      // values[ThermodynamicLogConfig::Pz]           = sim_info.pressure().z                                      * conv_pressure;
+      // values[ThermodynamicLogConfig::Pxy]          = sim_info.stress_tensor().m12                               * conv_pressure;
+      // values[ThermodynamicLogConfig::Pxz]          = sim_info.stress_tensor().m13                               * conv_pressure;
+      // values[ThermodynamicLogConfig::Pyz]          = sim_info.stress_tensor().m23                               * conv_pressure;
       values[ThermodynamicLogConfig::SMISES]       = sim_info.vonmises_scal()                                   * conv_pressure;
       values[ThermodynamicLogConfig::VOLUME]       = sim_info.volume();
       values[ThermodynamicLogConfig::MASS]         = sim_info.mass();
@@ -280,7 +286,7 @@ namespace exaStamp
   };
     
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(print_thermodynamic_state)
   {
    OperatorNodeFactory::instance()->register_factory( "print_thermodynamic_state", make_simple_operator<PrintThermodynamicStateNode> );
   }

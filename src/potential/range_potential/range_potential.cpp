@@ -1,17 +1,17 @@
-#pragma xstamp_grid_variant
+
 
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/basic_types.h>
-#include <exanb/core/basic_types_operators.h>
+#include <onika/math/basic_types.h>
+#include <onika/math/basic_types_operators.h>
 #include <exanb/compute/compute_cell_particle_pairs.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/operator_slot.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/scg/operator_slot.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/core/log.h>
-#include <exanb/core/cpp_utils.h>
+#include <onika/log.h>
+#include <onika/cpp_utils.h>
 
 #include "range_potential_ext.h"
 #include "range_potential_force_op.h"
@@ -112,7 +112,7 @@ namespace exaStamp
   template<class GridT> using RangePotentialTmpl = RangePotential<GridT>;
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(range_potential)
   {  
     OperatorNodeFactory::instance()->register_factory( "range_potential" , make_grid_variant_operator<RangePotentialTmpl> );
   }

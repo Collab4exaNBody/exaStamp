@@ -1,13 +1,13 @@
-#include <exanb/core/basic_types_yaml.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/math/basic_types_yaml.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
-#include <exanb/core/basic_types_stream.h>
-#include <exanb/core/log.h>
+#include <onika/math/basic_types_stream.h>
+#include <onika/log.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/file_utils.h>
+#include <onika/file_utils.h>
 
 #include <iostream>
 #include <fstream>
@@ -50,7 +50,7 @@ namespace exaStamp
     {
       using DumpFieldSet = FieldSet< field::_rx,field::_ry,field::_rz, field::_vx,field::_vy,field::_vz, field::_orient, field::_angmom, field::_id, field::_type >;
       static constexpr DumpFieldSet dump_field_set={};
-      std::string file_name = data_file_path( *filename );
+      std::string file_name = onika::data_file_path( *filename );
       auto dump_filter = make_atom_dump_filter(*grid,*species,ldbg,dump_field_set);
 
       if( scale_cell_size.has_value() )
@@ -88,15 +88,15 @@ namespace exaStamp
         dump_filter.override_mirroring = true;
         for(auto m : *mirror)
         {
-          if( exanb::str_tolower(m) == "x-" ) { dump_filter.mirror_x_min=true; mflags += " X-"; }
-          if( exanb::str_tolower(m) == "x+" ) { dump_filter.mirror_x_max=true; mflags += " X+"; }
-          if( exanb::str_tolower(m) == "x" )  { dump_filter.mirror_x_min=true; dump_filter.mirror_x_max=true; mflags += " X- X+"; }
-          if( exanb::str_tolower(m) == "y-" ) { dump_filter.mirror_y_min=true; mflags += " Y-";}
-          if( exanb::str_tolower(m) == "y+" ) { dump_filter.mirror_y_max=true; mflags += " Y+";}
-          if( exanb::str_tolower(m) == "y" )  { dump_filter.mirror_y_min=true; dump_filter.mirror_y_max=true; mflags += " Y- Y+";}
-          if( exanb::str_tolower(m) == "z-" ) { dump_filter.mirror_z_min=true; mflags += " Z-";}
-          if( exanb::str_tolower(m) == "z+" ) { dump_filter.mirror_z_max=true; mflags += " Z+";}
-          if( exanb::str_tolower(m) == "z" )  { dump_filter.mirror_z_min=true; dump_filter.mirror_z_max=true; mflags += " Z- Z+";}
+          if( onika::str_tolower(m) == "x-" ) { dump_filter.mirror_x_min=true; mflags += " X-"; }
+          if( onika::str_tolower(m) == "x+" ) { dump_filter.mirror_x_max=true; mflags += " X+"; }
+          if( onika::str_tolower(m) == "x" )  { dump_filter.mirror_x_min=true; dump_filter.mirror_x_max=true; mflags += " X- X+"; }
+          if( onika::str_tolower(m) == "y-" ) { dump_filter.mirror_y_min=true; mflags += " Y-";}
+          if( onika::str_tolower(m) == "y+" ) { dump_filter.mirror_y_max=true; mflags += " Y+";}
+          if( onika::str_tolower(m) == "y" )  { dump_filter.mirror_y_min=true; dump_filter.mirror_y_max=true; mflags += " Y- Y+";}
+          if( onika::str_tolower(m) == "z-" ) { dump_filter.mirror_z_min=true; mflags += " Z-";}
+          if( onika::str_tolower(m) == "z+" ) { dump_filter.mirror_z_max=true; mflags += " Z+";}
+          if( onika::str_tolower(m) == "z" )  { dump_filter.mirror_z_min=true; dump_filter.mirror_z_max=true; mflags += " Z- Z+";}
         }
         ldbg << "force domain mirroring to"<<mflags<<std::endl ;
       }
@@ -108,7 +108,7 @@ namespace exaStamp
   template<class GridT> using ReadDumpRigidMolTmpl = ReadDumpRigidMol<GridT>;
 
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(read_dump_rigidmol)
   {
     OperatorNodeFactory::instance()->register_factory( "read_dump_rigidmol" , make_grid_variant_operator<ReadDumpRigidMolTmpl> );
   }

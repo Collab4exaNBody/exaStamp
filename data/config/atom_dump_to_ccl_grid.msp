@@ -1,0 +1,71 @@
+# override parameters with command line options :
+# -----------------------------------------------
+#
+# exaStamp atom_dump_to_ccl_grid.msp --set-global-inputfile microjet.dump --set-global-outputfile ccl
+# --set-cc_label-grid_subdiv 1
+
+configuration:
+  logging:
+    debug: false
+#    parallel: true
+  debug:
+    filter: [ ".*cc_label" , ".*write_cc_table" ]
+  profiling:
+    summary: true
+
+global:
+  ghost_dist: 10.0 ang
+  cc_enable_stats: false
+  inputfile: microjet.dump
+  outputfile: ccl
+
+read_dump_atoms:
+  periodic: [ true , true , true ]
+
+atom_cell_projection:
+  splat_size: 1.0 ang                              # projection kernel size
+  grid_subdiv: 3                                   # cell subdivision, here 3x3x3
+  fields: [ velocity , mass , mv2 , processor_id ] # fields to project on grid
+
+cc_label:
+  grid_cell_field: mass                   # value used for threshold test
+  grid_cell_threshold: 100.0              # value threshold to build boolean CC flag
+  cc_count_threshold: 15                  # minimal number of cells in CC
+  cc_custom_fields: [ velocity , mv2 ]    # user defnied fields to be aggregated over CC cells
+  cc_avg_fields: [ velocity ]             # among user defined fields, those which quantity muste be divided by number of cells
+
+write_cc_table:
+  write_rank: false                         # writes MPI process id of CC owner during write
+  write_gyration: false                     # writes gyration tensor
+  write_custom_fields: [ velocity , mv2 ]   # writes user defined custom fields
+
+simulation:
+  - mpi_comm_world
+  - grid_flavor_multimat
+  - global
+  - domain
+  - species
+  - read_input_file:
+      rebind: { filename: inputfile }
+      body:
+        - read_dump_atoms
+  - reduce_species
+  - simple_cost_model
+  - load_balance_rcb
+  - migrate_cell_particles
+  - ghost_comm_scheme: { enable_cell_values: true }
+  - ghost_update_all
+  - simulation_thermodynamic_state
+  - print_thermodynamic_state
+  - print_domain
+  - grid_stats
+  - memory_stats
+  - resize_grid_cell_values
+  - atom_cell_projection
+  - cc_label
+  - write_output_file:
+      rebind: { filename: outputfile }
+      body:
+        - write_grid_vtk
+        - write_cc_table
+

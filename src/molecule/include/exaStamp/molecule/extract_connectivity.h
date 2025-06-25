@@ -4,9 +4,9 @@
 #include <unordered_set>
 
 #include <exanb/core/grid.h>
-#include <exanb/core/log.h>
+#include <onika/log.h>
 #include <exanb/core/particle_id_codec.h>
-#include <exanb/field_sets.h>
+#include <exanb/core/grid_fields.h>
 
 #include <exanb/core/std_array_hash.h>
 #include <exaStamp/molecule/mol_connectivity.h>

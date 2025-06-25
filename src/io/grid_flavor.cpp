@@ -1,8 +1,8 @@
-#include <exanb/core/basic_types_yaml.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/field_sets.h>
+#include <onika/math/basic_types_yaml.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
+#include <exanb/core/grid_fields.h>
 #include <exanb/core/grid.h>
 
 #include <mpi.h>
@@ -33,11 +33,12 @@ namespace exaStamp
   };
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(grid_flavor)
   {
+    // just an alias to multimat
 	  OperatorNodeFactory::instance()->register_factory(
         "grid_flavor_minimal",
-        make_compatible_operator< InitGridFlavorNode< GridFromFieldSet<MinimalFieldSet> > >
+        make_compatible_operator< InitGridFlavorNode< GridFromFieldSet<MultiMatFieldSet> > >
         );
 
       OperatorNodeFactory::instance()->register_factory(

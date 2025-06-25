@@ -4,21 +4,25 @@
 #include <string>
 #include <numeric>
 
-#include <exanb/core/basic_types_yaml.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/math/basic_types_yaml.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
-#include <exanb/core/basic_types_stream.h>
-#include <exanb/core/log.h>
-//#include "exanb/vector_utils.h"
-#include <exanb/core/file_utils.h>
+#include <onika/math/basic_types_stream.h>
+#include <onika/log.h>
+#include <onika/math/quaternion_operators.h>
+#include <onika/file_utils.h>
+#include <onika/physics/units.h>
+#include <onika/physics/constants.h>
+
 #include <exanb/core/domain.h>
-#include <exaStamp/particle_species/particle_specie.h>
 #include <exanb/core/check_particles_inside_cell.h>
 
-#include <exanb/core/quaternion_operators.h>
+#include <exaStamp/particle_species/particle_specie.h>
+#include <exaStamp/unit_system.h>
+
 
 namespace exaStamp
 {
@@ -43,14 +47,14 @@ namespace exaStamp
     double& min_x, double& min_y, double& min_z, 
     double& max_x, double& max_y, double& max_z )
   {
-    static const double coord_conv = UnityConverterHelper::convert(1.0, "ang"); // conversion factor between input unity to exaStamp internal unity
+    static constexpr double coord_conv = EXASTAMP_CONST_QUANTITY( 1.0 * ang ); // conversion factor between input unity to exaStamp internal unity
     using MoleculeTupleIO = onika::soatl::FieldTuple<field::_rx, field::_ry, field::_rz, field::_type>;
     using LocalParticleTuple = onika::soatl::FieldTuple<field::_rx, field::_ry, field::_rz, field::_id, field::_type, field::_orient >;
 
     ldbg << "read "<<file_name <<std::endl;
     
     std::ifstream file;
-    file.open( data_file_path(file_name), std::ifstream::in);
+    file.open( onika::data_file_path(file_name), std::ifstream::in);
     if(!file.is_open())
     {
       lerr << "Error in reading xyz : file "<< file_name << " not found !" << std::endl;

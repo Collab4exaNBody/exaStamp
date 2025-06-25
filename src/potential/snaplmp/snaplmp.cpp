@@ -1,26 +1,22 @@
-//#/* */pragma xstamp_cuda_enable
-
-#pragma xstamp_grid_variant
-
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/basic_types.h>
-#include <exanb/core/basic_types_operators.h>
+#include <onika/math/basic_types.h>
+#include <onika/math/basic_types_operators.h>
 #include <exanb/compute/compute_cell_particle_pairs.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/operator_slot.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/scg/operator_slot.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/core/log.h>
-#include <exanb/core/cpp_utils.h>
+#include <onika/log.h>
+#include <onika/cpp_utils.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/file_utils.h>
+#include <onika/file_utils.h>
 
-#include <exaStamp/potential/snap/snap_params.h>
-#include <exaStamp/potential/snap/snap_read_lammps.h>
-#include <exaStamp/potential/snap/snap_config.h>
-#include <exaStamp/potential/snap/snap_check_bispectrum.h>
+#include <md/snap/snap_params.h>
+#include <md/snap/snap_read_lammps.h>
+#include <md/snap/snap_config.h>
+#include <md/snap/snap_check_bispectrum.h>
 
 #include <exanb/particle_neighbors/chunk_neighbors.h>
 
@@ -99,8 +95,8 @@ namespace exaStamp
       //ldbg << "rcut="<<snap_ctx->m_rcut <<std::endl << std::flush;
       if( snap_ctx->m_rcut == 0.0 )
       {
-        std::string lammps_param = data_file_path( parameters->lammps_param );
-        std::string lammps_coef = data_file_path( parameters->lammps_coef ); 
+        std::string lammps_param = onika::data_file_path( parameters->lammps_param );
+        std::string lammps_coef = onika::data_file_path( parameters->lammps_coef ); 
         ldbg << "Snap: read lammps files "<<lammps_param<<" and "<<lammps_coef<<std::endl << std::flush;
         SnapExt::snap_read_lammps(lammps_param, lammps_coef, snap_ctx->m_config, *conv_coef_units );
         ldbg <<"rfac0="<<snap_ctx->m_config.rfac0() <<", rmin0="<<snap_ctx->m_config.rmin0() <<", rcutfac="<<snap_ctx->m_config.rcutfac() 
@@ -271,7 +267,7 @@ namespace exaStamp
         if( bispectrumchkfile.has_value() )
         {
           std::ostringstream oss; oss << *bispectrumchkfile << "." << *timestep;
-          std::string file_name = data_file_path( oss.str() );
+          std::string file_name = onika::data_file_path( oss.str() );
           ldbg << "bispectrumchkfile is set, check bispectrum from file "<< file_name << std::endl;
           snap_check_bispectrum(*mpi, *grid, file_name, ncoeff, snap_ctx->m_bispectrum.data() );
         }
@@ -345,7 +341,7 @@ namespace exaStamp
   template<class GridT> using SnapLMPForceTmpl = SnapLMPForce<GridT>;
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(snaplmp)
   {
     OperatorNodeFactory::instance()->register_factory( "snaplmp_force" ,make_grid_variant_operator< SnapLMPForceTmpl > );
   }

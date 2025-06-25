@@ -1,25 +1,23 @@
-
-
 #include <exanb/core/domain.h>
 #include <exanb/core/grid.h>
-#include <exanb/fields.h>
-#include <exanb/core/basic_types_stream.h>
-#include <exanb/core/log.h>
-#include <exanb/core/unityConverterHelper.h>
+#include <exanb/core/grid_fields.h>
+#include <onika/math/basic_types_stream.h>
+#include <onika/log.h>
+#include <onika/physics/units.h>
 
 #include <exanb/io/mpi_file_io.h>
 #include <exaStamp/molecule/stampv4_io.h>
-#include <exanb/mpi/all_value_equal.h>
+#include <onika/mpi/all_value_equal.h>
 #include <onika/oarray.h>
 
-#include <exanb/core/basic_types_yaml.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/math/basic_types_yaml.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 
 //#include "exanb/vector_utils.h"
-#include <exanb/core/file_utils.h>
+#include <onika/file_utils.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exaStamp/molecule/molecule_species.h>
 #include <exaStamp/molecule/bonds_potentials_parameters.h>
@@ -32,10 +30,10 @@
 #include <exaStamp/potential/ljexp6rf/ljexp6rf.h>
 
 #include <exanb/core/check_particles_inside_cell.h>
-#include <exanb/core/parallel_random.h>
-#include <exanb/core/math_utils.h>
-#include <exanb/core/basic_types_operators.h>
-#include <exanb/core/string_utils.h>
+#include <onika/parallel/random.h>
+#include <onika/math/math_utils.h>
+#include <onika/math/basic_types_operators.h>
+#include <onika/string_utils.h>
 #include <exanb/defbox/deformation.h>
 #include <exanb/defbox/deformation_math.h>
 
@@ -97,7 +95,7 @@ namespace exaStamp
     inline void execute () override final
     {
       //-------------------------------------------------------------------------------------------
-      std::string file_name = data_file_path( *filename );
+      std::string file_name = onika::data_file_path( *filename );
       std::string basename;
       std::string::size_type p = file_name.rfind("/");
       if( p != std::string::npos ) basename = file_name.substr(p+1);
@@ -210,14 +208,14 @@ namespace exaStamp
           {
             iss >> atom_mass >> unit;
             unit = read_unit(unit);
-            atom_mass = exanb::make_quantity( atom_mass , unit ).convert();
+            atom_mass = onika::physics::make_quantity( atom_mass , unit ).convert();
             ldbg << "masse = " << atom_mass << " (unit="<<unit<<")"<< std::endl;
           }
           else if( kw == "charge" )
           {
             iss >> atom_charge >> unit;
             unit = read_unit(unit);
-            atom_charge = exanb::make_quantity( atom_charge , unit ).convert();
+            atom_charge = onika::physics::make_quantity( atom_charge , unit ).convert();
             ldbg << "charge = " << atom_charge << " (unit="<<unit<<")"<< std::endl;
           }
           else if( kw == "Potentiel" )
@@ -235,9 +233,9 @@ namespace exaStamp
               std::string p1,u1, p2, u2, p3, u3;
               double v1, v2, v3;
               iss >> p1 >> v1 >> u1 >> p2 >> v2 >> u2 >> p3 >> v3 >> u3;
-              params[p1] = exanb::make_quantity( v1 , read_unit(u1) ).convert();
-              params[p2] = exanb::make_quantity( v2 , read_unit(u2) ).convert();
-              params[p3] = exanb::make_quantity( v3 , read_unit(u3) ).convert();
+              params[p1] = onika::physics::make_quantity( v1 , read_unit(u1) ).convert();
+              params[p2] = onika::physics::make_quantity( v2 , read_unit(u2) ).convert();
+              params[p3] = onika::physics::make_quantity( v3 , read_unit(u3) ).convert();
               double sigma = params["sigma"];
               double epsilon = params["epsilon"];
               double rc = params["rc"];
@@ -248,7 +246,7 @@ namespace exaStamp
               {
                 double alpha=0.0, D=0.0;
                 iss >> p1 >> alpha >> p2 >> D >> u2;
-                D = exanb::make_quantity( D , read_unit(u2) ).convert();
+                D = onika::physics::make_quantity( D , read_unit(u2) ).convert();
                 double rmin = sigma * pow( 2. , 1./6. );
                 double A = 6. * epsilon * exp(alpha) / ( alpha - 6. );
                 double B = alpha / rmin;
@@ -273,11 +271,11 @@ namespace exaStamp
               u4 = read_unit(u4);
               u5 = read_unit(u5);
               ldbg << p1<<"=" << v1 <<" "<< u1<<" , "<< p2<<"=" << v2<<" " << u2<<" , " << p3<<"=" << v3<<" " << u3<<" , " << p4<<"=" << v4<<" " << u4<<" , " << p5<<"=" << v5<<" " << u5<<std::endl;
-              params[p1] = exanb::make_quantity( v1 , u1 ).convert();
-              params[p2] = exanb::make_quantity( v2 , u2 ).convert();
-              params[p3] = exanb::make_quantity( v3 , u3 ).convert();
-              params[p4] = exanb::make_quantity( v4 , u4 ).convert();
-              params[p5] = exanb::make_quantity( v5 , u5 ).convert();
+              params[p1] = onika::physics::make_quantity( v1 , u1 ).convert();
+              params[p2] = onika::physics::make_quantity( v2 , u2 ).convert();
+              params[p3] = onika::physics::make_quantity( v3 , u3 ).convert();
+              params[p4] = onika::physics::make_quantity( v4 , u4 ).convert();
+              params[p5] = onika::physics::make_quantity( v5 , u5 ).convert();
               const double A=params["a"], B=params["b"], C=params["c"], D=params["d"], rc=params["rc"];
               ldbg << "Exp6v1 : A="<<A<<" , B="<<B<<" , C="<<C<<" , D="<<D<<" , rc="<<rc<<std::endl;
               pot.m_params.set_exp6_parameters( A, B, C, D, rc ); // set exp6 parameters
@@ -561,9 +559,9 @@ namespace exaStamp
         {
           double vx=0.0, vy=0.0, vz=0.0;
           next_line() >> vx >> vy >> vz;
-          atom_data[cnt][field::vx] = exanb::make_quantity( vx , atom_speed_unit ).convert();
-          atom_data[cnt][field::vy] = exanb::make_quantity( vy , atom_speed_unit ).convert();
-          atom_data[cnt][field::vz] = exanb::make_quantity( vz , atom_speed_unit ).convert();
+          atom_data[cnt][field::vx] = onika::physics::make_quantity( vx , atom_speed_unit ).convert();
+          atom_data[cnt][field::vy] = onika::physics::make_quantity( vy , atom_speed_unit ).convert();
+          atom_data[cnt][field::vz] = onika::physics::make_quantity( vz , atom_speed_unit ).convert();
         }
         
         // Read charges
@@ -583,7 +581,7 @@ namespace exaStamp
             {
               fatal_error() << "invalid atom id "<<at_id<<" found at line "<<lineno<<std::endl;
             }
-            atom_data[at_id][field::charge] = exanb::make_quantity( charge , atom_charge_unit ).convert();
+            atom_data[at_id][field::charge] = onika::physics::make_quantity( charge , atom_charge_unit ).convert();
           }
           process_kw_line( next_line() );
         }
@@ -605,10 +603,10 @@ namespace exaStamp
               std::string t1, t2;
               std::string u1, u2, u3, u4;
               iss >> t1 >> t2 >> p1 >> u1 >> p2 >> u2 >> p3 >> u3 >> p4 >> u4;
-              double r0 = exanb::make_quantity( p1 , read_unit(u1) ).convert(); if( std::isnan(r0) ) r0=0.0;
-              double k  = exanb::make_quantity( p2 , read_unit(u2) ).convert(); if( std::isnan(k)  ) k=0.0;
-              // p3 = exanb::make_quantity( p3 , read_unit(u3) ).convert(); if( std::isnan(p3) ) p3=0.0; // 2nd and 3rd parameter ignored
-              // p4 = exanb::make_quantity( p4 , read_unit(u4) ).convert(); if( std::isnan(p4) ) p4=0.0;
+              double r0 = onika::physics::make_quantity( p1 , read_unit(u1) ).convert(); if( std::isnan(r0) ) r0=0.0;
+              double k  = onika::physics::make_quantity( p2 , read_unit(u2) ).convert(); if( std::isnan(k)  ) k=0.0;
+              // p3 = onika::physics::make_quantity( p3 , read_unit(u3) ).convert(); if( std::isnan(p3) ) p3=0.0; // 2nd and 3rd parameter ignored
+              // p4 = onika::physics::make_quantity( p4 , read_unit(u4) ).convert(); if( std::isnan(p4) ) p4=0.0;
               ldbg << "Intramolecular "<<fftype<<" for "<<t1<<","<<t2<<" : r0="<<r0<<" , k="<<k << std::endl;
               potentials_for_bonds->m_bond_desc.push_back( BondPotential{ fftype , {t1,t2} , std::make_shared<IntraMolecularBondOPLSFunctional>(k,r0) } );
             }
@@ -618,10 +616,10 @@ namespace exaStamp
               std::string t1, t2, t3;
               std::string u1, u2, u3, u4;
               iss >> t1 >> t2 >> t3 >> p1 >> u1 >> p2 >> u2 >> p3 >> u3 >> p4 >> u4;
-              double phi0 = exanb::make_quantity( p1 , read_unit(u1) ).convert(); if( std::isnan(phi0) ) phi0=0.0;
-              double k    = exanb::make_quantity( p2 , read_unit(u2) ).convert(); if( std::isnan(k)    ) k=0.0;
-              // p3 = exanb::make_quantity( p3 , read_unit(u3) ).convert(); if( std::isnan(p3) ) p3=0.0;  // 2nd and 3rd parameter ignored
-              // p4 = exanb::make_quantity( p4 , read_unit(u4) ).convert(); if( std::isnan(p4) ) p4=0.0;
+              double phi0 = onika::physics::make_quantity( p1 , read_unit(u1) ).convert(); if( std::isnan(phi0) ) phi0=0.0;
+              double k    = onika::physics::make_quantity( p2 , read_unit(u2) ).convert(); if( std::isnan(k)    ) k=0.0;
+              // p3 = onika::physics::make_quantity( p3 , read_unit(u3) ).convert(); if( std::isnan(p3) ) p3=0.0;  // 2nd and 3rd parameter ignored
+              // p4 = onika::physics::make_quantity( p4 , read_unit(u4) ).convert(); if( std::isnan(p4) ) p4=0.0;
               ldbg << "Intramolecular "<<fftype<<" for "<<t1<<","<<t2<<" : "<<t3<<" : phi0="<<phi0<<" , k="<<k << std::endl;
               potentials_for_angles->m_potentials.push_back( BendPotential{ fftype , {t1,t2,t3} , std::make_shared<IntraMolecularBondOPLSFunctional>(k,phi0) } );
             }
@@ -631,9 +629,9 @@ namespace exaStamp
               std::string t1, t2, t3, t4;
               std::string u1, u2, u3;
               iss >> t1 >> t2 >> t3 >> t4 >> p1 >> u1 >> p2 >> u2 >> p3 >> u3 ;
-              p1 = exanb::make_quantity( p1 , read_unit(u1) ).convert(); if( std::isnan(p1) ) p1=0.0;
-              p2 = exanb::make_quantity( p2 , read_unit(u2) ).convert(); if( std::isnan(p2) ) p2=0.0;
-              p3 = exanb::make_quantity( p3 , read_unit(u3) ).convert(); if( std::isnan(p3) ) p3=0.0;
+              p1 = onika::physics::make_quantity( p1 , read_unit(u1) ).convert(); if( std::isnan(p1) ) p1=0.0;
+              p2 = onika::physics::make_quantity( p2 , read_unit(u2) ).convert(); if( std::isnan(p2) ) p2=0.0;
+              p3 = onika::physics::make_quantity( p3 , read_unit(u3) ).convert(); if( std::isnan(p3) ) p3=0.0;
               ldbg << "Intramolecular "<<fftype<<" for "<<t1<<","<<t2<<","<<t3<<","<<t4<<" : p1="<<p1<<" , p2="<<p2<<" , p3="<<p3<< std::endl;
               potentials_for_torsions->m_potentials.push_back( TorsionPotential{ fftype , {t1,t2,t3,t4} , std::make_shared<IntraMolecularCosOPLSFunctional>(p1,p2,p3) } );
             }
@@ -707,7 +705,7 @@ namespace exaStamp
         if( stampinput.has_value() )
         {
           //ldbg << "Init file = "<< *stampinput << std::endl;
-          file.open( data_file_path( *stampinput ) );
+          file.open( onika::data_file_path( *stampinput ) );
         }
         if( file.good() )
         {
@@ -726,7 +724,7 @@ namespace exaStamp
           {
             double rf_epsilon = init["ReactionField_epsilon"];
             double rf_rc = init["ReactionField_rc"];
-            rf_rc = EXANB_QUANTITY( rf_rc * m ); // StampV4 has implicit meter unit for distances
+            rf_rc = EXASTAMP_QUANTITY( rf_rc * m ); // StampV4 has implicit meter unit for distances
             ldbg << "found RF parameters : epsilon="<<rf_epsilon<<" , rcut="<<rf_rc<<std::endl;
             std::set< std::pair<std::string,std::string> > existing_pair_pots;
             for( auto & pot : potentials_for_pairs->m_potentials )
@@ -837,7 +835,7 @@ namespace exaStamp
           const Vec3d r = { tp[field::rx] , tp[field::ry] , tp[field::rz] };
           IJK loc = grid->locate_cell( r ); // domain_periodic_location( *domain, r );
 //          const Vec3d v = { tp[field::vx] , tp[field::vy] , tp[field::vz] };
-//          ldbg << format_string("\t%d : %s , Pos=(% .5e,% .5e,% .5e) , V=(% .5e,% .5e,% .5e)\n",tp[field::id], species->at(tp[field::type]).name(), r.x,r.y,r.z, v.x,v.y,v.z );
+//          ldbg << onika::format_string("\t%d : %s , Pos=(% .5e,% .5e,% .5e) , V=(% .5e,% .5e,% .5e)\n",tp[field::id], species->at(tp[field::type]).name(), r.x,r.y,r.z, v.x,v.y,v.z );
           grid->cell(loc).push_back( tp );
         }
 
@@ -914,7 +912,7 @@ namespace exaStamp
   };
 
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(read_fatomes_mol)
   {
     OperatorNodeFactory::instance()->register_factory("read_fatomes_mol", make_grid_variant_operator< ReadFAtomesMolecules >);
   }

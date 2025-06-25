@@ -1,12 +1,10 @@
 #pragma once
 
 #include <yaml-cpp/yaml.h>
-#include <exanb/core/quantity_yaml.h>
-#include <exanb/core/unityConverterHelper.h>
-//#include <exanb/pair_potential.h>
-#include <exanb/core/physics_constants.h>
-
+#include <onika/physics/units.h>
+#include <onika/physics/constants.h>
 #include <onika/cuda/cuda.h>
+#include <exaStamp/unit_system.h>
 
 namespace exaStamp
 {
@@ -27,7 +25,8 @@ namespace exaStamp
   };
 
   // core computation kernel for reaction field potential
-  ONIKA_HOST_DEVICE_FUNC inline void reaction_field_compute_energy(const ReactionFieldParms& p_rc, double c /* =c1*c2 */, double r, double& e, double& de)
+  ONIKA_HOST_DEVICE_FUNC
+  inline void reaction_field_compute_energy(const ReactionFieldParms& p_rc, double c /* =c1*c2 */, double r, double& e, double& de)
   {
     assert( r > 0. );
     const double r2 = r * r;
@@ -38,7 +37,8 @@ namespace exaStamp
 
   inline void init_rf(ReactionFieldParms& v, double rc, double epsilon)
   {
-    const double one_FourPiEpsilon0 = 1./4./M_PI/UnityConverterHelper::convert(exanb::legacy_constant::epsilonZero, "C^2.s^2/m^3/kg^1");
+    static constexpr double Epsilon0 = EXASTAMP_CONST_QUANTITY( onika::physics::epsilonZero * ( C^2 ) * ( s^2 ) / ( m^3 ) / ( kg^1 ) );
+    static constexpr double one_FourPiEpsilon0 = 1. / 4. / M_PI / Epsilon0;
     v.rc = rc;
     if( rc==0.0 || epsilon==0.0 )
     {
@@ -68,8 +68,7 @@ namespace YAML
 {
   using exaStamp::ReactionFieldParms;
   using exaStamp::reaction_field_compute_energy;
-  using exanb::UnityConverterHelper;
-  using exanb::Quantity;
+  using onika::physics::Quantity;
 
   template<> struct convert<ReactionFieldParms>
   {

@@ -1,7 +1,7 @@
 #include <algorithm>
 #include <string>
 #include <vector>
-#include <exanb/core/string_utils.h>
+#include <onika/string_utils.h>
 
 namespace exaStamp
 {
@@ -59,14 +59,14 @@ namespace exaStamp
       {
         if(p.second.len==-1)
         {
-          std::string s = format_string(p.second.m_format,0.0);
+          std::string s = onika::format_string(p.second.m_format,0.0);
           size_t pfxlen = ( p.first == SIM_STATUS ) ? 3 : 0;
           p.second.len = std::max( s.length() + pfxlen ,  p.second.m_header.length() );
         }
       }
       if( header )
       {
-        for(auto id : m_active_items) out << m_sep << format_string("%*s", m_avail_items[id].len, m_avail_items[id].m_header );
+        for(auto id : m_active_items) out << m_sep << onika::format_string("%*s", m_avail_items[id].len, m_avail_items[id].m_header );
         out << std::endl;
       }
       for(auto id : m_active_items)
@@ -96,15 +96,15 @@ namespace exaStamp
             }
             else
             {
-              lb_value = format_string(m_avail_items[SIM_STATUS].m_format, values[SIM_STATUS] );
+              lb_value = onika::format_string(m_avail_items[SIM_STATUS].m_format, values[SIM_STATUS] );
             }
           }
           
-          out << m_sep << format_string("%c %c%*s",lb_move_char,domext_char,m_avail_items[SIM_STATUS].len-3,lb_value);
+          out << m_sep << onika::format_string("%c %c%*s",lb_move_char,domext_char,m_avail_items[SIM_STATUS].len-3,lb_value);
         }
         else
         {
-          out << m_sep << format_string(m_avail_items[id].m_format,values[id]);
+          out << m_sep << onika::format_string(m_avail_items[id].m_format,values[id]);
         }
       }
       out << std::endl;      

@@ -2,8 +2,8 @@
 
 #include <cmath>
 #include <yaml-cpp/yaml.h>
-#include <exanb/core/quantity_yaml.h>
-#include <exanb/core/unityConverterHelper.h>
+#include <onika/physics/units.h>
+#include <onika/physics/units.h>
 
 namespace exaStamp
 {
@@ -154,8 +154,7 @@ namespace exaStamp
 namespace YAML
 {
   using exaStamp::EamJohnsonParameters;
-  using exanb::UnityConverterHelper;
-  using exanb::Quantity;
+  using onika::physics::Quantity;
 
   template<> struct convert<EamJohnsonParameters>
   {

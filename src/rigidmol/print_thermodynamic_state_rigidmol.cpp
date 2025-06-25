@@ -1,10 +1,10 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/log.h>
-#include <exanb/core/string_utils.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/log.h>
+#include <onika/string_utils.h>
 #include <exaStamp/compute/thermodynamic_state.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/constants.h>
 
 namespace exaStamp
 {
@@ -32,9 +32,9 @@ namespace exaStamp
 
     inline void execute () override final
     {
-      double conv_temperature = 1.e4 * legacy_constant::atomicMass / legacy_constant::boltzmann ;
-      double conv_energy = 1.e4 * legacy_constant::atomicMass / legacy_constant::elementaryCharge;
-      double conv_pressure = legacy_constant::atomicMass * 1e20;
+      double conv_temperature = 1.e4 * onika::physics::atomicMass / onika::physics::boltzmann ;
+      double conv_energy = 1.e4 * onika::physics::atomicMass / onika::physics::elementaryCharge;
+      double conv_pressure = onika::physics::atomicMass * 1e20;
       
       static const std::string header = "     Step     Time (ps)     Particles   Mv/Ext/Imb.  Tot. E. (eV/part)  Kin. E. (eV/part)  Rot. E. (eV/part)  Pot. E. (eV/part)      T. (K)     Tkin (K)    Trot (K) Pressure    sMises    Volume       Mass";
       
@@ -85,7 +85,7 @@ namespace exaStamp
         }
         else
         {
-          lb_value = format_string("%.1e", lb_inbalance);
+          lb_value = onika::format_string("%.1e", lb_inbalance);
         }
       }
 
@@ -102,7 +102,7 @@ namespace exaStamp
         lout << std::endl;
       }
 
-      lout<<format_string("%9ld % .6e %13ld  %c %c %8s  %.10e  %  .10e  % .10e  % .10e  % 11.3f % 11.3f % 11.3f % .3e % .3e % .3e % .3e",
+      lout<<onika::format_string("%9ld % .6e %13ld  %c %c %8s  %.10e  %  .10e  % .10e  % .10e  % 11.3f % 11.3f % 11.3f % .3e % .3e % .3e % .3e",
         *timestep,
 	      *physical_time,
         sim_info.particle_count(),
@@ -121,7 +121,7 @@ namespace exaStamp
       
       if( electronic_energy.has_value() )
       {
-        lout << format_string(" % .7e",(*electronic_energy) * conv_energy / sim_info.particle_count() );
+        lout << onika::format_string(" % .7e",(*electronic_energy) * conv_energy / sim_info.particle_count() );
       }
       lout << std::endl;
     }
@@ -130,7 +130,7 @@ namespace exaStamp
   };
     
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(print_thermodynamic_state_rigidmol)
   {
    OperatorNodeFactory::instance()->register_factory( "print_thermodynamic_state_rigidmol", make_simple_operator<PrintThermodynamicStateRigidmolNode> );
   }

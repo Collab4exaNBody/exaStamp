@@ -1,20 +1,20 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
 #include <onika/memory/allocator.h>
 #include <exaStamp/parrinellorahman/parrinellorahman.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/basic_types.h>
-#include <exanb/core/basic_types_operators.h>
-#include <exanb/core/basic_types_yaml.h>
-#include <exanb/core/basic_types_stream.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/math/basic_types.h>
+#include <onika/math/basic_types_operators.h>
+#include <onika/math/basic_types_yaml.h>
+#include <onika/math/basic_types_stream.h>
+#include <onika/physics/constants.h>
 
-#include <exanb/core/string_utils.h>
-#include <exanb/core/print_utils.h>
+#include <onika/string_utils.h>
+#include <onika/print_utils.h>
 
 #include <sstream>
 
@@ -34,6 +34,7 @@ namespace exaStamp
     ADD_SLOT( std::string             , file       , INPUT , "parrinello_rahman.dat" );
     ADD_SLOT( long                    , timestep            , INPUT, REQUIRED);
     ADD_SLOT( double                  , physical_time       , INPUT );
+    ADD_SLOT( bool                    , force_append_thermo , INPUT , false );
 
     using PointerTuple = onika::soatl::FieldPointerTuple< GridT::CellParticles::Alignment , GridT::CellParticles::ChunkSize, field::_vx, field::_vy, field::_vz >;
 
@@ -77,11 +78,11 @@ namespace exaStamp
       double Lb = norm(b);
       double Lc = norm(c);
 
-      double alpha = 180. * asin(norm(cross(a,b)) / (La * Lb)) / legacy_constant::pi;
-      double beta  = 180. * asin(norm(cross(b,c)) / (Lb * Lc)) / legacy_constant::pi;
-      double gamma = 180. * asin(norm(cross(c,a)) / (Lc * La)) / legacy_constant::pi;
+      double alpha = 180. * asin(norm(cross(a,b)) / (La * Lb)) / M_PI;
+      double beta  = 180. * asin(norm(cross(b,c)) / (Lb * Lc)) / M_PI;
+      double gamma = 180. * asin(norm(cross(c,a)) / (Lc * La)) / M_PI;
 
-      oss << format_string("%9ld % .6e % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e \n",
+      oss << onika::format_string("%9ld % .6e % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e  % .10e \n",
 			   *timestep,
 			   *physical_time,
 			   La,
@@ -100,7 +101,7 @@ namespace exaStamp
 			   newMat.m32,
 			   newMat.m33);
 
-      FileAppendWriteBuffer::instance().append_to_file( *file , oss.str() );
+      onika::FileAppendWriteBuffer::instance().append_to_file( *file , oss.str(), *force_append_thermo);
 
       //const Mat3d newPM = parrinello_rahman_ctx->h * diag_matrix( reciprocal(newExt) );
       //ldbg << "newPM = "<< newPM << std::endl;
@@ -152,7 +153,7 @@ namespace exaStamp
  template<class GridT> using UpdateXFormParrinelloRahmanTmpl = UpdateXFormParrinelloRahman<GridT>;
 
  // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(update_xform_parrinellorahman)
   {
    OperatorNodeFactory::instance()->register_factory( "update_xform_parrinellorahman", make_grid_variant_operator< UpdateXFormParrinelloRahmanTmpl > );
   }

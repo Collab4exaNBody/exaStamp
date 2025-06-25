@@ -1,19 +1,23 @@
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/basic_types.h>
-#include <exanb/core/basic_types_operators.h>
+#include <onika/math/basic_types.h>
+#include <onika/math/basic_types_operators.h>
 #include <exanb/compute/compute_cell_particle_pairs.h>
-#include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/operator_slot.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/scg/operator_slot.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/core/log.h>
-#include <exanb/core/cpp_utils.h>
-#include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/file_utils.h>
+#include <onika/log.h>
+#include <onika/cpp_utils.h>
+#include <onika/file_utils.h>
 
-#include <exaStamp/potential/snap/snap_params.h>
+#include <exanb/core/particle_type_id.h>
+#include <md/snap/snap_params.h>
+
+namespace exaStamp
+{
+  using namespace md;
+}
 
 #include <exaStamp/potential/snaplegacy/SnapLegacyCG.h>
 #include <exaStamp/potential/snaplegacy/SnapLegacyBS.h>
@@ -95,8 +99,8 @@ namespace exaStamp
 
       if( m_rcut == 0.0 )
       {
-        std::string lammps_param = data_file_path( parameters->lammps_param );
-        std::string lammps_coef = data_file_path( parameters->lammps_coef ); 
+        std::string lammps_param = onika::data_file_path( parameters->lammps_param );
+        std::string lammps_coef = onika::data_file_path( parameters->lammps_coef ); 
         ldbg << "Snap: read lammps files "<<lammps_param<<" and "<<lammps_coef<<std::endl;
         snap_legacy_read_lammps(lammps_param, lammps_coef, m_config);
         ldbg <<"rfac0="<<m_config.rfac0() <<", rmin0="<<m_config.rmin0() <<", rcutfac="<<m_config.rcutfac() <<", twojmax="<<m_config.twojmax()<<", nmat="<<m_config.materials().size()<<std::endl;
@@ -136,7 +140,7 @@ namespace exaStamp
         const SnapMaterial& mat = m_config.materials()[0];
 
         // temporay, enable mutiple species if they all have weight=1. modifications needed for true multimaterial
-        m_factor.assign( MAX_PARTICLE_SPECIES, 1.0 );
+        m_factor.assign( exanb::MAX_PARTICLE_TYPES , 1.0 );
         m_factor[0] = mat.weight();
 
         m_coefs.resize( mat.number_of_coefficients() );
@@ -199,8 +203,8 @@ namespace exaStamp
       const bool m_symetric_forces = false;
 
       template<class CellsAccessorT, class GridCellLocksT, class ParticleLockT>
-      inline void operator ()( size_t n, ComputeBuffer& buf,
-        double& en, double& fx, double& fy, double& fz, unsigned int type,
+      inline void operator ()(
+        size_t n, ComputeBuffer& buf, double& en, double& fx, double& fy, double& fz, unsigned int type,
         CellsAccessorT cells, GridCellLocksT locks, ParticleLockT& lock_a
         ) const
       {
@@ -208,20 +212,13 @@ namespace exaStamp
         this->operator () ( n,buf,en,fx,fy,fz,type, virial, cells , locks, lock_a);
       }
 
-      template<class CellsAccessorT, class Mat3dT>
-      inline void operator ()
-        (
-        size_t n,
-        ComputeBuffer& buf,
-        double& en,
-        double& fx,
-        double& fy,
-        double& fz,
-        unsigned int type, // to recover particle type
-        Mat3dT& virial ,
+      template<class CellsAccessorT>
+      inline void operator () (
+        size_t n, ComputeBuffer& buf, double& en, double& fx, double& fy, double& fz, unsigned int type,
         CellsAccessorT cells
         ) const
       {
+        FakeMat3d virial;
         ComputePairOptionalLocks<false> locks = {};
         FakeParticleLock lock_a = {};
         this->operator () ( n,buf,en,fx,fy,fz,type,virial, cells, locks , lock_a );
@@ -237,16 +234,16 @@ namespace exaStamp
         double& fy,
         double& fz,
         unsigned int type, // to recover particle type
+        Mat3d& virial ,
         CellsAccessorT cells
         ) const
       {
-        Mat3d virial;
         ComputePairOptionalLocks<false> locks = {};
         FakeParticleLock lock_a = {};
-        this->operator () ( n,buf,en,fx,fy,fz,type, virial, cells , locks, lock_a);
+        this->operator () ( n,buf,en,fx,fy,fz,type,virial, cells, locks , lock_a );
       }
 
-      template<class Mat3dT, class CellsAccessorT,class GridCellLocksT, class ParticleLockT>
+      template<class CellsAccessorT, class Mat3dT,class GridCellLocksT, class ParticleLockT>
       inline void operator ()
         (
         size_t n,
@@ -378,7 +375,7 @@ namespace exaStamp
   template<class GridT> using SnapLegacyForceTmpl = SnapLegacyForce<GridT>;
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(snaplegacy)
   {
     OperatorNodeFactory::instance()->register_factory( "snaplegacy_force" ,make_grid_variant_operator< SnapLegacyForceTmpl > );
   }

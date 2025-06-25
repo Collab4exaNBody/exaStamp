@@ -1,9 +1,9 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
-#include <exanb/core/parallel_random.h>
+#include <onika/parallel/random.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/particle_id_codec.h>
 #include <exanb/core/particle_id_translation.h>
@@ -12,7 +12,7 @@
 #include <exanb/core/algorithm.h>
 #include <exaStamp/sliplink/sliplink.h>
 
-#include <exanb/mpi/data_types.h>
+#include <onika/mpi/data_types.h>
 
 #include <random>
 #include <mpi.h>
@@ -81,7 +81,7 @@ namespace exaStamp
 
 #     pragma omp parallel
       {
-        auto& re = rand::random_engine();
+        auto& re = onika::parallel::random_engine();
         // random distributions used for sliplink parameters
         std::uniform_int_distribution<size_t> random_chain( 0 , n_chains-1 );
         std::uniform_int_distribution<size_t> random_bead( 0 , n_beads-2 );
@@ -348,7 +348,7 @@ namespace exaStamp
         MPI_Allreduce(MPI_IN_PLACE,sl_positions.data(),total_regen_count*3,MPI_DOUBLE,MPI_MAX,comm);
 
 #       ifndef NDEBUG
-        MPI_Allreduce(MPI_IN_PLACE,&n_resolved_positions,1,exanb::mpi_datatype<size_t>(),MPI_SUM,comm);
+        MPI_Allreduce(MPI_IN_PLACE,&n_resolved_positions,1,onika::mpi::mpi_datatype<size_t>(),MPI_SUM,comm);
         ldbg << "total resolved positions = "<< n_resolved_positions << std::endl;
         assert( n_resolved_positions == total_regen_count );
         for(size_t i=0;i<total_regen_count;i++)
@@ -375,7 +375,7 @@ namespace exaStamp
 
 #       pragma omp parallel
         {
-          auto& re = rand::random_engine();
+          auto& re = onika::parallel::random_engine();
           GRID_OMP_FOR_BEGIN(dims_no_ghost,_,loc_no_ghost)
           {
             IJK loc = loc_no_ghost + ghost_layers;
@@ -435,7 +435,7 @@ computes sliplink movement along curvilinear abcsissa. movement has two origins 
   template<class GridT> using SlipLinkSLMoveOperatorTmpl = SlipLinkSLMoveOperator<GridT>;
   
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(sliplink_sl_move)
   {
     OperatorNodeFactory::instance()->register_factory( "sliplink_sl_move", make_grid_variant_operator< SlipLinkSLMoveOperatorTmpl > );
   }

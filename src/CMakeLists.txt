@@ -16,8 +16,7 @@ add_subdirectory(mechanical)
 add_subdirectory(rigidmol)
 add_subdirectory(tutorial)
 add_subdirectory(flat_arrays)
+add_subdirectory(npt)
 
-if(XSTAMP_ENABLE_SLIPLINK)
-  add_subdirectory(sliplink)
-endif()
+# add_subdirectory(sliplink) # not maintained since release 3.6
 

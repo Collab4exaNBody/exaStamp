@@ -1,0 +1,69 @@
+# no-seq enable-if-EXASTAMP_ENABLE_PERF_TESTS nthreads=max
+
+configuration:
+  logging:
+    debug: true
+#    parallel: true
+  debug:
+    filter: [ ".*cc_label" , ".*write_cc_table" ]
+  profiling:
+    summary: true # default is deactivated, activate with --profiling-summary true
+
+grid_flavor: grid_flavor_multimat
+
+replicate_domain:
+  repeat: [ 1 , 1 , 1 ]
+
+input_data:
+  - read_dump_atoms:
+      filename: microjet.dump
+#      periodic: [ false , true , true ]
+#      scale_cell_size: 2.0
+  - replicate_domain
+
+global:
+  dt: 1.0e-3 ps
+  simulation_end_iteration: 600003
+  simulation_log_frequency: 1
+  simulation_dump_frequency: 1000
+#  analysis_dump_frequency: 5
+  rcut_inc: 1.25 ang
+
++first_iteration:
+  - grid_stats
+  - chunk_neighbors_stats
+  - memory_stats
+  - dump_data_CCL
+
+#dump_data:
+#  - memory_stats
+
+# define potential we'll reuse later
+compute_force:
+  - lj_compute_force
+
+lj_compute_force:
+  parameters: { epsilon: 9.340E-20 J , sigma: 0.227E-09 m }
+  rcut: 5.68 ang
+
+dump_data_CCL:
+  - grid_flavor
+  - resize_grid_cell_values
+  - atom_cell_projection
+  - cc_label
+  - timestep_file: "cc_%09d"
+  - write_grid_vtk
+  - write_cc_table
+
+dump_analysis: dump_data_CCL
+
+cc_label:
+  grid_cell_field: mass
+  grid_cell_threshold: 100.0
+  cc_count_threshold: 15
+
+atom_cell_projection:
+  splat_size: 3.0
+  grid_subdiv: 3
+  fields: [ mass , mv2 , processor_id ]
+

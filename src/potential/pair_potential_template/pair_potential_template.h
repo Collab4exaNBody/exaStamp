@@ -22,7 +22,7 @@
 #define USTAMP_POTENTIAL_HANDLE_FORCE_WEIGHTING 0
 #endif
 
-#include <exanb/core/cpp_utils.h>
+#include <onika/cpp_utils.h>
 
 #define USTAMP_POTENTIAL_CLASS USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,Potential)
 #define USTAMP_POTENTIAL_REGISTER_FUNCTION USTAMP_CONCAT(register_potential_factory_,USTAMP_POTENTIAL_NAME)

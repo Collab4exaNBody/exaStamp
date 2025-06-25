@@ -1,16 +1,16 @@
-#include <exanb/core/basic_types_yaml.h>
-#include <exanb/core/basic_types.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/math/basic_types_yaml.h>
+#include <onika/math/basic_types.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
-#include <exanb/core/basic_types_stream.h>
-#include <exanb/core/log.h>
+#include <onika/math/basic_types_stream.h>
+#include <onika/log.h>
 #include <exanb/core/domain.h>
 
-#include <exanb/fields.h>
+#include <exanb/core/grid_fields.h>
 
 #include <exanb/defbox/deformation.h>
 #include <exanb/defbox/deformation_stream.h>
@@ -173,7 +173,7 @@ namespace exaStamp
       	{
       	  cpbuf.process_neighbor.m_cells_t0 = grid_t0->cells();
       	};
-      auto cp_force_buf = make_compute_pair_buffer( cp_init_func );
+      auto cp_force_buf = make_compute_pair_buffer<CPBufT>( cp_init_func );
 
       DeformationGradientComputeOp<GridT> deformation_gradient_compute_op { grid_t0->cells() , local_mechanical_data, compute_static_measures, compute_dynamic_measures, xform_t0, xform, lattice, rrDef, weight_function_mode};
 	
@@ -305,7 +305,7 @@ namespace exaStamp
   template<class GridT> using ComputeLocalMechanicalMetricsOperatorTmpl = ComputeLocalMechanicalMetricsOperator<GridT>;
   
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(compute_local_mechanical_metrics)
   {
     OperatorNodeFactory::instance()->register_factory( "compute_local_mechanical_metrics", make_grid_variant_operator< ComputeLocalMechanicalMetricsOperatorTmpl > );
   }

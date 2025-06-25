@@ -1,6 +1,7 @@
-#pragma once
+#ifndef LMP_ERROR_H
+#define LMP_ERROR_H
 
-#include <exanb/core/log.h>
+#include <onika/log.h>
 
 namespace LAMMPS_NS
 {
@@ -26,4 +27,6 @@ namespace LAMMPS_NS
   };
 
 }
+
+#endif
 

@@ -1,8 +1,8 @@
 #pragma once
 
 #include <yaml-cpp/yaml.h>
-#include <exanb/core/quantity_yaml.h>
-#include <exanb/core/physics_constants.h>
+#include <onika/physics/units.h>
+#include <onika/physics/constants.h>
 
 #include <string>
 
@@ -46,7 +46,7 @@ namespace YAML
       if( ! node["cutoff"   ] ) { return false; }
       if( ! node["dump_out" ] ) { return false; }
 
-      static const double conv_energy_inv =  1e-4 * exanb::legacy_constant::elementaryCharge / exanb::legacy_constant::atomicMass;
+      static const double conv_energy_inv =  1e-4 * onika::physics::elementaryCharge / onika::physics::atomicMass;
       
       v.dir       = node["dir"      ].as<std::string>();
       v.showew    = node["showew"   ].as<bool>();

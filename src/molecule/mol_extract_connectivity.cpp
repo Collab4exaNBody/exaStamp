@@ -1,10 +1,10 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/log.h>
+#include <onika/log.h>
 #include <exaStamp/molecule/extract_connectivity.h>
 #include <exaStamp/molecule/get_r.h>
 #include <exaStamp/molecule/id_map.h>
@@ -39,7 +39,7 @@ namespace exaStamp
   template<class GridT> using MolExtractConnectivityTmpl = MolExtractConnectivity<GridT>;
 
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(mol_extract_connectivity)
   {
     /* ', field::_idmol' : this ensures that only grids with idmol field will be accepted to instantiate this operator */
     OperatorNodeFactory::instance()->register_factory( "mol_extract_connectivity", make_grid_variant_operator< MolExtractConnectivityTmpl > );

@@ -3,11 +3,12 @@
 #include <unordered_map>
 #include <cstdint>
 #include <exanb/core/mt_concurrent_map.h>
+#include <onika/thread.h>
 
 namespace exaStamp
 {
-  using IdMap       = exanb::MultiThreadedConcurrentMap< std::unordered_map     <uint64_t, uint64_t> , ::exanb::max_threads_hint *2 >;
-  using IdMapGhosts = exanb::MultiThreadedConcurrentMap< std::unordered_multimap<uint64_t, uint64_t> , ::exanb::max_threads_hint *2 >;
+  using IdMap       = exanb::MultiThreadedConcurrentMap< std::unordered_map     <uint64_t, uint64_t> , onika::max_threads_hint *2 >;
+  using IdMapGhosts = exanb::MultiThreadedConcurrentMap< std::unordered_multimap<uint64_t, uint64_t> , onika::max_threads_hint *2 >;
 
   static inline uint64_t atom_from_idmap(const uint64_t id, const IdMap& id_map, const IdMapGhosts& id_map_ghosts)
   {

@@ -1,0 +1,47 @@
+name: C/C++ CI
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
+  BUILD_TYPE: Release
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+    - name: Get Yaml cpp
+      run: sudo apt install libyaml-cpp-dev
+    - name: Install
+      run: sudo apt-get update && sudo apt-get install lcov
+    - name: Install MPI
+      run: sudo apt install mpich
+  
+    - name: Get Onika
+      run: git clone --depth 1 https://github.com/Collab4exaNBody/onika.git   
+    - name: Configure Onika
+      run: cmake -B ${{github.workspace}}/onika/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/onika/install
+      working-directory: ${{github.workspace}}/onika      
+    - name: Build Onika
+      # Build your program with the given configuration
+      run: cmake --build ${{github.workspace}}/onika/build --target install --config ${{env.BUILD_TYPE}} -j 8
+      
+    - name: Get ExaNBody
+      run: git clone --depth 1 https://github.com/Collab4exaNBody/exaNBody.git         
+    - name: Configure ExaNBody
+      run: cmake -B ${{github.workspace}}/exaNBody/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -Donika_DIR=${{github.workspace}}/onika/install -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/exaNBody/install -DEXANB_BUILD_CONTRIB_MD=ON -DEXANB_BUILD_MICROSTAMP=ON
+      working-directory: ${{github.workspace}}/exaNBody   
+    - name: Build ExaNBody
+      run: cmake --build ${{github.workspace}}/exaNBody/build --target install --config ${{env.BUILD_TYPE}} -j 8
+      
+    - name: Configure CMake for exaStamp
+      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DexaNBody_DIR=${{github.workspace}}/exaNBody/install
+    - name: Build exaStamp
+      # Build your program with the given configuration
+      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} -j 8

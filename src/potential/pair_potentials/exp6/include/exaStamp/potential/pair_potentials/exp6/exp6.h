@@ -3,7 +3,7 @@
 #include <cmath>
 #include <yaml-cpp/yaml.h>
 
-#include <exanb/core/quantity_yaml.h>
+#include <onika/physics/units.h>
 #include <exaStamp/potential_factory/pair_potential.h>
 
 #include <onika/cuda/cuda.h>
@@ -28,7 +28,7 @@ namespace exaStamp
 namespace YAML
 {
   using exaStamp::Exp6Parms;
-  using exanb::Quantity;
+  using onika::physics::Quantity;
 
   template<> struct convert<Exp6Parms>
   {

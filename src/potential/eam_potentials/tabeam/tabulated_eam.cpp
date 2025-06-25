@@ -1,7 +1,12 @@
 #include "tabulated_eam.h"
-#include <exanb/core/file_utils.h>
-#include <exanb/core/log.h>
-#include <exanb/core/physics_constants.h>
+
+#include <onika/file_utils.h>
+#include <onika/log.h>
+
+#include <onika/physics/units.h>
+#include <onika/physics/constants.h>
+#include <onika/cuda/cuda.h>
+#include <exaStamp/unit_system.h>
 
 // Yaml conversion operators, allows to read potential parameters from config file
 namespace YAML
@@ -9,8 +14,7 @@ namespace YAML
 
   bool convert<exaStamp::TabEAMPotentialParms>::decode(const Node& _node, exaStamp::TabEAMPotentialParms& v)
   {
-    using exanb::UnityConverterHelper;
-    using exanb::Quantity;
+    using onika::physics::Quantity;
     using exanb::lout;
     using exanb::lerr;
     using exanb::ldbg;
@@ -33,7 +37,7 @@ namespace YAML
 
     if( ! file_to_load.empty() )
     {
-      file_to_load = exanb::data_file_path(file_to_load);
+      file_to_load = onika::data_file_path(file_to_load);
       ldbg << "tabulated EAM data from "<<file_to_load<<std::endl;
       node = LoadFile(file_to_load);
     }
@@ -49,13 +53,13 @@ namespace YAML
     {
       if (node["format"].as<std::string>() == "exastampv1")
       {
-        phis = exanb::legacy_constant::avogadro * 1.e-1 ;
-        dphis = exanb::legacy_constant::avogadro * 1.e-11;
-        fs = exanb::legacy_constant::avogadro * 1.e-1 ; // .... <--
-        dfs = exanb::legacy_constant::avogadro * 1.e-3 ;
+        phis = onika::physics::avogadro * 1.e-1 ;
+        dphis = onika::physics::avogadro * 1.e-11;
+        fs = onika::physics::avogadro * 1.e-1 ; // .... <--
+        dfs = onika::physics::avogadro * 1.e-3 ;
         drhos = 1.e-8; // drho scale factor
         rhos = 1.0;
-        ls = exanb::make_quantity(1.0,"m").convert();
+        ls = EXASTAMP_CONST_QUANTITY( 1.0 * m );
       }
     }
 

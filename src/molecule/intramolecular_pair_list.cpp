@@ -1,7 +1,7 @@
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/log.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/log.h>
 #include <exanb/core/profiling_tools.h>
 #include <exaStamp/molecule/id_map.h>
 #include <exanb/core/particle_id_codec.h>
@@ -112,7 +112,7 @@ namespace exaStamp
   };
 
   // === register factories ===
-  CONSTRUCTOR_FUNCTION
+  ONIKA_AUTORUN_INIT(intramolecular_pair_list)
   {
     /* ', field::_idmol' : this ensures that only grids with idmol field will be accepted to instantiate this operator */
     OperatorNodeFactory::instance()->register_factory( "intramolecular_pair_list", make_simple_operator< IntramolecularPairPotentialList > );

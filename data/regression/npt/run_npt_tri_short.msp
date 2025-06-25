@@ -1,0 +1,16 @@
+includes:
+  - basis_run_npt_nvt.msp
+  - config_npt_nvt.msp
+  - config_eam.msp
+  
+init_npt:
+  algo: NPT
+  Tstart: 300. K
+  Tend:   300. K
+  Tdamp:  0.1 ps
+  tchain: 3
+  Pstart: 0.0
+  Pend:   5.0e9
+  Pdamp:  1.0 ps
+  pchain: 2
+  Pmode:  TRI

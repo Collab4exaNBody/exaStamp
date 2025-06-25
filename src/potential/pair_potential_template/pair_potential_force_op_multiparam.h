@@ -8,10 +8,10 @@
 #include <string>
 
 #include <yaml-cpp/yaml.h>
-#include <exanb/core/quantity_yaml.h>
-#include <exanb/core/basic_types_yaml.h>
+#include <onika/physics/units.h>
+#include <onika/math/basic_types_yaml.h>
 
-#include <exanb/core/quaternion_to_matrix.h>
+#include <onika/math/quaternion_to_matrix.h>
 
 #ifndef PRIV_NAMESPACE_NAME
 #define PRIV_NAMESPACE_NAME USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_details)
@@ -227,6 +227,7 @@ namespace exanb
 namespace YAML
 {
   using exaStamp::PRIV_NAMESPACE_NAME::PotentialMultiParameters;
+  using onika::lerr;
 
   template<> struct convert< PotentialMultiParameters >
   {
@@ -238,19 +239,19 @@ namespace YAML
 
       if( ! node.IsSequence() )
       {
-        ::exanb::lerr_stream() << "PotentialMultiParameters is not a sequence as expected"<<std::endl;
+        lerr << "PotentialMultiParameters is not a sequence as expected"<<std::endl;
         return false;
       }
       for(auto pp: node)
       {
         if( ! pp.IsMap() )
         {
-          ::exanb::lerr_stream() << "PotentialMultiParameters item is not a map as expected"<<std::endl;
+          lerr << "PotentialMultiParameters item is not a map as expected"<<std::endl;
           return false;
         }
         if( ! pp["type_a"] || ! pp["type_b"] || ! pp["rcut"] || ! pp["parameters"] )
         {
-          ::exanb::lerr_stream() << "PotentialMultiParameters : missing informations. required information keys are : type_a, type_b, rcut and parameters."<<std::endl;
+          lerr << "PotentialMultiParameters : missing informations. required information keys are : type_a, type_b, rcut and parameters."<<std::endl;
           return false;
         }
         auto type_a =  pp["type_a"].as<std::string>();

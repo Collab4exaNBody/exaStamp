@@ -1,16 +1,21 @@
-#include <exanb/core/basic_types.h>
-#include <exanb/core/basic_types_operators.h>
+#include <onika/math/basic_types.h>
+#include <onika/math/basic_types_operators.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exanb/core/operator.h>
-#include <exanb/core/operator_slot.h>
-#include <exanb/core/operator_factory.h>
-#include <exanb/core/log.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/log.h>
 
 #include <fstream>
 
 #include "potential.h"
 
 #define CLASS_NAME USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_plot)
+
+#define POTENTIAL_REGISTER_INIT() _POTENTIAL_REGISTER_INIT( CONSTRUCTOR_FUNC_NAME )
+#define CONSTRUCTOR_FUNC_NAME USTAMP_CONCAT(CLASS_NAME,_init)
+#define _POTENTIAL_REGISTER_INIT(name) CONSTRUCTOR_ATTRIB void MAKE_UNIQUE_NAME(name,_,__LINE__,ONIKA_CURRENT_PACKAGE_NAME) ()
+
 
 namespace exaStamp
 {
@@ -90,7 +95,8 @@ namespace exaStamp
   };
 
   // === register factories ===  
-  CONSTRUCTOR_FUNCTION
+  //ONIKA_AUTORUN_INIT(pair_potential_plot)
+  POTENTIAL_REGISTER_INIT()
   {
     OperatorNodeFactory::instance()->register_factory( USTAMP_STR(CLASS_NAME) , make_compatible_operator< CLASS_NAME > );
   }

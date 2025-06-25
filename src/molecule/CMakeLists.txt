@@ -19,5 +19,5 @@ set(exaStampMolecule_COMPILE_DEFINITIONS
  )
 
 set(exaStampMolecule_LINK_LIBRARIES exanbCompute exaStampCompute exanbParticleNeighbors exaStampParticleSpecies exp6 lennard_jones exaStampLJExp6RFParticleCharge exaStampReactionFieldParticleCharge exaStampPotential exanbIO exaStampIO)
-xstamp_add_plugin(exaStampMolecule ${CMAKE_CURRENT_SOURCE_DIR})
+onika_add_plugin(exaStampMolecule ${CMAKE_CURRENT_SOURCE_DIR})
 
