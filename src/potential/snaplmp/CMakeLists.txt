@@ -13,7 +13,7 @@ else()
 endif()
 
 set(exaStampSnapLMP_EXTERNAL_SRCS ${LMP_SRC_DIR}/src/memory.cpp ${LMP_SRC_DIR}/src/math_special.cpp ${LMP_SRC_DIR}/src/ML-SNAP/sna.cpp)
-set(exaStampSnapLMP_LINK_LIBRARIES exaStampSnap exaStampPotential exanbParticleNeighbors)
+set(exaStampSnapLMP_LINK_LIBRARIES mdSnap exaStampPotential exanbParticleNeighbors)
 set(exaStampSnapLMP_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR} ${LMP_SRC_DIR}/src/ML-SNAP ${LMP_SRC_DIR}/src)
 onika_add_plugin(exaStampSnapLMP ${CMAKE_CURRENT_SOURCE_DIR})
 

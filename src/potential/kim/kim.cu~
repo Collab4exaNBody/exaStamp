@@ -1,0 +1,158 @@
+#include <exanb/core/grid.h>
+#include <exanb/core/domain.h>
+#include <onika/math/basic_types.h>
+#include <onika/math/basic_types_operators.h>
+#include <exanb/compute/compute_cell_particle_pairs.h>
+#include <exaStamp/particle_species/particle_specie.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/scg/operator_slot.h>
+#include <exanb/core/make_grid_variant_operator.h>
+#include <onika/log.h>
+#include <onika/cpp_utils.h>
+#include <exaStamp/particle_species/particle_specie.h>
+#include <onika/file_utils.h>
+
+#include "kim.h"
+
+#include <onika/physics/constants.h>
+#include <onika/cuda/cuda_context.h>
+
+#include <vector>
+#include <memory>
+#include <iostream>
+
+namespace exaStamp
+{
+  using onika::memory::DEFAULT_ALIGNMENT;
+  
+  template<
+    class GridT,
+    class = AssertGridHasFields< GridT, field::_ep ,field::_fx ,field::_fy ,field::_fz ,field::_type ,field::_id >
+    >
+  class KIMComputeForce : public OperatorNode
+  {
+    // ========= I/O slots =======================
+    ADD_SLOT( KIMParams             , parameters        , INPUT        , REQUIRED );
+    ADD_SLOT( double                , rcut_max          , INPUT_OUTPUT , 0.0      );
+    ADD_SLOT( ParticleSpecies       , species           , INPUT        , REQUIRED );
+    ADD_SLOT( int64_t               , timestep          , INPUT        , REQUIRED );
+    ADD_SLOT( GridChunkNeighbors    , chunk_neighbors   , INPUT        , GridChunkNeighbors{} , DocString{"neighbor list"} );
+    ADD_SLOT( bool                  , ghost             , INPUT        , false    );
+    ADD_SLOT( GridT                 , grid              , INPUT_OUTPUT            );
+    ADD_SLOT( Domain                , domain            , INPUT        , REQUIRED );
+
+    // shortcut to the Compute buffer used (and passed to functor) by compute_cell_particle_pairs
+    using ComputeBuffer = ComputePairBuffer2<false,false>;
+    using CellParticles = typename GridT::CellParticles;
+    //    using ParticleLock  = decltype( ComputePairOptionalLocks<false>{}[0][0] );
+
+    // compile time constant indicating if grid has virial field
+    static constexpr bool has_virial_field = GridHasField<GridT,field::_virial>::value;
+
+    // attributes processed during computation
+    using ComputeFieldsWithoutVirial = FieldSet< field::_ep ,field::_fx ,field::_fy ,field::_fz ,field::_type ,field::_id >;
+    using ComputeFieldsWithVirial    = FieldSet< field::_ep ,field::_fx ,field::_fy ,field::_fz ,field::_type ,field::_id, field::_virial >;
+    using ComputeFields              = std::conditional_t< has_virial_field , ComputeFieldsWithVirial , ComputeFieldsWithoutVirial >;
+    static constexpr ComputeFields compute_force_field_set{};
+    
+  public:
+    // Operator execution
+    inline void execute () override final
+    {
+      assert( chunk_neighbors->number_of_cells() == grid->number_of_cells() );
+
+      if( m_rcut == 0.0 )
+      {
+        m_rcut = parameters->cutoff; // ang
+      }
+
+      *rcut_max = std::max( *rcut_max , m_rcut );
+      
+      size_t n_cells = grid->number_of_cells();
+      if( n_cells == 0 )
+      {
+        return ;
+      }
+		
+      ForceOp force_op { *rcut_max };
+      ComputePairNullWeightIterator          cp_weight{};
+      ComputePairOptionalLocks<false>        cp_locks {};
+      GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
+      auto force_buf = make_compute_pair_buffer<ComputeBuffer>();
+      ComputePairTrivialCellFiltering cpu_cell_filter = {};
+
+      if( domain->xform_is_identity() )
+      {
+        NullXForm cp_xform;
+        auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform, cp_locks, cpu_cell_filter );
+        compute_cell_particle_pairs( *grid, m_rcut, *ghost, optional, force_buf, force_op , compute_force_field_set );
+      }
+      else
+      {
+        LinearXForm cp_xform { domain->xform() };
+        auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform, cp_locks, cpu_cell_filter );
+        compute_cell_particle_pairs( *grid, m_rcut, *ghost, optional, force_buf, force_op , compute_force_field_set );
+      }
+    } 
+    
+    private:
+    
+    struct alignas(DEFAULT_ALIGNMENT) ForceOp 
+    {
+      const double m_rcut;      
+      // One interface per thread
+      //      std::vector< std::shared_ptr<nnp::InterfaceExastamp> > & m_interfaces;
+      inline void operator ()
+        (
+        size_t n,
+        ComputeBuffer& buf,
+        double& en,
+        double& fx,
+        double& fy,
+        double& fz,
+        unsigned int type, // On a besoin du type de l'atome courant
+        unsigned int id, // idem pour l'identifiant de l'atome courant
+        CellParticles* unused
+        ) const
+      {
+        Mat3d virial;
+        this->operator () ( n,buf,en,fx,fy,fz,type,id,virial, unused );
+      }
+
+      inline void operator ()
+        (
+        size_t n,
+        ComputeBuffer& buf,
+        double& en,
+        double& fx,
+        double& fy,
+        double& fz,
+        unsigned int type,
+        unsigned int id,
+        Mat3d& virial ,
+        CellParticles*
+        ) const
+      {
+        
+        // energy and force contributions to the particle
+        double _fx = 0.;	
+        double _fy = 0.;
+        double _fz = 0.;
+
+      }
+    };
+
+  };
+
+  template<class GridT> using KIMComputeForceTmpl = KIMComputeForce<GridT>;
+
+  // === register factories ===  
+  ONIKA_AUTORUN_INIT(n2p2)
+  {
+    OperatorNodeFactory::instance()->register_factory( "kim_force" ,make_grid_variant_operator< KIMComputeForceTmpl > );
+  }
+
+}
+
+

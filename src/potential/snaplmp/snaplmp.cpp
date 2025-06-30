@@ -36,6 +36,7 @@
 namespace exaStamp
 {
 
+  using namespace md;
   using namespace exanb;
   using onika::memory::DEFAULT_ALIGNMENT;
 //  using namespace SnapExt;
