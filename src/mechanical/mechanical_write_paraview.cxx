@@ -52,8 +52,8 @@ namespace exaStamp
     ADD_SLOT( GridParticleLocalMechanicalMetrics, local_mechanical_data , INPUT, OPTIONAL );
     ADD_SLOT( GridParticleLocalStructuralMetrics, local_structural_data , INPUT, OPTIONAL);
 
-    template<class FieldSelectorFuncT, class... GridFields>
-    inline void execute_on_fields( const FieldSelectorFuncT& field_selector, const GridFields& ... grid_fields) 
+    template<class... GridFields>
+    inline void execute_on_fields( const GridFields& ... grid_fields) 
     {
       {
         int s=0;
@@ -61,7 +61,10 @@ namespace exaStamp
         ( ... , ( ldbg<< (((s++)==0)?' ':',') <<grid_fields.short_name() ) ) ;
         ldbg << std::endl;
       }
-    
+
+      const auto& flist = *fields;
+      auto field_selector = [&flist] ( const std::string& name ) -> bool { for(const auto& f:flist) if( std::regex_match(name,std::regex(f)) ) return true; return false; } ;
+      
       //using CellParticleAcessor = GridParticleFieldAccessor<typename GridT::CellParticles * const>;
       auto cells = grid->cells_accessor(); //{ grid->cells() };
       ParaviewWriteTools::write_particles(ldbg,*mpi,*grid,cells,*domain,*filename,field_selector,*compression,*binary_mode,*write_box,*write_ghost, grid_fields ... );
@@ -72,9 +75,6 @@ namespace exaStamp
     {
       int rank=0;
       MPI_Comm_rank(*mpi, &rank);
-      
-      const auto& flist = *fields;
-      auto field_selector = [&flist] ( const std::string& name ) -> bool { for(const auto& f:flist) if( std::regex_match(name,std::regex(f)) ) return true; return false; } ;
 
       VelocityNorm2Combiner vnorm2 = {};
       ProcessorRankCombiner processor_id = { {rank} };
@@ -88,13 +88,6 @@ namespace exaStamp
       {
         mech_data = local_mechanical_data->data();
       }
-      else
-      {
-        if( field_selector("defgrad") || field_selector("greenlag") || field_selector("rot") || field_selector("stretch") )
-        {
-          fatal_error() << "requested a mechanical field but mechanical data is null" << std::endl;
-        }
-      }
 
       auto defgrad  = mechanical_field(mech_data,field::defgrad);
       auto greenlag = mechanical_field(mech_data,field::greenlag);
@@ -106,16 +99,9 @@ namespace exaStamp
       {
         structural_data = local_structural_data->data();
       }
-      else
-      {
-        if( field_selector("crystal") )
-        {
-          fatal_error() << "requested a structural field but structural data is null" << std::endl;
-        }
-      }
       auto crystal = structural_field( structural_data , field::crystal );
 
-      execute_on_fields( field_selector, processor_id, vnorm2, mv2, mass, momentum, defgrad, greenlag, rot, stretch, crystal, onika::soatl::FieldId<fid>{} ... );
+      execute_on_fields( processor_id, vnorm2, mv2, mass, momentum, defgrad, greenlag, rot, stretch, crystal, onika::soatl::FieldId<fid>{} ... );
     }
 
   public:

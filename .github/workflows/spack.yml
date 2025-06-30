@@ -1,0 +1,29 @@
+name: Check Spack Installation
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+  
+    - name: Set up Spack
+      uses: spack/setup-spack@v2
+      with:
+        ref: v0.23.0      # Spack version (examples: develop, releases/v0.21)
+        buildcache: true  # Configure oci://ghcr.io/spack/github-actions-buildcache
+        color: true       # Force color output (SPACK_COLOR=always)
+        path: spack       # Where to clone Spack
+
+    - name: Install ExaSTAMP With Spack
+      run: |
+        git clone https://github.com/Collab4exaNBody/spack-repos.git
+        spack repo add spack-repos
+        spack install exastamp@main
