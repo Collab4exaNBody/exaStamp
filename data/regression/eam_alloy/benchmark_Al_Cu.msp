@@ -75,7 +75,6 @@ compute_force_nosym:
   body:
     - eam_rho
     - eam_rho2emb
-#    - ghost_update_emb
     - ghost_update_opt: { opt_fields: [ "rho_dEmb" ] }
     - eam_force
 
@@ -83,9 +82,9 @@ compute_force_sym:
   rebind: { parameters: eam_alloy_parameters }
   body:
     - eam_rho_sym
-    - update_rho_from_ghost
+    - update_opt_from_ghost: { opt_fields: [ "rho_dEmb" ] }
     - eam_rho2emb
-    - ghost_update_emb
+    - ghost_update_opt: { opt_fields: [ "rho_dEmb" ] }
     - eam_force_sym
 
 compute_force_singlepass:
