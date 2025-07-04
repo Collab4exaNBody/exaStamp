@@ -1,9 +1,26 @@
 # default input : read last dump with legacy StampV3 format 
 
 read_stamp_v3:
-      file: lastLegacyDump
-      filename: lastLegacyDump
-      bounds_mode: FILE
+  file: lastLegacyDump
+  filename: lastLegacyDump
+  bounds_mode: FILE
 
-input_data: read_stamp_v3
+has_legacy_dump_file:
+  rebind: { result: has_dump_file }
+  body: [ file_exists: { filename: lastLegacyDump } ]
+
+input_data:
+  - has_legacy_dump_file
+  - read_lastLegacyDump:
+      condition: has_dump_file
+      body: [ read_stamp_v3 ]
+  - reset_input_data:
+      condition: not has_dump_file
+      body:
+        - message: "No input data"
+        - grid_flavor
+        - species:
+            verbose: false
+            species:
+              - XX: { mass: 1.0 Da , z: 1 , charge: 0.0 e- }
 
