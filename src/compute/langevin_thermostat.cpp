@@ -51,8 +51,9 @@ namespace exaStamp
     ADD_SLOT( double         , Tstart  , INPUT , OPTIONAL );
     ADD_SLOT( double         , Tstop   , INPUT , OPTIONAL );
     ADD_SLOT( TimeVec        , tserie  , INPUT , OPTIONAL );
-    ADD_SLOT( TempVec        , Tserie  , INPUT , OPTIONAL );    
-
+    ADD_SLOT( TempVec        , Tserie  , INPUT , OPTIONAL );
+    ADD_SLOT( bool             , deterministic_noise , INPUT , false );
+    
     template<typename YFunc>
     static inline double interpolate( const std::vector<double>& X , double ix, YFunc yfunc )
     {
@@ -162,11 +163,14 @@ namespace exaStamp
         region->build_from_expression_string( particle_regions->data() , particle_regions->size() );
       }
       if( region.has_value() ) prcsg = *region;
+      
+      const int nthreads = *deterministic_noise ? 1 : omp_get_max_threads();
 
-#     pragma omp parallel
+#     pragma omp parallel num_threads(nthreads)
       {
-        auto& re = onika::parallel::random_engine();
-        std::normal_distribution<double> f_rand(0.0,1.0);
+        std::mt19937_64 det_re;
+        std::mt19937_64 & re = *deterministic_noise ? det_re : onika::parallel::random_engine() ;
+        std::normal_distribution<double> f_rand(0.,1.);
 
         GRID_OMP_FOR_BEGIN(dims-2*gl,_,loc, schedule(dynamic) )
         {
@@ -190,6 +194,7 @@ namespace exaStamp
 
           for(unsigned int j=0;j<n;j++)
           {
+            det_re.seed( ( ( (i*1023) ^ j ) * 1023 ) ^ (*timestep) );
             double mass = masses[0];
             if constexpr ( has_type_field ) { mass = masses[ atom_type[j] ]; }
             uint64_t p_id = 0;
