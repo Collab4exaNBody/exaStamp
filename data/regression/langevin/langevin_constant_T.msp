@@ -51,8 +51,17 @@ input_data:
 global:
   simulation_end_iteration: 1000
   simulation_log_frequency: 20
-  simulation_dump_thermo_frequency: -1
+  simulation_dump_thermo_frequency: 5
   simulation_dump_frequency: -1
   rcut_inc: 1.0 ang
   dt: 2.0e-3 ps
   init_temperature: 5. K
+  deterministic_noise: true
+
+simulation_epilog:
+  - check_values:
+      file: test.dat
+      samples: 200100
+      pos_threshold: 1.e-10
+      acc_threshold: 1.e-10
+      vel_threshold: 1.e-10
