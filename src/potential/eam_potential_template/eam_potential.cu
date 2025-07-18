@@ -29,7 +29,7 @@
 #define EamPotentialOperatorName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_force)
 #define EamPotentialComputeEmbNoGhostName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_emb)
 #define EamPotentialComputeForceOnlyName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_force_reuse_emb)
-#define EamPotentialInitName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_init)
+#define EamParameterInitName USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_init)
 
 #define EamPotentialStr USTAMP_STR(EamPotentialOperatorName)
 #define EamPotentialEmbNoGhostStr USTAMP_STR(EamPotentialComputeEmbNoGhostName)
@@ -38,7 +38,7 @@
 
 // avoids name conflicts in resulting dynamic libraries
 #define POTENTIAL_REGISTER_INIT() _POTENTIAL_REGISTER_INIT( CONSTRUCTOR_FUNC_NAME )
-#define CONSTRUCTOR_FUNC_NAME USTAMP_CONCAT(EamPotentialOperatorName,_init)
+#define CONSTRUCTOR_FUNC_NAME USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_register)
 #define _POTENTIAL_REGISTER_INIT(name) CONSTRUCTOR_ATTRIB void MAKE_UNIQUE_NAME(name,_,__LINE__,ONIKA_CURRENT_PACKAGE_NAME) ()
 
 namespace exaStamp
