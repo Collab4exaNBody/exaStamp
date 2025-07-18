@@ -65,7 +65,7 @@ dump_data:
       avg_field: avg_vz
       rcut: 8.0 ang
   - timestep_file: "xyz/my_xyz_file_%09d.xyz"
-  - write_xyz: { fields: [ mass ] }
+  - write_xyz: { fields: [ mass, avg_mass, vz, avg_vz ] }
   - timestep_file: "paraview/my_xyz_file_%09d"
   - write_paraview: { fields: [ mass, avg_mass, vz, avg_vz] }
         
