@@ -1,0 +1,42 @@
+grid_flavor: grid_flavor_multimat
+
+species:
+  - Ta:
+     z: 12
+     mass: 12.0107 Da
+     charge: 0.0 e-
+  
+init_parameters:
+#  - species
+  - kim_init: { model: "EAM_Dynamo_RaveloGermannGuerrero_2013Ta1_Ta__MO_816821594689_001" , rcut: 8. ang}
+
+compute_force:
+  - kim_force
+
+input_data:
+  - domain:
+      cell_size: 3.3 ang
+      grid_dims: [20,20,20]
+      bounds: [[0 ang ,0 ang,0 ang],[66.0 ang, 66.0 ang, 66.0 ang]]
+      xform: [[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
+      periodic: [true,true,true]
+      expandable: false
+  - init_rcb_grid
+  - lattice:
+      structure: BCC
+      types: [ Ta , Ta]
+      size: [ 3.3 ang , 3.3 ang , 3.3 ang ]
+  
+dump_data:
+  - timestep_file: "xyz_datas/test_%09d.xyz"
+  - write_xyz:
+      fields: [ "id" , "force"]
+       
+global:
+  simulation_end_iteration: 100
+  simulation_log_frequency: 5
+  simulation_dump_thermo_frequency: 5
+  simulation_dump_frequency: 10
+  rcut_inc: 0.3 ang
+  dt: 0.001 ps
+  force_flush_file: true

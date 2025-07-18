@@ -7,7 +7,6 @@
 #include <exanb/core/domain.h>
 #include <onika/log.h>
 #include <onika/cpp_utils.h>
-#include "kim_init.h"
 
 namespace exaStamp
 {
@@ -17,7 +16,7 @@ namespace exaStamp
   class KIMInitOperator : public OperatorNode
   {
     // ========= I/O slots =======================
-    ADD_SLOT( std::string, model     , INPUT , REQUIRED );
+    ADD_SLOT( std::string, kim_model     , INPUT , REQUIRED );
 
   public:
     // Operator execution
