@@ -54,7 +54,6 @@ class ReadExternalAtomFormatNode : public OperatorNode
   ADD_SLOT(std::string, file        , INPUT, REQUIRED );
   ADD_SLOT(std::string, format      , INPUT, "");
   ADD_SLOT(std::string, compression , INPUT, "");
-  
   ADD_SLOT(PBC, pbc , INPUT, PBC{true, true, true});
 
   // ADD_SLOT(std::string, units       , INPUT, "metal" );
@@ -93,8 +92,8 @@ public:
     }
 
     // Ensure the file exists
-    std::string filepath = std::string(std::filesystem::absolute( *file ));
-    if (! std::filesystem::exists( filepath )) {
+    std::string filepath = std::string(std::filesystem::absolute(*file));
+    if (!std::filesystem::exists(filepath)) {
       lerr << onika::format_string("Input file doest not exists: '%s'\n", filepath.c_str());
       std::abort();
     }
@@ -158,11 +157,11 @@ public:
 
       auto cells = grid.cells();
 
+      // TODO:: Move this directly into the parse ?
       for (size_t i = 0; i < particle_data.size(); ++i) {
         ParticleTupleIO& p = particle_data[i];
         Vec3d r = {p[field::rx], p[field::ry], p[field::rz]};
 
-        // TODO:: Move this directly into the parse ?
         // transform position to domain coordinates.
         r = ctx.invXform * r;
         wrap_to_domain(r, ctx);

@@ -921,7 +921,7 @@ bool read_field_tilt(const TokenSet& tokens, Context& ctx) {
   return ok;
 }
 
-bool read_field_section(const TokenSet& tokens, Context& ctx) { 
+bool read_field_section(const TokenSet& tokens, Context&) { 
   return match_token_set_any(tokens, tok_sections);
 }
 
@@ -1211,7 +1211,7 @@ bool ExtendedXYZParser::parse(Context& ctx) {
   if (!(parse_exyz_lattice(m_tokens, ctx) && parse_exyz_properties(m_ptokens, m_properties)))
     return false;
 
-  // got to atoms lines
+  // go to atoms lines
   current_line() = m_file.get_line();
 
   // Skip empty/comment lines until first atom data line

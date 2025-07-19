@@ -82,6 +82,14 @@ template <typename T> bool token_to_num(const std::string_view token, T& rval) {
 
 inline bool is_space(char c) noexcept { return std::isspace(c); }
 
+template<char C>
+struct IsChar {
+  constexpr bool operator()(char c) const noexcept { return c == C; }
+  constexpr bool operator()(const char* c) const noexcept { return *c == C; }
+};
+
+struct IsWhiteSpace : IsChar<' '>{};
+
 struct IsSpace {
   constexpr bool operator()(char c) const noexcept { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
 };

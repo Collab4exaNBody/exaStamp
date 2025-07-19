@@ -108,7 +108,7 @@ struct Context {
 
     double cellsize = domain.cell_size();
 
-    // check for grid dims. If grid dims is not provided by the use, 
+    // check for grid dims. If grid dims is not provided by the user, 
     // it will be deducde from box lengths and cellsize.
     IJK grid_dim = domain.grid_dimension();
     size_t nx = static_cast<ssize_t>(boxlen.x / cellsize);
@@ -811,6 +811,10 @@ bool read_exyz_comment_line(std::string_view line, TokenSetTmpl<N1>& tok_lattice
   constexpr std::string_view prop_key = "Properties=";
   constexpr size_t prop_key_len = 11;
 
+  // constexpr IsSpace is_space{};
+  constexpr IsChar<'"'> is_quote{};
+  constexpr IsChar<' '> is_space{};
+
   const char* begin = line.data();
   const char* end = line.data() + line.size();
 
@@ -820,7 +824,8 @@ bool read_exyz_comment_line(std::string_view line, TokenSetTmpl<N1>& tok_lattice
   const char* val_start = begin + lattice_key_len;
   const char* val_end = val_start;
 
-  while (val_end < end && *val_end != '"')
+  // while (val_end < end && *val_end != '"')
+  while (val_end < end && is_quote(*val_end))
     ++val_end;
   if (val_end >= end)
     return false;
@@ -834,7 +839,8 @@ bool read_exyz_comment_line(std::string_view line, TokenSetTmpl<N1>& tok_lattice
     if (std::memcmp(prop_it, prop_key.data(), prop_key_len) == 0) {
       prop_it += prop_key_len;
       const char* prop_end = prop_it;
-      while (prop_end < end && *prop_end != ' ')
+      // while (prop_end < end && *prop_end != ' ')
+      while (prop_end < end && is_space(prop_end))
         ++prop_end;
       std::string_view ppt = std::string_view(prop_it, prop_end);
       tokenizer_tmpl(ppt, tok_props, ColumnDelimiter{});
@@ -890,11 +896,8 @@ template <size_t N> inline bool parse_exyz_properties(const TokenSetTmpl<N>& tok
 inline bool parse_line(IOContext& ctx, const Properties& properties, const TokenSet& tokens, size_t particle_count) {
 
   std::string_view type_as_string;
-  double x;
-  double y;
-  double z;
-  size_t type;
-  size_t id;
+  double x, y, z;
+  size_t type, id;
 
   // parse type
   if (!ctx.species.get_type_from_sv(tokens[properties.species().index], type)) {

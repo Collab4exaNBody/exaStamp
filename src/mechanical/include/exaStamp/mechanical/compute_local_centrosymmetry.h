@@ -35,6 +35,11 @@ struct alignas(DEFAULT_ALIGNMENT) CentroSymmetryOp {
 
     csp = 0.0; // ensure csp is zero initialized
 
+    // if n < nnn return
+    if (n < nnn) {
+      return;
+    }
+
     size_t npairs = nnn * (nnn - 1) / 2;
     size_t nhalf = nnn / 2;
 
