@@ -1,5 +1,4 @@
 name: C/C++ CI
-
 on:
   push:
     branches: [ "main" ]
@@ -12,7 +11,6 @@ env:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
@@ -22,35 +20,28 @@ jobs:
       run: sudo apt install libyaml-cpp-dev
     - name: Install
       run: sudo apt-get update && sudo apt-get install lcov
-    - uses: mpi4py/setup-mpi@v1
-    - name: Get ExaNBody
-      run: git clone https://github.com/Collab4exaNBody/exaNBody.git
-      
-    - name: Configure CMake
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DXSTAMP_ENABLE_SLIPLINK=OFF -DXSTAMP_BUILD_exaStampSliplink=OFF -DXSTAMP_BUILD_exaStampLCHBOP=OFF -DexaNBody_DIR=${{github.workspace}}/exaNBody
-#      run: cmake -DCMAKE_CXX_FLAGS="--coverage -g" -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DXSTAMP_ENABLE_SLIPLINK=OFF -DexaNBody_DIR=${{github.workspace}}/exaNBody
-
-    - name: Build
+    - name: Install MPI
+      run: sudo apt install mpich
+  
+    - name: Get Onika
+      run: git clone --depth 1 https://github.com/Collab4exaNBody/onika.git   
+    - name: Configure Onika
+      run: cmake -B ${{github.workspace}}/onika/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/onika/install
+      working-directory: ${{github.workspace}}/onika      
+    - name: Build Onika
       # Build your program with the given configuration
-      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} -j 2
-
-#    - name: Test Example
-#      working-directory: ${{github.workspace}}/build
-#      run: make UpdatePluginDataBase && ctest -C --rerun-failed --output-on-failure ${{env.BUILD_TYPE}}
-
-#    - name: Generate a code coverage repor part1
-#      uses: threeal/gcovr-action@v1.0.0
-#      with:
-#        root: ${{github.workspace}}/build/src/
-#        excludes: |
-#          exaNBody
-
-#    - name: Generate a code coverage report part2
-#      working-directory: ${{github.workspace}}/
-#      run: gcovr --exclude='exanb/*' --exclude='onika/*' --exclude='exaNBody/*' --exclude='build/*' --html-details coverage.html
-
-#    - name: Archive code coverage results
-#      uses: actions/upload-artifact@v4
-#      with:
-#        name: code-coverage-report
-#        path: ${{github.workspace}}/coverage.html      
+      run: cmake --build ${{github.workspace}}/onika/build --target install --config ${{env.BUILD_TYPE}} -j 8
+      
+    - name: Get ExaNBody
+      run: git clone --depth 1 https://github.com/Collab4exaNBody/exaNBody.git         
+    - name: Configure ExaNBody
+      run: cmake -B ${{github.workspace}}/exaNBody/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -Donika_DIR=${{github.workspace}}/onika/install -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/exaNBody/install -DEXANB_BUILD_CONTRIB_MD=ON -DEXANB_BUILD_MICROSTAMP=ON
+      working-directory: ${{github.workspace}}/exaNBody   
+    - name: Build ExaNBody
+      run: cmake --build ${{github.workspace}}/exaNBody/build --target install --config ${{env.BUILD_TYPE}} -j 8
+      
+    - name: Configure CMake for exaStamp
+      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DexaNBody_DIR=${{github.workspace}}/exaNBody/install
+    - name: Build exaStamp
+      # Build your program with the given configuration
+      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} -j 8

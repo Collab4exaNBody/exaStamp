@@ -12,6 +12,11 @@
 
 #define CLASS_NAME USTAMP_CONCAT(USTAMP_POTENTIAL_NAME,_plot)
 
+#define POTENTIAL_REGISTER_INIT() _POTENTIAL_REGISTER_INIT( CONSTRUCTOR_FUNC_NAME )
+#define CONSTRUCTOR_FUNC_NAME USTAMP_CONCAT(CLASS_NAME,_init)
+#define _POTENTIAL_REGISTER_INIT(name) CONSTRUCTOR_ATTRIB void MAKE_UNIQUE_NAME(name,_,__LINE__,ONIKA_CURRENT_PACKAGE_NAME) ()
+
+
 namespace exaStamp
 {
   using namespace exanb;
@@ -90,7 +95,8 @@ namespace exaStamp
   };
 
   // === register factories ===  
-  ONIKA_AUTORUN_INIT(pair_potential_plot)
+  //ONIKA_AUTORUN_INIT(pair_potential_plot)
+  POTENTIAL_REGISTER_INIT()
   {
     OperatorNodeFactory::instance()->register_factory( USTAMP_STR(CLASS_NAME) , make_compatible_operator< CLASS_NAME > );
   }

@@ -11,7 +11,7 @@ set(CMAKE_CXX_EXTENSIONS NO)
 # ===============
 # === Project ===
 # ===============
-project(exaStamp VERSION 3.6 LANGUAGES C CXX)
+project(exaStamp VERSION 3.7 LANGUAGES C CXX)
 set(EXASTAMP_VERSION ${CMAKE_PROJECT_VERSION}) 
 message(STATUS "Project version : ${EXASTAMP_VERSION}")
 
@@ -19,6 +19,9 @@ message(STATUS "Project version : ${EXASTAMP_VERSION}")
 # === CMake customization ===
 # ===========================
 set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS Release RelWithDebInfo Debug)
+if (NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
+endif()
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 # ======================================
