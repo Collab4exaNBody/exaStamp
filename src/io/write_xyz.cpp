@@ -137,7 +137,7 @@ namespace exaStamp
   // === register factories ===  
   ONIKA_AUTORUN_INIT(write_xyz)
   {
-    OperatorNodeFactory::instance()->register_factory( "write_xyz", make_grid_variant_operator< WriteXYZ > );
+    OperatorNodeFactory::instance()->register_factory( "write_xyz_old", make_grid_variant_operator< WriteXYZ > );
   }
 
 }

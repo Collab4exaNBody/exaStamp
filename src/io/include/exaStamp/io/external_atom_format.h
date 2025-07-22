@@ -1318,7 +1318,9 @@ inline bool parse_xyz_properties(const TokenSet& tokens, Properties& properties)
   }
 
   size_t icol = 0;
-  size_t ncol, ifield, itype;
+  size_t ncol = 0;
+  size_t ifield = 0;
+  size_t itype = 0;
 
   properties.clear();
 

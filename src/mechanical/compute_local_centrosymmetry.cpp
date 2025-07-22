@@ -25,11 +25,8 @@ using namespace exanb;
 
 using onika::memory::DEFAULT_ALIGNMENT;
 
-template< class GridT,
-    class = AssertGridHasFields< GridT, field::_ep ,field::_fx ,field::_fy ,field::_fz >
-    >
-class ComputeCSPOperator : public OperatorNode
-{    
+template <class GridT, class = AssertGridHasFields<GridT, field::_ep, field::_fx, field::_fy, field::_fz>>
+class ComputeCSPOperator : public OperatorNode {
 
   // ========= I/O slots =======================
   //  ADD_SLOT( double                , rcut_max            , INPUT_OUTPUT , 0.0 );
@@ -94,7 +91,6 @@ public:
 
     lout << onika::format_string("\t- Computing per-atom centrosymmetry END\n");    
   }
-
 };
 
 template <class GridT> using ComputeCSPOperatorTmpl = ComputeCSPOperator<GridT>;

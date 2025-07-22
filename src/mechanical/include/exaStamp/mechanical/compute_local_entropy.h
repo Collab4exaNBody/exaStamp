@@ -13,7 +13,6 @@
 
 XNB_DECLARE_FIELD(double, local_entropy, "per-atom local entropy")
 
-
 namespace exaStamp {
 
 using namespace exanb;
