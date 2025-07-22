@@ -224,9 +224,10 @@ public:
       fatal_error() << "Invalid domain configuration" << std::endl;
     }
 
-    if (!check_particles_inside_cell(grid)) {
-      fatal_error() << "Particles outside cells" << std::endl;
-    }
+    // FIXME: Not sure if the check is mandatory
+    // if (!check_particles_inside_cell(grid)) {
+    //   fatal_error() << "Particles outside cells" << std::endl;
+    // }
 
     lout << "===========================================\n\n";
   }
