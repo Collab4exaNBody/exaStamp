@@ -3,6 +3,8 @@
 #include <yaml-cpp/yaml.h>
 #include <onika/physics/units.h>
 #include <onika/physics/constants.h>
+#include "KIM_SimulatorHeaders.hpp"
+#include "KIM_SupportedExtensions.hpp"
 
 #include <string>
 
@@ -15,6 +17,12 @@ struct KIMParams
   double rcut;  
 };
 
+struct KIMContext
+{
+  KIM::Model* kim_model = nullptr;
+  std::vector<std::shared_ptr<KIM::Model>> m_test;
+};
+
 // Yaml conversion operators, allows to read NNP parameters from config file for n2p2
 namespace YAML
 {
@@ -22,11 +30,11 @@ namespace YAML
   {
     static inline bool decode(const Node& node, KIMParams& v)
     {
-      if( !node.IsMap()       ) { return false; }
-      if( ! node["model"      ] ) { return false; }
-      v.model = node["model"      ].as<std::string>();
-      if( ! node["rcut"      ] ) { return false; }
-      v.rcut = node["rcut"      ].as<double>();
+      if( !node.IsMap()   ) { return false; }
+      if( ! node["model"] ) { return false; }
+      if(   node["model"] ) { v.model = node["model"].as<std::string>(); }
+      if( ! node["rcut"]  ) { return false; }
+      if(   node["rcut"]  ) { v.rcut = node["rcut"].as<double>(); }
       return true;
     }
   };

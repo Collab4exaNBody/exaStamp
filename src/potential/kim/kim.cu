@@ -33,7 +33,9 @@ namespace exaStamp
   class KIMComputeForce : public OperatorNode
   {
     // ========= I/O slots =======================
-    ADD_SLOT( KIMParams             , parameters        , INPUT        , REQUIRED );
+    //    ADD_SLOT( KIMParams             , parameters        , INPUT        , REQUIRED );
+    ADD_SLOT( std::string           , kim_model         , INPUT );
+    ADD_SLOT( double                , kim_rcut          , INPUT );
     ADD_SLOT( double                , rcut_max          , INPUT_OUTPUT , 0.0      );
     ADD_SLOT( ParticleSpecies       , species           , INPUT        , REQUIRED );
     ADD_SLOT( int64_t               , timestep          , INPUT        , REQUIRED );
@@ -41,6 +43,7 @@ namespace exaStamp
     ADD_SLOT( bool                  , ghost             , INPUT        , false    );
     ADD_SLOT( GridT                 , grid              , INPUT_OUTPUT            );
     ADD_SLOT( Domain                , domain            , INPUT        , REQUIRED );
+    ADD_SLOT( KIMContext,    kim_ctx       , INPUT );
 
     // shortcut to the Compute buffer used (and passed to functor) by compute_cell_particle_pairs
     using ComputeBuffer = ComputePairBuffer2<false,false>;
@@ -66,7 +69,7 @@ namespace exaStamp
       
       if( m_rcut == 0.0 )
       {
-        m_rcut = parameters->rcut; // ang
+        m_rcut = *kim_rcut; // ang
       }
 
       *rcut_max = std::max( *rcut_max , m_rcut );

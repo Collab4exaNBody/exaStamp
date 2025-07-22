@@ -7,8 +7,9 @@ species:
      charge: 0.0 e-
   
 init_parameters:
-#  - species
-  - kim_init: { model: "EAM_Dynamo_RaveloGermannGuerrero_2013Ta1_Ta__MO_816821594689_001" , rcut: 8. ang}
+  - kim_init:
+      kim_model: "EAM_Dynamo_RaveloGermannGuerrero_2013Ta1_Ta__MO_816821594689_001"
+      kim_rcut: 9. ang
 
 compute_force:
   - kim_force
@@ -33,7 +34,7 @@ dump_data:
       fields: [ "id" , "force"]
        
 global:
-  simulation_end_iteration: 100
+  simulation_end_iteration: 10
   simulation_log_frequency: 5
   simulation_dump_thermo_frequency: 5
   simulation_dump_frequency: 10

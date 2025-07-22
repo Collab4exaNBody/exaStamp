@@ -7,25 +7,117 @@
 #include <exanb/core/domain.h>
 #include <onika/log.h>
 #include <onika/cpp_utils.h>
+#include "kim.h"
+#define MY_ERROR(message)                                                \
+  {                                                                      \
+    std::cout << "* Error : \"" << message << "\" : " << __LINE__ << ":" \
+              << __FILE__ << std::endl;                                  \
+    exit(1);                                                             \
+  }
 
 namespace exaStamp
 {
 
   using namespace exanb;
-
+  using namespace KIM;
+  
   class KIMInitOperator : public OperatorNode
   {
     // ========= I/O slots =======================
-    ADD_SLOT( std::string, kim_model     , INPUT , REQUIRED );
-
+    //    ADD_SLOT( KIMParams,   parameters    , INPUT , REQUIRED );
+    ADD_SLOT( std::string,   kim_model     , INPUT_OUTPUT , REQUIRED );
+    ADD_SLOT( double,        kim_rcut      , INPUT_OUTPUT , REQUIRED );
+    //    ADD_SLOT( KIMContext,    kim_ctx       , OUTPUT , REQUIRED );
+    
   public:
     // Operator execution
     inline void execute () override final
     {
-
       std::cout << "KIM Initialization function" << std::endl;
-    }
 
+      KIM::Model * kim_local_model;
+      int requestedUnitsAccepted;
+      int error = KIM::Model::Create(KIM::NUMBERING::zeroBased,
+                                     KIM::LENGTH_UNIT::A,
+                                     KIM::ENERGY_UNIT::eV,
+                                     KIM::CHARGE_UNIT::e,
+                                     KIM::TEMPERATURE_UNIT::K,
+                                     KIM::TIME_UNIT::ps,
+                                     *kim_model,
+                                     &requestedUnitsAccepted,
+                                     &kim_local_model);
+      if (error) { MY_ERROR("KIM::Model::Create()"); }
+
+      // Check for compatibility with the model
+      if (!requestedUnitsAccepted) { MY_ERROR("Must Adapt to model units"); }
+
+      // Check that we know about all required routines
+      int numberOfModelRoutineNames;
+      KIM::MODEL_ROUTINE_NAME::GetNumberOfModelRoutineNames(&numberOfModelRoutineNames);
+      
+      for (int i = 0; i < numberOfModelRoutineNames; ++i)
+        {
+          KIM::ModelRoutineName modelRoutineName;
+          int error
+            = KIM::MODEL_ROUTINE_NAME::GetModelRoutineName(i, &modelRoutineName);
+          if (error) { MY_ERROR("Unable to get ModelRoutineName."); }
+          int present;
+          int required;
+          error = kim_local_model->IsRoutinePresent(modelRoutineName, &present, &required);
+          if (error) { MY_ERROR("Unable to get routine present/required."); }
+
+          std::cout << "Model routine name \"" << modelRoutineName.ToString()
+                    << "\" has present = " << present
+                    << " and required = " << required << "." << std::endl;
+
+          if ((present == true) && (required == true))
+            {
+              using namespace KIM::MODEL_ROUTINE_NAME;
+              if (!((modelRoutineName == Create)
+                    || (modelRoutineName == ComputeArgumentsCreate)
+                    || (modelRoutineName == Compute) || (modelRoutineName == Refresh)
+                    || (modelRoutineName == ComputeArgumentsDestroy)
+                    || (modelRoutineName == Destroy)))
+                {
+                  MY_ERROR("Unknown Routine \"" + modelRoutineName.ToString()
+                           + "\" is required by model.");
+                }
+            }
+        }
+
+
+      // print model units
+      KIM::LengthUnit lengthUnit;
+      KIM::EnergyUnit energyUnit;
+      KIM::ChargeUnit chargeUnit;
+      KIM::TemperatureUnit temperatureUnit;
+      KIM::TimeUnit timeUnit;
+
+      kim_local_model->GetUnits(&lengthUnit, &energyUnit, &chargeUnit, &temperatureUnit, &timeUnit);
+
+      std::cout << "LengthUnit is \"" << lengthUnit.ToString() << "\"" << std::endl
+                << "EnergyUnit is \"" << energyUnit.ToString() << "\"" << std::endl
+                << "ChargeUnit is \"" << chargeUnit.ToString() << "\"" << std::endl
+                << "TemperatureUnit is \"" << temperatureUnit.ToString() << "\""
+                << std::endl
+                << "TimeUnit is \"" << timeUnit.ToString() << "\"" << std::endl;
+
+      // check species
+      int speciesIsSupported;
+      int modelTaCode;
+      error = kim_local_model->GetSpeciesSupportAndCode(KIM::SPECIES_NAME::Ta, &speciesIsSupported, &modelTaCode);
+      if ((error) || (!speciesIsSupported))
+        {
+          MY_ERROR("Species Ta not supported");
+        }
+
+      KIM::ComputeArguments * computeArguments;
+      error = kim_local_model->ComputeArgumentsCreate(&computeArguments);
+      if (error) { MY_ERROR("Unable to create a ComputeArguments object."); }
+      
+    }
+    
+    //    (*parameters).rcut = *rcut;    
   };
 
   // === register factories ===  
