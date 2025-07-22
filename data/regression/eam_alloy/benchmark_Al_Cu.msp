@@ -75,34 +75,17 @@ compute_force_nosym:
   body:
     - eam_rho
     - eam_rho2emb
-    - ghost_update_emb
+    - ghost_update_opt: { opt_fields: [ "rho_dEmb" ] }
     - eam_force
 
 compute_force_sym:
   rebind: { parameters: eam_alloy_parameters }
   body:
     - eam_rho_sym
-    - update_rho_from_ghost
+    - update_opt_from_ghost: { opt_fields: [ "rho_dEmb" ] }
     - eam_rho2emb
-    - ghost_update_emb
+    - ghost_update_opt: { opt_fields: [ "rho_dEmb" ] }
     - eam_force_sym
-
-compute_force_flat_sym:
-  rebind: { parameters: eam_alloy_parameters }
-  body:
-    - eam_flat_rho_sym
-    - update_rho_from_ghost
-    - eam_flat_rho2emb
-    - ghost_update_emb
-    - eam_flat_force_sym
-
-compute_force_flat_nosym:
-  rebind: { parameters: eam_alloy_parameters }
-  body:
-    - eam_flat_rho
-    - eam_flat_rho2emb
-    - ghost_update_emb
-    - eam_flat_force
 
 compute_force_singlepass:
   - eam_alloy_force: { rcut: 6.6825 ang , parameters: { file: AlCu.eam.alloy } , eam_rho: true , eam_rho2emb: true , eam_ghost: true , eam_force: true , eam_symmetry: false }

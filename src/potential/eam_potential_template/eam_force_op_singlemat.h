@@ -4,6 +4,7 @@
 
 #include <exanb/compute/compute_cell_particle_pairs.h>
 #include <exanb/compute/compute_pair_traits.h>
+#include <exanb/core/grid_fields.h>
 
 #include "potential.h"
 
@@ -67,6 +68,8 @@ namespace exaStamp
 
     struct ForceOp
     {
+      static inline constexpr field::generic_real_nth<0> field_rho_dEmb = {};
+
       const onika::cuda::ro_shallow_copy_t<USTAMP_POTENTIAL_PARMS> p;
 
       template<class ComputePairBufferT, class CellParticlesT>
@@ -125,7 +128,7 @@ namespace exaStamp
           double dPhi = 0.;
           USTAMP_POTENTIAL_EAM_RHO( p, r, Rho, dRho );          
           USTAMP_POTENTIAL_EAM_PHI( p, r, Phi, dPhi );          
-          double de = ( dRho * ( dEmb + tab.nbh_pt[i][field::rho_dEmb] ) + dPhi ) / r;
+          double de = ( dRho * ( dEmb + tab.nbh_pt[i][field_rho_dEmb] ) + dPhi ) / r;
 
           const double drx = tab.drx[i];
           const double dry = tab.dry[i];

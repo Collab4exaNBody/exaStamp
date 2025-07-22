@@ -2,7 +2,6 @@
 set(EAM_POTENTIAL_TEMPALE_SRCS
   ${CMAKE_CURRENT_SOURCE_DIR}/eam_potential.cu
   ${CMAKE_CURRENT_SOURCE_DIR}/eam_potential_multimat.cu
-  ${CMAKE_CURRENT_SOURCE_DIR}/eam_potential_multimat_flat.cu
   PARENT_SCOPE)
 
 macro(AddEAMPotential EamPotDir PluginName)
