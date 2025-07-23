@@ -27,7 +27,18 @@ Copyright [LE COMMISSARIAT A L’ENERGIE ATOMIQUE ET AUX ENERGIES ALTERNATIVES].
 
 Main sections of the documentation can be accessed directly using the following URLs.
 
-
+| URL | Short description |
+|-----|-------------|
+| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/1_Background.html | **exaStamp** background |
+| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/2_Build_and_Install.html | Build and installation instructions |
+| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/3_Beginners_guide.html | Beginner's guide |
+| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/Tutorials.html | Tutorials |
+| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/4_Domain_Regions.html | Simulation domain and spatial regions |
+| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/5_Grids.html | Manipulating grids |
+| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/6_Particles.html | Manipulating particles |
+| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/7_Interactions.html | Interatomic potentials |
+| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/8_Constraints.html | Thermodynamic ensembles and constraints |
+| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/3bis_microStamp.html | microStamp mini MD application |
 
 -----------------------------------------------------------------------------------------------------------
 
