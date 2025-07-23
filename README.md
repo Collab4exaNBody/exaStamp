@@ -1,91 +1,71 @@
-# exaStamp
+<p align="center">
+  <img src="doc/img/exaStamp-logo.png" alt="Example Stamp Logo" width="200"/>
+</p>
 
-![](doc/img/exaStamp-logo.png)
- 
-exaStamp is a high performance molecular dynamics simulation code, originated from CEA/DIF.
+This is the **exaStamp** software package, a high performance molecular dynamics simulation code, originated at CEA/DAM. **exaStamp** stands for **S**imulations **T**emporelles **A**tomistiques et **M**oléculaires **P**arallèles à l'**exa**scale (in French) or **exa**scale **S**imulations of **T**ime-dependent **A**tomistic and **M**olecular systems in **P**arallel (in English).
 
-## Important note for developpers working with legacy repository history
-Please check instructions in doc/transfer_from_legacy_repo.txt
+Copyright [LE COMMISSARIAT A L’ENERGIE ATOMIQUE ET AUX ENERGIES ALTERNATIVES]. This software is distributed under the Apache 2.0 public license.
 
-## Installation
+-----------------------------------------------------------------------------------------------------------
 
-### Minimal Requirements
+**exaStamp** is a high performance classical molecular dynamics simulation code designed to run efficiently on supercomputers as well as laptops or workstations. It takes advantage of hybrid parallelism with the ability to run using MPI + X where X is either OpenMP or Cuda/HIP. **exaStamp** is the result of a long-time effort at CEA/DAM/DIF, France. It is an open-source code, distributed freely under the terms of the Apache Public License version 2.0.
 
-To proceed with the installation, your system must meet the minimum prerequisites. The first step involves the installation of exaNBody:
+-----------------------------------------------------------------------------------------------------------
 
-```
-git clone https://github.com/Collab4exaNBody/exaNBody.git
-export exaNBody_DIR=`pwd`/exaNBody
-```
+## Documentation
 
-The next step involves the installation of yaml-cpp and MPI, which can be achieved using either the spack package manager or cmake:
+**exaStamp** documentation can be accessed using the following QR code and URls (Website and Documentation git repository.
 
-```
-sudo apt install libyaml-cpp-dev
-sudo apt install mpi-default-dev
-```
+<div align="center">
+  <table>
+    <tr>
+      <td><img src="doc/qr_doc_exastamp.png" width="200"/></td>
+      <td><a href="https://collab4exanbody.github.io/doc_exaStamp"> exaStamp Website</a><br><a href="https://github.com/Collab4exaNBody/doc_exaStamp.git"> exaStamp Documentation </a></td>
+    </tr>
+  </table>
+</div>
 
-### Optional Dependencies
+Main sections of the documentation can be accessed directly using the following URLs.
 
-Before proceeding further, you have the option to consider the following dependencies:
+| URL | Short description |
+|-----|-------------|
+| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/1_Background.html | **exaStamp** background |
+| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/2_Build_and_Install.html | Build and installation instructions |
+| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/3_Beginners_guide.html | Beginner's guide |
+| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/Tutorials.html | Tutorials |
+| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/4_Domain_Regions.html | Simulation domain and spatial regions |
+| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/5_Grids.html | Manipulating grids |
+| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/6_Particles.html | Manipulating particles |
+| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/7_Interactions.html | Interatomic potentials |
+| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/8_Constraints.html | Thermodynamic ensembles and constraints |
+| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/3bis_microStamp.html | microStamp mini MD application |
 
-- Cuda
-- Zoltan and parmetis
-- Cuda, see https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html
-- HIP, see https://rocm.docs.amd.com/projects/install-on-linux/en/latest/
+-----------------------------------------------------------------------------------------------------------
 
-### exaStamp installation
+## Community Guidelines
 
-To install exaStamp, follow these steps:
+For more details, see `CONTRIBUTING.md`. Main guidelines are:
 
-Set the exaNBody_DIR environment variable to the installation path. Clone the exaStamp repository using the command:
+- For any bug, please create an issue and add the label “bug”. We welcome all feedback to make **exaStamp** as robust as possible.
+- If you would like to participate and add functionality to **exaStamp**, you can find instructions for coding style, tests and pull request process in CONTRIBUTING.md.
+- If you have any support-related / collaboration questions, please contact the team at pauk.lafourcade@cea.fr. If you are a `CEA` member, please request access to the group : "exaNBody & Co. (exaStamp, exaDEM, exaSPH)", an external access can also be provided.
 
-```
-git clone https://github.com/Collab4exaNBody/exaStamp.git
-```
+-----------------------------------------------------------------------------------------------------------
 
-Create a directory named build and navigate into it:
+## Authors
 
-```
-mkdir build && cd build
-```
+### Main developers
 
-Run CMake to configure the exaStamp build, with CUDA support
+- Paul Lafourcade (CEA/DAM) (paul.lafourcade@cea.fr)
+- Thierry Carrard (CEA/DAM)
 
-```
-ccmake -DXNB_PRODUCT_VARIANT=all \
-       -DXNB_BUILD_CUDA=ON \
-       -DXSTAMP_CUDA_ARCH=86 \
-       -DONIKA_HAVE_OPENMP_DETACH=OFF \
-       -DONIKA_HAVE_OPENMP_TOOLS=OFF \
-       -DCMAKE_BUILD_TYPE=Release \
-       ../exaStamp
-``
+### Other Developers
 
-OR with HIP support
+- Raphaël Prat (CEA/DES)
+- Claire Lemarchand (CEA/DAM)
 
-```
-ccmake -DXNB_PRODUCT_VARIANT=rigidmol \
-       -DCMAKE_C_COMPILER=hipcc \
-       -DCMAKE_CXX_COMPILER=hipcc \
-       -DCMAKE_CXX_FLAGS="-Wpass-failed" \
-       -DXNB_BUILD_CUDA=ON \
-       -DXNB_ENABLE_HIP=ON \
-       -DCMAKE_HIP_PLATFORM=amd \
-       -DONIKA_HAVE_OPENMP_DETACH=OFF \
-       -DONIKA_HAVE_OPENMP_TOOLS=OFF \
-       -DCMAKE_BUILD_TYPE=Release \
-       ../exaStamp
-```
+-----------------------------------------------------------------------------------------------------------
 
-Build exaStamp using the make command with a specified number of parallel jobs (e.g., -j 4 for 4 parallel jobs):
+## License
 
-```
-make -j 4
-```
-
-Build Plugins
-
-```
-make UpdatePluginDataBase
-```
+See `LICENSE.txt`
