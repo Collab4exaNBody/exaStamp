@@ -1,6 +1,3 @@
-//  // DO NOT REMOVE THIS LINE
-
-//  // DO NOT REMOVE THIS LINE
 
 #include <exaStamp/potential/eam/eam_buffer.h>
 
@@ -124,7 +121,7 @@ namespace exaStamp
           EmbOp emb_op { *parameters };
 
           // Emb term computation will access, for each central atom, potential energy (internal field) and emb_field (externally stored extra field)
-          auto emb_field = grid->field_accessor( field::rho_dEmb );
+          auto emb_field = grid->field_accessor( field_rho_dEmb );
           auto emb_op_fields = make_field_tuple_from_field_set( FieldSet<field::_ep>{} , emb_field );
           auto emb_optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform , cp_locks /* no additional fields required for neighbors */ );
           compute_cell_particle_pairs( *grid, *rcut, ComputeGhostEmb, emb_optional, emb_buf, emb_op, emb_op_fields , parallel_execution_context() );      
@@ -133,11 +130,19 @@ namespace exaStamp
         // 2nd pass parameters: compute final force using the emb term, only for non ghost particles (but reading EMB terms from neighbor particles)
         if constexpr ( ComputeForce )
         {
-          using ForceCPBuf = SimpleNbhComputeBuffer< FieldSet<field::_rho_dEmb> >; /* we want extra neighbor storage space to store these fields */
-          ComputePairBufferFactory< ForceCPBuf > force_buf;  
+          // we want extra neighbor storage space to store embedding term
+          // FieldTuple, used to pack selected neighbor fields, cannot be addressed through dynamic field instances
+          // thus, we use different generic field types, field::generic_real_idx<0> , field::generic_real_idx<1> , ...
+          // to store and retreive neighbor selected fields in field tuple.
+          using MyType = typename field::generic_real_nth<0>::value_type;
+          using ForceCPBuf = SimpleNbhComputeBuffer< FieldSet< field::_generic_real<0> > >; 
+          ComputePairBufferFactory< ForceCPBuf > force_buf;
           ForceOp force_op { *parameters };
           //const double * c_emb_ptr = eam_extra_fields->m_rho_emb.data();
-          auto c_emb_field = grid->field_const_accessor( field::rho_dEmb );
+          
+          // neighbor field will be fetched using an accessor wich is actually using a dynamic real field.
+          // this embedding term will be fetched using field::generic_real_nth<0>{} as an index key.
+          auto c_emb_field = grid->field_const_accessor( field_rho_dEmb );
 
           // force computation will access, for each central atom, fields defined in ComputeFields plus external constant field c_emb_field
           auto force_op_fields = make_field_tuple_from_field_set( ComputeFields{} , c_emb_field );

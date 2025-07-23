@@ -32,7 +32,6 @@ namespace exaStamp
   using namespace UpdateGhostsUtils;
 
   // === register factory ===
-  template<typename GridT> using UpdateGhostsAllFieldsNoFV = UpdateGhostsNode< GridT , RemoveFields< typename GridT::Fields , FieldSet<field::_fx,field::_fy,field::_fz,field::_ep, field::_vx, field::_vy, field::_vz > > , true >;
   template<typename GridT> using UpdateGhostsRandVandVir = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz,  field::_vx, field::_vy, field::_vz, field::_virial > , false >;
   template<typename GridT> using UpdateGhostsRandV = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz,  field::_vx, field::_vy, field::_vz > , false >;
 
