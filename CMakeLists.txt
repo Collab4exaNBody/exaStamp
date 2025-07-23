@@ -19,6 +19,9 @@ message(STATUS "Project version : ${EXASTAMP_VERSION}")
 # === CMake customization ===
 # ===========================
 set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS Release RelWithDebInfo Debug)
+if (NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
+endif()
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 # ======================================
