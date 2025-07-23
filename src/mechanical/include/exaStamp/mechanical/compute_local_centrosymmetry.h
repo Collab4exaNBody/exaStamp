@@ -24,18 +24,15 @@ using onika::memory::DEFAULT_ALIGNMENT;
 
 struct alignas(DEFAULT_ALIGNMENT) CentroSymmetryOp {
 
-  const double rcut;
-  const size_t nnn;
-  const LocalCentroMethod method;
-
   using NeighInfo = std::pair<double, size_t>;
+
+  const size_t nnn;
 
   template <class CellParticlesT>
   inline void operator()(size_t n, ComputePairBuffer2<false, false>& buf, double& csp, CellParticlesT) const {
 
-    csp = 0.0; // ensure csp is zero initialized
+    csp = 0.0;
 
-    // if n < nnn return
     if (n < nnn) {
       return;
     }
@@ -48,7 +45,6 @@ struct alignas(DEFAULT_ALIGNMENT) CentroSymmetryOp {
 
     // Find the N-Nearest neighbours
     // sort neighbours by squared distance
-
     for (size_t i = 0; i < n; ++i) {
       neigh_infos[i].first = buf.d2[i];
       neigh_infos[i].second = i;

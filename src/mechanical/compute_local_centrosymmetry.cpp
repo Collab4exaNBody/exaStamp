@@ -23,54 +23,53 @@ namespace exaStamp
 {
 using namespace exanb;
 
-using onika::memory::DEFAULT_ALIGNMENT;
+// template <class GridT, class = AssertGridHasFields<GridT, field::_ep, field::_fx, field::_fy, field::_fz>>
+template <class GridT, class = AssertGridHasFields<GridT>>
+class ComputeCentroOp : public OperatorNode {
 
-template <class GridT, class = AssertGridHasFields<GridT, field::_ep, field::_fx, field::_fy, field::_fz>>
-class ComputeCSPOperator : public OperatorNode {
+  ADD_SLOT(exanb::GridChunkNeighbors, chunk_neighbors, INPUT, exanb::GridChunkNeighbors{}, DocString{"neighbor list"});
+  ADD_SLOT(bool, ghost, INPUT, false);
+  ADD_SLOT(GridT, grid, INPUT);
+  ADD_SLOT(Domain, domain, INPUT, REQUIRED);
 
-  // ========= I/O slots =======================
-  //  ADD_SLOT( double                , rcut_max            , INPUT_OUTPUT , 0.0 );
-  ADD_SLOT( exanb::GridChunkNeighbors                   , chunk_neighbors   , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
-  ADD_SLOT( bool                  , ghost               , INPUT , false );
-  ADD_SLOT( GridT                 , grid                , INPUT );
-  ADD_SLOT( Domain                , domain              , INPUT , REQUIRED );
+  ADD_SLOT(double, rcut, INPUT, 0.0);
+  ADD_SLOT(size_t, nnn, INPUT, 12);
 
-  ADD_SLOT(double, rcut, INPUT, 0.);
-  ADD_SLOT(uint64_t, nnn, INPUT, 12);
-  ADD_SLOT(LocalCentroMethod, method, INPUT, LocalCentroMethod::GES);
+  ADD_SLOT(std::string, name, INPUT, "csp");
+  ADD_SLOT(bool, verbose, INPUT, false);
 
   using ComputeBuffer = ComputePairBuffer2<false, false>;
   using ComputeFields = FieldSet<>;
-  static constexpr ComputeFields compute_force_field_set{};
+  static constexpr ComputeFields compute_field_set{};
+
+  static constexpr std::string_view tmpl_infos = "\t- Computing per-atom centrosymmetry:\n"
+                                                 "\t\t rcut = %.5f\n"
+                                                 "\t\t nnn  = %d\n";
 
 public:
+  inline void execute() override final {
 
-  inline void execute () override final
-  {
-    assert( chunk_neighbors->number_of_cells() == grid->number_of_cells() );
-    bool has_chunk_neighbors = chunk_neighbors.has_value();
-    if( !has_chunk_neighbors )
-    {
+    assert(chunk_neighbors->number_of_cells() == grid->number_of_cells());
+
+    if (!chunk_neighbors.has_value()) {
       lerr << "No neighbors input data available" << std::endl;
-      std::abort();
+      onika::fatal_error();
     }
 
-    double cutoff = *rcut;
-    lout << onika::format_string("\t- Computing per-atom centrosymmetry:\n")
-         << onika::format_string("\t    rcut = %.5f\n", cutoff)
-         << onika::format_string("\t    nnn  = %d\n", *nnn);
+    if (*verbose)
+      lout << onika::format_string(std::string(tmpl_infos), *rcut, *nnn);
 
-    // check if number of nearest neighbor is even
-    if (( *nnn % 2 ) != 0) {
-      lerr << "ComputeCentrosymmetryOperator: the number of nearest neighbors (nnn = " << *nnn << ") must be even" << std::endl;
-      std::abort();
+    if ((*nnn % 2) != 0) {
+      lerr << "compute_local_centrosymmetry: the number of nearest neighbors (nnn = " << *nnn << ") must be even.\n";
+      onika::fatal_error();
     }
 
-    CentroSymmetryOp local_op{cutoff, *nnn, *method};
+    CentroSymmetryOp local_op{.nnn = *nnn};
 
-    auto field_csp = grid->field_accessor(field::csp);
-    auto local_op_fields = make_field_tuple_from_field_set(FieldSet<>{}, field_csp);
-    
+    auto csp_field_id = field::mk_generic_real(*name);
+    auto csp_field_acc = grid->field_accessor(csp_field_id);
+    auto local_op_fields = make_field_tuple_from_field_set(FieldSet<>{}, csp_field_acc);
+
     ComputePairNullWeightIterator cp_weight{};
     ComputePairOptionalLocks<false> cp_locks{};
     exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{*chunk_neighbors};
@@ -80,24 +79,25 @@ public:
     if (domain->xform_is_identity()) {
       NullXForm cp_xform;
       auto optional = make_compute_pair_optional_args(nbh_it, cp_weight, cp_xform, cp_locks, cpu_cell_filter);
-      compute_cell_particle_pairs(*grid, cutoff, *ghost, optional, local_op_buf, local_op, local_op_fields,
+      compute_cell_particle_pairs(*grid, *rcut, *ghost, optional, local_op_buf, local_op, local_op_fields,
                                   parallel_execution_context());
     } else {
       LinearXForm cp_xform{domain->xform()};
       auto optional = make_compute_pair_optional_args(nbh_it, cp_weight, cp_xform, cp_locks, cpu_cell_filter);
-      compute_cell_particle_pairs(*grid, cutoff, *ghost, optional, local_op_buf, local_op, local_op_fields,
+      compute_cell_particle_pairs(*grid, *rcut, *ghost, optional, local_op_buf, local_op, local_op_fields,
                                   parallel_execution_context());
     }
 
-    lout << onika::format_string("\t- Computing per-atom centrosymmetry END\n");    
+    if (*verbose)
+      lout << onika::format_string("\t- Computing per-atom centrosymmetry END\n");
   }
 };
 
-template <class GridT> using ComputeCSPOperatorTmpl = ComputeCSPOperator<GridT>;
+template <class GridT> using ComputeCentroOpTmpl = ComputeCentroOp<GridT>;
 
 // === register factories ===
 ONIKA_AUTORUN_INIT(compute_local_csp) {
   OperatorNodeFactory::instance()->register_factory("compute_local_csp",
-                                                    make_grid_variant_operator<ComputeCSPOperatorTmpl>);
+                                                    make_grid_variant_operator<ComputeCentroOpTmpl>);
 }
 } // namespace exaStamp
