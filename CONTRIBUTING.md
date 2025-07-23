@@ -29,7 +29,6 @@ Guidelines for bug reports:
 
 A good bug report shouldn't leave others needing to chase you up for more information. Please try to be as detailed as possible in your report. What is your environment? What steps will reproduce the issue? What compiler(s) and OS experience the problem? What would you expect to be the outcome? All these details will help people to fix any potential bugs.
 
-
 Pull requests
 =============
 
@@ -66,6 +65,6 @@ If you are adding functionality, add tests accordingly.
 Pull request process
 --------------------
 
-Given the size of the code, only one reviewer will be assigned to you. If the assignment time exceeds one or two weeks, please tag `lafourcadep` or `carrardt` in the conversion.
+Given the size of the code, only one reviewer will be assigned to you. If the assignment time exceeds one or two weeks, please tag `lafourcadep` or `carrardt` in the conversation.
 
 IMPORTANT: By submitting a patch, you agree to allow the project owners to license your work under the the terms of the Apache2.0 License.
