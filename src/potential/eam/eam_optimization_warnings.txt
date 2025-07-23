@@ -4,6 +4,4 @@ Warning: things removed or not generic after EAM optimizations
 # - pair_enabled test removed
 - fast path for EAM Alloy not generalized to other EAM potentials
 - fast compute strategy not propagated to single mat EAM
-- lack Virial computation option (for flat_arrays only)
-- simulation_thermodynamic state only gather field::ep not field::flat_ep so trajectory is good but using flat_arrays the potential energy and virial are always zero
 
