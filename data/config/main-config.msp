@@ -80,6 +80,7 @@ init_cuda:
 hw_device_init:
   - mpi_comm_world
   - init_cuda
+  - update_ghost_config
 
 hw_device_finalize:
   - finalize_cuda
