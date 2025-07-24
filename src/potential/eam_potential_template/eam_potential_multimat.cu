@@ -1,3 +1,4 @@
+
 #include <exanb/core/grid.h>
 #include <onika/math/basic_types.h>
 #include <onika/math/basic_types_operators.h>
@@ -148,10 +149,10 @@ namespace exaStamp
       }
       USTAMP_POTENTIAL_EAM_MM_INIT_TYPES( *parameters , n_species , eam_scratch->m_pair_enabled.data() );
 
-      auto rho_emb_field = grid->field_accessor( field::rho_dEmb );
+      auto rho_emb_field = grid->field_accessor( field_rho_dEmb );
       auto * rho_emb_ptr = rho_emb_field.m_flat_array_ptr;
 
-      auto c_rho_emb_field = grid->field_const_accessor( field::rho_dEmb );
+      auto c_rho_emb_field = grid->field_const_accessor( field_rho_dEmb );
       const auto * c_rho_emb_ptr = c_rho_emb_field.m_flat_array_ptr;
 
       // execute the 2 passes

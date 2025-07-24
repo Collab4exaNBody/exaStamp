@@ -2,11 +2,6 @@
 #pragma once
 
 #include <exanb/core/grid_fields.h>
-
-// EAM package specific fields
-XNB_DECLARE_FIELD(double          ,rho_dEmb          ,"density or embedding term");
-
-
 #include <onika/memory/allocator.h>
 #include <onika/cuda/cuda.h>
 #include <vector>
@@ -21,6 +16,8 @@ namespace exaStamp
   using namespace exanb;
 
   using onika::memory::DEFAULT_ALIGNMENT;
+
+  static inline constexpr field::generic_real_nth<0> field_rho_dEmb = { "rho_dEmb" };
 
   struct PhiRhoCutoff
   {
