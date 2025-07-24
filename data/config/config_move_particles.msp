@@ -26,12 +26,11 @@ update_ghost_config:
     mpi_tag: 0
     gpu_buffer_pack: true
     async_buffer_pack: true
-    staging_buffer: false
+    staging_buffer: true
     serialize_pack_send: true
     wait_all: false
-    device_side_buffer: true
+    device_side_buffer: false
 ####################################################
-
 
 
 ################### Neighbor list update ############################
