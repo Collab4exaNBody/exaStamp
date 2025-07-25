@@ -69,7 +69,7 @@ for foldername, subfolders, filenames in os.walk(root_directory):
             content = file.read()
 
             # Check for duplicate headers based on file type
-            if extension in ['.cpp', '.h', '.cxx', '.cu']:
+            if extension in ['.cpp', '.h', '.cxx', '.hxx', '.cu']:
                 if content.count(license_header_c_style.strip()) > 1:
                     print(f"Duplicate header found in file: {file_path}")
             elif extension in [ '.txt', '.sh', '.py' ]:                
