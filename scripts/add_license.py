@@ -1,0 +1,80 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements. See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership. The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License. You may obtain a copy of the License at
+#   http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied. See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+import os, sys
+
+# Define the license headers
+license_header_c_style = """/*
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements. See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership. The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License. You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied. See the License for the
+specific language governing permissions and limitations
+under the License.
+*/
+
+"""
+
+license_header_python_style = """#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements. See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership. The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License. You may obtain a copy of the License at
+#   http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied. See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+"""
+
+# Specify the directory containing the files
+root_directory = sys.argv[1]
+
+# Walk through the directory tree
+for foldername, subfolders, filenames in os.walk(root_directory):
+    for filename in filenames:
+        file_path = os.path.join(foldername, filename)
+
+        # Determine the file extension
+        _, extension = os.path.splitext(filename)
+
+        # Open the file and read its contents
+        with open(file_path, 'r+') as file:
+            content = file.read()
+
+            # Prepend the appropriate license header based on file type
+            if extension in ['.cpp', '.h', '.cxx', '.cu']:
+                file.seek(0, 0)
+                file.write(license_header_c_style + content)
+            elif extension in [ '.txt', '.sh', '.py' ]:
+                file.seek(0, 0)
+                file.write(license_header_python_style + content)
+
+print("License headers added to all relevant files in the directory tree.")
