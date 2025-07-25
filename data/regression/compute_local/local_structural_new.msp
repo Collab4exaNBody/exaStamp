@@ -1,0 +1,50 @@
+compute_force:
+  - zero_compute_force
+
+zero_compute_force:
+  rcut: 6.0 ang
+  type: ignored
+    
+grid_flavor: grid_flavor_multimat
+
+species:
+  - U: { mass: 238.029 Da , z: 92 , charge: 0.0 e- }
+  - O: { mass: 15.999 Da , z: 8 , charge: 0.0 e- }
+
+input_data:
+  - particle_types:
+      particle_type_map: { U: 0 , O: 1 }
+  - particle_type_add_properties:
+      U: { mass: 238.029 Da , z: 92 , charge: 0.0 e- }
+      O: { mass: 15.999 Da , z: 8 , charge: 0.0 e- }
+  - domain:
+      cell_size: 4.0 ang
+      grid_dims: [ 20 , 20 , 20 ]
+      bounds: [ [ 0.0 um , 0.0 um , 0.0 um ] , [ 80.0 ang , 80.0 ang , 80.0 ang ] ]
+      periodic: [ true , true , true ]
+      expandable: false
+      xform: [ [ 1 , 0 , 0 ] , [ 0 , 1 , 0 ] , [ 0 , 0 , 1 ] ]
+  - init_rcb_grid
+  - lattice:
+      structure: FCC
+      types: [ U, U, U, U ]
+      size: [ 4.0 ang , 4.0 ang , 4.0 ang ]
+      noise: 0.1 ang
+  - lattice:
+      structure: SC
+      types: [ O ]
+      size: [ 2.0 ang , 2.0 ang , 2.0 ang ]
+      noise: 0.05 ang
+
+global:
+  simulation_end_iteration: 2
+  simulation_log_frequency: 1
+  simulation_dump_frequency: 1
+  init_temperature: 0 K
+  rcut_inc: 1.0 ang
+  dt: 1.0e-3 ps
+
+dump_data:
+  - timestep_file: "xyz_datas/test_%09d.xyz"
+  - write_xyz: { fields: [ id, type ] }
+  - compute_rdf: { rcut: 5.0, nbin: 100 }
