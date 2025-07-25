@@ -1,10 +1,6 @@
 name: Check Spack Installation
 
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+on: [push]
 
 jobs:
   build:
@@ -26,4 +22,4 @@ jobs:
       run: |
         git clone https://github.com/Collab4exaNBody/spack-repos.git
         spack repo add spack-repos
-        spack install exastamp@main
+        spack install exanbody@main
