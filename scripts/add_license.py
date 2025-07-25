@@ -17,7 +17,8 @@
 import os, sys
 
 # Define the license headers
-license_header_c_style = """/*
+license_header_c_style = """Apache Software Foundation (ASF)"""
+license_header_c_style_full = """/*
 Licensed to the Apache Software Foundation (ASF) under one
 or more contributor license agreements. See the NOTICE file
 distributed with this work for additional information
@@ -36,7 +37,8 @@ under the License.
 
 """
 
-license_header_python_style = """#
+license_header_python_style = """Apache Software Foundation (ASF)"""
+license_header_python_style_full = """#
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements. See the NOTICE file
 # distributed with this work for additional information
@@ -74,11 +76,11 @@ for foldername, subfolders, filenames in os.walk(root_directory):
                 if license_header_c_style.strip() not in content:
                     # Prepend the license header if not present
                     file.seek(0, 0)
-                    file.write(license_header_c_style + content)
+                    file.write(license_header_c_style_full + content)
             elif extension in [ '.txt', '.sh', '.py' ]:                    
                 if license_header_python_style.strip() not in content:
                     # Prepend the license header if not present
                     file.seek(0, 0)
-                    file.write(license_header_python_style + content)
+                    file.write(license_header_python_style_full + content)
 
 print("License headers added to all relevant files in the directory tree, if not already present.")
