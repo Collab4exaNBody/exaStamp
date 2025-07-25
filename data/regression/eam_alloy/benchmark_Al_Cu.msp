@@ -1,8 +1,3 @@
-#includes:
-#  - config_update_symmetric_forces.msp
-#  - config_flat_symmetric_forces.msp
-#  - config_flat_arrays.msp
-
 configuration:
   onika:
     gpu_block_size: 128
@@ -38,8 +33,6 @@ ghost_update_r: *ghost_update_parms
 
 ghost_update_all_no_fv: *ghost_update_parms
 
-flat_force_energy_from_ghost: *ghost_update_parms
-
 eam_rho:
   - eam_alloy_force: { rcut: 6.6825 ang , eam_rho: true , eam_rho2emb: false , eam_ghost: false , eam_force: false , eam_symmetry: false }
 
@@ -54,21 +47,6 @@ eam_force:
 
 eam_force_sym:
   - eam_alloy_force: { rcut: 6.6825 ang , eam_rho: false , eam_rho2emb: false, eam_ghost: false , eam_force: true , eam_symmetry: true }
-
-eam_flat_rho:
-  - eam_alloy_flat_force: { rcut: 6.6825 ang , eam_rho: true , eam_rho2emb: false , eam_ghost: false , eam_force: false , eam_symmetry: false }
-
-eam_flat_rho_sym:
-  - eam_alloy_flat_force: { rcut: 6.6825 ang , eam_rho: true , eam_rho2emb: false , eam_ghost: false , eam_force: false , eam_symmetry: true }
-
-eam_flat_rho2emb:
-  - eam_alloy_flat_force: { rcut: 6.6825 ang , eam_rho: false , eam_rho2emb: true , eam_ghost: false , eam_force: false , eam_symmetry: false }
-
-eam_flat_force:
-  - eam_alloy_flat_force: { rcut: 6.6825 ang , eam_rho: false , eam_rho2emb: false , eam_ghost: false , eam_force: true , eam_symmetry: false }
-
-eam_flat_force_sym:
-  - eam_alloy_flat_force: { rcut: 6.6825 ang , eam_rho: false , eam_rho2emb: false , eam_ghost: false , eam_force: true , eam_symmetry: true }
 
 compute_force_nosym:
   rebind: { parameters: eam_alloy_parameters }
@@ -96,8 +74,6 @@ compute_force: compute_force_singlepass
 # alternatives
 #compute_force: compute_force_nosym
 #compute_force: compute_force_sym
-#compute_force: compute_force_flat_sym
-#compute_force: compute_force_flat_nosym
 
 species:
   - Al:
@@ -137,7 +113,7 @@ domain:
   - chunk_neighbors_stats
   - memory_stats
 
-dump_analysis: nop
+#dump_analysis: nop
 
 dump_data:
   - timestep_file: "atoms_%09d.xyz"
