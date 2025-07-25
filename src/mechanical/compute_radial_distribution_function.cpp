@@ -40,14 +40,24 @@ struct alignas(DEFAULT_ALIGNMENT) PairDistFunctor {
   inline void operator()(size_t n, ComputePairBufferT& buf, int type_a, CellParticlesT cells) const {
 
     size_t cell, index;
-    buf.nbh.get(0, cell, index);
+    // buf.nbh.get(0, cell, index);
 
-    int v1 = cells[cell][field::type][index];
-    int v2 = buf.nbh_pt[0][field::type];
+    for (size_t j = 0; j < n; ++j) {
+      buf.nbh.get(j, cell, index);
+      size_t v1 = cells[cell][field::type][index];
+      size_t v2 = buf.nbh_pt[j][field::type];
+      std::string name = typeid(cells[cell][field::type][index]).name();
+      const char* name2 = abi::__cxa_demangle(name.c_str(), 0, 0, 0);
+      lout << onika::format_string("> type = (v1: %ld, v2: %ld) %s\n", v1, v2, name2);
+      break;
+    }
 
-    std::string name = typeid(cells[cell][field::type][index]).name();
-    const char* name2 = abi::__cxa_demangle(name.c_str(), 0, 0, 0);
-    lout << onika::format_string("> type = (v1: %d, v2: %d) %s\n", v1, v2, name2);
+    // int v1 = cells[cell][field::rx][index];
+    // int v2 = buf.nbh_pt[0][field::type];
+
+    // std::string name = typeid(cells[cell][field::type][index]).name();
+    // const char* name2 = abi::__cxa_demangle(name.c_str(), 0, 0, 0);
+    // lout << onika::format_string("> type = (v1: %.5f, v2: %c) %s\n", v1, v2, name2);
 
     // for (size_t i = 0; i < n; ++i) {
     //   lout << type_a << " " << "> " << buf.nbh_pt[i][field::type] << " <" << std::endl;
@@ -107,9 +117,9 @@ class ComputeRadialDistributionFunctionOperator : public OperatorNode {
 
 
   // ========= I/O slots =======================
-  ADD_SLOT(MPI_Comm, mpi, INPUT);
-  ADD_SLOT(exanb::GridChunkNeighbors, chunk_neighbors, INPUT, exanb::GridChunkNeighbors{}, DocString{"neighbor list"});
-  ADD_SLOT(bool, ghost, INPUT, false);
+  ADD_SLOT(MPI_Comm                  , mpi                     , INPUT);
+  ADD_SLOT(exanb::GridChunkNeighbors , chunk_neighbors         , INPUT, exanb::GridChunkNeighbors{}, DocString{"neighbor list"});
+  ADD_SLOT(bool                      , ghost, INPUT, false);
   ADD_SLOT(GridT, grid, INPUT);
   ADD_SLOT(double, rcut_max, INPUT_OUTPUT, 0.0, DocString{"Updated max rcut"});
   ADD_SLOT(Domain, domain, INPUT, REQUIRED);
@@ -122,9 +132,9 @@ class ComputeRadialDistributionFunctionOperator : public OperatorNode {
 
   // using ComputeBuffer = ComputePairBuffer2<false, true>;
   
-  static constexpr bool UseWeights = false;
+  static constexpr bool UseWeights = true;
   static constexpr bool UseNeighbours = true;
-  using NeighFieldSet = FieldSet<field::_type>;
+  using NeighFieldSet = FieldSet<field::_type, field::_rx>;
   using ComputeFieldsSet = FieldSet<field::_type>;
 
   using ComputeBuffer = ComputePairBuffer2<
@@ -186,7 +196,7 @@ public:
     LinearXForm cp_xform{domain->xform()};
     auto optional =
         make_compute_pair_optional_args(nbh_it, cp_weight, cp_xform, cp_locks, ComputePairTrivialCellFiltering{},
-                                        ComputePairTrivialParticleFiltering{});
+                                        ComputePairTrivialParticleFiltering{}, grid->field_accessors_from_field_set(FieldSet<field::_type, field::_rx>{}));
 
     compute_cell_particle_pairs2(*grid, *rcut, false, optional, local_op_buf, local_op, local_op_fields,
                                  DefaultPositionFields{}, parallel_execution_context(), use_cells_accessor);

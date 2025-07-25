@@ -23,8 +23,8 @@ namespace exaStamp
 {
 using namespace exanb;
 
-// template <class GridT, class = AssertGridHasFields<GridT, field::_ep, field::_fx, field::_fy, field::_fz>>
-template <class GridT, class = AssertGridHasFields<GridT>>
+template <class GridT, class = AssertGridHasFields<GridT, field::_ep, field::_fx, field::_fy, field::_fz>>
+// template <class GridT, class = AssertGridHasFields<GridT>>
 class ComputeCentroOp : public OperatorNode {
 
   ADD_SLOT(exanb::GridChunkNeighbors, chunk_neighbors, INPUT, exanb::GridChunkNeighbors{}, DocString{"neighbor list"});

@@ -1,17 +1,14 @@
 #pragma once
 
+#include <exanb/compute/compute_pair_buffer.h>
 #include <onika/math/basic_types.h>
 #include <onika/string_utils.h>
-#include <exanb/compute/compute_pair_buffer.h>
 
 #include <exaStamp/compute/thermodynamic_state.h>
 #include <exaStamp/mechanical/cell_particles_local_structural_metrics.h>
 
-#include <vector>
-#include <chrono>
 #include <omp.h>
-
-XNB_DECLARE_FIELD(double, local_entropy, "per-atom local entropy")
+#include <vector>
 
 namespace exaStamp {
 
@@ -21,6 +18,7 @@ using onika::memory::DEFAULT_ALIGNMENT;
 
 struct alignas(DEFAULT_ALIGNMENT) LocalEntropyOp {
 
+  bool verbose = true;
   double rcut;
   double sigma;
   size_t nbins;
@@ -48,6 +46,8 @@ struct alignas(DEFAULT_ALIGNMENT) LocalEntropyOp {
   std::vector<double> prefactor = {0};
 
   void initialize(const ThermodynamicState& thermo_state) {
+
+    lout << "\t\t - init entropy_op." << std::endl;
 
     if (!(nbins > 0)) {
       nbins = static_cast<size_t>(rcut / sigma) + 1;
@@ -93,7 +93,7 @@ struct alignas(DEFAULT_ALIGNMENT) LocalEntropyOp {
   }
 
   template <class CellParticlesT>
-  inline void operator()(size_t n, ComputePairBuffer2<false, false>& buf, double& local_entropy,
+  inline void operator()(size_t n, ComputePairBuffer2<false, false>& buf, double& entropy,
                          CellParticlesT /* cells */) const {
 
     double rho = local ? (static_cast<double>(n) / local_volume) : rho_global;
@@ -124,7 +124,7 @@ struct alignas(DEFAULT_ALIGNMENT) LocalEntropyOp {
     }
 
     // don't forget to mulitply the integral by dr
-    local_entropy = -2. * M_PI * rho * tmp * drm;
+    entropy = -2. * M_PI * rho * tmp * drm;
   }
 };
 
