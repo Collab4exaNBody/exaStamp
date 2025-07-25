@@ -1,3 +1,21 @@
+/*
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements. See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership. The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License. You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied. See the License for the
+specific language governing permissions and limitations
+under the License.
+*/
+
+
 #include <exanb/core/grid.h>
 #include <onika/math/basic_types.h>
 #include <onika/math/basic_types_operators.h>
@@ -148,10 +166,10 @@ namespace exaStamp
       }
       USTAMP_POTENTIAL_EAM_MM_INIT_TYPES( *parameters , n_species , eam_scratch->m_pair_enabled.data() );
 
-      auto rho_emb_field = grid->field_accessor( field::rho_dEmb );
+      auto rho_emb_field = grid->field_accessor( field_rho_dEmb );
       auto * rho_emb_ptr = rho_emb_field.m_flat_array_ptr;
 
-      auto c_rho_emb_field = grid->field_const_accessor( field::rho_dEmb );
+      auto c_rho_emb_field = grid->field_const_accessor( field_rho_dEmb );
       const auto * c_rho_emb_ptr = c_rho_emb_field.m_flat_array_ptr;
 
       // execute the 2 passes
