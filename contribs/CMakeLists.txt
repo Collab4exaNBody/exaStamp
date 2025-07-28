@@ -18,11 +18,4 @@
 # ============================================================
 # === Additional applications used togeteher with ExaStamp ===
 # ============================================================
-
-# if(XSTAMP_ENABLE_SLIPLINK)
-#   option(XSTAMP_BUILD_SLIPLINK_REFAPP "Build SLink (slip-link model sample implementation)" OFF)
-#   if(XSTAMP_BUILD_SLIPLINK_REFAPP)
-#       add_subdirectory(sliplink)
-#   endif()
-# endif()
  
