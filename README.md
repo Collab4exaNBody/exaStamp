@@ -1,3 +1,7 @@
+[![CMake](https://github.com/Collab4exaNBody/exaStamp/actions/workflows/cmake.yml/badge.svg)](https://github.com/Collab4exaNBody/exaStamp/actions/workflows/cmake.yml)
+[![Spack](https://github.com/Collab4exaNBody/exaStamp/actions/workflows/spack.yml/badge.svg)](https://github.com/Collab4exaNBody/exaStamp/actions/workflows/spack.yml)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
 <p align="center">
   <img src="doc/img/exaStamp-logo.png" alt="Example Stamp Logo" width="200"/>
 </p>
