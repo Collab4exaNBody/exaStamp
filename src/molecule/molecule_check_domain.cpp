@@ -38,7 +38,6 @@ namespace exaStamp
 
     inline void execute () override final
     {    
-      // domain must be at least sliplink_min_domain_size wide, so that we know how to duplicate beads/SL connectivity with periodic conditions
       double min_domain_size = ( *bond_max_dist * ( 1.0 + *bond_max_dist_eps ) ) * 2.0;
       assert( domain->bounds_size().x > min_domain_size && domain->bounds_size().y > min_domain_size && domain->bounds_size().z > min_domain_size );
 
