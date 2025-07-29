@@ -33,18 +33,6 @@ install(TARGETS readDumpStampV3 DESTINATION bin)
 # ==========================================
 # === XSP2LAMMPS : a data file converter ===
 # ==========================================
-if(XNB_BUILD_CONTRIBS) # because we need saru random generator by now
-  add_executable(genDroplet genDroplet.cpp)
-  target_include_directories(genDroplet PUBLIC ${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/src/exaStamp/io/include ${MPI_CXX_INCLUDE_PATH})
-  target_link_libraries(genDroplet exaStampIO SARU ${MPI_CXX_LIBRARIES} ${OpenMP_CXX_LIBRARIES})
-  target_compile_options(genDroplet PUBLIC ${OpenMP_CXX_FLAGS})
-  install(TARGETS genDroplet DESTINATION bin)
-endif()
-
-
-# ==========================================
-# === XSP2LAMMPS : a data file converter ===
-# ==========================================
 add_executable(stampv3_to_lammps stampv3_to_lammps.cpp)
 target_include_directories(stampv3_to_lammps PUBLIC ${PROJECT_SOURCE_DIR}/src/exaStamp/io/include ${MPI_CXX_INCLUDE_PATH})
 target_link_libraries(stampv3_to_lammps exaStampIO ${MPI_CXX_LIBRARIES})

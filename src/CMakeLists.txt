@@ -33,5 +33,3 @@ add_subdirectory(rigidmol)
 add_subdirectory(tutorial)
 add_subdirectory(npt)
 
-# add_subdirectory(sliplink) # not maintained since release 3.6
-
