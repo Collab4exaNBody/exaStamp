@@ -47,8 +47,6 @@ struct alignas(DEFAULT_ALIGNMENT) LocalEntropyOp {
 
   void initialize(const ThermodynamicState& thermo_state) {
 
-    lout << "\t\t - init entropy_op." << std::endl;
-
     if (!(nbins > 0)) {
       nbins = static_cast<size_t>(rcut / sigma) + 1;
     }

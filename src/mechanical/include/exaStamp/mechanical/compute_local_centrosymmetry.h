@@ -12,9 +12,6 @@
 #include <algorithm>
 #include <omp.h>
 
-EXANB_YAML_ENUM(exaStamp, LocalCentroMethod, GES, MWM);
-XNB_DECLARE_FIELD(double, csp, "csp")
-
 namespace exaStamp {
 
 using namespace exanb;

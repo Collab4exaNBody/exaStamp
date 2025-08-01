@@ -116,6 +116,7 @@ class ComputeRadialDistributionFunctionOperator : public OperatorNode {
   ADD_SLOT(size_t, nbin, INPUT, 100);
   ADD_SLOT(bool, symmetric, INPUT, false); // symmetrize pair interaction
   ADD_SLOT(std::string, dirname, INPUT, "dir.rdf");
+  ADD_SLOT(bool, verbose, INPUT, false);
 
   static constexpr bool UseWeights = true;
   static constexpr bool UseNeighbours = true;
@@ -151,7 +152,8 @@ public:
       std::abort();
     }
 
-    lout << onika::format_string("\t- Computing radial distribution function\n");
+    if (*verbose)
+      lout << onika::format_string("\t- Computing radial distribution function\n");
 
     size_t ntype = static_cast<size_t>((*species).size());
     size_t npair = (*symmetric) ? static_cast<size_t>(ntype * (ntype + 1) / 2) : static_cast<size_t>(ntype * ntype);
@@ -314,7 +316,8 @@ public:
       onika::FileAppendWriteBuffer::instance().append_to_file(filearray[i], line, false);
     }
 
-    lout << onika::format_string("\t- Computing radial distribution function END\n");
+    if (*verbose)
+      lout << onika::format_string("\t- Computing radial distribution function END\n");
   }
 };
 
