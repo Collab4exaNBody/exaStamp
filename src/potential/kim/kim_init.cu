@@ -42,9 +42,9 @@ namespace exaStamp
   {
     // ========= I/O slots =======================
     //    ADD_SLOT( KIMParams,   parameters    , INPUT , REQUIRED );
-    ADD_SLOT( std::string,   kim_model     , INPUT_OUTPUT , REQUIRED );
-    ADD_SLOT( double,        kim_rcut      , INPUT_OUTPUT , REQUIRED );
-    //    ADD_SLOT( KIMContext,    kim_ctx       , OUTPUT , REQUIRED );
+    ADD_SLOT( std::string,   kim_model_name , INPUT_OUTPUT , REQUIRED );
+    ADD_SLOT( double,        rcut_max       , INPUT_OUTPUT );    
+    ADD_SLOT( KIMContext,    kim_ctx        , OUTPUT );
     
   public:
     // Operator execution
@@ -60,11 +60,11 @@ namespace exaStamp
                                      KIM::CHARGE_UNIT::e,
                                      KIM::TEMPERATURE_UNIT::K,
                                      KIM::TIME_UNIT::ps,
-                                     *kim_model,
+                                     *kim_model_name,
                                      &requestedUnitsAccepted,
                                      &kim_local_model);
       if (error) { MY_ERROR("KIM::Model::Create()"); }
-
+      
       // Check for compatibility with the model
       if (!requestedUnitsAccepted) { MY_ERROR("Must Adapt to model units"); }
 
@@ -102,7 +102,6 @@ namespace exaStamp
             }
         }
 
-
       // print model units
       KIM::LengthUnit lengthUnit;
       KIM::EnergyUnit energyUnit;
@@ -131,6 +130,23 @@ namespace exaStamp
       KIM::ComputeArguments * computeArguments;
       error = kim_local_model->ComputeArgumentsCreate(&computeArguments);
       if (error) { MY_ERROR("Unable to create a ComputeArguments object."); }
+
+      const double* cutoffs;
+      double influencedistance;
+      
+      const int* modelWillNotRequestNeighborsOfNoncontributingParticles;
+      int numberOfNeighborLists;
+      kim_local_model->GetNeighborListPointers(&numberOfNeighborLists,
+                                               &cutoffs,
+                                               &modelWillNotRequestNeighborsOfNoncontributingParticles);
+      double rcutmax = 0.;
+      for (int i=0; i<numberOfNeighborLists;i++) {
+        rcutmax = std::max(rcutmax, cutoffs[i]);
+      }
+      *rcut_max = rcutmax;
+      std::cout << "RCUT MAX = " << *rcut_max << std::endl;
+      kim_local_model->GetInfluenceDistance( &influencedistance);
+      std::cout << "INF DIST = " << influencedistance << std::endl;
       
     }
     

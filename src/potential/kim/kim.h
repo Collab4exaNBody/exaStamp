@@ -34,10 +34,17 @@ struct KIMParams
   double rcut;  
 };
 
+struct KIMThreadContext
+{
+  KIM::Model * kim_model = nullptr;
+};
+
 struct KIMContext
 {
-  KIM::Model* kim_model = nullptr;
-  std::vector<std::shared_ptr<KIM::Model>> m_test;
+  KIM::Model * kim_model = nullptr;
+  std::vector<KIMThreadContext> m_thread_ctx;
+  //  std::vector<std::shared_ptr<KIM::Model*>> m_test;
+  //  std::vector<KIM::Model> m_test;  
 };
 
 // Yaml conversion operators, allows to read NNP parameters from config file for n2p2
