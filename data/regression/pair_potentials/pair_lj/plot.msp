@@ -1,0 +1,12 @@
+species:
+  - Ar: { mass: 39.948 Da , z: 18 , charge: 0.0 e- }
+
+lj_plot:
+  rcut: 8.0 ang
+  parameters: { epsilon: 0.0104 eV , sigma: 3.4 ang }
+
+plot_graph:
+  - species
+  - lj_plot
+
+simulation: plot_graph

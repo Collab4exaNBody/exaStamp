@@ -1,0 +1,69 @@
+configuration:
+  physics:
+    units:
+      length: angstrom
+      mass: Dalton
+      time: picosecond
+      charge: elementary_charge
+      temperature: kelvin
+      amount: particle
+      luminosity: candela
+      angle: radian
+      energy: joule
+  logging:
+    debug: false
+
+chunk_neighbors:
+  config:
+    chunk_size: 4
+    build_particle_offset: true
+
+grid_flavor: grid_flavor_multimat
+
+species:
+  - Al: { mass: 26.982 Da , z: 13 , charge: 0 e- }
+  - Cu: { mass: 63.546 Da , z: 29 , charge: 0 e- }
+
+eam_alloy_force:
+  rcut: 6.6825 ang
+  parameters:
+    file: AlCu.eam.alloy
+  
+compute_force:
+  - eam_alloy_force
+
+input_data:
+  - particle_types:
+      particle_type_map: { Al: 0, Cu: 1}
+  - particle_type_add_properties:
+      Al: { mass: 26.982 Da , z: 13 , charge: 0 e- }
+      Cu: { mass: 63.546 Da , z: 29 , charge: 0 e- }
+  - domain:
+      cell_size: 7.2 ang
+      grid_dims: [10,10,10]
+      bounds: [[0 ang ,0 ang,0 ang],[72 ang, 72 ang, 72 ang]]
+      xform: [[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
+      periodic: [true,true,true]
+      expandable: false
+  - init_rcb_grid
+  - lattice:
+      structure: BCC
+      types: [ Al, Cu]
+      size: [ 3.6 ang , 3.6 ang , 3.6 ang ]
+  - gaussian_noise_r: { sigma: 0.2 ang }
+  - gaussian_noise_v: { sigma: 50. m/s }  
+  
+global:
+  simulation_end_iteration: 10
+  simulation_log_frequency: 10
+  simulation_dump_thermo_frequency: -1
+  simulation_dump_frequency: -1
+  rcut_inc: 1.0 ang
+  dt: 1.0e-3 ps
+
+xxx_simulation_epilog:
+  - check_values:
+      file: eam_alloy_multi_species.dat
+      pos_threshold: 5.e-10
+      acc_threshold: 5.e-10
+      vel_threshold: 5.e-10

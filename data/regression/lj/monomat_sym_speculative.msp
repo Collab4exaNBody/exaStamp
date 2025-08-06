@@ -1,8 +1,0 @@
-# no-seq
-includes:
-  - monomat.cfg
-  - config_speculative_verlet.msp
-
-compute_force: lj_compute_force_symetric
-
-

@@ -1,0 +1,13 @@
+species:
+  - C: { mass: 12.011 Da , z: 6 , charge: 0.0 e- }
+
+tabpair_plot:
+  rcut: 5.68 ang
+  parameters: lj_tab.yml
+
+plot_graph:
+  - species
+  - tabpair_plot
+
+simulation: plot_graph
+

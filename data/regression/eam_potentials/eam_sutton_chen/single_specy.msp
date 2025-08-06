@@ -1,0 +1,51 @@
+grid_flavor: grid_flavor_multimat
+
+species:
+  - Cu: { mass: 63.546 Da , z: 29 , charge: 0.0 e- }
+
+sutton_chen_force:
+  rcut: 7.29 ang
+  parameters:
+    c: 3.317E+01
+    epsilon: 3.605E-21 J
+    a0: 0.327E-09 m
+    n: 9.050E+00
+    m: 5.005E+00
+
+compute_force: sutton_chen_force
+      
+input_data:
+  - particle_types:
+      particle_type_map: { Cu: 0 }
+  - particle_type_add_properties:
+      Cu: { mass: 63.546 Da , z: 29 , charge: 0.0 e- }
+  - domain:
+      cell_size: 7.2 ang
+      grid_dims: [10,10,10]
+      bounds: [[0 ang ,0 ang,0 ang],[72. ang, 72. ang, 72. ang]]
+      xform: [[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
+      periodic: [true,true,true]
+      expandable: false
+  - init_rcb_grid
+  - lattice:
+      structure: FCC
+      types: [ Cu, Cu, Cu, Cu]
+      size: [ 3.6 ang , 3.6 ang , 3.6 ang ]
+#      shift: [ 0.01 ang, 0.01 ang, 0.01 ang ]
+  - gaussian_noise_r: { sigma: 0.1 ang }
+  - gaussian_noise_v: { sigma: 50. m/s }  
+  
+global:
+  simulation_end_iteration: 10
+  simulation_log_frequency: 10
+  simulation_dump_thermo_frequency: -1
+  simulation_dump_frequency: -1
+  rcut_inc: 1.0 ang
+  dt: 1.0e-3 ps
+
+xxx_simulation_epilog:
+  - check_values:
+      file: check_values.dat
+      pos_threshold: 5.e-10
+      acc_threshold: 5.e-10
+      vel_threshold: 5.e-10

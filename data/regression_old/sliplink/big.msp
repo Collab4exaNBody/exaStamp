@@ -1,0 +1,42 @@
+# no-seq no-mt
+
+includes:
+  - rng.cfg
+  - sliplink.cfg
+
+configuration:
+  profiling:
+#    vite: sliplink.vite
+    summary: true
+
+domain:
+  cell_size: 100.0 ang
+  bounds: [ [0,0,0] , [ 2000.0 ang , 2000.0 ang , 2000.0 ang ] ]
+  periodic: [true,true,true]
+
+# atoms descriptions
+species:
+  - Bead:
+      mass: 1.0
+      z: 0
+      charge: 0 e-
+  - Filler:
+      mass: 105.486E-27 kg
+      z: 29
+      charge: 0 e-
+
+update_particle_neighbors:
+#  - compute_primary_neighbors
+#  - compute_dual_neighbors
+  - resize_particle_locks
+
+sliplink_param_init:
+  number_of_chains: 100000
+  beads_per_chain: 100
+  number_of_sliplinks: 100000
+  number_of_fillers: 10000
+
+global:
+  rcut_inc: 10.0 ang
+  simulation_end_iteration: 20
+

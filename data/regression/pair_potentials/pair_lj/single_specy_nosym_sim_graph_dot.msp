@@ -1,0 +1,52 @@
+configuration:
+  debug:
+    graph: true
+    graph_lod: 1    # 2 to show unconnected nodes 
+    graph_fmt: dot
+    graph_filter: [ '.*\.do_init_temperature' , '.*\.end_iteration' ]
+
+grid_flavor: grid_flavor_multimat
+
+species:
+  - Ar: { mass: 39.948 Da , z: 18 , charge: 0.0 e- }
+
+lj_compute_force:
+  parameters: { epsilon: 0.0104 eV , sigma: 3.4 ang }
+  rcut: 8.0 ang
+
+compute_force: lj_compute_force
+
+input_data:
+  - particle_types:
+      particle_type_map: { Ar: 0 }
+  - particle_type_add_properties:
+      Ar: { mass: 39.948 Da , z: 18 , charge: 0.0 e- }
+  - domain:
+      cell_size: 5 ang
+      grid_dims: [8,8,8]
+      bounds: [[0 ang ,0 ang,0 ang],[40. ang, 40. ang, 40. ang]]
+      xform: [[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
+      periodic: [true,true,true]
+      expandable: false
+  - init_rcb_grid
+  - lattice:
+      structure: FCC
+      types: [ Ar, Ar, Ar, Ar ]
+      size: [ 5.0 ang , 5.0 ang , 5.0 ang ]
+  - gaussian_noise_r: { sigma: 0.1 ang }
+  - gaussian_noise_v: { sigma: 50. m/s }  
+  
+global:
+  simulation_end_iteration: 10
+  simulation_log_frequency: 10
+  simulation_dump_thermo_frequency: -1
+  simulation_dump_frequency: -1
+  rcut_inc: 1.0 ang
+  dt: 1.0e-3 ps
+
+xxx_simulation_epilog:
+  - check_values:
+      file: check_values.dat
+      pos_threshold: 5.e-10
+      acc_threshold: 5.e-10
+      vel_threshold: 5.e-10

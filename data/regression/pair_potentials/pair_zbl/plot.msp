@@ -1,0 +1,13 @@
+species:
+  - C: { mass: 12.011 Da , z: 6 , charge: 0.0 e- }
+
+zbl_plot:
+  rcut: 5.68 ang
+  parameters: { r1: 5. ang , rc: 5.68 ang }
+
+plot_graph:
+  - species
+  - zbl_plot
+
+simulation: plot_graph
+
