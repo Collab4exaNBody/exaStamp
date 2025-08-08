@@ -1,0 +1,48 @@
+grid_flavor: grid_flavor_multimat
+
+species:
+  - C: { mass: 12.011 Da , z: 6 , charge: 0.4 e- }
+  - N: { mass: 14.007 Da , z: 7 , charge: -0.4 e- }
+
+compute_force_pair_multimat:
+  potentials:
+    - { type_a: C  , type_b: C, potential: relax, rcut: 12.5 ang, parameters: { r1: 4. ang, rc: 6. ang } }
+    - { type_a: C  , type_b: N, potential: relax, rcut: 12.5 ang, parameters: { r1: 4. ang, rc: 6. ang } }
+
+compute_force: compute_force_pair_multimat
+
+input_data:
+  - particle_types:
+      particle_type_map: { C: 0, N: 1 }
+  - particle_type_add_properties:
+      C: { mass: 12.011 Da , z: 6 , charge: 0.0 e- }
+      N: { mass: 14.007 Da , z: 7 , charge: 0.0 e- }
+  - domain:
+      cell_size: 5 ang
+      grid_dims: [8,8,8]
+      bounds: [[0 ang ,0 ang,0 ang],[40. ang, 40. ang, 40. ang]]
+      xform: [[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
+      periodic: [true,true,true]
+      expandable: false
+  - init_rcb_grid
+  - lattice:
+      structure: FCC
+      types: [ C, N, C, N ]
+      size: [ 5.0 ang , 5.0 ang , 5.0 ang ]
+  - gaussian_noise_r: { sigma: 0.1 ang }
+  - gaussian_noise_v: { sigma: 50. m/s }  
+  
+global:
+  simulation_end_iteration: 10
+  simulation_log_frequency: 10
+  simulation_dump_thermo_frequency: -1
+  simulation_dump_frequency: -1
+  rcut_inc: 1.0 ang
+  dt: 1.0e-3 ps
+
+xxx_simulation_epilog:
+  - check_values:
+      file: check_values.dat
+      pos_threshold: 5.e-10
+      acc_threshold: 5.e-10
+      vel_threshold: 5.e-10

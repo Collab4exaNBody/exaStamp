@@ -1,0 +1,13 @@
+species:
+  - C: { mass: 12.011 Da , z: 6 , charge: 0.5 e- }
+
+coul_cut_plot:
+  rcut: 3.0 ang
+  parameters: { dielectric: 1.0, shift: true }
+
+plot_graph:
+  - species
+  - coul_cut_plot
+
+simulation: plot_graph
+

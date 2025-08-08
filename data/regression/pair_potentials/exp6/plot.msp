@@ -1,0 +1,11 @@
+species:
+  - C: { mass: 12.011 Da , z: 6 , charge: 0.0 e- }
+
+exp6_plot:
+  rcut: 12.5 ang
+  parameters: { A: 107023.90 Da*kcal/g, B: 3.64050000 1/ang, C: 554.0100000 Da*kcal*ang^6/g, D: 5.0e-5 Da*kcal/g }
+
+simulation:
+  - species
+  - exp6_plot
+

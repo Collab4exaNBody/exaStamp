@@ -1,0 +1,11 @@
+species:
+  - C: { mass: 12.011 Da , z: 6 , charge: 0.0 e- }
+
+reaction_field_plot:
+  rcut: 12.5 ang
+  parameters: { epsilon: 100., rc: 12.5 ang }
+
+simulation:
+  - species
+  - reaction_field_plot
+

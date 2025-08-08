@@ -1,0 +1,11 @@
+species:
+  - C: { mass: 12.011 Da , z: 6 , charge: 0.4 e- }
+
+ljrf_plot:
+  rcut: 12.5 ang
+  parameters: { rcut: 12.5 ang, rf: { epsilon: 100., rc: 12.5 ang }, lj: { epsilon: 0.01 kcal/mol, sigma: 3.830864488 ang } }
+
+simulation:
+  - species
+  - ljrf_plot
+
