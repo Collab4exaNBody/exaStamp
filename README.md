@@ -27,18 +27,18 @@ This is the **exaStamp** software package, a high performance molecular dynamics
   </table>
 </div>
 
-Main sections of the documentation can be accessed directly using the following URLs.
 
-| URL | Short description |
-|-----|-------------|
-| https://collab4exanbody.github.io/doc_exaStamp/Background/index.html | **exaStamp** background |
-| https://collab4exanbody.github.io/doc_exaStamp/BuildInstall/index.html | Build and installation instructions |
-| https://collab4exanbody.github.io/doc_exaStamp/User/index.html | User guide |
-| https://collab4exanbody.github.io/doc_exaStamp/Beginner/index.html | Beginner's guide |
-| https://collab4exanbody.github.io/doc_exaStamp/microStamp/index.html | microStamp miniApp |
-| https://collab4exanbody.github.io/doc_exaStamp/References/index.html | References |
-| https://collab4exanbody.github.io/doc_exaStamp/About/index.html | About |
------------------------------------------------------------------------------------------------------------
+| Main sections of the documentation can be accessed directly using the following URLs                              |
+|-------------------------------------------------------------------------------------------------------------------|
+| [**exaStamp** background](https://collab4exanbody.github.io/doc_exaStamp/Background/index.html)                   |
+| [**Build and installation instructions**](https://collab4exanbody.github.io/doc_exaStamp/BuildInstall/index.html) |
+| [**User guide**](https://collab4exanbody.github.io/doc_exaStamp/User/index.html)                                  |
+| [**Beginner's guide**](https://collab4exanbody.github.io/doc_exaStamp/Beginner/index.html)                        |
+| [**microStamp miniApp**](https://collab4exanbody.github.io/doc_exaStamp/microStamp/index.html)                    |
+| [**References**](https://collab4exanbody.github.io/doc_exaStamp/References/index.html)                            |
+| [**About**](https://collab4exanbody.github.io/doc_exaStamp/About/index.html)                                      |
+
+---------------------------------------------------------------------------------------------------------------------
 
 ## Community Guidelines
 
