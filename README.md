@@ -31,13 +31,13 @@ Main sections of the documentation can be accessed directly using the following 
 
 | URL | Short description |
 |-----|-------------|
-| https://collab4exanbody.github.io/doc_exaStamp/Backgrund/index.html | **exaStamp** background |
+| https://collab4exanbody.github.io/doc_exaStamp/Background/index.html | **exaStamp** background |
 | https://collab4exanbody.github.io/doc_exaStamp/BuildInstall/index.html | Build and installation instructions |
 | https://collab4exanbody.github.io/doc_exaStamp/User/index.html | User guide |
-| https://collab4exanbody.github.io/doc_exaStamp/User/index.html | Beginner's guide |
-| https://collab4exanbody.github.io/doc_exaStamp/User/index.html | microStamp miniApp |
-| https://collab4exanbody.github.io/doc_exaStamp/User/index.html | Refernces |
-| https://collab4exanbody.github.io/doc_exaStamp/User/index.html | About |
+| https://collab4exanbody.github.io/doc_exaStamp/Beginner/index.html | Beginner's guide |
+| https://collab4exanbody.github.io/doc_exaStamp/microStamp/index.html | microStamp miniApp |
+| https://collab4exanbody.github.io/doc_exaStamp/References/index.html | References |
+| https://collab4exanbody.github.io/doc_exaStamp/About/index.html | About |
 -----------------------------------------------------------------------------------------------------------
 
 ## Community Guidelines
