@@ -26,4 +26,4 @@ jobs:
       run: |
         git clone https://github.com/Collab4exaNBody/spack-repos.git
         spack repo add spack-repos
-        spack install exastamp@main
+        spack install exastamp
