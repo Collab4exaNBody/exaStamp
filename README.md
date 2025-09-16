@@ -46,7 +46,7 @@ For more details, see `CONTRIBUTING.md`. Main guidelines are:
 
 - For any bug, please create an issue and add the label “bug”. We welcome all feedback to make **exaStamp** as robust as possible.
 - If you would like to participate and add functionality to **exaStamp**, you can find instructions for coding style, tests and pull request process in CONTRIBUTING.md.
-- If you have any support-related / collaboration questions, please contact the team at pauk.lafourcade@cea.fr. If you are a `CEA` member, please request access to the group : "exaNBody & Co. (exaStamp, exaDEM, exaSPH)", an external access can also be provided.
+- If you have any support-related / collaboration questions, please contact the team at paul.lafourcade@cea.fr. If you are a `CEA` member, please request access to the group : "exaNBody & Co. (exaStamp, exaDEM, exaSPH)", an external access can also be provided.
 
 -----------------------------------------------------------------------------------------------------------
 
