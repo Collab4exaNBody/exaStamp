@@ -1,4 +1,4 @@
-name: Check Spack Installation
+name: Spack CI
 
 on:
   push:
@@ -26,4 +26,4 @@ jobs:
       run: |
         git clone https://github.com/Collab4exaNBody/spack-repos.git
         spack repo add spack-repos
-        spack install exastamp
+        spack install -v exastamp
