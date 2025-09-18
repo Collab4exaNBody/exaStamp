@@ -1,0 +1,134 @@
+includes:
+  - config_update_symmetric_forces.msp
+  - xform_uo2.cfg
+
+ewald_short_range_multi_force:
+  rcut: 11.0 ang
+  parameters:
+    - { type_a: U , type_b: O , rcut: 11.0 ang , parameters: { radius: 11.0 ang, epsilon: 1.0e-5, kmax: 8, size: [11.0 ang, 11.0 ang, 11.0 ang] } }
+    - { type_a: O , type_b: O , rcut: 11.0 ang , parameters: { radius: 11.0 ang, epsilon: 1.0e-5, kmax: 8, size: [11.0 ang, 11.0 ang, 11.0 ang] } }
+    - { type_a: U , type_b: U , rcut: 11.0 ang , parameters: { radius: 11.0 ang, epsilon: 1.0e-5, kmax: 8, size: [11.0 ang, 11.0 ang, 11.0 ang] } }
+
+species:
+  - O:
+      mass:  15.9994 Da
+      z: 8
+      charge: -1.1104 e-
+  - U:
+      mass:  238.02891 Da
+      z: 92
+      charge: 2.2208 e-
+
+grid_flavor: grid_flavor_multimat
+  
+particle_regions:
+    - PLANE1:
+        quadric:
+          shape: { plane: [ 0 , 0 , -1 , 0 ] }
+          transform:
+            - translate: [ 0 , 0 , 15. ang ]
+    - PLANE2:
+        quadric:
+          shape: { plane: [ 0 , 0 , 1 , 0 ] }
+          transform:
+            - translate: [ 0 , 0 , 98. ang ]
+    - PLANE3:
+        quadric:
+          shape: { plane: [ 0 , 0 , 1 , 0 ] }
+          transform:
+            - translate: [ 0 , 0 , 120 ang ]
+
+input_data:
+  - lattice:
+      structure: FLUORITE
+      types: [ U, U, U, U, O, O, O, O, O, O, O, O]      
+      size: [ 5.6 ang , 5.6 ang , 5.6 ang ]
+      repeats: [ 10, 2, 30 ]
+      region: PLANE3
+#  - read_xyz_file_with_xform:
+#      file: noisy_uo2_file.xyz
+#      pbc_adjust_xform: true
+  - ewald_init
+  - sum_charges
+  - ewald_potential_energy_shift
+  - track_region_particles:
+      expr: not PLANE2
+      name: test
+
+ewald_init:
+  epsilon: 1.0E-05
+  alpha: 0.0
+  radius: 11.0 ang
+  kmax: 8
+
+ewald_short_range_block:
+  rebind: { common_parameters: ewald_config }
+  body: [ ewald_short_range_multi_force ]
+
+langevin_thermostat:
+  T: 300.0 K
+  gamma: 0.1 ps^-1
+
+longi_force_slab:
+  body:  [ set_velocity: { value: [ 50 m/s , 0,  0 ], region: test },
+  	   set_force: { value: [ 0 , 0 , 0 ], region: not PLANE1 } ]
+
+null_force_slab:
+  body:  [ set_force: { value: [ 0 , 0 , 0 ], region: not PLANE2 },
+  	   set_force: { value: [ 0 , 0 , 0 ], region: not PLANE1 } ]
+
+compute_force:
+  - not_thermostated:
+      rebind: {value: physical_time, result: not_thermostated}
+      body: [ greater_than: { threshold: 0.5 ps } ]
+  - with_langevin:
+      condition: not not_thermostated
+      body: [ ewald_init, ewald_short_range_block, ewald_long_range, zbl_multi_force, snaplmp_force, langevin_thermostat, null_force_slab ]
+  - without_langevin:
+      condition: not_thermostated
+      body: [ ewald_init, ewald_short_range_block, ewald_long_range, zbl_multi_force, snaplmp_force, longi_force_slab ]
+
+# compute_force:
+#   - ewald_init
+#   - ewald_short_range_block
+#   - ewald_long_range
+#   - zbl_multi_force
+#   - snaplmp_force
+
+# +first_iteration:
+#   - grid_stats
+#   - print_domain
+
+domain:
+  cell_size: 5.6 ang
+  periodic: [true,true,true]
+
+global:
+  simulation_end_iteration: 50000
+  simulation_log_frequency: 10
+  rcut_inc: 1.8 ang
+  dt: 2.0e-3 ps
+  simulation_dump_frequency: 50
+  simulation_dump_thermo_frequency: 10
+  is_dump_virial: false
+
+dump_analysis: nop
+#dump_data: nop #dump_data_atoms
+
+# dump_data_atoms:
+#   - timestep_file: "atoms_%09d.MpiIO"
+#   - message: { mesg: "Write dump " , endl: false }
+#   - print_dump_file:
+#       rebind: { mesg: filename }
+#       body:
+#         - message: { endl: true }
+#   - write_dump_atoms
+
+dump_data:
+  - timestep_file: "/tmp/test/snap_UO2_%09d.xyz"
+  - message: { mesg: "Write xyz " , endl: false }
+  - print_dump_file:
+      rebind: { mesg: filename }
+      body:
+        - message: { endl: true }
+  - write_xyz_file

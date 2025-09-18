@@ -1,0 +1,77 @@
+# no-seq
+
+grid_flavor: grid_flavor_full
+
+# atoms descriptions
+species:
+  - CH3:
+      mass: 2.4905359633393105e-26 kg
+      z: 15
+      charge: 0.1 e-
+  - N:
+      mass: 2.3245002324500234e-26 kg
+      z: 14
+      charge: 0.1 e-
+  - O1:
+      mass: 2.656571694228598e-26 kg
+      z: 16
+      charge: -0.1 e-
+  - O2:
+      mass: 2.656571694228598e-26 kg
+      z: 16
+      charge: -0.1 e-
+  - Xx:
+      mass: 1.0E-27 kg
+      z: 1
+      charge: 0.0 e-
+
+compute_force_pair_multimat:
+  potentials:
+    - { type_a: CH3 , type_b: CH3 , potential: ewald_short_range , rcut: 24.0 ang , parameters: { radius: 24.0 ang, epsilon: 1.0E-05, kmax: 8, size: [100.0 ang, 100.0 ang, 100.0 ang] } }
+    - { type_a: CH3 , type_b: N   , potential: ewald_short_range , rcut: 24.0 ang , parameters: { radius: 24.0 ang, epsilon: 1.0E-05, kmax: 8, size: [100.0 ang, 100.0 ang, 100.0 ang] } }
+    - { type_a: CH3 , type_b: O1  , potential: ewald_short_range , rcut: 24.0 ang , parameters: { radius: 24.0 ang, epsilon: 1.0E-05, kmax: 8, size: [100.0 ang, 100.0 ang, 100.0 ang] } }
+    - { type_a: CH3 , type_b: O2  , potential: ewald_short_range , rcut: 24.0 ang , parameters: { radius: 24.0 ang, epsilon: 1.0E-05, kmax: 8, size: [100.0 ang, 100.0 ang, 100.0 ang] } }
+    - { type_a: CH3 , type_b: Xx  , potential: zero }
+    - { type_a: N   , type_b: N   , potential: ewald_short_range , rcut: 24.0 ang , parameters: { radius: 24.0 ang, epsilon: 1.0E-05, kmax: 8, size: [100.0 ang, 100.0 ang, 100.0 ang] } }
+    - { type_a: N   , type_b: O1  , potential: ewald_short_range , rcut: 24.0 ang , parameters: { radius: 24.0 ang, epsilon: 1.0E-05, kmax: 8, size: [100.0 ang, 100.0 ang, 100.0 ang] } }
+    - { type_a: N   , type_b: O2  , potential: ewald_short_range , rcut: 24.0 ang , parameters: { radius: 24.0 ang, epsilon: 1.0E-05, kmax: 8, size: [100.0 ang, 100.0 ang, 100.0 ang] } }
+    - { type_a: N   , type_b: Xx  , potential: zero }
+    - { type_a: O1  , type_b: O1  , potential: ewald_short_range , rcut: 24.0 ang , parameters: { radius: 24.0 ang, epsilon: 1.0E-05, kmax: 8, size: [100.0 ang, 100.0 ang, 100.0 ang] } }
+    - { type_a: O1  , type_b: O2  , potential: ewald_short_range , rcut: 24.0 ang , parameters: { radius: 24.0 ang, epsilon: 1.0E-05, kmax: 8, size: [100.0 ang, 100.0 ang, 100.0 ang] } }
+    - { type_a: O1  , type_b: Xx  , potential: zero }
+    - { type_a: O2  , type_b: O2  , potential: ewald_short_range , rcut: 24.0 ang , parameters: { radius: 24.0 ang, epsilon: 1.0E-05, kmax: 8, size: [100.0 ang, 100.0 ang, 100.0 ang] } }
+    - { type_a: O2  , type_b: Xx  , potential: zero }
+    - { type_a: Xx  , type_b: Xx  , potential: lj   , rcut: 24.0 ang , parameters: { epsilon: 0.0 J , sigma: 1.0 m } }
+
+input_data:
+  - read_stamp_v3:
+      file: ewald_static.mpio
+      bounds_mode: DOMAIN
+  - ewald_init:
+      epsilon: 1.0E-05
+      alpha: 0.0
+      radius: 24.0 ang
+      kmax: 8
+  - sum_charges
+#  - ewald_potential_energy_shift
+
+domain:
+  grid_dims: [4,4,4]
+  bounds: [ [ -50.0 ang , -50.0 ang , -50.0 ang ] , [ 50.0 ang , 50.0 ang , 50.0 ang ] ]  
+  periodic: [true,true,true]
+
+global:
+  dt: 1.0e-3 ps
+  simulation_end_iteration: 5010
+  simulation_log_frequency: 1
+
+simulation_epilog:
+  - check_values:
+      file: ewald_static.dat
+      threshold: 1.e-10
+
+# define potential we'll reuse later
+compute_force:
+  - compute_force_pair_multimat
+  - ewald_long_range
+

@@ -1,0 +1,20 @@
+# no-mt no-mpi
+
+configuration:
+  +plugins:
+    - microStampEwald
+    - ewald
+
+configuration:
+  logging:
+    parallel: true
+
+simulation:
+  - domain:
+      bounds: [ [ -50.0 ang , -50.0 ang , -50.0 ang ] , [ 50.0 ang , 50.0 ang , 50.0 ang ] ]
+  - ewald_init:
+      epsilon: 1.0E-05
+      alpha: 0.0
+      radius: 24.0 ang
+      kmax: 8
+

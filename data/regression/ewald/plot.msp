@@ -1,0 +1,43 @@
+# no-mpi no-mt
+
+configuration:
+  +plugins:
+    - microStampEwald
+    - ewald
+    - microStampParticleCharge
+
+# atoms descriptions
+species:
+  - CH3:
+      mass: 2.4905359633393105e-26 kg
+      z: 15
+      charge: 0.1 e-
+  - N:
+      mass: 2.3245002324500234e-26 kg
+      z: 14
+      charge: 0.1 e-
+  - O1:
+      mass: 2.656571694228598e-26 kg
+      z: 16
+      charge: -0.1 e-
+  - O2:
+      mass: 2.656571694228598e-26 kg
+      z: 16
+      charge: -0.1 e-
+  - Xx:
+      mass: 1.0E-27 kg
+      z: 1
+      charge: 0.0 e-
+
+ewald_short_range_plot:
+  rcut: 24.0 ang
+  type_a: N
+  type_b: O1
+  parameters: { radius: 24.0 ang, epsilon: 1.0E-05, kmax: 8, size: [100.0 ang, 100.0 ang, 100.0 ang] }
+
+plot_graph:
+  - species
+  - ewald_short_range_plot
+
+simulation: plot_graph
+
