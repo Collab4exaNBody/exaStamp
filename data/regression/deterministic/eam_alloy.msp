@@ -30,9 +30,10 @@ eam_alloy_force:
   eam_ghost: true
   eam_force: true
   eam_symmetry: false
-  
+
 compute_force:
   - eam_alloy_force
+  - langevin_thermostat: { T: 50. K, gamma: 0.05 ps^-1 }
 
 input_data:
   - particle_types:
@@ -51,24 +52,24 @@ input_data:
       structure: BCC
       types: [ Ta, Ta]
       size: [ 3.3 ang , 3.3 ang , 3.3 ang ]
-  - gaussian_noise_r: { sigma: 0.2 ang }
-  - gaussian_noise_v: { sigma: 50. ang/ps }  
+#  - gaussian_noise_r: { sigma: 0.2 ang }
+#  - gaussian_noise_v: { sigma: 0.4 ang/ps }  
   
 +first_iteration:
   - dump_data
 
-dump_data:
-  - timestep_file: "test_cur.xyz"
-  - write_xyz: { fields: [id, force, velocity] }
+dump_data: nop
+#  - timestep_file: "test_cur_%09d.xyz"
+#  - write_xyz: { fields: [id, force, velocity] }
   
 global:
-  simulation_end_iteration: 1
-  simulation_log_frequency: 10
-  simulation_dump_thermo_frequency: -1
-  simulation_dump_frequency: 1
+  simulation_end_iteration: 20
+  simulation_log_frequency: 5
+  simulation_dump_thermo_frequency: 1
+  simulation_dump_frequency: -1
   rcut_inc: 1.0 ang
-  dt: 0.0e-3 ps
-  deterministic_noise: false
+  dt: 3.0e-3 ps
+  deterministic_noise: true
 
 simulation_epilog:
   - check_values:
