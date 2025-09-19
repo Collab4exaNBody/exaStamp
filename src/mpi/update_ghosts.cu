@@ -51,6 +51,7 @@ namespace exaStamp
   // === register factory ===
   template<typename GridT> using UpdateGhostsRandVandVir = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz,  field::_vx, field::_vy, field::_vz, field::_virial > , false >;
   template<typename GridT> using UpdateGhostsRandV = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz,  field::_vx, field::_vy, field::_vz > , false >;
+  template<typename GridT> using UpdateGhostsRandF = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz,  field::_fx, field::_fy, field::_fz > , false >;
 
   template<typename GridT> using UpdateGhostsRandRf = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz, field::_rxf, field::_ryf, field::_rzf > , false >;  
   template<typename GridT> using UpdateGhostsRandRfandV = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz, field::_rxf, field::_ryf, field::_rzf, field::_vx, field::_vy, field::_vz > , false >;
@@ -62,6 +63,7 @@ namespace exaStamp
   {
     OperatorNodeFactory::instance()->register_factory( "ghost_update_r_v_vir",   make_grid_variant_operator<UpdateGhostsRandVandVir> );
     OperatorNodeFactory::instance()->register_factory( "ghost_update_r_v",       make_grid_variant_operator<UpdateGhostsRandV> );
+    OperatorNodeFactory::instance()->register_factory( "ghost_update_r_f",       make_grid_variant_operator<UpdateGhostsRandF> );
     OperatorNodeFactory::instance()->register_factory( "ghost_update_r_rf",      make_grid_variant_operator<UpdateGhostsRandRf> );    
     OperatorNodeFactory::instance()->register_factory( "ghost_update_r_rf_v",    make_grid_variant_operator<UpdateGhostsRandRfandV> );    
     OperatorNodeFactory::instance()->register_factory( "ghost_update_rq",        make_grid_variant_operator<UpdateGhostsRQ> );
