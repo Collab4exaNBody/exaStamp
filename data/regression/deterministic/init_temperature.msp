@@ -1,0 +1,14 @@
+includes:
+  - eam_alloy_base.msp
+
++input_data:
+  - init_temperature:
+      temperature: 300. K
+      generate_velocity: true
+  
+check_values:
+  file: check_init_temperature.dat
+  samples: 100
+  pos_threshold: 1.e-10
+  acc_threshold: 1.e-10
+  vel_threshold: 1.e-10

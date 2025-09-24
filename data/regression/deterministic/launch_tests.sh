@@ -2,7 +2,7 @@
 
 execcmd=/home/lafourcadep/local/onika/bin/onika-exec
 
-for name in random_gaussian_r random_gaussian_v random_uniform_r random_uniform_v random_langevin;
+for name in init_temperature #random_gaussian_r random_gaussian_v random_uniform_r random_uniform_v random_langevin;
 do
     for OMP in 1 4;
     do

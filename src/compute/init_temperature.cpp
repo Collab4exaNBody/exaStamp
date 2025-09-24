@@ -19,6 +19,7 @@ under the License.
 #include <onika/scg/operator_slot.h>
 #include <onika/scg/operator_factory.h>
 #include <exanb/core/grid.h>
+#include <exanb/core/domain.h>
 #include <onika/log.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exanb/core/parallel_grid_algorithm.h>
@@ -54,7 +55,9 @@ namespace exaStamp
     ADD_SLOT( ParticleSpecies    , species             , INPUT , REQUIRED );
     ADD_SLOT( double             , temperature         , INPUT , 300.0 ); // in Kelvins
     ADD_SLOT( bool               , generate_velocity   , INPUT , false ); // set to true to erase velocity and replace it with gaussian noise
+    ADD_SLOT( bool               , deterministic_noise , INPUT , false );    
     ADD_SLOT( GridT              , grid                , INPUT_OUTPUT );
+    ADD_SLOT( Domain , domain    , INPUT );
 
     ADD_SLOT( ParticleRegions   , particle_regions , INPUT , OPTIONAL );
     ADD_SLOT( ParticleRegionCSG , region           , INPUT , OPTIONAL );
@@ -99,11 +102,16 @@ namespace exaStamp
 
       MPI_Comm comm = *mpi;
 
+      const bool det_noise = *deterministic_noise;
       auto cells = grid->cells();
       IJK dims = grid->dimension();
       size_t ghost_layers = grid->ghost_layers();
       IJK dims_no_ghost = dims - (2*ghost_layers);
 
+      IJK gstart { ghost_layers, ghost_layers, ghost_layers };
+      const auto dom_dims = domain->grid_dimension();
+      const auto dom_start = grid->offset();
+      
       Vec3d momentum;  // constructs itself with 0s
       Vec3d kinetic_energy;  // constructs itself with 0s
       double total_mass = 0.;
@@ -114,13 +122,16 @@ namespace exaStamp
 
 #     pragma omp parallel
       {
-        auto& re = onika::parallel::random_engine();
-        std::normal_distribution<double> gaussian(0.0,1.0);
+        std::mt19937_64 det_re;
+        std::mt19937_64 & re = det_noise ? det_re : onika::parallel::random_engine() ;
         
         GRID_OMP_FOR_BEGIN(dims_no_ghost,_,loc_no_ghosts, reduction(+:momentum,kinetic_energy,total_mass,total_particles) schedule(dynamic) )
         {
+          
           IJK loc = loc_no_ghosts + ghost_layers;
           size_t cell_i = grid_ijk_to_index(dims,loc);
+          const auto domain_cell_idx = grid_ijk_to_index( dom_dims , loc + gstart + dom_start );
+          det_re.seed( domain_cell_idx * 1023 );
 
           const auto* __restrict__ rx = cells[cell_i][field::rx];
           const auto* __restrict__ ry = cells[cell_i][field::ry];
@@ -139,6 +150,8 @@ namespace exaStamp
           const size_t cell_nb_particles = cells[cell_i].size();
           size_t n = 0;
 
+          std::normal_distribution<double> gaussian(0.0,1.0);
+          
 //#         pragma omp simd reduction(+:local_momentum,local_kinetic_ernergy,n)
           for(size_t j=0;j<cell_nb_particles;j++)
           {
