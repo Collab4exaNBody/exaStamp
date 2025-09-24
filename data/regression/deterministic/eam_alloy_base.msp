@@ -33,9 +33,11 @@ eam_alloy_force:
 
 compute_force:
   - eam_alloy_force
-  - langevin_thermostat: { T: 50. K, gamma: 0.05 ps^-1 }
 
 input_data:
+  - particle_regions:
+      - ZONE:
+          bounds: [ [ 15 ang , -100 ang , -100 ang ] , [ 33 ang , 100 ang , 100 ang ] ]
   - particle_types:
       particle_type_map: { Ta: 0 }
   - particle_type_add_properties:
@@ -52,29 +54,17 @@ input_data:
       structure: BCC
       types: [ Ta, Ta]
       size: [ 3.3 ang , 3.3 ang , 3.3 ang ]
-#  - gaussian_noise_r: { sigma: 0.2 ang }
-#  - gaussian_noise_v: { sigma: 0.4 ang/ps }  
   
-+first_iteration:
-  - dump_data
-
 dump_data: nop
-#  - timestep_file: "test_cur_%09d.xyz"
-#  - write_xyz: { fields: [id, force, velocity] }
   
 global:
-  simulation_end_iteration: 20
+  simulation_end_iteration: 10
   simulation_log_frequency: 5
-  simulation_dump_thermo_frequency: 1
+  simulation_dump_thermo_frequency: -1
   simulation_dump_frequency: -1
   rcut_inc: 1.0 ang
   dt: 3.0e-3 ps
   deterministic_noise: true
 
 simulation_epilog:
-  - check_values:
-      file: check_eam_johnson.dat
-      samples: 100
-      pos_threshold: 1.e-10
-      acc_threshold: 1.e-10
-      vel_threshold: 1.e-10
+  - check_values  
