@@ -1,5 +1,5 @@
 includes:
-  - eam_alloy_base.msp
+  - noise_base.msp
 
 +input_data:
   - uniform_noise_r: { sigma: 0.1 ang }
