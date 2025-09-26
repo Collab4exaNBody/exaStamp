@@ -1,0 +1,12 @@
+includes:
+  - noise_base.msp
+
++input_data:
+  - gaussian_noise_f: { sigma: 0.1 eV/ang }
+
+check_values:
+  file: check_gaussian_f.dat
+  samples: 100
+  pos_threshold: 1.e-10
+  acc_threshold: 1.e-10
+  vel_threshold: 1.e-10

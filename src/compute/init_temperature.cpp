@@ -19,6 +19,7 @@ under the License.
 #include <onika/scg/operator_slot.h>
 #include <onika/scg/operator_factory.h>
 #include <exanb/core/grid.h>
+#include <exanb/core/domain.h>
 #include <onika/log.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exanb/core/parallel_grid_algorithm.h>
@@ -52,9 +53,11 @@ namespace exaStamp
 
     ADD_SLOT( MPI_Comm           , mpi                 , INPUT , MPI_COMM_WORLD );
     ADD_SLOT( ParticleSpecies    , species             , INPUT , REQUIRED );
-    ADD_SLOT( double             , temperature         , INPUT , 300.0 ); // in Kelvins
+    ADD_SLOT( double             , T                   , INPUT , 300.0 ); // in Kelvins
     ADD_SLOT( bool               , generate_velocity   , INPUT , false ); // set to true to erase velocity and replace it with gaussian noise
+    ADD_SLOT( bool               , deterministic_noise , INPUT , false );    
     ADD_SLOT( GridT              , grid                , INPUT_OUTPUT );
+    ADD_SLOT( Domain             , domain              , INPUT );
 
     ADD_SLOT( ParticleRegions   , particle_regions , INPUT , OPTIONAL );
     ADD_SLOT( ParticleRegionCSG , region           , INPUT , OPTIONAL );
@@ -101,44 +104,50 @@ namespace exaStamp
 
       auto cells = grid->cells();
       IJK dims = grid->dimension();
-      size_t ghost_layers = grid->ghost_layers();
-      IJK dims_no_ghost = dims - (2*ghost_layers);
-
+      size_t gl = grid->ghost_layers();
+      IJK gstart { gl, gl, gl };
+      IJK gend = dims - IJK{ gl, gl, gl };
+      IJK gdims = gend - gstart;
+      const auto dom_dims = domain->grid_dimension();
+      const auto dom_start = grid->offset();
+      
       Vec3d momentum;  // constructs itself with 0s
       Vec3d kinetic_energy;  // constructs itself with 0s
       double total_mass = 0.;
       size_t total_particles = 0;
 
       const bool genvel = *generate_velocity;
-      ldbg << "target temperature is "<< *temperature << std::endl;
+      ldbg << "target temperature is "<< *T << std::endl;
 
-#     pragma omp parallel
+      const int nthreads = *deterministic_noise ? 1 : omp_get_max_threads();
+#     pragma omp parallel num_threads(nthreads)
       {
-        auto& re = onika::parallel::random_engine();
-        std::normal_distribution<double> gaussian(0.0,1.0);
-        
-        GRID_OMP_FOR_BEGIN(dims_no_ghost,_,loc_no_ghosts, reduction(+:momentum,kinetic_energy,total_mass,total_particles) schedule(dynamic) )
+        std::mt19937_64 det_re;
+        std::mt19937_64 & re = *deterministic_noise ? det_re : onika::parallel::random_engine() ;
+        std::normal_distribution<double> f_rand(0.,1.);
+        GRID_OMP_FOR_BEGIN(dims-2*gl,_,loc, reduction(+:momentum,kinetic_energy,total_mass,total_particles) schedule(dynamic) )
         {
-          IJK loc = loc_no_ghosts + ghost_layers;
-          size_t cell_i = grid_ijk_to_index(dims,loc);
-
-          const auto* __restrict__ rx = cells[cell_i][field::rx];
-          const auto* __restrict__ ry = cells[cell_i][field::ry];
-          const auto* __restrict__ rz = cells[cell_i][field::rz];
-
-          auto* __restrict__ vx = cells[cell_i][field::vx];
-          auto* __restrict__ vy = cells[cell_i][field::vy];
-          auto* __restrict__ vz = cells[cell_i][field::vz];
+          const auto i = grid_ijk_to_index( dims , loc + gstart );
+          const auto domain_cell_idx = grid_ijk_to_index( dom_dims , loc + gstart + dom_start );
           
-          const auto* __restrict__ atype = cells[cell_i].field_pointer_or_null(field::type);
-          const auto* __restrict__ ids = cells[cell_i].field_pointer_or_null(field::id);
+          const auto* __restrict__ rx = cells[i][field::rx];
+          const auto* __restrict__ ry = cells[i][field::ry];
+          const auto* __restrict__ rz = cells[i][field::rz];
+
+          auto* __restrict__ vx = cells[i][field::vx];
+          auto* __restrict__ vy = cells[i][field::vy];
+          auto* __restrict__ vz = cells[i][field::vz];
+          
+          const auto* __restrict__ atype = cells[i].field_pointer_or_null(field::type);
+          const auto* __restrict__ ids = cells[i].field_pointer_or_null(field::id);
 
           Vec3d local_momentum = {0.,0.,0.};
           Vec3d local_kinetic_ernergy = {0.,0.,0.};
           double local_mass = 0.;
-          const size_t cell_nb_particles = cells[cell_i].size();
+          const size_t cell_nb_particles = cells[i].size();
           size_t n = 0;
-
+          det_re.seed( domain_cell_idx * 1023 );
+          
 //#         pragma omp simd reduction(+:local_momentum,local_kinetic_ernergy,n)
           for(size_t j=0;j<cell_nb_particles;j++)
           {
@@ -153,9 +162,9 @@ namespace exaStamp
               {
                 if( genvel )
                 {
-                  vx[j] = gaussian(re);
-                  vy[j] = gaussian(re);
-                  vz[j] = gaussian(re);
+                  vx[j] = f_rand(re);
+                  vy[j] = f_rand(re);
+                  vz[j] = f_rand(re);
                 }
                 const double pmass = atom_masses[type];
                 const Vec3d v { vx[j], vy[j], vz[j] };
@@ -200,29 +209,28 @@ namespace exaStamp
       // temperature
       Vec3d temp = 2. * ( kinetic_energy - 0.5 * momentum * momentum / total_mass );
       double temp_scale = ( conv_temperature * ( temp.x + temp.y + temp.z ) / 3. ) / total_particles;
-      temp_scale = (*temperature) / temp_scale;
+      temp_scale = (*T) / temp_scale;
       double vel_scale = std::sqrt( temp_scale );
       Vec3d momentum_shift = momentum / total_mass;
 
 #     pragma omp parallel
       {
-        GRID_OMP_FOR_BEGIN(dims_no_ghost,_,loc_no_ghosts, schedule(dynamic) )
+        GRID_OMP_FOR_BEGIN(dims-2*gl,_,loc, schedule(dynamic) )
         {
-          IJK loc = loc_no_ghosts + ghost_layers;
-          size_t cell_i = grid_ijk_to_index(dims,loc);
+          const auto i = grid_ijk_to_index( dims , loc + gstart );
 
-          const auto* __restrict__ rx = cells[cell_i][field::rx];
-          const auto* __restrict__ ry = cells[cell_i][field::ry];
-          const auto* __restrict__ rz = cells[cell_i][field::rz];
+          const auto* __restrict__ rx = cells[i][field::rx];
+          const auto* __restrict__ ry = cells[i][field::ry];
+          const auto* __restrict__ rz = cells[i][field::rz];
 
-          auto* __restrict__ vx = cells[cell_i][field::vx];
-          auto* __restrict__ vy = cells[cell_i][field::vy];
-          auto* __restrict__ vz = cells[cell_i][field::vz];
+          auto* __restrict__ vx = cells[i][field::vx];
+          auto* __restrict__ vy = cells[i][field::vy];
+          auto* __restrict__ vz = cells[i][field::vz];
           
-          const auto* __restrict__ atype = cells[cell_i].field_pointer_or_null(field::type);
-          const auto* __restrict__ ids = cells[cell_i].field_pointer_or_null(field::id);
+          const auto* __restrict__ atype = cells[i].field_pointer_or_null(field::type);
+          const auto* __restrict__ ids = cells[i].field_pointer_or_null(field::id);
 
-          size_t n = cells[cell_i].size();
+          size_t n = cells[i].size();
 
 #         pragma omp simd
           for(size_t j=0;j<n;j++)
@@ -256,7 +264,7 @@ namespace exaStamp
       YAML::Node tmp;
       if( node.IsScalar() )
       {
-        tmp["temperature"] = node;
+        tmp["T"] = node;
       }
       else { tmp = node; }
       this->OperatorNode::yaml_initialize( tmp );

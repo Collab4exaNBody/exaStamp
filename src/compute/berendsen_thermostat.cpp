@@ -29,7 +29,6 @@ under the License.
 #include <onika/physics/constants.h>
 #include <onika/physics/units.h>
 #include <onika/memory/allocator.h>
-#include <onika/parallel/random.h>
 #include <exanb/grid_cell_particles/particle_region.h>
 #include <exaStamp/compute/thermodynamic_state.h>
 

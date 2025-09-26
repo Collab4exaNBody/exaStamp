@@ -41,7 +41,6 @@ under the License.
 #include <exaStamp/molecule/molecule_species.h>
 
 #include <exanb/core/check_particles_inside_cell.h>
-#include <onika/parallel/random.h>
 #include <onika/math/math_utils.h>
 #include <onika/math/basic_types_operators.h>
 
