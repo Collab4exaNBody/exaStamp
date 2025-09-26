@@ -1,3 +1,7 @@
+[![CMake](https://github.com/Collab4exaNBody/exaStamp/actions/workflows/cmake.yml/badge.svg)](https://github.com/Collab4exaNBody/exaStamp/actions/workflows/cmake.yml)
+[![Spack](https://github.com/Collab4exaNBody/exaStamp/actions/workflows/spack.yml/badge.svg)](https://github.com/Collab4exaNBody/exaStamp/actions/workflows/spack.yml)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
 <p align="center">
   <img src="doc/img/exaStamp-logo.png" alt="Example Stamp Logo" width="200"/>
 </p>
@@ -23,22 +27,18 @@ This is the **exaStamp** software package, a high performance molecular dynamics
   </table>
 </div>
 
-Main sections of the documentation can be accessed directly using the following URLs.
 
-| URL | Short description |
-|-----|-------------|
-| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/1_Background.html | **exaStamp** background |
-| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/2_Build_and_Install.html | Build and installation instructions |
-| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/3_Beginners_guide.html | Beginner's guide |
-| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/Tutorials.html | Tutorials |
-| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/4_Domain_Regions.html | Simulation domain and spatial regions |
-| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/5_Grids.html | Manipulating grids |
-| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/6_Particles.html | Manipulating particles |
-| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/7_Interactions.html | Interatomic potentials |
-| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/8_Constraints.html | Thermodynamic ensembles and constraints |
-| https://collab4exanbody.github.io/doc_exaStamp/project_exaStamp/3bis_microStamp.html | microStamp mini MD application |
+| Main sections of the documentation can be accessed directly using the following URLs                              |
+|-------------------------------------------------------------------------------------------------------------------|
+| [**exaStamp** background](https://collab4exanbody.github.io/doc_exaStamp/Background/index.html)                   |
+| [**Build and installation instructions**](https://collab4exanbody.github.io/doc_exaStamp/BuildInstall/index.html) |
+| [**User guide**](https://collab4exanbody.github.io/doc_exaStamp/User/index.html)                                  |
+| [**Beginner's guide**](https://collab4exanbody.github.io/doc_exaStamp/Beginner/index.html)                        |
+| [**microStamp miniApp**](https://collab4exanbody.github.io/doc_exaStamp/microStamp/index.html)                    |
+| [**References**](https://collab4exanbody.github.io/doc_exaStamp/References/index.html)                            |
+| [**About**](https://collab4exanbody.github.io/doc_exaStamp/About/index.html)                                      |
 
------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------
 
 ## Community Guidelines
 
@@ -46,7 +46,7 @@ For more details, see `CONTRIBUTING.md`. Main guidelines are:
 
 - For any bug, please create an issue and add the label “bug”. We welcome all feedback to make **exaStamp** as robust as possible.
 - If you would like to participate and add functionality to **exaStamp**, you can find instructions for coding style, tests and pull request process in CONTRIBUTING.md.
-- If you have any support-related / collaboration questions, please contact the team at pauk.lafourcade@cea.fr. If you are a `CEA` member, please request access to the group : "exaNBody & Co. (exaStamp, exaDEM, exaSPH)", an external access can also be provided.
+- If you have any support-related / collaboration questions, please contact the team at paul.lafourcade@cea.fr. If you are a `CEA` member, please request access to the group : "exaNBody & Co. (exaStamp, exaDEM, exaSPH)", an external access can also be provided.
 
 -----------------------------------------------------------------------------------------------------------
 
