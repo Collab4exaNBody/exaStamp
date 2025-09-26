@@ -16,19 +16,15 @@ configuration:
 grid_flavor: grid_flavor_multimat
 
 species:
-  - Al:
-      mass: 26.98200000 Da
-      z: 13
-      charge: 0 e-
-  - Cu:
-      mass: 63.54600000 Da
-      z: 29
+  - Ta:
+      mass: 180.95 Da
+      z: 73
       charge: 0 e-
 
 eam_alloy_force:
   rcut: 6.6825 ang
   parameters:
-    file: AlCu.eam.alloy
+    file: Ta1_Ravelo_2013.eam.alloy
   eam_rho: true
   eam_rho2emb: true
   eam_ghost: true
@@ -37,48 +33,43 @@ eam_alloy_force:
 
 compute_force:
   - eam_alloy_force
-  - material_langevin_thermostat:
-      - { type: Al , gamma: 0.1 , T: 1000. K }
-      - { type: Cu , gamma: 0.1 , T: 100. K }
-
+  - two_sided_langevin_thermostat:
+      T_a: 300 K
+      gamma_a: 0.1 ps^-1
+      T_b: 100 K
+      gamma_b: 0.1 ps^-1
+      planes:
+        - [ 1.0 , 0.0 , 0.0 , -33.0 ang ]
+      thickness: 0.5 ang
+  
 input_data:
   - particle_regions:
       - ZONE:
-          bounds: [ [ 25.6 ang , -100 ang , -100 ang ] , [ 54.4 ang , 100 ang , 100 ang ] ]
+          bounds: [ [ 15 ang , -100 ang , -100 ang ] , [ 33 ang , 100 ang , 100 ang ] ]
   - particle_types:
-      particle_type_map: { Al: 0, Cu: 1 }
+      particle_type_map: { Ta: 0 }
   - particle_type_add_properties:
-      Al: { mass: 26.982 Da , z: 13 }
-      Cu: { mass: 63.546 Da , z: 29 }
+      Ta: { mass: 180.95 Da , z: 73 }
   - domain:
-      cell_size: 4.0 ang
+      cell_size: 3.3 ang
       grid_dims: [20,20,20]
-      bounds: [[0 ang ,0 ang,0 ang],[80 ang, 80 ang, 80 ang]]
+      bounds: [[0 ang ,0 ang,0 ang],[66 ang, 66 ang, 66 ang]]
       xform: [[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
       periodic: [true,true,true]
       expandable: false
   - init_rcb_grid
   - lattice:
-      structure: FCC
-      types: [ Cu, Cu, Cu, Cu]
-      size: [ 4.0 ang , 4.0 ang , 4.0 ang ]
-      region: ZONE
-  - lattice:
-      structure: FCC
-      types: [ Al, Al, Al, Al]
-      size: [ 4.0 ang , 4.0 ang , 4.0 ang ]
-      region: not ZONE
+      structure: BCC
+      types: [ Ta, Ta]
+      size: [ 3.3 ang , 3.3 ang , 3.3 ang ]
   
-dump_data:
-  - timestep_file: "atoms_%09d.xyz"
-  - write_xyz:
-      fields: [ id, type ]
+dump_data: nop
   
 global:
-  simulation_end_iteration: 2000
+  simulation_end_iteration: 10
   simulation_log_frequency: 5
   simulation_dump_thermo_frequency: -1
-  simulation_dump_frequency: 10
+  simulation_dump_frequency: -1
   rcut_inc: 1.0 ang
   dt: 3.0e-3 ps
   deterministic_noise: true
@@ -87,7 +78,7 @@ simulation_epilog:
   - check_values
 
 check_values:
-  file: check_random_langevin.dat
+  file: check_two_sided_langevin_thermostat.dat
   samples: 100
   pos_threshold: 1.e-10
   acc_threshold: 1.e-10

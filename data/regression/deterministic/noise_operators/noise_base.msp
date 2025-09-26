@@ -44,7 +44,7 @@ input_data:
 dump_data: nop
   
 global:
-  simulation_end_iteration: 10
+  simulation_end_iteration: 2
   simulation_log_frequency: 5
   simulation_dump_thermo_frequency: -1
   simulation_dump_frequency: -1

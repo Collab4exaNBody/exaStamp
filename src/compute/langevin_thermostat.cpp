@@ -112,7 +112,7 @@ namespace exaStamp
     // -----------------------------------------------
     inline void execute ()  override final
     {
-      static constexpr double k = EXASTAMP_CONST_QUANTITY( onika::physics::boltzmann * J / K );
+      const double k = onika::physics::make_quantity( onika::physics::boltzmann, "J/K" ).convert();
 
       if( grid->number_of_cells() == 0 ) return;
 

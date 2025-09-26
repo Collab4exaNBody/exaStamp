@@ -5,7 +5,7 @@ includes:
   - uniform_noise_v: { sigma: 0.1 ang/ps }
 
 check_values:
-  file: check_random_uniform_v.dat
+  file: check_uniform_v.dat
   samples: 100
   pos_threshold: 1.e-10
   acc_threshold: 1.e-10

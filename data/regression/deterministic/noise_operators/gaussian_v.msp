@@ -2,10 +2,10 @@ includes:
   - noise_base.msp
 
 +input_data:
-  - uniform_noise_r: { sigma: 0.1 ang }
+  - gaussian_noise_v: { sigma: 0.1 ang/ps }  
 
 check_values:
-  file: check_random_uniform_r.dat
+  file: check_gaussian_v.dat
   samples: 100
   pos_threshold: 1.e-10
   acc_threshold: 1.e-10

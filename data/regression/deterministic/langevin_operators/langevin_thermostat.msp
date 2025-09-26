@@ -33,15 +33,8 @@ eam_alloy_force:
 
 compute_force:
   - eam_alloy_force
-  - two_sided_langevin_thermostat:
-      T_a: 3000 K
-      gamma_a: 0.1 ps^-1
-      T_b: 300 K
-      gamma_b: 0.1 ps^-1
-      planes:
-        - [ 1.0 , 0.0 , 0.0 , -33.0 ang ]
-      thickness: 0.5 ang
-  
+  - langevin_thermostat: { T: 200. K, gamma: 0.1 ps^-1 }  
+
 input_data:
   - particle_regions:
       - ZONE:
@@ -63,16 +56,13 @@ input_data:
       types: [ Ta, Ta]
       size: [ 3.3 ang , 3.3 ang , 3.3 ang ]
   
-dump_data:
-  - timestep_file: "atoms_%09d.xyz"
-  - write_xyz:
-      fields: [ id, type ]
+dump_data: nop
   
 global:
-  simulation_end_iteration: 2000
+  simulation_end_iteration: 10
   simulation_log_frequency: 5
   simulation_dump_thermo_frequency: -1
-  simulation_dump_frequency: 10
+  simulation_dump_frequency: -1
   rcut_inc: 1.0 ang
   dt: 3.0e-3 ps
   deterministic_noise: true
@@ -81,7 +71,7 @@ simulation_epilog:
   - check_values
 
 check_values:
-  file: check_random_langevin.dat
+  file: check_langevin_thermostat.dat
   samples: 100
   pos_threshold: 1.e-10
   acc_threshold: 1.e-10
