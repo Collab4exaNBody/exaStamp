@@ -1,3 +1,20 @@
+/*
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements. See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership. The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License. You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied. See the License for the
+specific language governing permissions and limitations
+under the License.
+*/
+
 #include <chrono>
 #include <ctime>
 #include <mpi.h>
@@ -17,7 +34,6 @@
 #include <exanb/core/domain.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exanb/core/check_particles_inside_cell.h>
-#include <onika/parallel/random.h>
 
 namespace exaStamp
 {
@@ -40,8 +56,6 @@ namespace exaStamp
     ADD_SLOT( GridT           , grid         , INPUT_OUTPUT );
     ADD_SLOT( ParticleSpecies , species      , INPUT ); // optional. if no species given, type ids are allocated automatically
     ADD_SLOT( ReadBoundsSelectionMode, bounds_mode   , INPUT , ReadBoundsSelectionMode::FILE_BOUNDS );
-    ADD_SLOT( bool             , gaussian_noise        , INPUT , false);    
-    ADD_SLOT( double           , gaussian_noise_sigma  , INPUT , 0.0);
 
   public:
     inline void execute () override final
@@ -54,9 +68,6 @@ namespace exaStamp
       Domain& domain = *(this->domain);
       GridT& grid = *(this->grid);
 
-      bool is_noise = *(this->gaussian_noise);            
-      double sigma_noise = *(this->gaussian_noise_sigma);
-            
       //-------------------------------------------------------------------------------------------
       std::string basename;
       std::string::size_type p = file_name.rfind("/");
@@ -169,16 +180,6 @@ namespace exaStamp
                 x = box_size_x * r.x;
                 y = box_size_y * r.y;
                 z = box_size_z * r.z;
-
-	        if (is_noise) {
-
-	          auto& re = onika::parallel::random_engine();
-	          std::normal_distribution<double> f_rand(0.,sigma_noise);
-	          x += f_rand(re);
-	          y += f_rand(re);
-	          z += f_rand(re);
-			      
-	        }
 	  
           if( typeMap.find(type) == typeMap.end() )
           {

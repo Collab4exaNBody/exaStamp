@@ -1,3 +1,20 @@
+/*
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements. See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership. The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License. You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied. See the License for the
+specific language governing permissions and limitations
+under the License.
+*/
+
 #include <chrono>
 #include <ctime>
 #include <mpi.h>
@@ -10,6 +27,7 @@
 #include <onika/scg/operator_factory.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/grid.h>
+#include <exanb/core/domain.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <onika/log.h>
 #include <exaStamp/particle_species/particle_specie.h>
@@ -32,8 +50,11 @@ namespace exaStamp
   {
     ADD_SLOT( MPI_Comm        , mpi          , INPUT , MPI_COMM_WORLD  );
     ADD_SLOT( GridT           , grid         , INPUT_OUTPUT );
+    ADD_SLOT( Domain             , domain              , INPUT );
     ADD_SLOT( ParticleSpecies , species      , INPUT_OUTPUT );
     ADD_SLOT( double          , T            , INPUT , REQUIRED );
+    ADD_SLOT( bool            , deterministic_noise , INPUT , false );    
+    
   public:
     inline void execute () override final
     {
@@ -44,8 +65,12 @@ namespace exaStamp
 
       auto cells = grid->cells();
       IJK dims = grid->dimension();
-      size_t ghost_layers = grid->ghost_layers();
-      IJK dims_no_ghost = dims - (2*ghost_layers);
+      size_t gl = grid->ghost_layers();
+      IJK gstart { gl, gl, gl };
+      IJK gend = dims - IJK{ gl, gl, gl };
+      IJK gdims = gend - gstart;
+      const auto dom_dims = domain->grid_dimension();
+      const auto dom_start = grid->offset();
 
       double sum_mass = 0.0;
       double sum_vx   = 0.0;
@@ -73,25 +98,30 @@ namespace exaStamp
       //double sum_nrj=0.0;
 
       // partie 1
-#     pragma omp parallel
+      const int nthreads = *deterministic_noise ? 1 : omp_get_max_threads();
+#     pragma omp parallel num_threads(nthreads)
       {
         //creation graine pour distribution gaussienne
-        auto& re = onika::parallel::random_engine();
-        GRID_OMP_FOR_BEGIN(dims_no_ghost,_,loc_no_ghosts, reduction(+:sum_mass,sum_vx,sum_vxc,sum_vy,sum_vyc,sum_vz,sum_vzc,sum_wx,sum_wxc,sum_wy,sum_wyc,sum_wz,sum_wzc,sum_mix,sum_miy,sum_miz,N,nddl_x,nddl_y,nddl_z) schedule(dynamic) )
+        std::mt19937_64 det_re;
+        std::mt19937_64 & re = *deterministic_noise ? det_re : onika::parallel::random_engine() ;
+        std::normal_distribution<double> f_rand(0.,1.);
+        GRID_OMP_FOR_BEGIN(dims-2*gl,_,loc, reduction(+:sum_mass,sum_vx,sum_vxc,sum_vy,sum_vyc,sum_vz,sum_vzc,sum_wx,sum_wxc,sum_wy,sum_wyc,sum_wz,sum_wzc,sum_mix,sum_miy,sum_miz,N,nddl_x,nddl_y,nddl_z) schedule(dynamic) )
         {
-          IJK loc = loc_no_ghosts + ghost_layers;
-          size_t cell_i = grid_ijk_to_index(dims,loc);
+          const auto i = grid_ijk_to_index( dims , loc + gstart );
+          const auto domain_cell_idx = grid_ijk_to_index( dom_dims , loc + gstart + dom_start );
 
-          auto* __restrict__ vx = cells[cell_i][field::vx];
-          auto* __restrict__ vy = cells[cell_i][field::vy];
-          auto* __restrict__ vz = cells[cell_i][field::vz];
-//          const auto* __restrict__ rx = cells[cell_i][field::rx];
-//          const auto* __restrict__ ry = cells[cell_i][field::ry];
-//          const auto* __restrict__ rz = cells[cell_i][field::rz];
-          auto* __restrict__ angmom = cells[cell_i][field::angmom];
-          const auto* __restrict__ type_atom = cells[cell_i][field::type];
+          auto* __restrict__ vx = cells[i][field::vx];
+          auto* __restrict__ vy = cells[i][field::vy];
+          auto* __restrict__ vz = cells[i][field::vz];
+//          const auto* __restrict__ rx = cells[i][field::rx];
+//          const auto* __restrict__ ry = cells[i][field::ry];
+//          const auto* __restrict__ rz = cells[i][field::rz];
+          auto* __restrict__ angmom = cells[i][field::angmom];
+          const auto* __restrict__ type_atom = cells[i][field::type];
 
-          size_t n = cells[cell_i].size();
+          size_t n = cells[i].size();
+          
+          det_re.seed( domain_cell_idx * 1023 );
 
           //boucle d'initialisation aleatoire des quantites
           for(size_t j=0;j<n;j++)
@@ -151,23 +181,22 @@ namespace exaStamp
       // partie 2
 #     pragma omp parallel
       {
-        GRID_OMP_FOR_BEGIN(dims_no_ghost,_,loc_no_ghosts, reduction(+:sum_vxc,sum_vyc,sum_vzc,sum_wxc,sum_wyc,sum_wzc) schedule(dynamic)  )
+        GRID_OMP_FOR_BEGIN(dims-2*gl,_,loc, reduction(+:sum_vxc,sum_vyc,sum_vzc,sum_wxc,sum_wyc,sum_wzc) schedule(dynamic)  )
         {
-          IJK loc = loc_no_ghosts + ghost_layers;
-          size_t cell_i = grid_ijk_to_index(dims,loc);
+          const auto i = grid_ijk_to_index( dims , loc + gstart );
 
-         auto* __restrict__ vx = cells[cell_i][field::vx];
-         auto* __restrict__ vy = cells[cell_i][field::vy];
-         auto* __restrict__ vz = cells[cell_i][field::vz];
-//         auto* __restrict__ rx = cells[cell_i][field::rx];
-//         auto* __restrict__ ry = cells[cell_i][field::ry];
-//         auto* __restrict__ rz = cells[cell_i][field::rz];
-         auto* __restrict__ angmom = cells[cell_i][field::angmom];
-//         auto* __restrict__ couple = cells[cell_i][field::couple];
-//         const auto* __restrict__ orient = cells[cell_i][field::orient];
-         const auto* __restrict__ type_atom = cells[cell_i][field::type];
+         auto* __restrict__ vx = cells[i][field::vx];
+         auto* __restrict__ vy = cells[i][field::vy];
+         auto* __restrict__ vz = cells[i][field::vz];
+//         auto* __restrict__ rx = cells[i][field::rx];
+//         auto* __restrict__ ry = cells[i][field::ry];
+//         auto* __restrict__ rz = cells[i][field::rz];
+         auto* __restrict__ angmom = cells[i][field::angmom];
+//         auto* __restrict__ couple = cells[i][field::couple];
+//         const auto* __restrict__ orient = cells[i][field::orient];
+         const auto* __restrict__ type_atom = cells[i][field::type];
 
-         size_t n = cells[cell_i].size();
+         size_t n = cells[i].size();
 
          //boucle d'annulation des grandeurs du CDM
          for(size_t j=0;j<n;j++)
@@ -210,23 +239,22 @@ namespace exaStamp
         Vec3d EcRcal={0.,0.,0.};
         /* Fin Modifications LS */
 
-        GRID_OMP_FOR_BEGIN(dims_no_ghost,_,loc_no_ghosts, schedule(dynamic)  )
+        GRID_OMP_FOR_BEGIN(dims-2*gl,_,loc, schedule(dynamic)  )
         {
-          IJK loc = loc_no_ghosts + ghost_layers;
-          size_t cell_i = grid_ijk_to_index(dims,loc);
+          const auto i = grid_ijk_to_index( dims , loc + gstart );
 
-         auto* __restrict__ vx = cells[cell_i][field::vx];
-         auto* __restrict__ vy = cells[cell_i][field::vy];
-         auto* __restrict__ vz = cells[cell_i][field::vz];
-//         auto* __restrict__ rx = cells[cell_i][field::rx];
-//         auto* __restrict__ ry = cells[cell_i][field::ry];
-//         auto* __restrict__ rz = cells[cell_i][field::rz];
-         auto* __restrict__ angmom = cells[cell_i][field::angmom];
-//         auto* __restrict__ couple = cells[cell_i][field::couple];
-         auto* __restrict__ orient = cells[cell_i][field::orient];
-         const auto* __restrict__ type_atom = cells[cell_i][field::type];
+         auto* __restrict__ vx = cells[i][field::vx];
+         auto* __restrict__ vy = cells[i][field::vy];
+         auto* __restrict__ vz = cells[i][field::vz];
+//         auto* __restrict__ rx = cells[i][field::rx];
+//         auto* __restrict__ ry = cells[i][field::ry];
+//         auto* __restrict__ rz = cells[i][field::rz];
+         auto* __restrict__ angmom = cells[i][field::angmom];
+//         auto* __restrict__ couple = cells[i][field::couple];
+         auto* __restrict__ orient = cells[i][field::orient];
+         const auto* __restrict__ type_atom = cells[i][field::type];
 
-         size_t n = cells[cell_i].size();
+         size_t n = cells[i].size();
 
          //boucle de rescale pour avoir la bonne temperature
          if ( T>0.)

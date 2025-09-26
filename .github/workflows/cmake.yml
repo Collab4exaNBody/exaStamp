@@ -1,4 +1,5 @@
-name: C/C++ CI
+name: CMake
+
 on:
   push:
     branches: [ "main" ]
@@ -15,6 +16,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
     - uses: actions/setup-node@v4
     - name: Get Yaml cpp
       run: sudo apt install libyaml-cpp-dev
@@ -24,24 +27,19 @@ jobs:
       run: sudo apt install mpich
   
     - name: Get Onika
-      run: git clone --depth 1 https://github.com/Collab4exaNBody/onika.git   
+      run: git clone --depth 1 --branch v1.0.4 https://github.com/Collab4exaNBody/onika.git   
     - name: Configure Onika
       run: cmake -B ${{github.workspace}}/onika/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/onika/install
-      working-directory: ${{github.workspace}}/onika      
+      working-directory: ${{github.workspace}}/onika
     - name: Build Onika
       # Build your program with the given configuration
       run: cmake --build ${{github.workspace}}/onika/build --target install --config ${{env.BUILD_TYPE}} -j 8
       
-    - name: Get ExaNBody
-      run: git clone --depth 1 https://github.com/Collab4exaNBody/exaNBody.git         
-    - name: Configure ExaNBody
-      run: cmake -B ${{github.workspace}}/exaNBody/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -Donika_DIR=${{github.workspace}}/onika/install -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/exaNBody/install -DEXANB_BUILD_CONTRIB_MD=ON -DEXANB_BUILD_MICROSTAMP=ON
-      working-directory: ${{github.workspace}}/exaNBody   
-    - name: Build ExaNBody
-      run: cmake --build ${{github.workspace}}/exaNBody/build --target install --config ${{env.BUILD_TYPE}} -j 8
-      
-    - name: Configure CMake for exaStamp
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DexaNBody_DIR=${{github.workspace}}/exaNBody/install
-    - name: Build exaStamp
+    - name: Get exaNBody
+      run: git clone --depth 1 --branch v2.0.5 https://github.com/Collab4exaNBody/exaNBody.git
+    - name: Configure exaNBody
+      run: cmake -B ${{github.workspace}}/exaNBody/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -Donika_DIR=${{github.workspace}}/onika/install -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/exaNBody/install -DEXANB_BUILD_CONTRIB_MD=ON -DEXANB_BUILD_MICROSTAMP=ON -DEXANB_BUILD_CONTRIB_PI=ON -DEXANB_BUILD_MICROCOSMOS=ON
+      working-directory: ${{github.workspace}}/exaNBody
+    - name: Build exaNBody
       # Build your program with the given configuration
-      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} -j 8
+      run: cmake --build ${{github.workspace}}/exaNBody/build --target install --config ${{env.BUILD_TYPE}} -j 8

@@ -1,3 +1,20 @@
+/*
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements. See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership. The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License. You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied. See the License for the
+specific language governing permissions and limitations
+under the License.
+*/
+
 #include <chrono>
 #include <ctime>
 #include <mpi.h>
@@ -17,6 +34,7 @@
 #include <onika/physics/units.h>
 #include <onika/physics/constants.h>
 #include <exaStamp/unit_system.h>
+#include <exanb/core/domain.h>
 
 #include <onika/math/quaternion_operators.h>
 
@@ -31,13 +49,15 @@ namespace exaStamp
   {
     ADD_SLOT( MPI_Comm        , mpi            , INPUT , MPI_COMM_WORLD  );
     ADD_SLOT( GridT           , grid           , INPUT_OUTPUT );
+    ADD_SLOT( Domain          , domain         , INPUT );
     ADD_SLOT( ParticleSpecies , species        , INPUT_OUTPUT );
     ADD_SLOT( double          , dt             , INPUT );
     ADD_SLOT( double          , T              , INPUT , REQUIRED );
-    ADD_SLOT( double          , friction       , INPUT , 1.0 );
-    ADD_SLOT( double          , friction_ratio , INPUT , 1.e-2 );
+    ADD_SLOT( double          , gamma       , INPUT , 1.0 );
+    ADD_SLOT( double          , gamma_ratio , INPUT , 1.e-2 );
     ADD_SLOT( double          , time_nve,        INPUT , 1e30 );    
     ADD_SLOT( int64_t         , timestep       , INPUT , REQUIRED );
+    ADD_SLOT( bool            , deterministic_noise , INPUT , false );
 
   public:
     inline void execute () override final
@@ -48,10 +68,17 @@ namespace exaStamp
       IJK dims = grid->dimension();
       size_t ghost_layers = grid->ghost_layers();
       IJK dims_no_ghost = dims - (2*ghost_layers);
+      ssize_t gl = grid->ghost_layers();      
+      IJK gstart { gl, gl, gl };
+      IJK gend = dims - IJK{ gl, gl, gl };
+      IJK gdims = gend - gstart;
+      const auto dom_dims = domain->grid_dimension();
+      const auto dom_start = grid->offset();
+      
       const double dt           = *(this->dt);
       const double T           = *(this->T);
-      const double xsi       = *(this->friction);
-      const double friction_ratio       = *(this->friction_ratio);
+      const double xsi       = *(this->gamma);
+      const double friction_ratio       = *(this->gamma_ratio);
       const double xsir = xsi * friction_ratio;
       const double nvetime           = *(this->time_nve);
       const auto * __restrict__ species_ptr = species->data();
@@ -62,27 +89,29 @@ namespace exaStamp
 
         ldbg<<" ###### Langevin #######"<<std::endl<<std::flush;
 
-      // partie 1
-#     pragma omp parallel
+      const int nthreads = *deterministic_noise ? 1 : omp_get_max_threads();
+#     pragma omp parallel num_threads(nthreads)
       {
-        //creation graine pour distribution gaussienne
-        auto& re = onika::parallel::random_engine();
-        std::normal_distribution<double> f_rand(0.0 , 1.0) ;
-        GRID_OMP_FOR_BEGIN(dims_no_ghost,_,loc_no_ghosts, schedule(dynamic) )
+        std::mt19937_64 det_re;
+        std::mt19937_64 & re = *deterministic_noise ? det_re : onika::parallel::random_engine() ;
+        std::normal_distribution<double> f_rand(0.,1.);
+        GRID_OMP_FOR_BEGIN(dims-2*gl,_,loc, schedule(dynamic) )
         {
-          IJK loc = loc_no_ghosts + ghost_layers;
-          size_t cell_i = grid_ijk_to_index(dims,loc);
+          const auto i = grid_ijk_to_index( dims , loc + gstart );
+          const auto domain_cell_idx = grid_ijk_to_index( dom_dims , loc + gstart + dom_start );
 
-          auto* __restrict__ vx = cells[cell_i][field::vx];
-          auto* __restrict__ vy = cells[cell_i][field::vy];
-          auto* __restrict__ vz = cells[cell_i][field::vz];
-          auto* __restrict__ angmom = cells[cell_i][field::angmom];
-          auto* __restrict__ orient = cells[cell_i][field::orient];
-//          const auto* __restrict__ couple = cells[cell_i][field::couple];
-          const auto* __restrict__ type_atom = cells[cell_i][field::type];
+          auto* __restrict__ vx = cells[i][field::vx];
+          auto* __restrict__ vy = cells[i][field::vy];
+          auto* __restrict__ vz = cells[i][field::vz];
+          auto* __restrict__ angmom = cells[i][field::angmom];
+          auto* __restrict__ orient = cells[i][field::orient];
+//          const auto* __restrict__ couple = cells[i][field::couple];
+          const auto* __restrict__ type_atom = cells[i][field::type];
 
-          size_t n = cells[cell_i].size();
+          size_t n = cells[i].size();
 
+          det_re.seed( domain_cell_idx * 1023 );
+          
           for(size_t j=0;j<n;j++)
           {
             const int t = type_atom[j];
@@ -177,9 +206,9 @@ namespace exaStamp
   template<class GridT> using LangevinRigidMolTmpl = LangevinRigidMol<GridT>;
 
   // === register factories ===
-  ONIKA_AUTORUN_INIT(langevin_rigidmol)
+  ONIKA_AUTORUN_INIT(langevin_thermostat_rigidmol)
   {
-    OperatorNodeFactory::instance()->register_factory("langevin_rigidmol", make_grid_variant_operator< LangevinRigidMolTmpl >);
+    OperatorNodeFactory::instance()->register_factory("langevin_thermostat_rigidmol", make_grid_variant_operator< LangevinRigidMolTmpl >);
   }
 
 }
