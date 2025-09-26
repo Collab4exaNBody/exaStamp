@@ -27,7 +27,6 @@ under the License.
 #include <onika/physics/constants.h>
 #include <onika/physics/units.h>
 #include <onika/memory/allocator.h>
-#include <onika/parallel/random.h>
 #include <exanb/core/domain.h>
 
 namespace exaStamp
@@ -138,31 +137,7 @@ namespace exaStamp
     inline std::string documentation() const override final
     {
       return R"EOF(
-Apply a langevin thermostat on particles.
-if a single value is given as the node description, it is understood as the T parameter (temperature)
-
-Uses formulation as in LAMMPS documentation :
-=============================================
-Apply a Langevin thermostat as described in (Schneider) to a group of atoms which models an interaction with a background implicit solvent. Used with fix nve, this command performs Brownian dynamics (BD), since the total force on each atom will have the form:
-F = Fc + Ff + Fr
-Ff = - (m / damp) v
-Fr is proportional to sqrt(Kb T m / (dt damp))
-Fc is the conservative force computed via the usual inter-particle interactions (pair_style, bond_style, etc).
-The Ff and Fr terms are added by this fix on a per-particle basis. See the pair_style dpd/tstat command for a thermostatting option that adds similar terms on a pairwise basis to pairs of interacting particles.
-Ff is a frictional drag or viscous damping term proportional to the particle’s velocity. The proportionality constant for each atom is computed as m/damp, where m is the mass of the particle and damp is the damping factor specified by the user.
-Fr is a force due to solvent atoms at a temperature T randomly bumping into the particle. As derived from the fluctuation/dissipation theorem, its magnitude as shown above is proportional to sqrt(Kb T m / dt damp), where Kb is the Boltzmann constant, T is the desired temperature, m is the mass of the particle, dt is the timestep size, and damp is the damping factor. Random numbers are used to randomize the direction and magnitude of this force as described in (Dunweg), where a uniform random number is used (instead of a Gaussian random number) for speed.
-
-exemple 1:
-==========
-langevin_thermostat: 500 K
-
-exemple 2:
-==========
-langevin_thermostat:
-  T: 800 K
-  gamma: 0.25
-
-Note: do not process particles in ghost layers.
+TODO
 )EOF";
     }
 
