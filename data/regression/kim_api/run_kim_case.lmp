@@ -1,0 +1,28 @@
+# 3d Lennard-Jones melt
+
+units        metal
+
+read_data    Ta_disturbed.data
+  
+pair_style  kim EAM_Dynamo_RaveloGermannGuerrero_2013Ta1_Ta__MO_816821594689_001
+pair_coeff  * * Ta
+
+thermo       10
+thermo_style custom step time atoms etotal ke pe temp 
+
+variable  peat equal pe/atoms
+variable  keat equal ke/atoms
+variable  etotalat equal etotal/atoms
+variable  T equal temp
+variable  nats equal atoms
+variable  s equal step
+variable  t equal time
+        
+fix 2 all print 1 "${s} ${t} ${nats} ${etotalat} ${keat} ${peat} ${T}" file thermo_lammps.csv screen no
+
+neighbor     1.0 bin
+neigh_modify delay 0 every 1 check yes
+
+fix          1 all nve
+
+run          10

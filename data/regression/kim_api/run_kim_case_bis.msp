@@ -36,9 +36,18 @@ compute_force:
 input_data:
   - domain:
       cell_size: 3.3 ang
+      grid_dims: [10,10,10]
+      bounds: [[0 ang ,0 ang,0 ang],[33.0 ang, 33.0 ang, 33.0 ang]]
+      xform: [[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
       periodic: [true,true,true]
-  - read_xyz_file_with_xform:
-      file: "Ta_disturbed.xyz"
+      expandable: false
+  - init_rcb_grid
+  - lattice:
+      structure: BCC
+      types: [ Ta , Ta]
+      size: [ 3.3 ang , 3.3 ang , 3.3 ang ]
+      shift: [0.1 ang, 0.1 ang, 0.1 ang]
+  - gaussian_noise_r: { sigma: 0.2 ang }
 
 dump_data:
   - timestep_file: "xyz_datas/test_%09d.xyz"

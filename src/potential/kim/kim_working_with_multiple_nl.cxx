@@ -31,8 +31,6 @@ under the License.
 #include <onika/file_utils.h>
 
 #include "kim.h"
-#include "KIM_Log.hpp"
-#include "KIM_LogVerbosity.hpp"
 //#include "Eigen/Eigen/Dense"
 #include <onika/physics/units.h>
 
@@ -99,8 +97,6 @@ namespace exaStamp
     // Operator execution
     inline void execute () override final
     {
-      KIM::Log::PushDefaultVerbosity(KIM::LOG_VERBOSITY::silent);
-      
       assert( chunk_neighbors->number_of_cells() == grid->number_of_cells() );
       size_t nt = omp_get_max_threads();
       if (nt > kim_ctx->m_thread_ctx.size()) {
@@ -217,7 +213,6 @@ namespace exaStamp
           auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform, cp_locks, cpu_cell_filter );
           compute_cell_particle_pairs( *grid, *rcut_max, *ghost, optional, force_buf, force_op , compute_force_field_set, parallel_execution_context());
         }
-      KIM::Log::PopDefaultVerbosity(); 
     }
     
     private:
@@ -242,7 +237,7 @@ namespace exaStamp
         ) const
       {
         Mat3d virial;
-        this->operator () ( n,buf,en,fx,fy,fz,type,id,virial, unused);
+        this->operator () ( n,buf,en,fx,fy,fz,type,id,virial, unused );
       }
 
       inline void operator ()
@@ -264,12 +259,12 @@ namespace exaStamp
         assert(tid < m_thread_ctx.size());
         KIMThreadContext & kim_ctx = m_thread_ctx[tid];
         auto kimptr = kim_ctx.kim_model;
-        //        KIM::Log::PushDefaultVerbosity(KIM::LOG_VERBOSITY::silent);
         
         // FILL BELOW with the appropriate code to compute forces and energy on central particles.
         // number of particles in this local cluster: 1 (center) + n neighbors
         const int np = static_cast<int>(n) + 1;
 
+        // coordinates layout: [x0,y0,z0, x1,y1,z1, ...]
         // put central at origin; neighbors are already r_ij = (drx, dry, drz)
         std::vector<double> coords(3 * static_cast<size_t>(np), 0.0);
         for (int i = 0; i < static_cast<int>(n); ++i) {
@@ -281,9 +276,8 @@ namespace exaStamp
         int particleSpecies[np];
         int particleContributing[np];
         
-        //        for (int i = 0; i < np; ++i)
-        //          particleContributing[i] = 1;
-        particleContributing[0] = 1;
+        for (int i = 0; i < np; ++i)
+          particleContributing[i] = 1;
 
         /* setup particleSpecies */
         int isSpeciesSupported;
@@ -305,35 +299,23 @@ namespace exaStamp
         double localEnergy = 0.0;
         std::vector<double> forces(3 * static_cast<size_t>(np), 0.0);
 
-        // // lightweight neighbor list object for the callback
-        // struct LocalNeighList {
-        //   double cutoff = 0.0;
-        //   int    numberOfParticles = 0;
-        //   std::vector<int> NNeighbors;    // size = np
-        //   std::vector<int> neighborList;  // size = np*np, row-major; row i starts at i*np
-        // } nl;
-        
-        // nl.numberOfParticles = np;
-        // nl.NNeighbors.assign(np, 0);
-        // nl.neighborList.assign(np * np, 0);
-
-        // // provide neighbors for the central particle (index 0): 1..n
-        // nl.NNeighbors[0] = static_cast<int>(n);
-        // for (int j = 0; j < static_cast<int>(n); ++j) {
-        //   nl.neighborList[0 * np + j] = j + 1;  // central's j-th neighbor is particle (j+1)
-        // }
-
-        // lightweight neighbor-list payload: ONLY central has neighbors
-        struct CentralOnlyNL {
-          int np;
-          int n;                              // number of neighbors of central
-          std::vector<int> neighbors_indices; // length n, values 1..n
+        // lightweight neighbor list object for the callback
+        struct LocalNeighList {
+          double cutoff = 0.0;
+          int    numberOfParticles = 0;
+          std::vector<int> NNeighbors;    // size = np
+          std::vector<int> neighborList;  // size = np*np, row-major; row i starts at i*np
         } nl;
-        
-        nl.np = np;
-        nl.n  = static_cast<int>(n);
-        nl.neighbors_indices.resize(nl.n);
-        for (int j = 0; j < nl.n; ++j) nl.neighbors_indices[j] = j + 1; // neighbors of central
+
+        nl.numberOfParticles = np;
+        nl.NNeighbors.assign(np, 0);
+        nl.neighborList.assign(np * np, 0);
+
+        // provide neighbors for the central particle (index 0): 1..n
+        nl.NNeighbors[0] = static_cast<int>(n);
+        for (int j = 0; j < static_cast<int>(n); ++j) {
+          nl.neighborList[0 * np + j] = j + 1;  // central's j-th neighbor is particle (j+1)
+        }
 
         // prepare ComputeArguments
         KIM::ComputeArguments* computeArguments = nullptr;
@@ -342,13 +324,13 @@ namespace exaStamp
           if (err) { MY_ERROR("KIM::ComputeArgumentsCreate() failed."); }
         }
 
-        // // (optional) read model neighbor-list hints to set an appropriate cutoff
-        // int num_nlists = 0;
-        // double const* cutoffs = nullptr;
-        // int const* will_not_request_noncontrib = nullptr;
-        // kimptr->GetNeighborListPointers(&num_nlists, &cutoffs, &will_not_request_noncontrib);
-        // if (num_nlists != 1) { kimptr->ComputeArgumentsDestroy(&computeArguments); MY_ERROR("Unexpected number of neighbor lists."); }
-        // nl.cutoff = (cutoffs != nullptr) ? cutoffs[0] : m_rcut;
+        // (optional) read model neighbor-list hints to set an appropriate cutoff
+        int num_nlists = 0;
+        double const* cutoffs = nullptr;
+        int const* will_not_request_noncontrib = nullptr;
+        kimptr->GetNeighborListPointers(&num_nlists, &cutoffs, &will_not_request_noncontrib);
+        if (num_nlists != 1) { kimptr->ComputeArgumentsDestroy(&computeArguments); MY_ERROR("Unexpected number of neighbor lists."); }
+        nl.cutoff = (cutoffs != nullptr) ? cutoffs[0] : m_rcut;
 
         // wire required argument pointers
         {
@@ -379,24 +361,13 @@ namespace exaStamp
                                         int* numberOfNeighbors,
                                         int const** neighborsOfParticle) -> int
         {
-          //          auto* nl = static_cast<LocalNeighList*>(dataObject);
-          auto* nl = static_cast<CentralOnlyNL*>(dataObject);          
+          auto* nl = static_cast<LocalNeighList*>(dataObject);
           if (numberOfNeighborLists != 1) return 1;
           if (neighborListIndex != 0)     return 1;
-          
-          // if (particleNumber < 0 || particleNumber >= nl->numberOfParticles) return 1;
+          if (particleNumber < 0 || particleNumber >= nl->numberOfParticles) return 1;
 
-          // *numberOfNeighbors   = nl->NNeighbors[particleNumber];
-          // *neighborsOfParticle = &(nl->neighborList[particleNumber * nl->numberOfParticles]);
-
-          if (particleNumber == 0) {
-            *numberOfNeighbors   = nl->n;
-            *neighborsOfParticle = nl->neighbors_indices.data();
-          } else {
-            // No neighbor list for non-central particles
-            *numberOfNeighbors   = 0;
-            *neighborsOfParticle = nullptr;
-          }
+          *numberOfNeighbors   = nl->NNeighbors[particleNumber];
+          *neighborsOfParticle = &(nl->neighborList[particleNumber * nl->numberOfParticles]);
           return 0;
         };
 
@@ -420,10 +391,10 @@ namespace exaStamp
         // accumulate central-particle results (index 0)
         for (int i = 1; i < np; ++i)
           {
-            fx += ( forces[3 * i + 0] * conv_energy_factor );
-            fy += ( forces[3 * i + 1] * conv_energy_factor );
-            fz += ( forces[3 * i + 2] * conv_energy_factor );
-          }
+            fx += ( forces[3*i+0] * conv_energy_factor );
+            fy += ( forces[3*i+1] * conv_energy_factor );
+            fz += ( forces[3*i+2] * conv_energy_factor );
+          }            
         en = (localEnergy * conv_energy_factor);
 
         // cleanup
@@ -433,7 +404,6 @@ namespace exaStamp
         }
         // -----------------------------------------------------------------------------
 
-        //        KIM::Log::PopDefaultVerbosity();
         //
         
       }
