@@ -60,6 +60,9 @@ find_and_enable_compression(libZIP ZLIB    USE_ZLIB  WITH_ZLIB )
 find_and_enable_compression(libZIP BZip2   USE_BZIP2 WITH_BZIP2)
 find_and_enable_compression(libZIP LibLZMA USE_LZMA  WITH_LZMA )
 
+set(AIO_POLICY "ExaStamp" CACHE STRING "Choose active policy")
+target_compile_definitions(libZIP INTERFACE AIO_POLICY=${AIO_POLICY})
+
 set(exaStampIO_LINK_LIBRARIES exaStampMechanical exaStampCompute exanbMPI exanbIO exanbDefBox exaStampParticleSpecies exanbGridCellParticles exanbParticleNeighbors libZIP stdc++fs)
 set(exaStampIO_INCLUDE_DIRS ${BASEN_INCLUDE_DIRS}) 
 onika_add_plugin(exaStampIO ${CMAKE_CURRENT_SOURCE_DIR})
