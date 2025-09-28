@@ -21,8 +21,8 @@
 #include <exanb/core/check_particles_inside_cell.h>
 // clang-format on
 
-#include <exaStamp/particle_species/particle_specie.h>
 #include <exaStamp/io/external_atom_format_v2.h>
+#include <exaStamp/particle_species/particle_specie.h>
 
 namespace exaStamp {
 
