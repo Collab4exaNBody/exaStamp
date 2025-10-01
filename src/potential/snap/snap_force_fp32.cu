@@ -22,12 +22,12 @@ under the License.
 
 namespace exaStamp
 {
-  template<class GridT> using SnapForceXSTmpl = md::SnapForceGenericFP64<GridT,field::_ep,field::_virial>;
+  template<class GridT> using SnapForceXSFP32Tmpl = md::SnapForceGenericFP32<GridT,field::_ep,field::_virial>;
 
   // === register factories ===  
-  ONIKA_AUTORUN_INIT(snap_force)
+  ONIKA_AUTORUN_INIT(snap_force_fp32)
   {
-    OperatorNodeFactory::instance()->register_factory( "snap_force" ,make_grid_variant_operator< SnapForceXSTmpl > );
+    OperatorNodeFactory::instance()->register_factory( "snap_force_fp32" ,make_grid_variant_operator< SnapForceXSFP32Tmpl > );
   }
 
 }
