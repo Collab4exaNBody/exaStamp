@@ -105,8 +105,6 @@ namespace exaStamp
       size_t nt = omp_get_max_threads();
       if (nt > kim_ctx->m_thread_ctx.size()) {
         size_t old_nt = kim_ctx->m_thread_ctx.size();
-        std::cout << "resizing thread context " << std::endl;
-        std::cout << "\told size = " << old_nt << ", new size = " << nt << std::endl;
         kim_ctx->m_thread_ctx.resize( nt );
         int requestedUnitsAccepted;
         int error;
@@ -141,9 +139,9 @@ namespace exaStamp
                 error = kim_ctx->m_thread_ctx[j].kim_model->IsRoutinePresent(modelRoutineName, &present, &required);
                 if (error) { MY_ERROR("Unable to get routine present/required."); }
 
-                std::cout << "Model routine name \"" << modelRoutineName.ToString()
-                          << "\" has present = " << present
-                          << " and required = " << required << "." << std::endl;
+                ldbg << "Model routine name \"" << modelRoutineName.ToString()
+                     << "\" has present = " << present
+                     << " and required = " << required << "." << std::endl;
 
                 if ((present == true) && (required == true))
                   {
@@ -169,12 +167,12 @@ namespace exaStamp
 
             kim_ctx->m_thread_ctx[j].kim_model->GetUnits(&lengthUnit, &energyUnit, &chargeUnit, &temperatureUnit, &timeUnit);
 
-            std::cout << "LengthUnit is \"" << lengthUnit.ToString() << "\"" << std::endl
-                      << "EnergyUnit is \"" << energyUnit.ToString() << "\"" << std::endl
-                      << "ChargeUnit is \"" << chargeUnit.ToString() << "\"" << std::endl
-                      << "TemperatureUnit is \"" << temperatureUnit.ToString() << "\""
-                      << std::endl
-                      << "TimeUnit is \"" << timeUnit.ToString() << "\"" << std::endl;
+            ldbg << "LengthUnit is \"" << lengthUnit.ToString() << "\"" << std::endl
+                 << "EnergyUnit is \"" << energyUnit.ToString() << "\"" << std::endl
+                 << "ChargeUnit is \"" << chargeUnit.ToString() << "\"" << std::endl
+                 << "TemperatureUnit is \"" << temperatureUnit.ToString() << "\""
+                 << std::endl
+                 << "TimeUnit is \"" << timeUnit.ToString() << "\"" << std::endl;
 
             // check species
             int speciesIsSupported;
@@ -191,7 +189,6 @@ namespace exaStamp
           }
       }
           
-      //      if (nt > pace
       size_t n_cells = grid->number_of_cells();
       if( n_cells == 0 )
       {
@@ -202,8 +199,8 @@ namespace exaStamp
       ComputePairNullWeightIterator          cp_weight{};
       ComputePairOptionalLocks<false>        cp_locks {};
       GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
+      ComputePairTrivialCellFiltering        cpu_cell_filter = {};
       auto force_buf = make_compute_pair_buffer<ComputeBuffer>();
-      ComputePairTrivialCellFiltering cpu_cell_filter = {};
 
       if( domain->xform_is_identity() )
         {
@@ -225,7 +222,6 @@ namespace exaStamp
     struct alignas(DEFAULT_ALIGNMENT) ForceOp 
     {
       const double m_rcut;
-
       KIMThreadContext* m_thread_ctx = nullptr;
       
       inline void operator ()
@@ -236,8 +232,8 @@ namespace exaStamp
         double& fx,
         double& fy,
         double& fz,
-        unsigned int type, // On a besoin du type de l'atome courant
-        unsigned int id, // idem pour l'identifiant de l'atome courant
+        unsigned int type,
+        unsigned int id,
         CellParticles* unused
         ) const
       {
@@ -261,67 +257,39 @@ namespace exaStamp
       {
         
         size_t tid = omp_get_thread_num();
-        assert(tid < m_thread_ctx.size());
+        //        assert(tid < (*m_thread_ctx).size());
         KIMThreadContext & kim_ctx = m_thread_ctx[tid];
         auto kimptr = kim_ctx.kim_model;
-        //        KIM::Log::PushDefaultVerbosity(KIM::LOG_VERBOSITY::silent);
         
-        // FILL BELOW with the appropriate code to compute forces and energy on central particles.
         // number of particles in this local cluster: 1 (center) + n neighbors
         const int np = static_cast<int>(n) + 1;
-
+        
         // put central at origin; neighbors are already r_ij = (drx, dry, drz)
         std::vector<double> coords(3 * static_cast<size_t>(np), 0.0);
         for (int i = 0; i < static_cast<int>(n); ++i) {
-          coords[3 * (i + 1) + 0] = buf.drx[i];
-          coords[3 * (i + 1) + 1] = buf.dry[i];
-          coords[3 * (i + 1) + 2] = buf.drz[i];
+          coords[3 * ( i + 1 ) + 0] = buf.drx[i];
+          coords[3 * ( i + 1 ) + 1] = buf.dry[i];
+          coords[3 * ( i + 1 ) + 2] = buf.drz[i];
+          //          std::cout << "cx,cy,cz = " << coords[3 * i + 0] << ","<< coords[3 * i + 1] << ","<< coords[3 * i + 2] << std::endl;
         }
-
-        int particleSpecies[np];
-        int particleContributing[np];
         
-        //        for (int i = 0; i < np; ++i)
-        //          particleContributing[i] = 1;
-        particleContributing[0] = 1;
-
-        /* setup particleSpecies */
-        int isSpeciesSupported;
-        int error = kimptr->GetSpeciesSupportAndCode(KIM::SPECIES_NAME::Ta,
-                                                     &isSpeciesSupported,
-                                                     &(particleSpecies[0]));
-        if (error) MY_ERROR("get_species_code");
-        for (int i = 1; i < np; ++i)
-          particleSpecies[i] = particleSpecies[0];
-        
-        // species: reuse the code you already queried into particleSpecies_cluster_model[0]
-        std::vector<int> species_codes(np, particleSpecies[0]);
-
-        // contributing flags: only the central needs to contribute here
+        // contributing: only central particle is a contributing particle. Other particles just serve to compute energy and force on central particle.
         std::vector<int> contributing(np, 0);
         contributing[0] = 1;
-
-        // outputs
-        double localEnergy = 0.0;
-        std::vector<double> forces(3 * static_cast<size_t>(np), 0.0);
-
-        // // lightweight neighbor list object for the callback
-        // struct LocalNeighList {
-        //   double cutoff = 0.0;
-        //   int    numberOfParticles = 0;
-        //   std::vector<int> NNeighbors;    // size = np
-        //   std::vector<int> neighborList;  // size = np*np, row-major; row i starts at i*np
-        // } nl;
         
-        // nl.numberOfParticles = np;
-        // nl.NNeighbors.assign(np, 0);
-        // nl.neighborList.assign(np * np, 0);
+        // species: reuse the code you already queried into particleSpecies_cluster_model[0]
+        int isSpeciesSupported;
+        std::vector<int> species_codes(np, 0);        
+        int error = kimptr->GetSpeciesSupportAndCode(KIM::SPECIES_NAME::Ta,
+                                                     &isSpeciesSupported,
+                                                     &(species_codes[0]));
+        if (error) MY_ERROR("get_species_code");
 
-        // // provide neighbors for the central particle (index 0): 1..n
-        // nl.NNeighbors[0] = static_cast<int>(n);
-        // for (int j = 0; j < static_cast<int>(n); ++j) {
-        //   nl.neighborList[0 * np + j] = j + 1;  // central's j-th neighbor is particle (j+1)
-        // }
+        // Defining outputs
+        double localEnergy = 0.0;
+        std::vector<double> energies(static_cast<size_t>(np), 0.0);
+        std::vector<double> forces(3 * static_cast<size_t>(np), 0.0);
+        std::vector<double> virials(6 * static_cast<size_t>(np), 0.0);
 
         // lightweight neighbor-list payload: ONLY central has neighbors
         struct CentralOnlyNL {
@@ -342,14 +310,6 @@ namespace exaStamp
           if (err) { MY_ERROR("KIM::ComputeArgumentsCreate() failed."); }
         }
 
-        // // (optional) read model neighbor-list hints to set an appropriate cutoff
-        // int num_nlists = 0;
-        // double const* cutoffs = nullptr;
-        // int const* will_not_request_noncontrib = nullptr;
-        // kimptr->GetNeighborListPointers(&num_nlists, &cutoffs, &will_not_request_noncontrib);
-        // if (num_nlists != 1) { kimptr->ComputeArgumentsDestroy(&computeArguments); MY_ERROR("Unexpected number of neighbor lists."); }
-        // nl.cutoff = (cutoffs != nullptr) ? cutoffs[0] : m_rcut;
-
         // wire required argument pointers
         {
           int np_local = np;
@@ -365,7 +325,11 @@ namespace exaStamp
             computeArguments->SetArgumentPointer(
                                                  KIM::COMPUTE_ARGUMENT_NAME::partialEnergy, &localEnergy) ||
             computeArguments->SetArgumentPointer(
+                                                 KIM::COMPUTE_ARGUMENT_NAME::partialParticleEnergy, energies.data());
+            computeArguments->SetArgumentPointer(
                                                  KIM::COMPUTE_ARGUMENT_NAME::partialForces, forces.data());
+            computeArguments->SetArgumentPointer(
+                                                 KIM::COMPUTE_ARGUMENT_NAME::partialVirial, virials.data());          
           if (err) { kimptr->ComputeArgumentsDestroy(&computeArguments); MY_ERROR("Error in SetArgumentPointer."); }
         }
 
@@ -415,15 +379,32 @@ namespace exaStamp
           if (err) { kimptr->ComputeArgumentsDestroy(&computeArguments); MY_ERROR("KIM::Model::Compute() failed."); }
         }
 
+        //std::cout << "###################################" << std::endl;
+        //std::cout << "list of forces = " << std::endl;
+        //std::cout << "fx,fy,fz central atom = " << Vec3d{forces[0],forces[1],forces[2]} << std::endl;
+        // Vec3d sumforces {0.,0.,0.};
+        // for (int i = 1; i < static_cast<int>(n+1); ++i) {
+        //   sumforces += Vec3d{forces[3*i+0],forces[3*i+1],forces[3*i+2] };
+        //   //          //std::cout << "fx,fy,fz for atom " << i << " = " << Vec3d{forces[3*i+0],forces[3*i+1],forces[3*i+2] } << std::endl;
+        // }
+        //std::cout << "sumforces on neihgors = " << sumforces << std::endl;
+        //        ldbg << "###################################" << std::endl;
+
+        //        std::cout << "###################################" << std::endl;
+        //        std::cout << "list of energies = " << std::endl;
+        //        std::cout << "fx,fy,fz central atom = " << Vec3d{forces[0],forces[1],forces[2]} << std::endl;
+        //        std::cout << "energy central atom = " << energies[0] << std::endl;        
+        // for (int i = 1; i < static_cast<int>(n+1); ++i) {
+        //   std::cout << "energy for atom " << i << " = " << energies[i] << std::endl;
+        // }
+        //std::cout << "sumforces on neihgors = " << sumforces << std::endl;
+        //        ldbg << "###################################" << std::endl;                
         double conv_energy_factor = ONIKA_CONST_QUANTITY( 1. * eV ).convert();
-        
-        // accumulate central-particle results (index 0)
-        for (int i = 1; i < np; ++i)
-          {
-            fx += ( forces[3 * i + 0] * conv_energy_factor );
-            fy += ( forces[3 * i + 1] * conv_energy_factor );
-            fz += ( forces[3 * i + 2] * conv_energy_factor );
-          }
+        Vec3d localForce = Vec3d{forces[0],forces[1],forces[2]} * conv_energy_factor * 2.0;
+        fx += localForce.x;
+        fy += localForce.y;
+        fz += localForce.z;
+        //        en = localEnenergies[0] * conv_energy_factor;
         en = (localEnergy * conv_energy_factor);
 
         // cleanup

@@ -22,12 +22,19 @@ under the License.
 #include <onika/physics/constants.h>
 #include "KIM_SimulatorHeaders.hpp"
 #include "KIM_SupportedExtensions.hpp"
+#include "KIM_Log.hpp"
+#include "KIM_LogVerbosity.hpp"
+#define MY_ERROR(message)                                                \
+  {                                                                      \
+    std::cout << "* Error : \"" << message << "\" : " << __LINE__ << ":" \
+              << __FILE__ << std::endl;                                  \
+    exit(1);                                                             \
+  }
 
 #include <string>
 
 using namespace exanb;
 
-// NNP Parameters
 struct KIMParams
 {
   std::string model;
@@ -48,7 +55,6 @@ struct KIMContext
   double rcut = 0;
 };
 
-// Yaml conversion operators, allows to read NNP parameters from config file for n2p2
 namespace YAML
 {
   template<> struct convert<KIMParams>
@@ -58,11 +64,9 @@ namespace YAML
       if( !node.IsMap()   ) { return false; }
       if( ! node["model"] ) { return false; }
       if(   node["model"] ) { v.model = node["model"].as<std::string>(); }
-      if( ! node["rcut"]  ) { return false; }
-      if(   node["rcut"]  ) { v.rcut = node["rcut"].as<double>(); }
+      // if( ! node["rcut"]  ) { return false; }
+      // if(   node["rcut"]  ) { v.rcut = node["rcut"].as<Quantity>().convert(); }
       return true;
     }
   };
 }
-
-

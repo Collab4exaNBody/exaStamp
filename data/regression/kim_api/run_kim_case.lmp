@@ -1,6 +1,7 @@
 # 3d Lennard-Jones melt
 
 units        metal
+timestep     0.001
 
 read_data    Ta_disturbed.data
   
@@ -24,5 +25,5 @@ neighbor     1.0 bin
 neigh_modify delay 0 every 1 check yes
 
 fix          1 all nve
-
-run          10
+dump         d_1 all custom 1 lammps/dump.*.dump id type x y z fx fy fz
+run          1000

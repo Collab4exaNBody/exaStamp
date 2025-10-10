@@ -24,15 +24,7 @@ under the License.
 #include <exanb/core/domain.h>
 #include <onika/log.h>
 #include <onika/cpp_utils.h>
-#include "kim.h"
-#include "KIM_Log.hpp"
-#include "KIM_LogVerbosity.hpp"
-#define MY_ERROR(message)                                                \
-  {                                                                      \
-    std::cout << "* Error : \"" << message << "\" : " << __LINE__ << ":" \
-              << __FILE__ << std::endl;                                  \
-    exit(1);                                                             \
-  }
+#include "kim_new.h"
 
 namespace exaStamp
 {
@@ -43,10 +35,9 @@ namespace exaStamp
   class KIMInitOperator : public OperatorNode
   {
     // ========= I/O slots =======================
-    //    ADD_SLOT( KIMParams,   parameters    , INPUT , REQUIRED );
-    ADD_SLOT( std::string,   kim_model_name , INPUT_OUTPUT , REQUIRED );
-    //    ADD_SLOT( double,        rcut_max       , INPUT_OUTPUT );    
-    ADD_SLOT( KIMContext,    kim_ctx        , OUTPUT );
+    ADD_SLOT( KIMParams,   parameters    , INPUT_OUTPUT , REQUIRED );
+    ADD_SLOT( double,      rcut_max      , INPUT_OUTPUT );    
+    ADD_SLOT( KIMContext,  kim_ctx       , OUTPUT );
     
   public:
     // Operator execution
@@ -63,7 +54,7 @@ namespace exaStamp
                                      KIM::CHARGE_UNIT::e,
                                      KIM::TEMPERATURE_UNIT::K,
                                      KIM::TIME_UNIT::ps,
-                                     *kim_model_name,
+                                     parameters->model,
                                      &requestedUnitsAccepted,
                                      &kim_local_model);
       if (error) { MY_ERROR("KIM::Model::Create()"); }
@@ -148,10 +139,11 @@ namespace exaStamp
         kim_ctx->rcut = std::max(kim_ctx->rcut, cutoffs[i]);
         
       }
-      //      *rcut_max = std::max(*rcut_max, kim_ctx->rcut);
       
       std::cout << "Model cutoff radius = " << kim_ctx->rcut << std::endl;
       kim_local_model->GetInfluenceDistance( &influencedistance);
+      parameters->rcut = influencedistance;
+      
       std::cout << "Model influence distance = " << influencedistance << std::endl;
       // Replace rcut_max by influence distance
       KIM::Log::PopDefaultVerbosity();
@@ -162,9 +154,9 @@ namespace exaStamp
   };
 
   // === register factories ===  
-  ONIKA_AUTORUN_INIT(kim_init)
+  ONIKA_AUTORUN_INIT(kim_new_init)
   {  
-    OperatorNodeFactory::instance()->register_factory( "kim_init" , make_simple_operator< KIMInitOperator > );
+    OperatorNodeFactory::instance()->register_factory( "kim_new_init" , make_simple_operator< KIMInitOperator > );
   }
 
 }
