@@ -1,0 +1,69 @@
+configuration:
+  physics:
+    units:
+      length: angstrom
+      mass: Dalton
+      time: picosecond
+      charge: elementary_charge
+      temperature: kelvin
+      amount: particle
+      luminosity: candela
+      angle: radian
+      energy: joule
+  logging:
+    debug: false
+  profiling:
+    summary: false
+
+grid_flavor: grid_flavor_full
+  
+global:
+  simulation_end_iteration: 1000
+  simulation_log_frequency: 10
+  simulation_dump_thermo_frequency: 5
+  simulation_dump_frequency: -1
+  rcut_inc: 1.0 ang
+  dt: 0.001 ps
+  force_flush_file: true
+  file: "thermo_exastamp_sym.csv"
+  symmetric_forces: true
+
+species:
+  - O: { mass: 15.999 Da , z: 8 , charge: -1.1104 e- }
+  - U: { mass: 238.029 Da , z: 92 , charge: 2.2208 e- }
+    
+compute_force_singlepass:
+  - eam_alloy_force: { rcut: 11.0 ang , parameters: { file: UO_test.eam.alloy } , eam_rho: true , eam_rho2emb: true , eam_ghost: true , eam_force: true , eam_symmetry: false }
+  
+compute_force:
+  - ewald_short_range_pc:
+      ewald_config:
+        epsilon: 1.0e-5
+        alpha: 0.0
+        radius: 11. ang
+        kmax: 8
+        size: [100. ang, 100. ang, 100. ang]
+  - ewald_long_range
+  - compute_force_singlepass
+
+input_data:
+  - read_xyz_file_with_xform:
+      file: "EDGE_dislo_2200_K.124000.xyz"
+      pbc_adjust_xform: true
+  - ewald_init
+  - sum_charges
+#  - ewald_potential_energy_shift
+
+ewald_init:
+  epsilon: 1.0E-05
+  alpha: 0.0
+  radius: 11.0 ang
+  kmax: 8
+  
+dump_data:
+  - timestep_file: "exastamp/output_%09d.xyz"
+  - write_xyz:
+      fields: [ id , type, force]
+
++first_iteration:
+  - dump_data
