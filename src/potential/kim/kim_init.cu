@@ -24,7 +24,9 @@ under the License.
 #include <exanb/core/domain.h>
 #include <onika/log.h>
 #include <onika/cpp_utils.h>
-#include "kim_new.h"
+#include <exaStamp/particle_species/particle_specie_yaml.h>
+
+#include "kim.h"
 
 namespace exaStamp
 {
@@ -38,6 +40,8 @@ namespace exaStamp
     ADD_SLOT( KIMParams,   parameters    , INPUT_OUTPUT , REQUIRED );
     ADD_SLOT( double,      rcut_max      , INPUT_OUTPUT );    
     ADD_SLOT( KIMContext,  kim_ctx       , OUTPUT );
+    ADD_SLOT( ParticleSpecies , species , INPUT_OUTPUT , REQUIRED );
+    ADD_SLOT( std::vector<int>, kim_particle_codes, OUTPUT);
     
   public:
     // Operator execution
@@ -114,13 +118,27 @@ namespace exaStamp
 
       // check species
       int speciesIsSupported;
-      int modelTaCode;
-      error = kim_local_model->GetSpeciesSupportAndCode(KIM::SPECIES_NAME::Ta, &speciesIsSupported, &modelTaCode);
-      if ((error) || (!speciesIsSupported))
+      int modelCode;
+
+      // Looping over all declared species and checking whether the KIM model supports them all.
+      //      std::vector<int> kim_particle_codes;
+      for(ParticleSpecie& atom : *species)
         {
-          MY_ERROR("Species Ta not supported");
+          error = kim_local_model->GetSpeciesSupportAndCode(SpeciesName(atom.name()), &speciesIsSupported, &modelCode);
+          if (speciesIsSupported) {
+            (*kim_particle_codes).push_back(modelCode);
+          }
+          
+          if ((error) || (!speciesIsSupported))
+            {
+              MY_ERROR("Specy " + atom.name() + " is not supported by the required KIM model.\n");
+            }
         }
 
+      for (int i=0; i<(*kim_particle_codes).size();i++) {
+        std::cout << "\t Specy code = " << (*kim_particle_codes)[i] << std::endl;;
+      }
+      
       KIM::ComputeArguments * computeArguments;
       error = kim_local_model->ComputeArgumentsCreate(&computeArguments);
       if (error) { MY_ERROR("Unable to create a ComputeArguments object."); }
@@ -135,7 +153,7 @@ namespace exaStamp
                                                &modelWillNotRequestNeighborsOfNoncontributingParticles);
       
       for (int i=0; i<numberOfNeighborLists;i++) {
-        std::cout << "cutoff i = " << cutoffs[i] << std::endl;
+        std::cout << "Cutoff for neighbor list " << i <<" = " << cutoffs[i] << std::endl;
         kim_ctx->rcut = std::max(kim_ctx->rcut, cutoffs[i]);
         
       }
@@ -154,9 +172,9 @@ namespace exaStamp
   };
 
   // === register factories ===  
-  ONIKA_AUTORUN_INIT(kim_new_init)
+  ONIKA_AUTORUN_INIT(kim_init)
   {  
-    OperatorNodeFactory::instance()->register_factory( "kim_new_init" , make_simple_operator< KIMInitOperator > );
+    OperatorNodeFactory::instance()->register_factory( "kim_init" , make_simple_operator< KIMInitOperator > );
   }
 
 }

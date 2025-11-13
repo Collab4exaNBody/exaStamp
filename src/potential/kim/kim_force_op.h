@@ -24,10 +24,28 @@ under the License.
 
 using namespace exanb;
 
-struct alignas(onika::memory::DEFAULT_ALIGNMENT) KimNewForceOp
+struct alignas(onika::memory::DEFAULT_ALIGNMENT) KimComputeBuffer
+{
+  alignas(onika::memory::DEFAULT_ALIGNMENT) int type[exanb::MAX_PARTICLE_NEIGHBORS];
+};
+
+// functor that populate compute buffer's extended storage for particle charges
+struct CopyParticleType
+{
+  template<class ComputeBufferT, class FieldArraysT>
+  /* ONIKA_HOST_DEVICE_FUNC */ inline void operator () (ComputeBufferT& tab, const Vec3d& dr, double d2, FieldArraysT cells, size_t cell_b, size_t p_b, double weight) const noexcept
+  {
+    assert( ssize_t(tab.count) < ssize_t(tab.MaxNeighbors) );
+    tab.ext.type[tab.count] = cells[cell_b][field::type][p_b];
+    exanb::DefaultComputePairBufferAppendFunc{} ( tab, dr, d2, cells, cell_b, p_b, weight );
+  }
+};
+
+struct alignas(onika::memory::DEFAULT_ALIGNMENT) KimForceOp
 {
 
   KIMThreadContext* m_thread_ctx = nullptr;
+  std::vector<int> kim_particle_codes;
   
   template<class ComputeBufferT, class CellParticlesT>
   inline void operator ()
@@ -118,10 +136,13 @@ struct alignas(onika::memory::DEFAULT_ALIGNMENT) KimNewForceOp
         
     // put central at origin; neighbors are already r_ij = (drx, dry, drz)
     std::vector<double> coords(3 * static_cast<size_t>(np), 0.0);
+    std::vector<int> species_codes(np, 0);
+    species_codes[0] = type;
     for (int i = 0; i < static_cast<int>(n); ++i) {
       coords[3 * ( i + 1 ) + 0] = buf.drx[i];
       coords[3 * ( i + 1 ) + 1] = buf.dry[i];
       coords[3 * ( i + 1 ) + 2] = buf.drz[i];
+      species_codes[i+1] = kim_particle_codes[buf.ext.type[i]];
       //          std::cout << "cx,cy,cz = " << coords[3 * i + 0] << ","<< coords[3 * i + 1] << ","<< coords[3 * i + 2] << std::endl;
     }
         
@@ -130,12 +151,13 @@ struct alignas(onika::memory::DEFAULT_ALIGNMENT) KimNewForceOp
     contributing[0] = 1;
         
     // species: reuse the code you already queried into particleSpecies_cluster_model[0]
-    int isSpeciesSupported;
-    std::vector<int> species_codes(np, 0);        
-    int error = kimptr->GetSpeciesSupportAndCode(KIM::SPECIES_NAME::Ta,
-                                                 &isSpeciesSupported,
-                                                 &(species_codes[0]));
-    if (error) MY_ERROR("get_species_code");
+
+    // This block is not to be done again : should crash at kim_init
+    // int isSpeciesSupported;
+    // int error = kimptr->GetSpeciesSupportAndCode(KIM::SPECIES_NAME::Ta,
+    //                                              &isSpeciesSupported,
+    //                                              &(species_codes[0]));
+    // if (error) MY_ERROR("get_species_code");
 
     // Defining outputs
     double localEnergy = 0.0;

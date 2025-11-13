@@ -30,8 +30,8 @@ under the License.
 #include <exaStamp/particle_species/particle_specie.h>
 #include <onika/file_utils.h>
 
-#include "kim_new.h"
-#include "kim_new_force_op.h"
+#include "kim.h"
+#include "kim_force_op.h"
 
 #include <onika/physics/units.h>
 #include <onika/physics/constants.h>
@@ -49,7 +49,7 @@ namespace exaStamp
     class GridT,
     class = AssertGridHasFields< GridT, field::_ep ,field::_fx ,field::_fy ,field::_fz ,field::_type >
     >
-  class KIMNewComputeForce : public OperatorNode
+  class KIMComputeForce : public OperatorNode
   {
 
     using CellParticles = typename GridT::CellParticles;
@@ -64,11 +64,13 @@ namespace exaStamp
     ADD_SLOT( Domain                , domain            , INPUT        , REQUIRED );
     ADD_SLOT( KIMContext            , kim_ctx           , INPUT );    
     ADD_SLOT( GridParticleLocks     , particle_locks    , INPUT , OPTIONAL , DocString{"particle spin locks"} );
+    ADD_SLOT( std::vector<int>      , kim_particle_codes, INPUT);
+    
     // shortcut to the Compute buffer used (and passed to functor) by compute_cell_particle_pairs
     //    using ComputeBuffer = ComputePairBuffer2<false,false>;
     static constexpr bool UseWeights = false;
     static constexpr bool UseNeighbors = true;
-    using ComputeBuffer = ComputePairBuffer2<UseWeights,UseNeighbors>;
+    using ComputeBuffer = ComputePairBuffer2<UseWeights,UseNeighbors,KimComputeBuffer,CopyParticleType>;
     // compile time constant indicating if grid has virial field
     static constexpr bool has_virial_field = GridHasField<GridT,field::_virial>::value;
 
@@ -109,64 +111,66 @@ namespace exaStamp
             // Check for compatibility with the model
             if (!requestedUnitsAccepted) { MY_ERROR("Must Adapt to model units"); }
 
-
-            // Check that we know about all required routines
-            int numberOfModelRoutineNames;
-            KIM::MODEL_ROUTINE_NAME::GetNumberOfModelRoutineNames(&numberOfModelRoutineNames);
+            // This is done in kim_init so if it does get through there no need to do it here.
+            // If an error occur, it should crash at kim_init
+            
+            // // Check that we know about all required routines
+            // int numberOfModelRoutineNames;
+            // KIM::MODEL_ROUTINE_NAME::GetNumberOfModelRoutineNames(&numberOfModelRoutineNames);
       
-            for (int i = 0; i < numberOfModelRoutineNames; ++i)
-              {
-                KIM::ModelRoutineName modelRoutineName;
-                int error = KIM::MODEL_ROUTINE_NAME::GetModelRoutineName(i, &modelRoutineName);
-                if (error) { MY_ERROR("Unable to get ModelRoutineName."); }
-                int present;
-                int required;
-                error = kim_ctx->m_thread_ctx[j].kim_model->IsRoutinePresent(modelRoutineName, &present, &required);
-                if (error) { MY_ERROR("Unable to get routine present/required."); }
+            // for (int i = 0; i < numberOfModelRoutineNames; ++i)
+            //   {
+            //     KIM::ModelRoutineName modelRoutineName;
+            //     int error = KIM::MODEL_ROUTINE_NAME::GetModelRoutineName(i, &modelRoutineName);
+            //     if (error) { MY_ERROR("Unable to get ModelRoutineName."); }
+            //     int present;
+            //     int required;
+            //     error = kim_ctx->m_thread_ctx[j].kim_model->IsRoutinePresent(modelRoutineName, &present, &required);
+            //     if (error) { MY_ERROR("Unable to get routine present/required."); }
 
-                ldbg << "Model routine name \"" << modelRoutineName.ToString()
-                     << "\" has present = " << present
-                     << " and required = " << required << "." << std::endl;
+            //     ldbg << "Model routine name \"" << modelRoutineName.ToString()
+            //          << "\" has present = " << present
+            //          << " and required = " << required << "." << std::endl;
 
-                if ((present == true) && (required == true))
-                  {
-                    using namespace KIM::MODEL_ROUTINE_NAME;
-                    if (!((modelRoutineName == Create)
-                          || (modelRoutineName == ComputeArgumentsCreate)
-                          || (modelRoutineName == Compute) || (modelRoutineName == Refresh)
-                          || (modelRoutineName == ComputeArgumentsDestroy)
-                          || (modelRoutineName == Destroy)))
-                      {
-                        MY_ERROR("Unknown Routine \"" + modelRoutineName.ToString()
-                                 + "\" is required by model.");
-                      }
-                  }
-              }
+            //     if ((present == true) && (required == true))
+            //       {
+            //         using namespace KIM::MODEL_ROUTINE_NAME;
+            //         if (!((modelRoutineName == Create)
+            //               || (modelRoutineName == ComputeArgumentsCreate)
+            //               || (modelRoutineName == Compute) || (modelRoutineName == Refresh)
+            //               || (modelRoutineName == ComputeArgumentsDestroy)
+            //               || (modelRoutineName == Destroy)))
+            //           {
+            //             MY_ERROR("Unknown Routine \"" + modelRoutineName.ToString()
+            //                      + "\" is required by model.");
+            //           }
+            //       }
+            //   }
+            
+            // // print model units
+            // KIM::LengthUnit lengthUnit;
+            // KIM::EnergyUnit energyUnit;
+            // KIM::ChargeUnit chargeUnit;
+            // KIM::TemperatureUnit temperatureUnit;
+            // KIM::TimeUnit timeUnit;
 
-            // print model units
-            KIM::LengthUnit lengthUnit;
-            KIM::EnergyUnit energyUnit;
-            KIM::ChargeUnit chargeUnit;
-            KIM::TemperatureUnit temperatureUnit;
-            KIM::TimeUnit timeUnit;
+            // kim_ctx->m_thread_ctx[j].kim_model->GetUnits(&lengthUnit, &energyUnit, &chargeUnit, &temperatureUnit, &timeUnit);
 
-            kim_ctx->m_thread_ctx[j].kim_model->GetUnits(&lengthUnit, &energyUnit, &chargeUnit, &temperatureUnit, &timeUnit);
+            // ldbg << "LengthUnit is \"" << lengthUnit.ToString() << "\"" << std::endl
+            //      << "EnergyUnit is \"" << energyUnit.ToString() << "\"" << std::endl
+            //      << "ChargeUnit is \"" << chargeUnit.ToString() << "\"" << std::endl
+            //      << "TemperatureUnit is \"" << temperatureUnit.ToString() << "\""
+            //      << std::endl
+            //      << "TimeUnit is \"" << timeUnit.ToString() << "\"" << std::endl;
 
-            ldbg << "LengthUnit is \"" << lengthUnit.ToString() << "\"" << std::endl
-                 << "EnergyUnit is \"" << energyUnit.ToString() << "\"" << std::endl
-                 << "ChargeUnit is \"" << chargeUnit.ToString() << "\"" << std::endl
-                 << "TemperatureUnit is \"" << temperatureUnit.ToString() << "\""
-                 << std::endl
-                 << "TimeUnit is \"" << timeUnit.ToString() << "\"" << std::endl;
-
-            // check species
-            int speciesIsSupported;
-            int modelTaCode;
-            error = kim_ctx->m_thread_ctx[j].kim_model->GetSpeciesSupportAndCode(KIM::SPECIES_NAME::Ta, &speciesIsSupported, &modelTaCode);
-            if ((error) || (!speciesIsSupported))
-              {
-                MY_ERROR("Species Ta not supported");
-              }
+            // // check species
+            // int speciesIsSupported;
+            // int modelCode;
+            // error = kim_ctx->m_thread_ctx[j].kim_model->GetSpeciesSupportAndCode(KIM::SPECIES_NAME::Ta, &speciesIsSupported, &modelCode);
+            // if ((error) || (!speciesIsSupported))
+            //   {
+            //     MY_ERROR("Species Ta not supported");
+            //   }
 
             KIM::ComputeArguments * computeArguments;
             error = kim_ctx->m_thread_ctx[j].kim_model->ComputeArgumentsCreate(&computeArguments);
@@ -195,7 +199,7 @@ namespace exaStamp
       auto compute_opt_locks = [&](auto cp_locks)
       {
         auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform, cp_locks );
-        KimNewForceOp force_op { kim_ctx->m_thread_ctx.data() };
+        KimForceOp force_op { kim_ctx->m_thread_ctx.data(), *kim_particle_codes };
         compute_cell_particle_pairs( *grid, parameters->rcut, *ghost, optional, force_buf, force_op , compute_force_field_set , parallel_execution_context() );
       };
       if( omp_get_max_threads() > 1 ) {
@@ -208,12 +212,12 @@ namespace exaStamp
 
   };
 
-  template<class GridT> using KIMNewComputeForceTmpl = KIMNewComputeForce<GridT>;
+  template<class GridT> using KIMComputeForceTmpl = KIMComputeForce<GridT>;
 
   // === register factories ===  
-  ONIKA_AUTORUN_INIT(kim_new_force)
+  ONIKA_AUTORUN_INIT(kim_force)
   {
-    OperatorNodeFactory::instance()->register_factory( "kim_new_force" ,make_grid_variant_operator< KIMNewComputeForceTmpl > );
+    OperatorNodeFactory::instance()->register_factory( "kim_force" ,make_grid_variant_operator< KIMComputeForceTmpl > );
   }
 
 }

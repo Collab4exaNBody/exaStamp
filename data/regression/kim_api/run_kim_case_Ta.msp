@@ -18,11 +18,11 @@ species:
 
 init_parameters:
   - species
-  - kim_new_init:
+  - kim_init:
       parameters: { model: "EAM_Dynamo_RaveloGermannGuerrero_2013Ta1_Ta__MO_816821594689_001" }
   
 compute_force:
-  - kim_new_force
+  - kim_force
   
 input_data:
   - domain:

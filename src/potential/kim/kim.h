@@ -21,6 +21,7 @@ under the License.
 #include <onika/physics/units.h>
 #include <onika/physics/constants.h>
 #include "KIM_SimulatorHeaders.hpp"
+#include "KIM_SpeciesName.hpp"
 #include "KIM_SupportedExtensions.hpp"
 #include "KIM_Log.hpp"
 #include "KIM_LogVerbosity.hpp"

@@ -37,11 +37,11 @@ species:
 
 init_parameters:
   - species
-  - kim_new_init:
+  - kim_init:
       parameters: { model: "EAM_Dynamo_CaiYe_1996_AlCu__MO_942551040047_006" }
   
 compute_force:
-  - kim_new_force
+  - kim_force
   
 input_data:
   - domain:
