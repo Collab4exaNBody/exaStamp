@@ -37,6 +37,5 @@ add_subdirectory(snaplegacy)
 add_subdirectory(snaplmp)
 add_subdirectory(range_potential)
 add_subdirectory(n2p2)
-add_subdirectory(kim)
 add_subdirectory(kimnew)
 

@@ -24,36 +24,24 @@ global:
   simulation_end_iteration: 1000
   simulation_log_frequency: 10
   simulation_dump_thermo_frequency: 5
-  simulation_dump_frequency: -1
+  simulation_dump_frequency: 10
   rcut_inc: 1.0 ang
   dt: 0.001 ps
   force_flush_file: true
-  file: "thermo_exastamp_sym.csv"
+  file: "dir.thermos/thermo_exastamp_CuAl.csv"
   symmetric_forces: true
   
 species:
-  - Ta: { z: 73, mass: 180.948 Da, charge: 0.0 e- }
+  - Al: { mass: 26.982 Da , z: 13 , charge: 0.0 e- }
+  - Cu: { mass: 63.546 Da , z: 29 , charge: 0.0 e- }
 
 init_parameters:
+  - species
   - kim_new_init:
-      parameters: { model: "EAM_Dynamo_RaveloGermannGuerrero_2013Ta1_Ta__MO_816821594689_001" }
+      parameters: { model: "EAM_Dynamo_CaiYe_1996_AlCu__MO_942551040047_006" }
   
 compute_force:
   - kim_new_force
-
-# compute_force_prolog:
-#   - zero_forces_ghost:
-#       condition: symmetric_forces
-#       body: [ zero_force_energy: { ghost: true } ]
-#   - zero_forces_no_ghost:
-#       condition: not symmetric_forces
-#       body: [ zero_force_energy ]
-  
-# compute_force_epilog:
-#   - forces_from_ghost:
-#       condition: symmetric_forces
-#       body: [ update_force_energy_from_ghost ]
-#   - force_to_accel
   
 input_data:
   - domain:
@@ -61,10 +49,10 @@ input_data:
       periodic: [true,true,true]
       expandable: false
   - read_xyz_file_with_xform:
-      file: "Ta_disturbed.xyz"
-
+      file: "dir.datas/CuAl_disturbed.xyz"
+  
 dump_data:
-  - timestep_file: "exastamp/output_%09d.xyz"
+  - timestep_file: "dir.dumps/dump_exastamp_CuAl_%09d.xyz"
   - write_xyz:
       fields: [ id , type, force]
 

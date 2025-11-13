@@ -3,8 +3,9 @@
 units        metal
 timestep     0.001
 
-read_data    Ta_disturbed.data
-  
+read_data    dir.datas/Ta_disturbed.data
+replicate    2 2 2
+    
 pair_style  kim EAM_Dynamo_RaveloGermannGuerrero_2013Ta1_Ta__MO_816821594689_001
 pair_coeff  * * Ta
 
@@ -19,11 +20,11 @@ variable  nats equal atoms
 variable  s equal step
 variable  t equal time
         
-fix 2 all print 1 "${s} ${t} ${nats} ${etotalat} ${keat} ${peat} ${T}" file thermo_lammps.csv screen no
+fix 2 all print 1 "${s} ${t} ${nats} ${etotalat} ${keat} ${peat} ${T}" file dir.thermos/thermo_lammps_Ta.csv screen no
 
 neighbor     1.0 bin
 neigh_modify delay 0 every 1 check yes
 
 fix          1 all nve
-dump         d_1 all custom 1 lammps/dump.*.dump id type x y z fx fy fz
+dump         d_1 all custom 10 dir.dumps/dump_lammps_Ta_*.dump id type x y z fx fy fz
 run          1000
