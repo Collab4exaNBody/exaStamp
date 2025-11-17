@@ -80,6 +80,7 @@ init_cuda:
 hw_device_init:
   - mpi_comm_world
   - init_cuda
+#  - update_ghost_config # uncomment when future-mpi-feature-compatibility is merged into exaNBody
 
 hw_device_finalize:
   - finalize_cuda
