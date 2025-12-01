@@ -47,7 +47,6 @@ under the License.
 #include <exaStamp/potential/ljexp6rf/ljexp6rf.h>
 
 #include <exanb/core/check_particles_inside_cell.h>
-#include <onika/parallel/random.h>
 #include <onika/math/math_utils.h>
 #include <onika/math/basic_types_operators.h>
 #include <onika/string_utils.h>
