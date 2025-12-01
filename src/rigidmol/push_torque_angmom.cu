@@ -31,7 +31,6 @@ under the License.
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <onika/log.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <onika/parallel/random.h>
 #include <onika/physics/units.h>
 #include <onika/physics/constants.h>
 #include <onika/physics/units.h>

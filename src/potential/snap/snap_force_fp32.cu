@@ -15,24 +15,21 @@ specific language governing permissions and limitations
 under the License.
 */
 
-#pragma once
+#include <md/snap/snap_force.h>
+#include <exanb/core/make_grid_variant_operator.h>
+#include <exanb/core/grid_fields.h>
+#include <onika/cpp_utils.h>
 
-#include "eam_buffer.h"
-#include <yaml-cpp/yaml.h>
-
-namespace YAML
+namespace exaStamp
 {
-  using exaStamp::EamMultimatParameters;
-  template<class EamParametersT> struct convert< EamMultimatParameters<EamParametersT> >
+  template<class GridT> using SnapForceXSFP32Tmpl = md::SnapForceGenericFP32<GridT,field::_ep,field::_virial>;
+
+  // === register factories ===  
+  ONIKA_AUTORUN_INIT(snap_force_fp32)
   {
-    static bool decode(const Node& node, EamMultimatParameters<EamParametersT> & v)
-    {
-      if( ! node.IsMap() ) return false;
-      v.m_type_a = node["type_a"].as< std::string >();
-      v.m_type_b = node["type_b"].as< std::string >();
-      v.m_parameters = node["parameters"].as< EamParametersT >();
-      return true;
-    }
-  };
+    OperatorNodeFactory::instance()->register_factory( "snap_force_fp32" ,make_grid_variant_operator< SnapForceXSFP32Tmpl > );
+  }
+
 }
+
 

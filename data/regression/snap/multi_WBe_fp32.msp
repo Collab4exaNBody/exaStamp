@@ -1,0 +1,87 @@
+includes:
+  - config_update_symmetric_forces.msp
+
+configuration:
+  onika:
+    gpu_block_size: 128
+    gpu_block_dims: [ 128 , 1 , 1 ]
+  profiling:
+    summary: true
+  logging:
+    debug: false
+  debug:
+    filter: [ ".*snap_force" , ".*snaplmp_force" ]
+
+zbl_multi_force:
+  rcut: 4.8 ang
+  parameters:
+    - { type_a: Be , type_b: W  , rcut: 4.8 ang , parameters: { r1: 4.0 ang , rc: 4.8 ang } }
+    - { type_a: W  , type_b: W  , rcut: 4.8 ang , parameters: { r1: 4.0 ang , rc: 4.8 ang } }
+    - { type_a: Be , type_b: Be , rcut: 4.8 ang , parameters: { r1: 4.0 ang , rc: 4.8 ang } }
+  
+snaplmp_force: &snapconfig
+#  bispectrumchkfile: "snap_multi_WBe.bs"
+  parameters:
+    nt: 2
+    param: "WBe_Wood_PRB2019.snapparam"
+    coef: "WBe_Wood_PRB2019.snapcoeff"
+
+snap_force: *snapconfig
+
+snap_force_fp32: *snapconfig
+
+species:
+  - W:
+      mass:  183.84 Da
+      z: 74
+  - Be:
+      mass:  9.012182 Da
+      z: 4
+
+grid_flavor: grid_flavor_multimat
+
+chunk_neighbors:
+  config:
+    build_particle_offset: false
+    chunk_size: 4
+
+replicate_domain:
+  repeat: [ 4 , 4 , 4 ]
+
+input_data:
+  - read_xyz_file_with_xform:
+      file: noisy_W_Be.xyz
+      pbc_adjust_xform: true
+  - replicate_domain
+
+compute_force:
+  - zbl_multi_force
+#  - snap_force
+  - snap_force_fp32
+#  - snaplmp_force
+#  - langevin_thermostat: { T: 300 K , gamma: 0.1 ps^-1 }
+
++first_iteration:
+  - grid_stats
+  - chunk_neighbors_stats
+  - memory_stats
+
+domain:
+  cell_size: 15.0 ang
+  periodic: [true,true,true]
+
+global:
+  simulation_end_iteration: 10
+  simulation_log_frequency: 10
+  rcut_inc: 2.0 ang
+  dt: 1.0e-3 ps
+  simulation_dump_frequency: -1
+  simulation_dump_thermo_frequency: -1
+
+final_dump: nop
+
+xxx_simulation_epilog:
+  - check_values:
+      file: snap_multi_WBe_3it.dat
+      threshold: 1.e-9
+
