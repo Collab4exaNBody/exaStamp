@@ -1,0 +1,32 @@
+compute_force:
+ - vniitf_force: { rcut: 5.599 ang, parameters: { rmax: 5.599 ang, rmin: 1.0 ang, rt0: 3.437 ang, Ecoh: 1.8450094310887324 eV, E0: 0.3214401234364775 eV, beta: 6.000, A: 1.401, Z: 7.618, n: 0.724, alpha: 3.072, D: 0.1450, eta: 2.720, mu: -1.870 } }
+   
+species:
+  - Sn: { mass: 118.69 Da, z: 50, charge: 0 e- }
+
+grid_flavor: grid_flavor_multimat
+
+domain:
+  grid_dims: [12,12,12]
+  periodic: [true,true,true]
+  expandable: false
+
+input_data:
+  - read_stamp_v3:
+      filename: 'tin.mpio'
+      bounds_mode: FILE
+      
+dump_data: nop
+  # - timestep_file: "test_%05d.xyz"
+  # - write_xyz:
+  #     fields: ["ep"]
+
+global:
+  simulation_end_iteration: 1000
+  simulation_log_frequency: 50
+  simulation_dump_frequency: 50
+  simulation_dump_thermo_frequency: 10
+  analysis_dump_frequency: -1
+  rcut_inc: 1.0 ang
+  dt: 1.0e-3 ps
+  file: "basic_thermo.csv"
