@@ -104,10 +104,10 @@ namespace exaStamp
 
       auto cells = grid->cells();
       IJK dims = grid->dimension();
-      size_t gl = grid->ghost_layers();
-      IJK gstart { gl, gl, gl };
-      IJK gend = dims - IJK{ gl, gl, gl };
-      IJK gdims = gend - gstart;
+      const ssize_t gl = grid->ghost_layers();
+      const IJK gstart { gl, gl, gl };
+      // IJK gend = dims - IJK{ gl, gl, gl };
+      // IJK gdims = gend - gstart;
       const auto dom_dims = domain->grid_dimension();
       const auto dom_start = grid->offset();
       
