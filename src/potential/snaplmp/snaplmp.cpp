@@ -66,7 +66,7 @@ namespace exaStamp
   {
     // ========= I/O slots =======================
     ADD_SLOT( MPI_Comm              , mpi               , INPUT , REQUIRED);
-    ADD_SLOT( SnapParms             , parameters        , INPUT , REQUIRED );
+    ADD_SLOT( md::SnapParms             , parameters        , INPUT , REQUIRED );
     ADD_SLOT( double                , rcut_max          , INPUT_OUTPUT , 0.0 );
     ADD_SLOT( exanb::GridChunkNeighbors , chunk_neighbors   , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
     ADD_SLOT( bool                  , ghost             , INPUT , false );
@@ -286,7 +286,7 @@ namespace exaStamp
           std::ostringstream oss; oss << *bispectrumchkfile << "." << *timestep;
           std::string file_name = onika::data_file_path( oss.str() );
           ldbg << "bispectrumchkfile is set, check bispectrum from file "<< file_name << std::endl;
-          snap_check_bispectrum(*mpi, *grid, file_name, ncoeff, snap_ctx->m_bispectrum.data() );
+          md::snap_check_bispectrum(*mpi, *grid, file_name, ncoeff, snap_ctx->m_bispectrum.data() );
         }
       }
 
