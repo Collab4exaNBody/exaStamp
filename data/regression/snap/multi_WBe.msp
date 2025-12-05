@@ -2,9 +2,6 @@ includes:
   - config_update_symmetric_forces.msp
 
 configuration:
-  onika:
-    gpu_block_size: 128
-    gpu_block_dims: [ 128 , 1 , 1 ]
   profiling:
     summary: true
   logging:
@@ -40,11 +37,6 @@ species:
 
 grid_flavor: grid_flavor_multimat
 
-chunk_neighbors:
-  config:
-    build_particle_offset: false
-    chunk_size: 4
-
 replicate_domain:
   repeat: [ 4 , 4 , 4 ]
 
@@ -57,7 +49,6 @@ input_data:
 compute_force:
   - zbl_multi_force
   - snap_force
-#  - snap_force_fp32
 #  - snaplmp_force
 #  - langevin_thermostat: { T: 300 K , gamma: 0.1 ps^-1 }
 
