@@ -62,12 +62,12 @@ domain:
   periodic: [true,true,true]
 
 global:
-  simulation_end_iteration: 10
+  simulation_end_iteration: 500
   simulation_log_frequency: 10
   rcut_inc: 2.0 ang
   dt: 1.0e-3 ps
   simulation_dump_frequency: -1
-  simulation_dump_thermo_frequency: -1
+  simulation_dump_thermo_frequency: 1
 
 final_dump: nop
 
