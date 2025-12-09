@@ -7,7 +7,7 @@ configuration:
   logging:
     debug: false
   debug:
-    filter: [ ".*snap_force" , ".*snaplmp_force" ]
+    filter: [ ".*snap_force" ]
 
 zbl_multi_force:
   rcut: 4.8 ang
@@ -17,15 +17,13 @@ zbl_multi_force:
     - { type_a: Be , type_b: Be , rcut: 4.8 ang , parameters: { r1: 4.0 ang , rc: 4.8 ang } }
   
 snaplmp_force: &snapconfig
-#  bispectrumchkfile: "snap_multi_WBe.bs"
+  bispectrumchkfile: "snap_multi_WBe.bs"
   parameters:
     nt: 2
     param: "WBe_Wood_PRB2019.snapparam"
     coef: "WBe_Wood_PRB2019.snapcoeff"
 
 snap_force: *snapconfig
-
-snap_force_fp32: *snapconfig
 
 species:
   - W:
@@ -62,7 +60,11 @@ domain:
   periodic: [true,true,true]
 
 global:
+<<<<<<< HEAD
   simulation_end_iteration: 500
+=======
+  simulation_end_iteration: 4
+>>>>>>> bd37fd3c9a39398dcd40c0bc2dcc6aa07a411d01
   simulation_log_frequency: 10
   rcut_inc: 2.0 ang
   dt: 1.0e-3 ps
