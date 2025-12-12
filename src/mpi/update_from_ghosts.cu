@@ -15,35 +15,11 @@ specific language governing permissions and limitations
 under the License.
 */
 
-//  // DO NOT REMOVE THIS LINE !!
-
-#include <exanb/core/grid_fields.h>
-#include <exanb/core/grid_fields.h>
-
 #include <onika/scg/operator.h>
-#include <onika/scg/operator_slot.h>
 #include <onika/scg/operator_factory.h>
-#include <onika/log.h>
-#include <onika/math/basic_types_stream.h>
 #include <exanb/core/grid.h>
-#include <exanb/core/domain.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/core/particle_id_codec.h>
-#include <exanb/core/check_particles_inside_cell.h>
-
-#include <onika/mpi/data_types.h>
-#include <exanb/mpi/ghosts_comm_scheme.h>
-
-#include <mpi.h>
-#include <vector>
-#include <string>
-#include <list>
-#include <algorithm>
-
-#include <exanb/mpi/update_from_ghost_utils.h>
-#include <exanb/mpi/ghosts_comm_scheme.h>
 #include <exanb/mpi/update_from_ghosts.h>
-#include <exanb/grid_cell_particles/cell_particle_update_functor.h>
 
 namespace exaStamp
 {
