@@ -42,6 +42,5 @@ jobs:
 
     - name: Configure exaStamp
       run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DexaNBody_DIR=${{github.workspace}}/exaNBody/install
-
     - name: Build exaStamp
       run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} -j 8
