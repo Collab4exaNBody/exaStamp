@@ -1,4 +1,4 @@
-name: Spack CI
+name: Check Spack Installation
 
 on:
   push:
@@ -22,7 +22,7 @@ jobs:
         color: true       # Force color output (SPACK_COLOR=always)
         path: spack       # Where to clone Spack
 
-    - name: Install ExaSTAMP With Spack
+    - name: Install exaStamp With Spack
       run: |
         git clone https://github.com/Collab4exaNBody/spack-repos.git
         spack repo add spack-repos
