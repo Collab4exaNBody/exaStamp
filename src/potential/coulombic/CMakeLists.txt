@@ -14,10 +14,7 @@
 # specific language governing permissions and limitations
 # under the License.
 #
-# ===================================
-# === micro-stamp meam potential  ===
-# ===================================
 
-set(exaStampCoulWolfParticleCharge_LINK_LIBRARIES exaStampPotential exanbParticleNeighbors)
-onika_add_plugin(exaStampCoulWolfParticleCharge ${CMAKE_CURRENT_SOURCE_DIR})
+set(exaStampCoulombic_LINK_LIBRARIES exaStampPotential exanbParticleNeighbors)
+onika_add_plugin(exaStampCoulombic ${CMAKE_CURRENT_SOURCE_DIR})
 

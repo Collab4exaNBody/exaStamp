@@ -56,20 +56,25 @@ XNB_DECLARE_FIELD(double          ,flat_ep           ,"force X (flat)");
 XNB_DECLARE_FIELD(uint8_t         ,flat_type         ,"atom type (flat)");
 XNB_DECLARE_FIELD(::exanb::Mat3d  ,flat_virial       ,"virial tensor (flat)");
 
-
 namespace exaStamp
 {
   using namespace ::exanb;
 
-  using MultiMatFieldSet     = FieldSet<field::_ep,field::_fx,field::_fy,field::_fz,field::_vx,field::_vy,field::_vz,field::_id,field::_type>;
+  using AtomicFieldSet        = FieldSet<field::_ep,field::_fx,field::_fy,field::_fz,field::_vx,field::_vy,field::_vz,field::_id,field::_type>;
 
-  using MoleculeFieldSet     = FieldSet<field::_ep,field::_fx,field::_fy,field::_fz,field::_vx,field::_vy,field::_vz,field::_charge,field::_virial,field::_id,field::_idmol,field::_cmol,field::_type>;
+  using AtomicChargeFieldSet        = FieldSet<field::_ep,field::_fx,field::_fy,field::_fz,field::_vx,field::_vy,field::_vz,field::_id,field::_type,field::_charge>;
+
+  using AtomicFullFieldSet          = FieldSet<field::_ep,field::_fx,field::_fy,field::_fz,field::_vx,field::_vy,field::_vz,field::_id,field::_type,field::_charge,field::_virial>;
+  
+  using MultiMatFieldSet      = FieldSet<field::_ep,field::_fx,field::_fy,field::_fz,field::_vx,field::_vy,field::_vz,field::_id,field::_type>;
+
+  using MoleculeFieldSet      = FieldSet<field::_ep,field::_fx,field::_fy,field::_fz,field::_vx,field::_vy,field::_vz,field::_charge,field::_virial,field::_id,field::_idmol,field::_cmol,field::_type>;
   using RigidMoleculeFieldSet = FieldSet<field::_ep,field::_fx,field::_fy,field::_fz,field::_vx,field::_vy,field::_vz,field::_id,field::_orient, field::_angmom, field::_couple,field::_type >;
 
   using FullFieldMechSet     = FieldSet<field::_ep,field::_fx,field::_fy,field::_fz,field::_vx,field::_vy,field::_vz,field::_rxf,field::_ryf,field::_rzf,field::_virial,field::_id,field::_type>;
   using MultimatMechFieldSet = FieldSet<field::_ep,field::_fx,field::_fy,field::_fz,field::_vx,field::_vy,field::_vz,field::_virial,field::_id,field::_type>;
   
-  static inline constexpr exanb::FieldSets< MultiMatFieldSet
+  static inline constexpr exanb::FieldSets< AtomicFieldSet, AtomicChargeFieldSet, AtomicFullFieldSet, MultiMatFieldSet
 # ifdef EXASTAMP_ENABLE_MOLECULE
     , MoleculeFieldSet, RigidMoleculeFieldSet
 # endif

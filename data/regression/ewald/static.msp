@@ -45,7 +45,7 @@ compute_force_pair_multimat:
 
 input_data:
   - read_stamp_v3:
-      file: ewald_static.mpio
+      filename: ewald_static.mpio
       bounds_mode: DOMAIN
   - ewald_init:
       epsilon: 1.0E-05

@@ -19,43 +19,47 @@ under the License.
 
 #include <cmath>
 #include <yaml-cpp/yaml.h>
-
 #include <onika/physics/units.h>
 #include <onika/physics/constants.h>
-#include <exaStamp/potential_factory/pair_potential.h>
-#include <exaStamp/unit_system.h>
-
 #include <onika/cuda/cuda.h>
+#include <exaStamp/unit_system.h>
 
 namespace exaStamp
 {
   using namespace exanb;
 
-  // CoulWolf Parameters
-  struct CoulWolfParms
+  struct WolfParameters
   {
     double alpha = 0.0;
     double rc = 0.0;
     double qqrd2e = 14.399645;
     double e_shift = 0.0;
     double f_shift = 0.0;
+
+    ONIKA_HOST_DEVICE_FUNC
+    inline bool is_null() const { return alpha==0.0 && e_shift==0.0 && f_shift==0.0; }    
+    
   };
   
-  // core computation kernel for coul wolf potential
-  ONIKA_HOST_DEVICE_FUNC inline void coul_wolf_compute_energy(const CoulWolfParms& p, double c1, double c2, double r, double& e, double& de)
+  ONIKA_HOST_DEVICE_FUNC
+  inline void wolf_compute_energy(const WolfParameters& p, double c, double r, double& e, double& de)
   {
     assert( r > 0. );
     
-    // LAMMPS
-    double prefactor = p.qqrd2e * c1 * c2 / r;
-    double erfcc = erfc(p.alpha * r);
-    double erfcd = exp(-p.alpha * p.alpha * r * r);
-    double v_sh = (erfcc - p.e_shift * r) * prefactor;
-    double dvdrr = (erfcc / ( r * r ) + 2.0 * p.alpha / sqrt(M_PI) * erfcd / r) + p.f_shift;
-    double forcecoul = dvdrr * r * r * prefactor;
-    double fpair = -forcecoul / r;
+    const double prefactor = p.qqrd2e * c / r;
+    const double r2 = r * r;
+    const double alpha2 = p.alpha * p.alpha;
     
+    const double erfcc = erfc(p.alpha * r);
+    const double erfcd = exp(-alpha2 * r2);
+    const double v_sh = (erfcc - p.e_shift * r) * prefactor;
+
     e = EXASTAMP_QUANTITY( v_sh * eV );
+    
+    const double dvdrr = (erfcc / r2 + 2.0 * p.alpha / sqrt(M_PI) * erfcd / r) + p.f_shift;
+    const double forcecoul = dvdrr * r2 * prefactor;
+    const double fpair = -forcecoul / r;
+    
     de = EXASTAMP_QUANTITY( fpair * eV / ang );
     
   }
@@ -64,13 +68,13 @@ namespace exaStamp
 // Yaml conversion operators, allows to read potential parameters from config file
 namespace YAML
 {
-  using exaStamp::CoulWolfParms;
+  using exaStamp::WolfParameters;
   
   using onika::physics::Quantity;
 
-  template<> struct convert<CoulWolfParms>
+  template<> struct convert<WolfParameters>
   {
-    static bool decode(const Node& node, CoulWolfParms& v)
+    static bool decode(const Node& node, WolfParameters& v)
     {
       if( !node.IsMap() ) { return false; }
       v.alpha = node["alpha"].as<Quantity>().convert();

@@ -1,0 +1,40 @@
+units        metal
+dimension    3
+boundary     p p p
+atom_style   atomic
+read_data    UO2_disturbed.lmp
+
+fix          addcharge all property/atom q     ghost yes
+fix          addmass   all property/atom rmass ghost yes
+
+group        U type 1
+set          group U mass 238.02891  
+set          group U charge 2.2208
+
+group        O type 2
+set          group O mass 15.999000
+set          group O charge -1.1104
+
+pair_style   hybrid/overlay eam/alloy coul/dsf 0.2 10.0
+pair_coeff   * * coul/dsf
+pair_coeff   * * eam/alloy UO_test.eam.alloy U O
+  
+thermo       10
+thermo_style custom step time atoms etotal ke pe temp 
+
+variable     peat equal pe/atoms
+variable     keat equal ke/atoms
+variable     etotalat equal etotal/atoms
+variable     T equal temp
+variable     nats equal atoms
+variable     s equal step
+variable     t equal time
+        
+fix          2 all print 1 "${s} ${t} ${nats} ${etotalat} ${keat} ${peat} ${T}" file thermo_lammps_yes_dsf.csv screen no
+
+neighbor     1.0 bin
+neigh_modify delay 0 every 1 check yes
+
+fix          3 all nve
+dump         d_1 all custom 10 lammps/dump.*.dump id type x y z fx fy fz
+run          100
