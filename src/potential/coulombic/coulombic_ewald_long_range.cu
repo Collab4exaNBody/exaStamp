@@ -62,10 +62,12 @@ namespace exaStamp
       const unsigned int nk = p.nknz;
       for(unsigned int k=0;k<nk;k++)
       {
-        const auto gdata = p.Gdata[k];
+        const EwaldCoeffs& gdata = p.Gdata[k];
         const double ps = r.x * gdata.Gx + r.y * gdata.Gy + r.z * gdata.Gz;
-        ONIKA_CU_BLOCK_ATOMIC_ADD( m_ewald_rho[k].r , q * cos(ps) );
-        ONIKA_CU_BLOCK_ATOMIC_ADD( m_ewald_rho[k].i , q * sin(ps) );
+        double s,c;
+        sincos(ps,&s,&c);
+        ONIKA_CU_BLOCK_ATOMIC_ADD( m_ewald_rho[k].r , q * c );
+        ONIKA_CU_BLOCK_ATOMIC_ADD( m_ewald_rho[k].i , q * s );
       }
     }
   };
@@ -89,9 +91,13 @@ namespace exaStamp
       double lfz = 0.0;
       for(unsigned int k=0;k<nk;k++)
       {
-        const auto gdata = p.Gdata[k];
+        const EwaldCoeffs& gdata = p.Gdata[k];
         const double ps = r.x * gdata.Gx + r.y * gdata.Gy + r.z * gdata.Gz;
-        const double al = q * gdata.Gc * ( m_ewald_rho[k].r * sin(ps) - m_ewald_rho[k].i * cos(ps) );
+        double s,c;
+        sincos(ps,&s,&c);
+        const double rr = m_ewald_rho[k].r;
+        const double ri = m_ewald_rho[k].i;
+        const double al = q * gdata.Gc * ( rr * s - ri * c );
         lfx += al * gdata.Gx;
         lfy += al * gdata.Gy;
         lfz += al * gdata.Gz;
