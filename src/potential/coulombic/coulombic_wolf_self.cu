@@ -81,9 +81,10 @@ namespace exaStamp
   template<class GridT, class _Ep, class _Type>
   class WolfSelf : public OperatorNode
   {      
-    ADD_SLOT( GridT            , grid              , INPUT_OUTPUT );
-    ADD_SLOT( ParticleSpecies  , species           , INPUT , REQUIRED );
-    ADD_SLOT( WolfParameters    , parameters        , INPUT , REQUIRED );
+    ADD_SLOT( GridT             , grid                , INPUT_OUTPUT );
+    ADD_SLOT( ParticleSpecies   , species             , INPUT , REQUIRED );
+    ADD_SLOT( WolfParameters    , parameters          , INPUT , REQUIRED );
+    ADD_SLOT( bool              , trigger_thermo_state, INPUT , OPTIONAL );
 
   public:
 
@@ -91,21 +92,34 @@ namespace exaStamp
     // -----------------------------------------------
     inline void execute () override final
     {
-      WolfSelfForceOp func = { species->data() , *parameters , species->at(0).m_charge };
-      auto ep = grid->field_accessor( onika::soatl::FieldId<_Ep>{} );
-      
-      onika::soatl::FieldId<_Type> type_field = {};
-      if( grid->has_allocated_field( type_field ) )
+
+      bool log_energy = false;
+      if( trigger_thermo_state.has_value() )
       {
-        auto type = grid->field_accessor( type_field );          
-        auto cp_fields = onika::make_flat_tuple( ep, type );
-        compute_cell_particles( *grid , false , func , cp_fields , parallel_execution_context() );
+        log_energy = *trigger_thermo_state ;
       }
       else
       {
-        auto cp_fields = onika::make_flat_tuple( ep );
-        compute_cell_particles( *grid , false , func , cp_fields , parallel_execution_context() );
+        ldbg << "trigger_thermo_state missing " << std::endl;
       }
+      
+      if( log_energy )
+        {
+          WolfSelfForceOp func = { species->data() , *parameters , species->at(0).m_charge };
+          auto ep = grid->field_accessor( onika::soatl::FieldId<_Ep>{} );
+          onika::soatl::FieldId<_Type> type_field = {};
+          if( grid->has_allocated_field( type_field ) )
+            {
+              auto type = grid->field_accessor( type_field );          
+              auto cp_fields = onika::make_flat_tuple( ep, type );
+              compute_cell_particles( *grid , false , func , cp_fields , parallel_execution_context() );
+            }
+          else
+            {
+              auto cp_fields = onika::make_flat_tuple( ep );
+              compute_cell_particles( *grid , false , func , cp_fields , parallel_execution_context() );
+            }
+        }
     }
 
     // -----------------------------------------------
