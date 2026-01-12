@@ -217,6 +217,8 @@ namespace exanb
 namespace exaStamp
 {
 
+  using namespace exanb;
+  
   template<
     class GridT,
     class = AssertGridHasFields< GridT, field::_ep ,field::_fx ,field::_fy ,field::_fz >

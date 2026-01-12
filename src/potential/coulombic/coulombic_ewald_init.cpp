@@ -25,6 +25,7 @@ under the License.
 #include <onika/log.h>
 #include <onika/cpp_utils.h>
 #include <exaStamp/potential/coulombic/ewald.h>
+#include <exaStamp/compute/thermodynamic_state.h>
 
 namespace exaStamp
 {
@@ -33,13 +34,16 @@ namespace exaStamp
   class EwaldInitOperator : public OperatorNode
   {
     // ========= I/O slots =======================
-    ADD_SLOT( double     , epsilon     , INPUT , REQUIRED );
-    ADD_SLOT( double     , alpha       , INPUT , REQUIRED );
+    ADD_SLOT( double     , accuracy_relative , INPUT , REQUIRED );
+    ADD_SLOT( double     , g_ewald       , INPUT , REQUIRED );
     ADD_SLOT( double     , radius      , INPUT , REQUIRED );
     ADD_SLOT( long       , kmax        , INPUT , REQUIRED );
     ADD_SLOT( Domain     , domain      , INPUT , OPTIONAL );
     ADD_SLOT( EwaldParameters , ewald_config, INPUT_OUTPUT );
     ADD_SLOT( double     , rcut        , OUTPUT );
+    ADD_SLOT( double     , sum_square_charge, INPUT );
+    ADD_SLOT( double     , sum_charge, INPUT );
+    ADD_SLOT( uint64_t   , natoms , INPUT , OPTIONAL);
     ADD_SLOT( double     , rcut_max    , INPUT_OUTPUT , 0.0 );
 
   public:
@@ -48,6 +52,7 @@ namespace exaStamp
     // -----------------------------------------------
     inline void execute () override final
     {
+      
       using ewald_constants::fpe0;
       using ewald_constants::epsilonZero;
 
@@ -55,7 +60,7 @@ namespace exaStamp
       {
         auto & p = *ewald_config;
         
-        if( ( *alpha > 0.0 && *alpha != p.alpha ) || p.volume==0.0 || *radius != p.radius || *epsilon != p.epsilon || ( *kmax > 0 && *kmax != p.kmax ) )
+        if( ( *g_ewald > 0.0 && *g_ewald != p.g_ewald ) || p.volume==0.0 || *radius != p.radius || *accuracy_relative != p.accuracy_relative || ( *kmax > 0 && *kmax != p.kmax ) )
         {
           auto domainSize = domain->bounds_size();
           auto xform = domain->xform();
@@ -71,7 +76,7 @@ namespace exaStamp
             std::abort();
           }
 
-          ewald_init_parameters( *alpha , *radius , *epsilon , *kmax , domainSize , p , ldbg<<"" );
+          ewald_init_parameters( *g_ewald , *radius , *accuracy_relative , *kmax , domainSize, *natoms, *sum_square_charge, *sum_charge, p , ldbg<<"" );
           if( p.volume > 0.0 )
           {
             lout << "====== Ewald configuration ======" << std::endl;      
@@ -79,18 +84,15 @@ namespace exaStamp
             lout << "period. = "<< std::boolalpha << domain->periodic_boundary_x() 
                                 << " , " << std::boolalpha << domain->periodic_boundary_y() 
                                 << " , " << std::boolalpha << domain->periodic_boundary_z() << std::endl;                    
-            lout << "alpha   = "<<p.alpha << std::endl;
+            lout << "g_ewald = "<<p.g_ewald << std::endl;
             lout << "radius  = "<<p.radius << std::endl;
-            lout << "epsilon = "<<p.epsilon << std::endl;
+            lout << "accuracy_relative = "<<p.accuracy_relative << std::endl;
             lout << "kmax    = "<<p.kmax << std::endl;
             lout << "nk      = "<<p.nk << std::endl;
             lout << "nknz    = "<<p.nknz << std::endl;
-            lout << "bt      = "<<p.bt << std::endl;
             lout << "gm      = "<<p.gm << std::endl;
-            lout << "lm      = "<< p.lm.x <<','<<p.lm.y<<','<<p.lm.z << std::endl;
+            lout << "lm      = "<< p.unitk.x <<','<<p.unitk.y<<','<<p.unitk.z << std::endl;
             lout << "volume  = "<< p.volume << std::endl;
-            lout << "fpe0    = "<< fpe0 << std::endl;
-            lout << "GnMax   = "<< p.GnMax << std::endl;
             lout << "=================================" << std::endl;
           }
         }
