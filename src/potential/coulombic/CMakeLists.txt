@@ -15,6 +15,6 @@
 # under the License.
 #
 
-set(exaStampCoulombic_LINK_LIBRARIES exaStampPotential exanbParticleNeighbors)
+set(exaStampCoulombic_LINK_LIBRARIES exaStampCompute exaStampPotential exanbParticleNeighbors)
 onika_add_plugin(exaStampCoulombic ${CMAKE_CURRENT_SOURCE_DIR})
 
