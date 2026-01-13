@@ -28,7 +28,7 @@ under the License.
 #include <onika/log.h>
 #include <onika/cpp_utils.h>
 
-#include <exaStamp/potential/coulombic/ewald.h>
+#include <exaStamp/potential/coulombic/ewald_soa.h>
 #include <exaStamp/unit_system.h>
 
 #include <exanb/core/config.h>
@@ -202,18 +202,17 @@ namespace exaStamp
       
       if( grid->number_of_cells() == 0 ) return;
 
-      auto cells = grid->cells();
-      IJK dims = grid->dimension();
-
       // Recupération du nombre de point k
       const size_t nk = ewald_config->nknz;
+
+      if (ewald_rho->rho.size() < nk) {
+        ewald_rho->rho.resize(nk);
+      }
       ewald_rho->nk = nk;
-      ewald_rho->rho.resize(nk);
       
-      //      const EwaldCoeffs * __restrict__ Gdata = ewald_config->Gdata.data();
       Mat3d xform = domain->xform();
       ONIKA_CU_CHECK_ERRORS( ONIKA_CU_MEMSET( ewald_rho->rho.data(), 0, sizeof(Complexd)*nk, global_cuda_ctx()->getThreadStream(0) ) );
-
+      
       EwaldLongRangeRhoComputeFunc<LinearXForm> rho_func = { {xform} , species->data() , *ewald_config , ewald_rho->rho.data() };
       compute_cell_particles( *grid , false , rho_func , ewald_rho_field_set , parallel_execution_context() );
       static_assert( sizeof(Complexd) == 2*sizeof(double) );
@@ -247,7 +246,7 @@ namespace exaStamp
   template<class GridT> using EwaldLongRangePCTmpl = EwaldLongRangePC<GridT>;
 
   // === register factories ===  
-  ONIKA_AUTORUN_INIT(coulombic_ewald_long_rage)
+  ONIKA_AUTORUN_INIT(coulombic_ewald_long_range)
   {  
     OperatorNodeFactory::instance()->register_factory( "coulombic_ewald_long_range" , make_grid_variant_operator<EwaldLongRangePCTmpl> );
   }
