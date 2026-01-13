@@ -28,7 +28,7 @@ under the License.
 #include <onika/log.h>
 #include <onika/cpp_utils.h>
 
-#include <exaStamp/potential/coulombic/ewald_soa.h>
+#include <exaStamp/potential/coulombic/ewald.h>
 #include <exaStamp/unit_system.h>
 
 #include <exanb/core/config.h>
