@@ -87,13 +87,8 @@ domain:
   periodic: [false,false,false]
 
 dump_data:
-  - write_vtk:
-      is_binary: true
-      compression: default
-      is_box: true
-      is_ghosts: false
-      is_external_box: true
-
+  - write_paraview
+  
 molecule_pair_weight:
   weight:
     OPLS: [0.5, 0.5, 0.0]

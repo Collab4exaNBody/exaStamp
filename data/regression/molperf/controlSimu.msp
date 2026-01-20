@@ -84,8 +84,6 @@ xxx_mur:
 #dump_data: 
 #  - write_xyz_file
 #  - timestep_file:  "output_%09d"
-#  - write_vtk:
-#      is_binary: false
 
 #  - timestep_file: "molstampv4_%05d.mpio"
 #  - message: { mesg: "dump data to " , endl: false }

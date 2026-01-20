@@ -72,24 +72,6 @@ dump_data_rigidmol:
   - timestep_file: "rigidmol_%09d.MpiIO"
   - write_dump_rigidmol
 
-dump_data_vtklegacy:
-  - timestep_file: "output_%09d.vtk"
-  - message: { mesg: "Write vtk-legacy " , endl: false }
-  - print_dump_file:
-      rebind: { mesg: filename }
-      body:
-        - message: { endl: true }
-  - write_vtklegacy: { ghost: false }
-
-dump_data_vtk:
-  - timestep_file: "output_%09d"
-  - message: { mesg: "Write vtk " , endl: false }
-  - print_dump_file:
-      rebind: { mesg: filename }
-      body:
-        - message: { endl: true }
-  - write_vtk
-
 dump_data_paraview:
   - timestep_file: "paraview/output_%09d"
   - message: { mesg: "Write " , endl: false }
