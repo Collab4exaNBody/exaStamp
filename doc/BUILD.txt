@@ -13,9 +13,11 @@ in exaStamp (i.e ML SNAP)
 XNB_INSTALL_DIR=${HOME}/local/exaNBody
 EXASTAMP_SRC_DIR=${HOME}/dev/exaStamp
 EXASTAMP_INSTALL_DIR=${HOME}/local/exaStamp
+CUDA_FLAGS_OPTS="--generate-line-info"
 cmake -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX=${EXASTAMP_INSTALL_DIR} \
       -DexaNBody_DIR=${XNB_INSTALL_DIR} \
+      -DCMAKE_CUDA_FLAGS=${CUDA_FLAGS_OPTS} \
       ${EXASTAMP_SRC_DIR}
 
 2. Compile
