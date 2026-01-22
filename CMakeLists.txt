@@ -74,9 +74,11 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/exaStamp DESTINATION include)
 # =================================================
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/data DESTINATION ${CMAKE_INSTALL_PREFIX})
 if(ONIKA_REGRESSION_TEST_ENABLE)
-#  AddRegressionTestDir("${CMAKE_SOURCE_DIR}/data/regression")
-  AddRegressionTestDir("${CMAKE_SOURCE_DIR}/data/regression/eam_potentials")
-  AddRegressionTestDir("${CMAKE_SOURCE_DIR}/data/regression/pair_potentials")
+  #  AddRegressionTestDir("${CMAKE_SOURCE_DIR}/data/regression")
+  file(GLOB_RECURSE POTENTIAL_FILES "${CMAKE_SOURCE_DIR}/data/potentials/*")
+  file(COPY ${POTENTIAL_FILES} DESTINATION ${CMAKE_BINARY_DIR})
+  AddRegressionTestDir("${CMAKE_SOURCE_DIR}/data/regression_new/eam_potentials")
+  AddRegressionTestDir("${CMAKE_SOURCE_DIR}/data/regression_new/pair_potentials")
 endif()
 
 # =======================================
