@@ -24,7 +24,7 @@
 [ $PSIZEY ] || PSIZEY=100
 [ $TSIZEX ] || TSIZEX=80
 [ $TSIZEY ] || TSIZEY=16
-[ $NX ] || NX=11
+[ $NX ] || NX=4
 [ $XTERMOPT ] || XTERMOPT="-fn -misc-fixed-medium-r-normal--8-80-75-75-c-50-iso10646-1 -b 0 +sb"
 
 [ $MYRANK ] || [ $PMI_RANK ] && MYRANK=$PMI_RANK
@@ -50,5 +50,5 @@ then
 fi
 
 set -x
-xterm -geom ${TSIZEX}x${TSIZEY}+${GEOMPOSX}+${GEOMPOSY} -title "${TITLE}" ${XTERMOPT} -e ${GDB} -ex 'set pagination off' -ex run --args $*
+xterm -geom ${TSIZEX}x${TSIZEY}+${GEOMPOSX}+${GEOMPOSY} -title "${TITLE}" ${XTERMOPT} -e ${GDB} -ex 'set pagination off' -ex "set confirm off" -ex run --args $*
 
