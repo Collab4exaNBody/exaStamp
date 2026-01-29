@@ -341,12 +341,6 @@ molecule_pair_weight:
   weight:
     TATB: [0.2,0.3,0.4,0.5]
 
-write_vtk:
-   is_binary: true
-   compression: default
-   is_box: true
-   is_ghosts: true
-   is_external_box: true
 
 simulation:
 
@@ -378,7 +372,7 @@ simulation:
         #- debug_particle : {particle_ids: [1]}
         - numerical_scheme_verlet
         #- shift_v: {shift: [13,13,13]}
-        - write_vtk
+        - write_paraview
         - end_iteration
         - compute_loop_stop
 

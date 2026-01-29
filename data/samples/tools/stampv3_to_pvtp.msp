@@ -27,5 +27,5 @@ simulation:
   - simulation_thermodynamic_state
   - print_thermodynamic_state
   - timestep_file: "particles_%09d"
-  - write_vtk: { compression: 3 }
+  - write_paraview
 
