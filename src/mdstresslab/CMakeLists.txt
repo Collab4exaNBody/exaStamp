@@ -14,23 +14,12 @@
 # specific language governing permissions and limitations
 # under the License.
 #
-# ExaStamp specific packages
+# ====================================================================
+# === micro-stamp pair potential compute operator library library  ===
+# ====================================================================
 
-add_subdirectory(debug)
-add_subdirectory(analytics)
-add_subdirectory(particle_species)
-add_subdirectory(io)
-add_subdirectory(compute)
-add_subdirectory(mdstresslab)
-add_subdirectory(mpi)
-add_subdirectory(parrinellorahman)
-add_subdirectory(ttm)
-add_subdirectory(potential_factory)
-add_subdirectory(potential)
-add_subdirectory(particle_charge)
-add_subdirectory(molecule)
-add_subdirectory(mechanical)
-add_subdirectory(rigidmol)
-add_subdirectory(tutorial)
-add_subdirectory(npt)
+set(ONIKA_BUILD_exaStampMDStressLab_DEFAULT ON)
 
+find_package(MDStressLab++ REQUIRED)
+set(exaStampMDStressLab_LINK_LIBRARIES exaStampParticleSpecies exanbGridCellParticles exanbCompute MDStressLab++::MDStressLab++)
+onika_add_plugin(exaStampMDStressLab ${CMAKE_CURRENT_SOURCE_DIR})

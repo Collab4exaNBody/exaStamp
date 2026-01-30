@@ -1,0 +1,16 @@
+######## simulation program description #################
+simulation:
+  name: sim
+  body:
+    - print_logo_banner
+    - hw_device_init   # provide MPI_COMM_WORLD as a default communicator
+    - global
+    - generate_default_species
+    - domain
+    - grid_memory_compact
+    - compute_stress_grid_mdstresslab:
+        filename: "reference_and_current.xyz"
+        modelnames: ["EAM_Dynamo_RaveloGermannGuerrero_2013Ta1_Ta__MO_816821594689_001"]
+    - message
+    - hw_device_finalize
+

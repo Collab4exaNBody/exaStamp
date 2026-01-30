@@ -1,0 +1,93 @@
+eam_alloy_force:
+  rcut: 5.30 ang
+  parameters:
+    file: "dir.pots/Ta1_Ravelo_2013.eam.alloy"
+
+compute_force:
+  - eam_alloy_force
+  - langevin_thermostat: { T: 300. K , gamma: 0.1 ps^-1 }
+
+grid_flavor: grid_flavor_full
+
+global:
+  simulation_end_iteration: 2000
+  simulation_log_frequency: 10
+  simulation_dump_thermo_frequency: -1
+  simulation_dump_frequency: 50
+  rcut_inc: 1.0 ang
+  dt: 0.005 ps
+
+species:
+  - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+
+input_data:
+  - domain:
+      cell_size: 3.3 ang
+      grid_dims: [60, 5, 60]
+      bounds: [[0 ang, 0 ang, 0 ang], [198 ang, 16.5 ang, 198 ang]]
+      xform: [[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
+      periodic: [true, true, true]
+      expandable: false
+  - particle_regions:
+      - CYLY1:
+          quadric:
+            shape: cyly
+            transform:
+              - scale: [20 ang, 1 ang, 20 ang]
+              - translate: [85 ang, 0 ang, 140 ang]
+      - CYLY2:
+          quadric:
+            shape: cyly
+            transform:
+              - scale: [15 ang, 1 ang, 35 ang]
+              - yrot: pi/3.
+              - translate: [120 ang, 0 ang, 80 ang]
+  - init_rcb_grid
+  - lattice:
+      structure: BCC
+      types: [ Ta , Ta]
+      size: [ 3.3 ang , 3.3 ang , 3.3 ang ]
+      region: not ( CYLY1 or CYLY2 )
+
+init_epilog:
+  - backup_r_lt
+  - backup_xform
+
+final_dump: nop
+
+xform_time_interpolate_byparts:
+  time_serie: [0.0, 10.0]    
+  xform_serie: [ [ [1.0, 0.0, 0.0],  [0.0, 1.0, 0.0],  [0.0, 0.0, 1.0] ],
+            	   [ [1.3, 0.0, 0.0],  [0.0, 1.0, 0.0],  [0.0, 0.0, 1.3] ] ]
+
+xform_function: xform_time_interpolate_byparts
+
+init_prolog:
+  - deformation_xform:
+      defbox: { extension: [ 1.0 , 1.0 , 1.0 ] }
+
+compute_loop_prolog:
+  - xform_function
+  - nbh_dist
+
+dump_data:
+  - test_xyz:
+      body:
+        - timestep_file: "dir.outputs/my_xyz_file_%09d.xyz"
+        - write_xyz: { fields: [ "id", "velocity" , "virial" ] }
+  - copy_grid
+  - restore_ghost_r0:
+      rebind: { grid: grid_copy }
+      body:
+        - backup_r_lt_move_data
+        - restore_r_lt
+        - ghost_update_r_v
+  - ghost_update_r_v
+  - compute_stress_grid_mdstresslab_master:
+      rebind: { grid_t0: grid_copy, xform_t0: backup_xform }
+      body:
+        - compute_stress_grid_mdstresslab:
+            modelnames: ["EAM_Dynamo_RaveloGermannGuerrero_2013Ta1_Ta__MO_816821594689_001"]
+      
++first_iteration:
+  - dump_data
