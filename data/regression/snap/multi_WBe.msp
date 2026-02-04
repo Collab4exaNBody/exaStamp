@@ -2,14 +2,12 @@ includes:
   - config_update_symmetric_forces.msp
 
 configuration:
-  onika:
-    gpu_block_size: 64
   profiling:
     summary: true
   logging:
     debug: false
   debug:
-    filter: [ ".*snap_force" , ".*snaplmp_force" ]
+    filter: [ ".*snap_force" ]
 
 zbl_multi_force:
   rcut: 4.8 ang
@@ -37,13 +35,8 @@ species:
 
 grid_flavor: grid_flavor_multimat
 
-chunk_neighbors:
-  config:
-    build_particle_offset: false
-    chunk_size: 1
-
 replicate_domain:
-  repeat: [ 1 , 1 , 1 ]
+  repeat: [ 4 , 4 , 4 ]
 
 input_data:
   - read_xyz_file_with_xform:
@@ -67,16 +60,20 @@ domain:
   periodic: [true,true,true]
 
 global:
-  simulation_end_iteration: 3
+<<<<<<< HEAD
+  simulation_end_iteration: 500
+=======
+  simulation_end_iteration: 4
+>>>>>>> bd37fd3c9a39398dcd40c0bc2dcc6aa07a411d01
   simulation_log_frequency: 10
   rcut_inc: 2.0 ang
   dt: 1.0e-3 ps
   simulation_dump_frequency: -1
-  simulation_dump_thermo_frequency: -1
+  simulation_dump_thermo_frequency: 1
 
 final_dump: nop
 
-simulation_epilog:
+xxx_simulation_epilog:
   - check_values:
       file: snap_multi_WBe_3it.dat
       threshold: 1.e-9

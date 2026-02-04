@@ -1,0 +1,40 @@
+# licensed to the apache software foundation (asf) under one
+# or more contributor license agreements.  see the notice file
+# distributed with this work for additional information
+# regarding copyright ownership.  the asf licenses this file
+# to you under the apache license, version 2.0 (the
+# "license"); you may not use this file except in compliance
+# with the license.  you may obtain a copy of the license at
+# 
+#   http://www.apache.org/licenses/license-2.0
+# 
+# unless required by applicable law or agreed to in writing,
+# software distributed under the license is distributed on an
+# "as is" basis, without warranties or conditions of any
+# kind, either express or implied.  see the license for the
+# specific language governing permissions and limitations
+# under the license.
+
+# xstabpy
+
+xstabpy stands for eXaSTAamp TABulation with PYthon; it is a basic,
+simple script to write tabulated potential data in yaml format ready
+to be used by exastamp.
+
+
+## Usage
+
+You can tabulate a predefined potential (currently only Lennard-Jones,
+Sutton-Chen and VNIITF are implemented) using your own parameters (see
+example.py), or create a new pair or EAM potential.
+
+If you want to create a new potential, a pair potential is an object
+with a __call__ method which takes a distance input (scalar or 1D
+array) and returns a tuple containing the associated energy and
+derivate. To create a new EAM potential, you need three methods, rho,
+phi and f based on the same principle.
+
+A set of abstract classes could have been implemented but it did not
+happened by lack of time. Feel free to improve this small piece of
+code ...
+

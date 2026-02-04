@@ -1,0 +1,102 @@
+includes:
+  - config_rigidmol.msp
+
+configuration:
+  physics:
+    units:
+      length: angstrom
+      mass: Dalton
+      time: picosecond
+      charge: elementary_charge
+      temperature: kelvin
+      amount: particle
+      luminosity: candela
+      angle: radian
+      energy: joule
+  logging:
+    debug: false
+
+grid_flavor: grid_flavor_rigidmol
+  
+ljrf_rigidmol_force:
+  type: H2O
+  rcut: 8 ang
+  parameters:
+    - { type_a: O , type_b: O , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } , lj_rcut: 8 ang , lj: { epsilon: 1.286776984E-21 J , sigma: 0.31589E-09 m } } }
+    - { type_a: O , type_b: M , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: O , type_b: H , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: H , type_b: M , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: M , type_b: M , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: H , type_b: H , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
+
+compute_force: 
+  - ljrf_rigidmol_force
+  - langevin_thermostat_rigidmol:
+      T: 100.0 K
+      gamma : 50.0 ps^-1
+      gamma_ratio : 1.0
+
+input_data:
+  - particle_regions:
+      - SPHERE:
+          quadric:
+            shape: sphere
+            transform:
+              - scale: [ 20 ang , 20 ang , 20 ang ] 
+              - translate: [ 50 ang , 50 ang , 50 ang ]
+  - has_dump_file:
+      rebind: { result: has_dump_file }
+      body: [ file_exists: { filename: lastLegacyDump } ]
+  - generate_initial_grid:
+      condition: not has_dump_file
+      body:
+        - species:
+            verbose: false
+            species:
+              - H: { mass: 1.007 Da , z: 1 , charge: 0.5564 e-  , molecule: H2O }
+              - O: { mass: 16 Da    , z: 8 , charge: 0.0 e-     , molecule: H2O }
+              - M: { mass: 0.000 Da , z: 0 , charge: -1.1128 e- , molecule: H2O }
+              - H2O:
+                  charge: 0.0 e-
+                  z: 0
+                  mass: 0.0 Da
+                  rigid_molecule:
+                    - O: [  0.00000000 ang ,  0.00000000 ang ,  0.00000000 ang ]
+                    - H: [  0.75695033 ang ,  0.58588228 ang ,  0.00000000 ang ]
+                    - H: [ -0.75695033 ang ,  0.58588228 ang ,  0.00000000 ang ]
+                    - M: [  0.00000000 ang ,  0.15460000 ang ,  0.00000000 ang ]
+        - domain:
+            cell_size: 10.0 ang
+            grid_dims: [ 10 , 10 , 10 ]
+            bounds: [ [ 0.0 ang , 0.0 ang , 0.0 ang ] , [ 100.0 ang , 100.0 ang , 100.0 ang ] ]
+            xform: [ [ 1 , 0, 0 ] , [ 0 , 1 , 0 ] , [ 0 , 0 , 1 ] ]
+            periodic: [true, true, true]
+            expandable: false
+        - init_rcb_grid
+        - lattice:
+            structure: SC
+            types: [ H2O ]
+            size: [ 3.103 ang , 3.103 ang , 3.103 ang ]
+            region: SPHERE
+        - random_orient
+  
+dump_data: nop
+    
+global:
+  simulation_end_iteration: 10
+  simulation_log_frequency: 5
+  simulation_dump_thermo_frequency: -1
+  simulation_dump_frequency: -1
+  rcut_inc: 1.5 ang
+  dt: 1.0e-3 ps
+  deterministic_noise: true
+
+simulation_epilog:
+  - check_values
+
+check_values:
+  file: check_langevin_thermostat_rigidmol_random_orient.dat
+  samples: 100
+  pos_threshold: 1.e-10
+  acc_threshold: 1.e-10
+  vel_threshold: 1.e-10

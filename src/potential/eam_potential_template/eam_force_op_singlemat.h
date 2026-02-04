@@ -1,9 +1,27 @@
+/*
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements. See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership. The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License. You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied. See the License for the
+specific language governing permissions and limitations
+under the License.
+*/
+
 #pragma once
 
 #include <cmath>
 
 #include <exanb/compute/compute_cell_particle_pairs.h>
 #include <exanb/compute/compute_pair_traits.h>
+#include <exanb/core/grid_fields.h>
 
 #include "potential.h"
 
@@ -67,6 +85,8 @@ namespace exaStamp
 
     struct ForceOp
     {
+      static inline constexpr field::generic_real_nth<0> field_rho_dEmb = {};
+
       const onika::cuda::ro_shallow_copy_t<USTAMP_POTENTIAL_PARMS> p;
 
       template<class ComputePairBufferT, class CellParticlesT>
@@ -125,7 +145,7 @@ namespace exaStamp
           double dPhi = 0.;
           USTAMP_POTENTIAL_EAM_RHO( p, r, Rho, dRho );          
           USTAMP_POTENTIAL_EAM_PHI( p, r, Phi, dPhi );          
-          double de = ( dRho * ( dEmb + tab.nbh_pt[i][field::rho_dEmb] ) + dPhi ) / r;
+          double de = ( dRho * ( dEmb + tab.nbh_pt[i][field_rho_dEmb] ) + dPhi ) / r;
 
           const double drx = tab.drx[i];
           const double dry = tab.dry[i];

@@ -1,3 +1,20 @@
+/*
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements. See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership. The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License. You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied. See the License for the
+specific language governing permissions and limitations
+under the License.
+*/
+
 #include <onika/scg/operator.h>
 #include <onika/scg/operator_slot.h>
 #include <onika/scg/operator_factory.h>
@@ -14,6 +31,7 @@
 #include <onika/math/basic_types_yaml.h>
 #include <exaStamp/particle_species/particle_specie_yaml.h>
 #include <exaStamp/unit_system.h>
+#include <exanb/core/domain.h>
 
 #include <yaml-cpp/yaml.h>
 #include <string>
@@ -68,9 +86,11 @@ namespace exaStamp
     static constexpr bool has_type_field = has_type_field_t::value;
 
     ADD_SLOT( GridT          , grid    , INPUT_OUTPUT);
+    ADD_SLOT( Domain         , domain  , INPUT );
     ADD_SLOT( ParticleSpecies, species , INPUT , REQUIRED );
     ADD_SLOT( double         , dt      , INPUT , REQUIRED );
     ADD_SLOT( std::vector<MaterialLangevin> , matlangevin , INPUT , REQUIRED );
+    ADD_SLOT( bool             , deterministic_noise , INPUT , false );
 
   public:
 
@@ -78,7 +98,7 @@ namespace exaStamp
     // -----------------------------------------------
     inline void execute ()  override final
     {
-      static constexpr double k = EXASTAMP_CONST_QUANTITY( onika::physics::boltzmann * J / K );
+      const double k = onika::physics::make_quantity( onika::physics::boltzmann, "J/K" ).convert();
 
       ldbg << "per material langevin: dt="<<*dt<<std::endl;
 
@@ -105,15 +125,22 @@ namespace exaStamp
       IJK dims = grid->dimension();
       ssize_t gl = grid->ghost_layers();
       const double dt = *(this->dt);    
+      IJK gstart { gl, gl, gl };
+      IJK gend = dims - IJK{ gl, gl, gl };
+      IJK gdims = gend - gstart;
+      const auto dom_dims = domain->grid_dimension();
+      const auto dom_start = grid->offset();
 
-#     pragma omp parallel
+      const int nthreads = *deterministic_noise ? 1 : omp_get_max_threads();
+#     pragma omp parallel num_threads(nthreads)
       {
-        auto& re = onika::parallel::random_engine();
+        std::mt19937_64 det_re;
+        std::mt19937_64 & re = *deterministic_noise ? det_re : onika::parallel::random_engine() ;
         std::normal_distribution<double> f_rand(0.0,1.0);
-
         GRID_OMP_FOR_BEGIN(dims-2*gl,_,loc, schedule(dynamic) )
         {
-          size_t i = grid_ijk_to_index( dims , loc + gl );
+          const auto i = grid_ijk_to_index( dims , loc + gstart );
+          const auto domain_cell_idx = grid_ijk_to_index( dom_dims , loc + gstart + dom_start );
 
           auto* __restrict__ fx = cells[i][field::fx]; ONIKA_ASSUME_ALIGNED(fx);
           auto* __restrict__ fy = cells[i][field::fy]; ONIKA_ASSUME_ALIGNED(fy);
@@ -125,6 +152,8 @@ namespace exaStamp
 
           const auto* __restrict__ atom_type = cells[i][field::type]; ONIKA_ASSUME_ALIGNED(atom_type);
           const unsigned int n = cells[i].size();
+          
+          det_re.seed( domain_cell_idx * 1023 );
 
           for(unsigned int j=0;j<n;j++)
           {

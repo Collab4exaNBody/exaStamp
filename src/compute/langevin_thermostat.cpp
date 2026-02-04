@@ -1,3 +1,20 @@
+/*
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements. See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership. The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License. You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied. See the License for the
+specific language governing permissions and limitations
+under the License.
+*/
+
 #include <memory>
 
 #include <onika/scg/operator.h>
@@ -15,6 +32,7 @@
 #include <onika/parallel/random.h>
 #include <exanb/grid_cell_particles/particle_region.h>
 #include <exaStamp/unit_system.h>
+#include <exanb/core/domain.h>
 
 namespace exaStamp
 {
@@ -38,6 +56,7 @@ namespace exaStamp
     using TempVec = std::vector<double>;
 
     ADD_SLOT( GridT          , grid    , INPUT_OUTPUT);
+    ADD_SLOT( Domain , domain    , INPUT );
     ADD_SLOT( ParticleSpecies, species , INPUT , REQUIRED );
     ADD_SLOT( double         , dt      , INPUT , REQUIRED );
     ADD_SLOT( long           , timestep     , INPUT , REQUIRED );
@@ -51,8 +70,9 @@ namespace exaStamp
     ADD_SLOT( double         , Tstart  , INPUT , OPTIONAL );
     ADD_SLOT( double         , Tstop   , INPUT , OPTIONAL );
     ADD_SLOT( TimeVec        , tserie  , INPUT , OPTIONAL );
-    ADD_SLOT( TempVec        , Tserie  , INPUT , OPTIONAL );    
-
+    ADD_SLOT( TempVec        , Tserie  , INPUT , OPTIONAL );
+    ADD_SLOT( bool             , deterministic_noise , INPUT , false );
+    
     template<typename YFunc>
     static inline double interpolate( const std::vector<double>& X , double ix, YFunc yfunc )
     {
@@ -92,7 +112,7 @@ namespace exaStamp
     // -----------------------------------------------
     inline void execute ()  override final
     {
-      static constexpr double k = EXASTAMP_CONST_QUANTITY( onika::physics::boltzmann * J / K );
+      const double k = onika::physics::make_quantity( onika::physics::boltzmann, "J/K" ).convert();
 
       if( grid->number_of_cells() == 0 ) return;
 
@@ -151,6 +171,11 @@ namespace exaStamp
       auto cells = grid.cells();
       IJK dims = grid.dimension();
       ssize_t gl = grid.ghost_layers();      
+      IJK gstart { gl, gl, gl };
+      IJK gend = dims - IJK{ gl, gl, gl };
+      IJK gdims = gend - gstart;
+      const auto dom_dims = domain->grid_dimension();
+      const auto dom_start = grid.offset();
 
       ParticleRegionCSGShallowCopy prcsg;
       if( region.has_value() && !particle_regions.has_value() )
@@ -162,15 +187,17 @@ namespace exaStamp
         region->build_from_expression_string( particle_regions->data() , particle_regions->size() );
       }
       if( region.has_value() ) prcsg = *region;
-
-#     pragma omp parallel
+      
+      const int nthreads = *deterministic_noise ? 1 : omp_get_max_threads();
+#     pragma omp parallel num_threads(nthreads)
       {
-        auto& re = onika::parallel::random_engine();
-        std::normal_distribution<double> f_rand(0.0,1.0);
-
+        std::mt19937_64 det_re;
+        std::mt19937_64 & re = *deterministic_noise ? det_re : onika::parallel::random_engine() ;
+        std::normal_distribution<double> f_rand(0.,1.);
         GRID_OMP_FOR_BEGIN(dims-2*gl,_,loc, schedule(dynamic) )
         {
-          size_t i = grid_ijk_to_index( dims , loc + gl );
+          const auto i = grid_ijk_to_index( dims , loc + gstart );
+          const auto domain_cell_idx = grid_ijk_to_index( dom_dims , loc + gstart + dom_start );
 
           const auto* __restrict__ rx = cells[i][field::rx];
           const auto* __restrict__ ry = cells[i][field::ry];
@@ -187,6 +214,8 @@ namespace exaStamp
 
           const auto* __restrict__ atom_type = cells[i].field_pointer_or_null(field::type);
           const unsigned int n = cells[i].size();
+          
+          det_re.seed( domain_cell_idx * 1023 );
 
           for(unsigned int j=0;j<n;j++)
           {

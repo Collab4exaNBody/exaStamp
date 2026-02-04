@@ -1,3 +1,20 @@
+/*
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements. See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership. The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License. You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied. See the License for the
+specific language governing permissions and limitations
+under the License.
+*/
+
 #include <exaStamp/particle_species/particle_specie_yaml.h>
 #include <onika/math/basic_types_stream.h>
 
@@ -7,6 +24,7 @@
 #include <onika/log.h>
 #include <onika/yaml/yaml_utils.h>
 #include <exanb/core/particle_type_id.h>
+#include <exanb/core/particle_type_properties.h>
 
 #include <iostream>
 #include <iomanip>
@@ -22,6 +40,7 @@ namespace exaStamp
   {
     ADD_SLOT( ParticleSpecies , species , INPUT_OUTPUT , REQUIRED );
     ADD_SLOT( ParticleTypeMap , particle_type_map , INPUT_OUTPUT );
+    ADD_SLOT( ParticleTypeProperties , particle_type_properties , INPUT_OUTPUT , ParticleTypeProperties{} );
     ADD_SLOT( bool , verbose , INPUT , true );
     ADD_SLOT( bool , fail_if_empty , INPUT , false );
 
@@ -140,12 +159,28 @@ namespace exaStamp
         lout<<"=============================="<<std::endl<<std::endl;
       }
       
-      // update particle type name map
+      // update generic (exaNBody level) particle type name map and particle type properties
       particle_type_map->clear();
+      particle_type_properties->m_name_map.clear();
+      particle_type_properties->m_scalars.clear();
+      particle_type_properties->m_vectors.clear();
+      particle_type_properties->m_names.assign( species->size() , "" );
       for(unsigned int a=0;a<species->size();a++)
       {
-        (*particle_type_map) [ species->at(a).name() ] = a;
+        const auto & spec = species->at(a);
+        const std::string type_name = spec.name();
+        (*particle_type_map) [ type_name ] = a;
+        particle_type_properties->m_names[a] = type_name;
+        
+        particle_type_properties->m_name_map[ type_name ].m_scalars["mass"] = spec.m_mass;
+        particle_type_properties->m_name_map[ type_name ].m_scalars["z"] = spec.m_z;
+        particle_type_properties->m_name_map[ type_name ].m_scalars["charge"] = spec.m_charge;
+
+        particle_type_properties->scalar_property("mass")[a] = spec.m_mass;
+        particle_type_properties->scalar_property("z")[a] = spec.m_z;
+        particle_type_properties->scalar_property("charge")[a] = spec.m_charge;
       }
+            
     }
 
     inline void yaml_initialize(const YAML::Node& node) override final

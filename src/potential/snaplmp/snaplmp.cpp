@@ -1,3 +1,20 @@
+/*
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements. See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership. The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License. You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied. See the License for the
+specific language governing permissions and limitations
+under the License.
+*/
+
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
 #include <onika/math/basic_types.h>
@@ -49,7 +66,7 @@ namespace exaStamp
   {
     // ========= I/O slots =======================
     ADD_SLOT( MPI_Comm              , mpi               , INPUT , REQUIRED);
-    ADD_SLOT( SnapParms             , parameters        , INPUT , REQUIRED );
+    ADD_SLOT( md::SnapParms             , parameters        , INPUT , REQUIRED );
     ADD_SLOT( double                , rcut_max          , INPUT_OUTPUT , 0.0 );
     ADD_SLOT( exanb::GridChunkNeighbors , chunk_neighbors   , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
     ADD_SLOT( bool                  , ghost             , INPUT , false );
@@ -269,7 +286,7 @@ namespace exaStamp
           std::ostringstream oss; oss << *bispectrumchkfile << "." << *timestep;
           std::string file_name = onika::data_file_path( oss.str() );
           ldbg << "bispectrumchkfile is set, check bispectrum from file "<< file_name << std::endl;
-          snap_check_bispectrum(*mpi, *grid, file_name, ncoeff, snap_ctx->m_bispectrum.data() );
+          md::snap_check_bispectrum(*mpi, *grid, file_name, ncoeff, snap_ctx->m_bispectrum.data() );
         }
       }
 

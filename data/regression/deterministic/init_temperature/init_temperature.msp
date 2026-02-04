@@ -1,0 +1,80 @@
+configuration:
+  physics:
+    units:
+      length: angstrom
+      mass: Dalton
+      time: picosecond
+      charge: elementary_charge
+      temperature: kelvin
+      amount: particle
+      luminosity: candela
+      angle: radian
+      energy: joule
+  logging:
+    debug: false
+
+grid_flavor: grid_flavor_multimat
+
+species:
+  - Ta:
+      mass: 180.95 Da
+      z: 73
+      charge: 0 e-
+
+eam_alloy_force:
+  rcut: 6.6825 ang
+  parameters:
+    file: Ta1_Ravelo_2013.eam.alloy
+  eam_rho: true
+  eam_rho2emb: true
+  eam_ghost: true
+  eam_force: true
+  eam_symmetry: false
+
+compute_force:
+  - eam_alloy_force
+
+input_data:
+  - particle_regions:
+      - ZONE:
+          bounds: [ [ 15 ang , -100 ang , -100 ang ] , [ 33 ang , 100 ang , 100 ang ] ]
+  - particle_types:
+      particle_type_map: { Ta: 0 }
+  - particle_type_add_properties:
+      Ta: { mass: 180.95 Da , z: 73 }
+  - domain:
+      cell_size: 3.3 ang
+      grid_dims: [20,20,20]
+      bounds: [[0 ang ,0 ang,0 ang],[66 ang, 66 ang, 66 ang]]
+      xform: [[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
+      periodic: [true,true,true]
+      expandable: false
+  - init_rcb_grid
+  - lattice:
+      structure: BCC
+      types: [ Ta, Ta]
+      size: [ 3.3 ang , 3.3 ang , 3.3 ang ]
+  - init_temperature:
+      T: 300. K
+      generate_velocity: true
+  
+dump_data: nop
+  
+global:
+  simulation_end_iteration: 10
+  simulation_log_frequency: 5
+  simulation_dump_thermo_frequency: -1
+  simulation_dump_frequency: -1
+  rcut_inc: 1.0 ang
+  dt: 3.0e-3 ps
+  deterministic_noise: true
+
+simulation_epilog:
+  - check_values
+
+check_values:
+  file: check_init_temperature.dat
+  samples: 100
+  pos_threshold: 1.e-10
+  acc_threshold: 1.e-10
+  vel_threshold: 1.e-10

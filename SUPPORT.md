@@ -1,0 +1,4 @@
+- If you have any support-related / collaboration questions, please contact the team at paul.lafourcade@cea.fr.
+- If you are a CEA member, please request access to the group : "exaNBody & Co. (exaStamp, exaDEM, exaSPH)", an external access can also be provided.
+
+

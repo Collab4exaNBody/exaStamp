@@ -1,0 +1,34 @@
+compute_force:
+  - eam_alloy_force: { rcut: 7.29 ang , parameters: { file: "../../../scripts/python/pytab-eam-alloy/Cu.eam.alloy" } , eam_rho: true , eam_rho2emb: true , eam_ghost: true , eam_force: true , eam_symmetry: false }
+
+species:
+  - Cu: { mass: 63.546 Da , z: 29 , charge: 0.0 e- }
+
+grid_flavor: grid_flavor_multimat
+      
+domain:
+  cell_size: 5. ang
+  periodic: [true,true,true]
+  expandable: false
+      
+input_data:
+  - read_xyz_file_with_xform:
+      file: Cu_disturbed.xyz      
+      pbc_adjust_xform: true
+
+dump_data: nop
+  # - timestep_file: "bistest_%05d.xyz"
+  # - write_xyz:
+  #     fields: ["ep"]
+  
+global:
+  simulation_end_iteration: 1000
+  simulation_log_frequency: 50
+  simulation_dump_frequency: 50
+  simulation_dump_thermo_frequency: 10
+  analysis_dump_frequency: -1
+  rcut_inc: 1.0 ang
+  dt: 1.0e-3 ps
+  file: "alloy_thermo.csv"
+
+
