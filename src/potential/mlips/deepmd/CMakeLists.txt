@@ -18,23 +18,30 @@
 # === micro-stamp meam potential  ===
 # ===================================
 
-set(DeepMD_ROOT_DIR /usr/local/deepmd CACHE STRING "DEEPMD installation directory")
+# set(DeepMD_ROOT_DIR /usr/local/deepmd CACHE STRING "DEEPMD installation directory")
 
-# # default is disabled, user must explicitly enable it
-# set(ONIKA_BUILD_exaStampDeepMD_DEFAULT OFF)
+# # # default is disabled, user must explicitly enable it
+# # set(ONIKA_BUILD_exaStampDeepMD_DEFAULT OFF)
 
-# if(NOT IS_DIRECTORY ${DeepMD_ROOT_DIR})
-# 	message(STATUS "DeepMD directory not found in ${DeepMD_ROOT_DIR}, DeepMD is forced OFF")
-#   set(ONIKA_BUILD_exaStampDeepMD_FORCED OFF)
-# else()
-#   set(ONIKA_BUILD_exaStampDeepMD_FORCED ON)
-# endif()
+# # if(NOT IS_DIRECTORY ${DeepMD_ROOT_DIR})
+# # 	message(STATUS "DeepMD directory not found in ${DeepMD_ROOT_DIR}, DeepMD is forced OFF")
+# #   set(ONIKA_BUILD_exaStampDeepMD_FORCED OFF)
+# # else()
+# #   set(ONIKA_BUILD_exaStampDeepMD_FORCED ON)
+# # endif()
 
+
+# set(exaStampDeepMD_LINK_LIBRARIES exaStampPotential exaStampParticleSpecies exanbGridCellParticles exanbCompute ${DeepMD_ROOT_DIR}/lib/libdeepmd_cc_low.so)
+# onika_add_plugin(exaStampDeepMD ${CMAKE_CURRENT_SOURCE_DIR})
+
+# # set(exaStampDEEPMD_LINK_LIBRARIES exaStampPotential exaStampParticleSpecies)
+# # onika_add_plugin(exaStampDEEPMD ${CMAKE_CURRENT_SOURCE_DIR})
+
+# TODO with the following
+
+# Add the following to CMake 
+# -DDeePMD_DIR=/home/lafourcadep/CODES/ATOMISTIC/FFs/deepmd-kit/lib/cmake/DeePMD
+find_package(DeePMD REQUIRED)
 set(exaStampDeepMD_INCLUDE_DIRS ${DeepMD_ROOT_DIR}/include/deepmd)
-set(exaStampDeepMD_LINK_LIBRARIES exaStampPotential exaStampParticleSpecies exanbGridCellParticles exanbCompute ${DeepMD_ROOT_DIR}/lib/libdeepmd_cc_low.so)
+set(exaStampDeepMD_LINK_LIBRARIES exaStampPotential exaStampParticleSpecies exanbGridCellParticles exanbCompute PRIVATE DeePMD::deepmd_cc)
 onika_add_plugin(exaStampDeepMD ${CMAKE_CURRENT_SOURCE_DIR})
-
-
-# set(exaStampDEEPMD_LINK_LIBRARIES exaStampPotential exaStampParticleSpecies)
-# onika_add_plugin(exaStampDEEPMD ${CMAKE_CURRENT_SOURCE_DIR})
-
