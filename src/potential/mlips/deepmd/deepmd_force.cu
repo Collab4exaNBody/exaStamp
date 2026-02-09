@@ -28,7 +28,8 @@ under the License.
 #include <exaStamp/particle_species/particle_specie.h>
 #include <onika/physics/units.h>
 #include <onika/physics/constants.h>
-#include <onika/physics/units.h>
+#include <exaStamp/unit_system.h>
+
 #include <onika/memory/allocator.h>
 #include <exanb/grid_cell_particles/grid_cell_values.h>
 #include <exanb/core/source_term.h>
@@ -37,6 +38,7 @@ under the License.
 #include <iomanip>
 
 #include "DeepPot.h"
+#include <exaStamp/potential/mlips/deepmd/deepmd.h>
 
 namespace exaStamp
 {
@@ -53,10 +55,11 @@ namespace exaStamp
     ADD_SLOT( double         , rcut_max     , INPUT_OUTPUT , 0.0 );
     ADD_SLOT( GridT  , grid         , INPUT , REQUIRED );
     ADD_SLOT( Domain , domain       , INPUT , REQUIRED );
-    ADD_SLOT( std::string , model   , INPUT , REQUIRED );
-    ADD_SLOT( std::vector<std::string> , coefs   , INPUT , REQUIRED );
+    //    ADD_SLOT( std::string , model   , INPUT , REQUIRED );
+    //    ADD_SLOT( std::vector<std::string> , coefs   , INPUT , REQUIRED );
     ADD_SLOT( long           , grid_subdiv  , INPUT , 3 );
     ADD_SLOT( GridCellValues , grid_cell_values      , INPUT_OUTPUT );
+    ADD_SLOT( deepmd::DeepPot , deep_pot     , INPUT );
     
   public:
 
@@ -65,10 +68,18 @@ namespace exaStamp
     inline void execute ()  override final
     {
 
-      *rcut_max = 8.0;
+      *rcut_max = (*deep_pot).cutoff();
       
+      if( grid->number_of_cells() == 0 ) { return; }
+
       lout << "DeepMD force computation" << std::endl;
 
+      static constexpr double econv = EXASTAMP_CONST_QUANTITY( 1. * eV );
+      //      double econv = ONIKA_QUANTITY( 1.0 * eV ).convert();
+      static constexpr double fconv = EXASTAMP_CONST_QUANTITY( 1. * eV/ang );
+      lout << "fconv = " << fconv << std::endl;
+      static constexpr double vconv = EXASTAMP_CONST_QUANTITY( 1. * eV );
+      
       int rank=0;
       MPI_Comm_rank(*mpi, &rank);
 
@@ -97,7 +108,8 @@ namespace exaStamp
       
       if (numberOfParticles < 0) lerr << "Error: Negative number of particles.\n" << std::endl;
       
-      deepmd::DeepPot dp (*model);
+      //      deepmd::DeepPot dp (*model);
+      
       // std::vector<double > coord = {1., 0., 0., 0., 0., 1.5, 1. ,0. ,3.};
       // std::vector<double > cell = {10., 0., 0., 0., 10., 0., 0., 0., 10.};
       // std::vector<int > atype = {1, 0, 1};
@@ -165,8 +177,9 @@ namespace exaStamp
       //	-------------------------------------------------------------------
       
       // Compute energy and forces
-      dp.compute(energy, force, virial, coord, atype, cell);
-
+      std::string type_map_str;
+      (*deep_pot).compute(energy, force, virial, coord, atype, cell);
+      lout << "force 0 = " << force[0] << std::endl;
       //	-------------------------------------------------------------------
 #     pragma omp parallel
       {
@@ -184,9 +197,9 @@ namespace exaStamp
             for(unsigned int j=0;j<n;j++)
               {
                 size_t iloc = cell_offsets[i]+j;
-                fx[j] += force[iloc + 0];
-                fy[j] += force[iloc + 1];
-                fz[j] += force[iloc + 2];
+                fx[j] += force[iloc + 0] * fconv;
+                fy[j] += force[iloc + 1] * fconv;
+                fz[j] += force[iloc + 2] * fconv;
                 //                ep += energy[iloc];
               }
           }
