@@ -1,0 +1,45 @@
+species:
+  - O: { mass:  16.0 Da , z: 8 , charge: 0.0 e- }
+  - H: { mass:   1.0 Da , z: 1 , charge: 0.0 e- }
+
+grid_flavor: grid_flavor_multimat
+
+input_data:
+  - read_xyz_file_with_xform:
+      file: water_named.xyz
+      pbc_adjust_xform: true
+  - replicate_domain: [ 2 , 2 , 2 ]
+
+init_parameters:
+  - deepmd_init_bis:
+      model: "frozen_model.pth"
+      coefs: [ "O", "H" ]
+
+compute_force:
+  - deepmd_force_bis
+    
+domain:
+  cell_size: 3.2235 ang
+  periodic: [true,true,true]
+  expandable: false
+
+compute_force_prolog:
+  - zero_force_energy: { ghost: true }
+
+compute_force_epilog:
+  - update_force_energy_from_ghost
+  - force_to_accel
+  
+global:
+  simulation_end_iteration: 2000
+  simulation_log_frequency: 1
+  rcut_inc: 2.0 ang
+  dt: 0.001 ps
+  simulation_dump_frequency: 10
+  simulation_dump_thermo_frequency: 1
+  force_flush_file: true
+  
+dump_data:
+  - timestep_file: "xyz_datas/myfile_%09d.xyz"
+  - write_xyz: [ id, type, force ]
+

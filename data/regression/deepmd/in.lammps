@@ -1,0 +1,50 @@
+# bulk water
+
+units           metal
+boundary        p p p
+atom_style      atomic
+
+neighbor        2.0 bin
+neigh_modify    every 10 delay 0 check no
+
+read_data	water.lmp
+replicate 2 2 2  
+mass 		1 16
+mass		2 1
+
+# See https://deepmd.rtfd.io/lammps/ for usage
+pair_style	deepmd frozen_model.pth
+# If atom names (O H in this example) are not set in the pair_coeff command, the type_map defined by the training parameter will be used by default.
+pair_coeff  * *	O H
+
+#velocity        all create 330.0 23456789
+
+fix             1 all nve
+timestep        0.001
+
+variable ttt equal time
+variable sss equal step
+variable nat equal atoms
+variable etot_at equal etotal/atoms
+variable ke_at equal ke/atoms
+variable pe_at equal pe/atoms
+variable TTT equal temp
+variable PPP equal press
+  
+thermo_style    custom step time atoms etotal ke pe temp press vol
+thermo          1
+
+variable     peat equal pe/atoms
+variable     keat equal ke/atoms
+variable     etotalat equal etotal/atoms
+variable     T equal temp
+variable     nats equal atoms
+variable     s equal step
+variable     t equal time
+  
+fix          2 all print 1 "${s} ${t} ${nats} ${etotalat} ${keat} ${peat} ${T}" file thermo_deepmd_lmp.csv screen no
+
+# compute         dipole all deeptensor/atom frozen_model.pth
+# dump		        1 all custom 10 dumps/water.*.dump id type x y z c_dipole[1] c_dipole[2] c_dipole[3]
+  
+run             500
