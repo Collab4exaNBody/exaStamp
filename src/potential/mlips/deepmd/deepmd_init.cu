@@ -53,7 +53,7 @@ namespace exaStamp
     ADD_SLOT( double         , rcut_max     , INPUT_OUTPUT , 0.0 );
     ADD_SLOT( GridT  , grid         , INPUT , REQUIRED );
     //    ADD_SLOT( Domain , domain       , INPUT , REQUIRED );
-    ADD_SLOT( std::string , model   , INPUT , REQUIRED );
+    ADD_SLOT( std::string , model   , INPUT_OUTPUT , REQUIRED );
     ADD_SLOT( std::vector<std::string> , coefs   , INPUT , REQUIRED );
     //    ADD_SLOT( long           , grid_subdiv  , INPUT , 3 );
     //    ADD_SLOT( GridCellValues , grid_cell_values      , INPUT_OUTPUT );
@@ -67,10 +67,8 @@ namespace exaStamp
     {
       
       lout << "DeepMD force initialization" << std::endl;
-      
       deepmd::DeepPot dp (*model);
       *rcut_max = dp.cutoff();
-
       *deep_pot = dp;
       
     }

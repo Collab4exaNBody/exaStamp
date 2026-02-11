@@ -17,19 +17,15 @@ under the License.
 
 #pragma once
 
-namespace exaStamp
+using namespace exanb;
+
+struct DPMDThreadContext
 {
-  
-  using namespace exanb;
-  
-  struct DeepMDThreadContext
-  {
-    deepmd::DeepPot * dp = nullptr;
-  };
-    
-  struct DeepMDContext
-  {
-    std::vector<DeepMDThreadContext> m_thread_ctx;
-  };
-  
-}  
+  deepmd::DeepPot * dpmd_model = nullptr;
+
+};
+
+struct DPMDContext
+{
+  std::vector<DPMDThreadContext> m_thread_ctx;
+};

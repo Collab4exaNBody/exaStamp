@@ -15,17 +15,28 @@ specific language governing permissions and limitations
 under the License.
 */
 
-#include <memory>
-
-#include <onika/scg/operator.h>
-#include <onika/scg/operator_slot.h>
-#include <onika/scg/operator_factory.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
-#include <exanb/core/parallel_grid_algorithm.h>
-#include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/core/grid_fields.h>
+#include <onika/math/basic_types.h>
+#include <onika/math/basic_types_operators.h>
+#include <exanb/compute/compute_cell_particle_pairs.h>
 #include <exaStamp/particle_species/particle_specie.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/scg/operator_slot.h>
+#include <exanb/core/make_grid_variant_operator.h>
+#include <onika/log.h>
+#include <onika/cpp_utils.h>
+#include <exaStamp/particle_species/particle_specie.h>
+#include <onika/file_utils.h>
+
+#include "DeepPot.h"
+#include <exaStamp/potential/mlips/deepmd/deepmd.h>
+#include <exaStamp/potential/mlips/deepmd/deepmd_force_op.h>
+
+#include <exanb/core/parallel_grid_algorithm.h>
+#include <exanb/core/grid_fields.h>
+
 #include <onika/physics/units.h>
 #include <onika/physics/constants.h>
 #include <exaStamp/unit_system.h>
@@ -36,176 +47,100 @@ under the License.
 
 #include <mpi.h>
 #include <iomanip>
-
-#include "DeepPot.h"
-#include <exaStamp/potential/mlips/deepmd/deepmd.h>
+#include <memory>
 
 namespace exaStamp
 {
-  using namespace exanb;
+  using onika::memory::DEFAULT_ALIGNMENT;
 
   template<
     class GridT ,
-    class = AssertGridHasFields< GridT, field::_ep, field::_fx, field::_fy, field::_fz >
+    class = AssertGridHasFields< GridT, field::_ep, field::_fx, field::_fy, field::_fz, field::_type >
     >
   class DeepMDForce : public OperatorNode
   {
     ADD_SLOT( MPI_Comm       , mpi          , INPUT , MPI_COMM_WORLD );
     ADD_SLOT( ParticleSpecies, species      , INPUT , REQUIRED );
+    ADD_SLOT( GridChunkNeighbors    , chunk_neighbors   , INPUT        , GridChunkNeighbors{} , DocString{"neighbor list"} );
+    ADD_SLOT( bool                  , ghost             , INPUT        , false    );    
     ADD_SLOT( double         , rcut_max     , INPUT_OUTPUT , 0.0 );
     ADD_SLOT( GridT  , grid         , INPUT , REQUIRED );
     ADD_SLOT( Domain , domain       , INPUT , REQUIRED );
-    //    ADD_SLOT( std::string , model   , INPUT , REQUIRED );
-    //    ADD_SLOT( std::vector<std::string> , coefs   , INPUT , REQUIRED );
     ADD_SLOT( long           , grid_subdiv  , INPUT , 3 );
     ADD_SLOT( GridCellValues , grid_cell_values      , INPUT_OUTPUT );
     ADD_SLOT( deepmd::DeepPot , deep_pot     , INPUT );
+    ADD_SLOT( std::string , model   , INPUT_OUTPUT , REQUIRED );    
+    ADD_SLOT( DPMDContext , dpmd_ctx , PRIVATE );
+    ADD_SLOT( GridParticleLocks     , particle_locks    , INPUT , OPTIONAL , DocString{"particle spin locks"} );
     
+    static constexpr bool UseWeights = false;
+    static constexpr bool UseNeighbors = true;
+    using ComputeBuffer = ComputePairBuffer2<UseWeights,UseNeighbors>;
+    static constexpr bool has_virial_field = GridHasField<GridT,field::_virial>::value;
+
+    // attributes processed during computation
+    using ComputeFieldsWithoutVirial = FieldSet< field::_ep ,field::_fx ,field::_fy ,field::_fz ,field::_type >;
+    using ComputeFieldsWithVirial    = FieldSet< field::_ep ,field::_fx ,field::_fy ,field::_fz ,field::_type, field::_virial >;
+    using ComputeFields              = std::conditional_t< has_virial_field , ComputeFieldsWithVirial , ComputeFieldsWithoutVirial >;
+    static constexpr ComputeFields compute_force_field_set{};
+        
   public:
 
     // -----------------------------------------------
     // -----------------------------------------------
     inline void execute ()  override final
     {
+      ldbg << "DeepMD force computation" << std::endl;
 
-      *rcut_max = (*deep_pot).cutoff();
-      
       if( grid->number_of_cells() == 0 ) { return; }
-
-      lout << "DeepMD force computation" << std::endl;
-
-      static constexpr double econv = EXASTAMP_CONST_QUANTITY( 1. * eV );
-      //      double econv = ONIKA_QUANTITY( 1.0 * eV ).convert();
-      static constexpr double fconv = EXASTAMP_CONST_QUANTITY( 1. * eV/ang );
-      lout << "fconv = " << fconv << std::endl;
-      static constexpr double vconv = EXASTAMP_CONST_QUANTITY( 1. * eV );
       
-      int rank=0;
-      MPI_Comm_rank(*mpi, &rank);
+      assert( chunk_neighbors->number_of_cells() == grid->number_of_cells() );
+      size_t nt = omp_get_max_threads();
+      if (nt > dpmd_ctx->m_thread_ctx.size()) {
+        size_t old_nt = dpmd_ctx->m_thread_ctx.size();
+        dpmd_ctx->m_thread_ctx.resize( nt );
 
-      GridT& grid = *(this->grid);
-      // compile time constant indicating if grid has type field
-      using has_type_field_t = typename GridT::CellParticles::template HasField < field::_type > ;
-      static constexpr has_type_field_t has_type_field{};
-        
-      IJK dims = grid.dimension();
-      auto cells = grid.cells();
-        
-      int gl = grid.ghost_layers();
-      IJK start = {gl,gl,gl};
-      IJK end = dims-start;
-      IJK local_grid_dims = end-start;
-      AABB bnds = grid.grid_bounds();
-      AABB bnds_no_ghosts = grid.grid_bounds_no_ghost();
-        
-      Mat3d xform = domain->xform();
-      Mat3d lattice = diag_matrix( domain->extent() - domain->origin() );
-      Mat3d lattice_loc = diag_matrix( bnds_no_ghosts.bmax - bnds_no_ghosts.bmin );
-      Mat3d Hcur = transpose(xform * lattice_loc);
-
-      int numberOfParticles = grid.number_of_particles();
-      int numberOfCells = grid.number_of_cells();
-      
-      if (numberOfParticles < 0) lerr << "Error: Negative number of particles.\n" << std::endl;
-      
-      //      deepmd::DeepPot dp (*model);
-      
-      // std::vector<double > coord = {1., 0., 0., 0., 0., 1.5, 1. ,0. ,3.};
-      // std::vector<double > cell = {10., 0., 0., 0., 10., 0., 0., 0., 10.};
-      // std::vector<int > atype = {1, 0, 1};
-      // double e;
-      // std::vector<double > f, v;
-      // dp.compute (e, f, v, coord, atype, cell);
-
-      // Prepare your inputs
-      // 3N coordinates [x1,y1,z1,x2,y2,z2,...]      
-      std::vector<double> coord;
-      coord.resize(3*numberOfParticles);
-      // N atom types [0,1,0,1,...]      
-      std::vector<int> atype;
-      atype.resize(numberOfParticles);
-      // 9 elements for 3x3 cell matrix
-      std::vector<double> cell;
-      cell.resize(9);
-      cell[0] = Hcur.m11;
-      cell[1] = Hcur.m12;
-      cell[2] = Hcur.m13;      
-      cell[3] = Hcur.m21;
-      cell[4] = Hcur.m22;
-      cell[5] = Hcur.m23;      
-      cell[6] = Hcur.m31;
-      cell[7] = Hcur.m32;
-      cell[8] = Hcur.m33;
-      // Output variables
-      double energy;
-      std::vector<double> force;
-      std::vector<double> virial;
-
-      std::vector<size_t> cell_offsets(numberOfCells + 1, 0);
-      for(size_t i = 0; i < numberOfCells; i++) {
-        cell_offsets[i + 1] = cell_offsets[i] + cells[i].size();
+        for(size_t j=old_nt;j<nt;j++)
+          {
+            assert( dpmd_ctx->m_thread_ctx[j].dpmd_model == nullptr );
+            dpmd_ctx->m_thread_ctx[j].dpmd_model = new deepmd::DeepPot (*model);
+          }
       }
 
-      //	-------------------------------------------------------------------
-#     pragma omp parallel
+      *rcut_max = std::max( *rcut_max, (*deep_pot).cutoff() );
+
+      size_t n_cells = grid->number_of_cells();
+      if( n_cells == 0 )
       {
-        GRID_OMP_FOR_BEGIN(dims,i,cell_loc, schedule(dynamic) )
-          {
-            GridFieldSetPointerTuple< GridT, FieldSet<field::_rx,field::_ry,field::_rz,field::_type> > ptrs;
-            cells[i].capture_pointers( ptrs );
-            
-            const auto* __restrict__ rx = ptrs[field::rx];
-            const auto* __restrict__ ry = ptrs[field::ry];
-            const auto* __restrict__ rz = ptrs[field::rz];
-            const auto* __restrict__ pt = ptrs[field::type];
-              
-            const unsigned int n = cells[i].size();
-              
-            for(unsigned int j=0;j<n;j++)
-              {
-                size_t iloc = cell_offsets[i]+j;
-                Vec3d r = { rx[j], ry[j], rz[j] };
-                Vec3d rt = xform * r;                  
-                coord[iloc + 0] = rt.x;
-                coord[iloc + 1] = rt.y;
-                coord[iloc + 2] = rt.z;
-                atype[iloc] = pt[j];
-              }
-          }
-        GRID_OMP_FOR_END
-          }
-      //	-------------------------------------------------------------------
+        return ;
+      }
+		
+      if( ! particle_locks.has_value() )
+      {
+        fatal_error() << "No particle locks" << std::endl;
+      }
+
+      ComputePairNullWeightIterator cp_weight{};
+      GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
+      auto force_buf = make_compute_pair_buffer<ComputeBuffer>();
+      LinearXForm cp_xform { domain->xform() };
+
+      using TypeFieldT = decltype( grid->field_accessor( field::type ) );
+      TypeFieldT   type_field   = {};
+      type_field = grid->field_accessor( field::type );
       
-      // Compute energy and forces
-      std::string type_map_str;
-      (*deep_pot).compute(energy, force, virial, coord, atype, cell);
-      lout << "force 0 = " << force[0] << std::endl;
-      //	-------------------------------------------------------------------
-#     pragma omp parallel
+      auto compute_opt_locks = [&](auto cp_locks)
       {
-        GRID_OMP_FOR_BEGIN(dims,i,cell_loc, schedule(dynamic) )
-          {
-            GridFieldSetPointerTuple< GridT, FieldSet<field::_fx,field::_fy,field::_fz> > ptrs;
-            cells[i].capture_pointers( ptrs );
-            
-            auto* fx = ptrs[field::fx];
-            auto* fy = ptrs[field::fy];
-            auto* fz = ptrs[field::fz];
-              
-            const unsigned int n = cells[i].size();
-              
-            for(unsigned int j=0;j<n;j++)
-              {
-                size_t iloc = cell_offsets[i]+j;
-                fx[j] += force[iloc + 0] * fconv;
-                fy[j] += force[iloc + 1] * fconv;
-                fz[j] += force[iloc + 2] * fconv;
-                //                ep += energy[iloc];
-              }
-          }
-        GRID_OMP_FOR_END
-          }
-      //	-------------------------------------------------------------------
+        auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform, cp_locks );
+        DPMDForceOp<TypeFieldT> force_op { dpmd_ctx->m_thread_ctx.data() , type_field };
+        compute_cell_particle_pairs( *grid, (*deep_pot).cutoff(), *ghost, optional, force_buf, force_op , compute_force_field_set , parallel_execution_context() );
+      };
+
+      if( omp_get_max_threads() > 1 ) {
+        compute_opt_locks( ComputePairOptionalLocks<true>{ particle_locks->data() } );
+      } else {
+        compute_opt_locks( ComputePairOptionalLocks<false>{} );
+      }
       
     }
 
