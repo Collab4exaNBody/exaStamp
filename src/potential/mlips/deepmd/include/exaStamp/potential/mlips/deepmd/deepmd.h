@@ -22,10 +22,19 @@ using namespace exanb;
 struct DPMDThreadContext
 {
   deepmd::DeepPot * dpmd_model = nullptr;
-
 };
 
 struct DPMDContext
 {
   std::vector<DPMDThreadContext> m_thread_ctx;
+};
+
+struct DPMDThreadContextPT
+{
+  deepmd::DeepPotPT * dpmd_model = nullptr;
+};
+
+struct DPMDContextPT
+{
+  std::vector<DPMDThreadContextPT> m_thread_ctx;
 };

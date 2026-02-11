@@ -57,7 +57,7 @@ namespace exaStamp
     class GridT ,
     class = AssertGridHasFields< GridT, field::_ep, field::_fx, field::_fy, field::_fz, field::_type >
     >
-  class DeepMDForce : public OperatorNode
+  class DeePMDForceBis : public OperatorNode
   {
     ADD_SLOT( MPI_Comm       , mpi          , INPUT , MPI_COMM_WORLD );
     ADD_SLOT( ParticleSpecies, species      , INPUT , REQUIRED );
@@ -68,9 +68,9 @@ namespace exaStamp
     ADD_SLOT( Domain , domain       , INPUT , REQUIRED );
     ADD_SLOT( long           , grid_subdiv  , INPUT , 3 );
     ADD_SLOT( GridCellValues , grid_cell_values      , INPUT_OUTPUT );
-    ADD_SLOT( deepmd::DeepPot , deep_pot     , INPUT );
+    ADD_SLOT( deepmd::DeepPotPT , deep_pot     , INPUT );
     ADD_SLOT( std::string , model   , INPUT_OUTPUT , REQUIRED );    
-    ADD_SLOT( DPMDContext , dpmd_ctx , PRIVATE );
+    ADD_SLOT( DPMDContextPT , dpmd_ctx , PRIVATE );
     ADD_SLOT( GridParticleLocks     , particle_locks    , INPUT , OPTIONAL , DocString{"particle spin locks"} );
     
     static constexpr bool UseWeights = false;
@@ -103,7 +103,7 @@ namespace exaStamp
         for(size_t j=old_nt;j<nt;j++)
           {
             assert( dpmd_ctx->m_thread_ctx[j].dpmd_model == nullptr );
-            dpmd_ctx->m_thread_ctx[j].dpmd_model = new deepmd::DeepPot (*model);
+            dpmd_ctx->m_thread_ctx[j].dpmd_model = new deepmd::DeepPotPT (*model);
           }
       }
 
@@ -132,7 +132,7 @@ namespace exaStamp
       auto compute_opt_locks = [&](auto cp_locks)
       {
         auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform, cp_locks );
-        DPMDForceOp<TypeFieldT> force_op { dpmd_ctx->m_thread_ctx.data() , type_field };
+        DPMDForceOpBis<TypeFieldT> force_op { dpmd_ctx->m_thread_ctx.data() , type_field };
         compute_cell_particle_pairs( *grid, (*deep_pot).cutoff(), *ghost, optional, force_buf, force_op , compute_force_field_set , parallel_execution_context() );
       };
 
@@ -146,12 +146,12 @@ namespace exaStamp
 
   };
 
-  template<class GridT> using DeepMDForceTmpl = DeepMDForce<GridT>;
+  template<class GridT> using DeePMDForceBisTmpl = DeePMDForceBis<GridT>;
 
   // === register factories ===
-  ONIKA_AUTORUN_INIT(deepmd_force)
+  ONIKA_AUTORUN_INIT(deepmd_force_bis)
   {
-   OperatorNodeFactory::instance()->register_factory("deepmd_force", make_grid_variant_operator< DeepMDForceTmpl > );
+   OperatorNodeFactory::instance()->register_factory("deepmd_force_bis", make_grid_variant_operator< DeePMDForceBisTmpl > );
   }
 
 }

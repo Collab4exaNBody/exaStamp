@@ -46,7 +46,7 @@ namespace exaStamp
     class GridT ,
     class = AssertGridHasFields< GridT, field::_ep, field::_fx, field::_fy, field::_fz >
     >
-  class DeepMDInit : public OperatorNode
+  class DeepMDInitBis : public OperatorNode
   {
     ADD_SLOT( MPI_Comm       , mpi          , INPUT , MPI_COMM_WORLD );
     //    ADD_SLOT( ParticleSpecies, species      , INPUT , REQUIRED );
@@ -57,7 +57,7 @@ namespace exaStamp
     ADD_SLOT( std::vector<std::string> , coefs   , INPUT , REQUIRED );
     //    ADD_SLOT( long           , grid_subdiv  , INPUT , 3 );
     //    ADD_SLOT( GridCellValues , grid_cell_values      , INPUT_OUTPUT );
-    ADD_SLOT( deepmd::DeepPot , deep_pot     , OUTPUT );
+    ADD_SLOT( deepmd::DeepPotPT , deep_pot     , OUTPUT );
     
   public:
 
@@ -67,7 +67,7 @@ namespace exaStamp
     {
       
       lout << "DeepMD force initialization" << std::endl;
-      deepmd::DeepPot dp (*model);
+      deepmd::DeepPotPT dp (*model);
       *rcut_max = dp.cutoff();
       *deep_pot = dp;
       
@@ -75,12 +75,12 @@ namespace exaStamp
 
   };
 
-  template<class GridT> using DeepMDInitTmpl = DeepMDInit<GridT>;
+  template<class GridT> using DeepMDInitBisTmpl = DeepMDInitBis<GridT>;
 
   // === register factories ===
-  ONIKA_AUTORUN_INIT(deepmd_init)
+  ONIKA_AUTORUN_INIT(deepmd_init_bis)
   {
-   OperatorNodeFactory::instance()->register_factory("deepmd_init", make_grid_variant_operator< DeepMDInitTmpl > );
+   OperatorNodeFactory::instance()->register_factory("deepmd_init_bis", make_grid_variant_operator< DeepMDInitBisTmpl > );
   }
 
 }

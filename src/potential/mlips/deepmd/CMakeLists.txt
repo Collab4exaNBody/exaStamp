@@ -41,7 +41,14 @@
 
 # Add the following to CMake 
 # -DDeePMD_DIR=/home/lafourcadep/CODES/ATOMISTIC/FFs/deepmd-kit/lib/cmake/DeePMD
+
+find_package(Torch REQUIRED)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
+
+#set(exaStampDeepMD_COMPILE_DEFINITIONS TORCH_STABLE_ONLY=1)
 find_package(DeePMD REQUIRED)
-set(exaStampDeepMD_INCLUDE_DIRS ${DeepMD_ROOT_DIR}/include/deepmd)
-set(exaStampDeepMD_LINK_LIBRARIES exaStampPotential exaStampParticleSpecies exanbGridCellParticles exanbCompute PRIVATE DeePMD::deepmd_cc)
+set(exaStampDeepMD_INCLUDE_DIRS ${DeepMD_ROOT_DIR}/include/deepmd ${TORCH_ROOT_DIR}/include/torch)
+set(exaStampDeepMD_LINK_LIBRARIES exaStampPotential exaStampParticleSpecies exanbGridCellParticles exanbCompute PRIVATE DeePMD::deepmd_cc "${TORCH_LIBRARIES}")
+set(CMAKE_CXX_STANDARD 17)
+  
 onika_add_plugin(exaStampDeepMD ${CMAKE_CURRENT_SOURCE_DIR})
