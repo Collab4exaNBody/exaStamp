@@ -169,11 +169,40 @@ namespace exaStamp
       for(auto& potelem : potentials_for_pairs->m_potentials)
       {
         auto & pot = potelem.m_params;
+        //std::string typea_typeb;
+
+
         if( str2type(potelem.m_type_a)==-1 ) { fatal_error()<<"unknown type "<<potelem.m_type_a<<" in potential description"<<std::endl; }
         if( str2type(potelem.m_type_b)==-1 ) { fatal_error()<<"unknown type "<<potelem.m_type_b<<" in potential description"<<std::endl; }
         const unsigned int ta = str2type(potelem.m_type_a);
         const unsigned int tb = str2type(potelem.m_type_b); 
         const unsigned int pair_id = unique_pair_id(ta,tb);
+
+	      ///* string for pairs */
+	      //typea_typeb = potelem.m_type_a + "_" + potelem.m_type_b;
+	      //auto it = mol_pair_weights->m_molecule_weight.find(typea_typeb);
+	      //if (it != mol_pair_weights->m_molecule_weight.end()) {
+              //  bond_pair_weight = it->second.m_bond_weight;
+              //  bond_rf_weight = it->second.m_rf_bond_weight;
+              //  angle_pair_weight = it->second.m_bend_weight;
+              //  angle_rf_weight = it->second.m_rf_bend_weight;
+              //  torsion_pair_weight = it->second.m_torsion_weight;
+              //  torsion_rf_weight = it->second.m_rf_torsion_weight;
+	      //} else {
+              //  typea_typeb = potelem.m_type_b + "_" + potelem.m_type_a;
+	      //  it = mol_pair_weights->m_molecule_weight.find(typea_typeb);
+	      //  if (it != mol_pair_weights->m_molecule_weight.end()) {
+              //    bond_pair_weight = it->second.m_bond_weight;
+              //    bond_rf_weight = it->second.m_rf_bond_weight;
+              //    angle_pair_weight = it->second.m_bend_weight;
+              //    angle_rf_weight = it->second.m_rf_bend_weight;
+              //    torsion_pair_weight = it->second.m_torsion_weight;
+              //    torsion_rf_weight = it->second.m_rf_torsion_weight;
+	      //  } else {
+              //    fatal_error() << "intramolecular weight for pair (" << potelem.m_type_a << ", " << potelem.m_type_b << ") not found !" << std::endl;
+	      //  }
+	      //}
+
         
         // if long_range_correction is enabled, we must set non-RF pair potenital's ecut to 0
         if( *long_range_correction )
