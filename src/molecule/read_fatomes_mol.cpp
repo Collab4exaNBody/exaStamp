@@ -221,7 +221,7 @@ namespace exaStamp
         auto read_unit = [this] ( std::string u ) -> std::string
         {
           //const std::map<std::string,std::string> replace = { {"J/mol.m6","J*m^6   "} , {"ang2","ang^2"} , {"deg","degree"} , {"m6","m^6"} , {"m-1","m^-1"} , {"kcal/mol", "kcal"}};
-          const std::map<std::string,std::string> replace = { {"J.m6","J*m^6   "} , {"ang2","ang^2"} , {"deg","degree"} , {"m6","m^6"} , {"m-1","m^-1"} , {"metre", "m"}, {"kcal/mol.ang^6", "kcal/mol*ang^6"}};
+          const std::map<std::string,std::string> replace = { {"J.m6","J*m^6   "} , {"ang2","ang^2"} , {"deg","degree"} , {"degreere","degree"}, {"m6","m^6"} , {"m-1","m^-1"} , {"metre", "m"}, {"kcal/mol.ang^6", "kcal/mol*ang^6"}};
 
           for(const auto& r : replace)
           {
@@ -230,7 +230,7 @@ namespace exaStamp
             {
               //ldbg << "found "<<r.first<<" @"<<p<<std::endl;
               //if( r.second.find(r.first)!=0 || p != u.find(r.second,p) ) u.replace( p , r.second.length() , r.second );
-	      u.replace( p , r.first.length() , r.second );
+	            u.replace( p , r.first.length() , r.second );
               p = u.find( r.first , p + r.second.length() );
             }
           }
@@ -274,6 +274,7 @@ namespace exaStamp
 	          std::string ta, tb;
             std::string typepot;
             iss >> ta >> tb >> typepot;
+            std::cout << ta << tb << typepot;
 
             // if ta and tb are atom type ids,
             if (isdigit(ta[0])) {
@@ -1021,6 +1022,13 @@ namespace exaStamp
         // close main file
         file.close();
 
+        // Determine the maximum rcut from LJ/Exp6 interaction
+        for(const auto& pot : potentials_for_pairs->m_potentials )
+        {
+          ldbg<<"potentials_for_pairs: "<<pot.m_type_a<<" / "<<pot.m_type_b<<" => " << pot.m_params << std::endl;
+          *rcut_max = std::max( *rcut_max , pot.m_params.m_rcut );
+        }
+        
         // if available, open and read Stamp init file to get reaction field parameters
         if( stampinput.has_value() )
         {
@@ -1045,7 +1053,12 @@ namespace exaStamp
             double rf_epsilon = init["ReactionField_epsilon"];
             double rf_rc = init["ReactionField_rc"];
             rf_rc = EXASTAMP_QUANTITY( rf_rc * m ); // StampV4 has implicit meter unit for distances
+
+            /* if rf_rc < 0, the convention is to take rf_rc = max (rc from LJ/Exp6)*/
+            if (rf_rc < 0.0) rf_rc = *rcut_max;
+
             ldbg << "found RF parameters : epsilon="<<rf_epsilon<<" , rcut="<<rf_rc<<std::endl;
+            std::cout << "found RF parameters : epsilon="<<rf_epsilon<<" , rcut="<<rf_rc<<std::endl;
             std::set< std::pair<std::string,std::string> > existing_pair_pots;
             for( auto & pot : potentials_for_pairs->m_potentials )
             {
@@ -1071,6 +1084,7 @@ namespace exaStamp
           }
         }
         
+        // Determine the global rcut, taking into account rf_rc
         for(const auto& pot : potentials_for_pairs->m_potentials )
         {
           ldbg<<"potentials_for_pairs: "<<pot.m_type_a<<" / "<<pot.m_type_b<<" => " << pot.m_params << std::endl;

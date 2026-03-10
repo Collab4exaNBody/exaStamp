@@ -151,25 +151,25 @@ namespace exaStamp
       }
 
       float torsion_pair_weight=1.0f, torsion_rf_weight=1.0f, angle_pair_weight=1.0f, angle_rf_weight=1.0f, bond_pair_weight=1.0f, bond_rf_weight=1.0f;
-      for( const auto & p : mol_pair_weights->m_molecule_weight )
-      {
-        ldbg << p.first << " : bond="<<p.second.m_bond_weight<<" , bond_rf="<<p.second.m_rf_bond_weight
-                        <<" , bend="<<p.second.m_bend_weight<<" , bend_rf="<<p.second.m_rf_bend_weight
-                        <<" , torsion="<<p.second.m_torsion_weight<<" , torsion_rf="<<p.second.m_rf_torsion_weight<<std::endl;
-        bond_pair_weight = p.second.m_bond_weight;
-        bond_rf_weight = p.second.m_rf_bond_weight;
-        angle_pair_weight = p.second.m_bend_weight;
-        angle_rf_weight = p.second.m_rf_bend_weight;
-        torsion_pair_weight = p.second.m_torsion_weight;
-        torsion_rf_weight = p.second.m_rf_torsion_weight;
-      }
+      //for( const auto & p : mol_pair_weights->m_molecule_weight )
+      //{
+      //  ldbg << p.first << " : bond="<<p.second.m_bond_weight<<" , bond_rf="<<p.second.m_rf_bond_weight
+      //                  <<" , bend="<<p.second.m_bend_weight<<" , bend_rf="<<p.second.m_rf_bend_weight
+      //                  <<" , torsion="<<p.second.m_torsion_weight<<" , torsion_rf="<<p.second.m_rf_torsion_weight<<std::endl;
+      //  bond_pair_weight = p.second.m_bond_weight;
+      //  bond_rf_weight = p.second.m_rf_bond_weight;
+      //  angle_pair_weight = p.second.m_bend_weight;
+      //  angle_rf_weight = p.second.m_rf_bend_weight;
+      //  torsion_pair_weight = p.second.m_torsion_weight;
+      //  torsion_rf_weight = p.second.m_rf_torsion_weight;
+      //}
 
       const unsigned int n_type_pairs = unique_pair_count( species->size() );
       molecule_compute_parameters->m_pair_params.assign( n_type_pairs * 3 , IntramolecularPairParams{ LJExp6RFParms{}, 0.0f, 0.0f } );
       for(auto& potelem : potentials_for_pairs->m_potentials)
       {
         auto & pot = potelem.m_params;
-        //std::string typea_typeb;
+        std::string typea_typeb;
 
 
         if( str2type(potelem.m_type_a)==-1 ) { fatal_error()<<"unknown type "<<potelem.m_type_a<<" in potential description"<<std::endl; }
@@ -178,30 +178,30 @@ namespace exaStamp
         const unsigned int tb = str2type(potelem.m_type_b); 
         const unsigned int pair_id = unique_pair_id(ta,tb);
 
-	      ///* string for pairs */
-	      //typea_typeb = potelem.m_type_a + "_" + potelem.m_type_b;
-	      //auto it = mol_pair_weights->m_molecule_weight.find(typea_typeb);
-	      //if (it != mol_pair_weights->m_molecule_weight.end()) {
-              //  bond_pair_weight = it->second.m_bond_weight;
-              //  bond_rf_weight = it->second.m_rf_bond_weight;
-              //  angle_pair_weight = it->second.m_bend_weight;
-              //  angle_rf_weight = it->second.m_rf_bend_weight;
-              //  torsion_pair_weight = it->second.m_torsion_weight;
-              //  torsion_rf_weight = it->second.m_rf_torsion_weight;
-	      //} else {
-              //  typea_typeb = potelem.m_type_b + "_" + potelem.m_type_a;
-	      //  it = mol_pair_weights->m_molecule_weight.find(typea_typeb);
-	      //  if (it != mol_pair_weights->m_molecule_weight.end()) {
-              //    bond_pair_weight = it->second.m_bond_weight;
-              //    bond_rf_weight = it->second.m_rf_bond_weight;
-              //    angle_pair_weight = it->second.m_bend_weight;
-              //    angle_rf_weight = it->second.m_rf_bend_weight;
-              //    torsion_pair_weight = it->second.m_torsion_weight;
-              //    torsion_rf_weight = it->second.m_rf_torsion_weight;
-	      //  } else {
-              //    fatal_error() << "intramolecular weight for pair (" << potelem.m_type_a << ", " << potelem.m_type_b << ") not found !" << std::endl;
-	      //  }
-	      //}
+	      /* string for pairs */
+	      typea_typeb = potelem.m_type_a + "_" + potelem.m_type_b;
+	      auto it = mol_pair_weights->m_molecule_weight.find(typea_typeb);
+	      if (it != mol_pair_weights->m_molecule_weight.end()) {
+          bond_pair_weight = it->second.m_bond_weight;
+          bond_rf_weight = it->second.m_rf_bond_weight;
+          angle_pair_weight = it->second.m_bend_weight;
+          angle_rf_weight = it->second.m_rf_bend_weight;
+          torsion_pair_weight = it->second.m_torsion_weight;
+          torsion_rf_weight = it->second.m_rf_torsion_weight;
+	      } else {
+          typea_typeb = potelem.m_type_b + "_" + potelem.m_type_a;
+	        it = mol_pair_weights->m_molecule_weight.find(typea_typeb);
+	        if (it != mol_pair_weights->m_molecule_weight.end()) {
+            bond_pair_weight = it->second.m_bond_weight;
+            bond_rf_weight = it->second.m_rf_bond_weight;
+            angle_pair_weight = it->second.m_bend_weight;
+            angle_rf_weight = it->second.m_rf_bend_weight;
+            torsion_pair_weight = it->second.m_torsion_weight;
+            torsion_rf_weight = it->second.m_rf_torsion_weight;
+	        } else {
+            fatal_error() << "intramolecular weight for pair (" << potelem.m_type_a << ", " << potelem.m_type_b << ") not found !" << std::endl;
+	        }
+	      }
 
         
         // if long_range_correction is enabled, we must set non-RF pair potenital's ecut to 0
@@ -460,16 +460,16 @@ namespace exaStamp
         }
       }
 
-      for(unsigned int m=0;m<nmol;m++)
-      {
-        if( mol_pair_weights.has_value() )
-        {
-          if( mol_pair_weights->m_molecule_weight.find( molecules->m_molecules.at(m).name() ) == mol_pair_weights->m_molecule_weight.end() )
-          {
-            fatal_error() << "mol_pair_weights has no entry for molecule name '"<<molecules->m_molecules.at(m).name()<<"'" << std::endl;
-          }
-        }
-      }
+      //for(unsigned int m=0;m<nmol;m++)
+      //{
+      //  if( mol_pair_weights.has_value() )
+      //  {
+      //    if( mol_pair_weights->m_molecule_weight.find( molecules->m_molecules.at(m).name() ) == mol_pair_weights->m_molecule_weight.end() )
+      //    {
+      //      fatal_error() << "mol_pair_weights has no entry for molecule name '"<<molecules->m_molecules.at(m).name()<<"'" << std::endl;
+      //    }
+      //  }
+      //}
       
       // count number of different pair potential parameters
       std::map< std::pair<int,int> , LJExp6RFMultiParmsPair > pair_param_map;
