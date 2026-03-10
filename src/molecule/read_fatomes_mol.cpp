@@ -274,7 +274,6 @@ namespace exaStamp
 	          std::string ta, tb;
             std::string typepot;
             iss >> ta >> tb >> typepot;
-            std::cout << ta << tb << typepot;
 
             // if ta and tb are atom type ids,
             if (isdigit(ta[0])) {
@@ -1058,7 +1057,6 @@ namespace exaStamp
             if (rf_rc < 0.0) rf_rc = *rcut_max;
 
             ldbg << "found RF parameters : epsilon="<<rf_epsilon<<" , rcut="<<rf_rc<<std::endl;
-            std::cout << "found RF parameters : epsilon="<<rf_epsilon<<" , rcut="<<rf_rc<<std::endl;
             std::set< std::pair<std::string,std::string> > existing_pair_pots;
             for( auto & pot : potentials_for_pairs->m_potentials )
             {
