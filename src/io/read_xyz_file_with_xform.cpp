@@ -56,6 +56,7 @@ namespace exaStamp
     ADD_SLOT( GridT           , grid         , INPUT_OUTPUT );
     ADD_SLOT( ParticleSpecies , species      , INPUT ); // optional. if no species given, type ids are allocated automatically
     ADD_SLOT( ReadBoundsSelectionMode, bounds_mode   , INPUT , ReadBoundsSelectionMode::FILE_BOUNDS );
+    ADD_SLOT( uint64_t        , natoms       , OUTPUT );
 
   public:
     inline void execute () override final
@@ -189,6 +190,8 @@ namespace exaStamp
           
           particle_data.push_back( ParticleTupleIO(x,y,z,n_particles++,typeMap[type]) );
         }
+
+        *natoms = n_particles;
         
         if( ! domain.xform_is_identity() )
         {

@@ -19,13 +19,10 @@ under the License.
 
 #include <cmath>
 #include <yaml-cpp/yaml.h>
-
 #include <onika/physics/units.h>
-#include <exaStamp/potential_factory/pair_potential.h>
 #include <onika/physics/constants.h>
-#include <exaStamp/unit_system.h>
-
 #include <onika/cuda/cuda.h>
+#include <exaStamp/unit_system.h>
 
 #define EWALD_F 1.12837917
 #define EWALD_P 0.3275911
@@ -39,32 +36,34 @@ namespace exaStamp
 {
   using namespace exanb;
 
-  // CoulDsf Parameters
-  struct CoulDsfParms
+  struct DsfParameters
   {
     double alpha = 0.0;
     double rc = 0.0;
     double qqrd2e = 14.399645;
+    double e_shift = 0.0;
+    double f_shift = 0.0;
+
+    ONIKA_HOST_DEVICE_FUNC
+    inline bool is_null() const { return alpha==0.0 && e_shift==0.0 && f_shift==0.0; }    
+    
   };
-  // core computation kernel for coul dsf potential
-  ONIKA_HOST_DEVICE_FUNC inline void coul_dsf_compute_energy(const CoulDsfParms& p, double c1, double c2, double r, double& e, double& de)
+  
+  ONIKA_HOST_DEVICE_FUNC
+  inline void dsf_compute_energy(const DsfParameters& p, double c, double r, double& e, double& de)
   {
     assert( r > 0. );
     double MY_PIS = sqrt(M_PI);
     double rsq = r*r;
     double cut_coul = p.rc;
     double cut_coulsq = cut_coul * cut_coul;    
-    double qtmp = c1;
-    double qj = c2;
 
     double erfcc = erfc(p.alpha * cut_coul);
     double erfcd = exp(-p.alpha * p.alpha * cut_coul * cut_coul);
     double f_shift = -(erfcc / cut_coulsq + 2.0 / MY_PIS * p.alpha * erfcd / cut_coul);
     double e_shift = erfcc / cut_coul - f_shift * cut_coul;
 
-    //    double e_self = -(e_shift / 2.0 + p.alpha / MY_PIS) * qtmp * qtmp * p.qqrd2e;
-    
-    double prefactor = p.qqrd2e * qtmp * qj / r;
+    double prefactor = p.qqrd2e * c / r;
     erfcd = exp(-p.alpha * p.alpha * rsq);
     double t = 1.0 / (1.0 + EWALD_P * p.alpha * r);
     erfcc = t * (A1 + t * (A2 + t * (A3 + t * (A4 + t * A5)))) * erfcd;
@@ -75,24 +74,33 @@ namespace exaStamp
     
     e = EXASTAMP_QUANTITY( ecoul * eV );
     de = EXASTAMP_QUANTITY( fpair * eV / ang );
-
+    
   }
 }
 
 // Yaml conversion operators, allows to read potential parameters from config file
 namespace YAML
 {
-  using exaStamp::CoulDsfParms;
+  using exaStamp::DsfParameters;
   
   using onika::physics::Quantity;
 
-  template<> struct convert<CoulDsfParms>
+  template<> struct convert<DsfParameters>
   {
-    static bool decode(const Node& node, CoulDsfParms& v)
+    static bool decode(const Node& node, DsfParameters& v)
     {
       if( !node.IsMap() ) { return false; }
       v.alpha = node["alpha"].as<Quantity>().convert();
       v.rc = node["rc"].as<Quantity>().convert();
+
+      double MY_PIS = sqrt(M_PI);
+      double cut_coul = v.rc;
+      double cut_coulsq = cut_coul * cut_coul;
+      double erfcc = erfc(v.alpha * cut_coul);
+      double erfcd = exp(-v.alpha * v.alpha * cut_coul * cut_coul);
+      v.f_shift = -(erfcc / cut_coulsq + 2.0 / MY_PIS * v.alpha * erfcd / cut_coul);
+      v.e_shift = erfcc / cut_coul - v.f_shift * cut_coul;
+        
       return true;
     }
   };
