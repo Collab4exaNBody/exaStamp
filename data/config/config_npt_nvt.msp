@@ -54,7 +54,15 @@ final_integrate_nvt:
       rebind: { value: vscale }
       body:
         - scale_v
-  
+  - compute_vel_bias:
+      rebind: { out: vbias }
+      body:
+        - avg_v_m
+  - remove_vel_bias:
+      rebind: { value: vbias }
+      body:
+        - shift_v
+    
 numerical_scheme_npt:
   - initial_integrate_npt
   - final_integrate_npt
