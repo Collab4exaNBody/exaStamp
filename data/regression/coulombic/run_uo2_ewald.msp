@@ -1,0 +1,51 @@
+configuration:
+  logging:
+    debug: false
+  profiling:
+    summary: true
+    
+grid_flavor: grid_flavor_full
+  
+global:
+  simulation_end_iteration: 100
+  simulation_log_frequency: 10
+  simulation_dump_thermo_frequency: 1
+  simulation_dump_frequency: -1
+  rcut_inc: 1.0 ang
+  dt: 0.001 ps
+  force_flush_file: true
+  file: "thermo_exastamp_yes_ewald.csv"
+
+species:
+  - O: { mass: 15.999000 Da , z: 8 , charge: -1.1104 e- }
+  - U: { mass: 238.02891 Da , z: 92 , charge: 2.2208 e- }
+    
+eam_alloy_force: { rcut: 10.0 ang , parameters: { file: "UO_test.eam.alloy" } , eam_rho: true , eam_rho2emb: true , eam_ghost: true , eam_force: true , eam_symmetry: false }
+
+coulombic_ewald_init:
+  accuracy_relative: 1.0e-5
+  g_ewald: 0.0
+  radius: 10.0 ang
+  kmax: 0
+
+init_parameters:
+  - coulombic_ewald_init
+
+compute_force:
+  - eam_alloy_force
+  - coulombic_ewald_short_range
+  - coulombic_ewald_long_range
+  
+input_data:
+  - domain:
+      cell_size: 5.5 ang
+      periodic: [true,true,true]
+      expandable: false
+  - read_xyz_file_with_xform:
+      file: "UO2_disturbed.xyz"
+      pbc_adjust_xform: true
+  - copy_charge_specy_to_particle
+  - sum_charges
+  - coulombic_ewald_init
+ 
+dump_data: nop

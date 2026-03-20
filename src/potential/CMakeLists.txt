@@ -15,6 +15,9 @@
 # under the License.
 #
 
+# Coulombic potentials
+add_subdirectory(coulombic)
+
 # Pair potentials
 add_subdirectory(reaction_field)
 add_subdirectory(ljexp6rf)
@@ -29,8 +32,6 @@ add_subdirectory(eam_potentials)
 
 add_subdirectory(LCHBOP)
 add_subdirectory(meam)
-add_subdirectory(coul_dsf)
-add_subdirectory(coul_wolf)
 add_subdirectory(ewald)
 add_subdirectory(snap)
 add_subdirectory(snaplegacy)

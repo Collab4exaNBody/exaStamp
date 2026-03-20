@@ -1,0 +1,81 @@
+######################
+### INITIALIZATION ###
+######################
+
+units       metal
+dimension   3
+boundary    p p p
+atom_style  charge
+
+# Configuration
+read_data EDGE_dislo_2200_K.124000.lmp
+change_box all triclinic
+group  U type 1
+mass	1	238.03
+set group U charge 2.2208
+group  O type 2
+mass  2    16.00
+set group O charge -1.1104
+
+# Force field
+#kspace_style pppm 1.0e-5
+pair_style hybrid/overlay eam/alloy 
+#pair_coeff * * coul/long
+pair_coeff * * eam/alloy ./UO_test.eam.alloy U O
+#  CeThUNpPuAmCmO.eam.alloy U O
+pair_modify     table     12
+
+
+# Parametres + info thermo
+neigh_modify every 1 delay 0 check yes
+timestep 0.001
+
+# Temperature / Stress
+variable T equal 2000
+variable stress equal 10*100 #  stress en bar
+
+# Variables
+variable natoms equal "count(all)"
+variable mypress equal press
+variable mytemp equal temp
+variable myvol equal vol
+variable mype equal pe
+variable myke equal ke
+variable mylx equal lx
+variable myly equal ly
+variable mylz equal lz
+variable myxy equal xy
+variable myxz equal xz
+variable myyz equal yz
+variable mypxx equal pxx
+variable mypyy equal pyy
+variable mypzz equal pzz
+variable mypxy equal pxy
+variable mypxz equal pxz
+variable mypyz equal pyz
+
+# Deplacement base sur Orowan
+#Burgers CRG
+variable burgers equal 3.847846876287952
+variable depdisloX equal lx*lz*atan(xz/lz)/(2*${burgers})
+
+thermo 10000
+thermo_style custom step pe temp press vol lx ly lz xy xz yz pxx pyy pzz pxy pxz pyz v_depdisloX
+run 0
+
+###########
+### RUN ###
+###########
+
+# Output
+dump d_1 all custom 10000 UO2_2000K_100MPa_*.dump id mass type x y z vx vy vz
+
+# Rampe de contrainte
+fix f_1 all npt temp $T $T 0.1 x 0.0 0.0 1 y 0.0 0.0 1 z 0.0 0.0 1 xy 0.0 0.0 1 xz 0.0 ${stress} 1 yz 0.0 0.0 1
+run 10000
+unfix f_1
+
+# Run
+fix f_1 all npt temp $T $T 0.1 x 0.0 0.0 1 y 0.0 0.0 1 z 0.0 0.0 1 xy 0.0 0.0 1 xz ${stress} ${stress} 1 yz 0.0 0.0 1 
+run 4000000
+unfix f_1

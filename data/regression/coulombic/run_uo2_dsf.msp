@@ -1,0 +1,48 @@
+configuration:
+  logging:
+    debug: false
+  profiling:
+    summary: true
+    
+grid_flavor: grid_flavor_full
+  
+global:
+  simulation_end_iteration: 100
+  simulation_log_frequency: 10
+  simulation_dump_thermo_frequency: 1
+  simulation_dump_frequency: -1
+  rcut_inc: 1.0 ang
+  dt: 0.001 ps
+  force_flush_file: true
+  file: "thermo_exastamp_yes_dsf.csv"
+
+species:
+  - O: { mass: 15.999000 Da , z: 8 , charge: -1.1104 e- }
+  - U: { mass: 238.02891 Da , z: 92 , charge: 2.2208 e- }
+    
+eam_alloy_force: { rcut: 10.0 ang , parameters: { file: "UO_test.eam.alloy" } , eam_rho: true , eam_rho2emb: true , eam_ghost: true , eam_force: true , eam_symmetry: false }
+
+coulombic_dsf:
+  parameters: { alpha: 0.2 1/ang , rc: 10.0 ang }
+  
+compute_force:
+  - eam_alloy_force
+  - coulombic_dsf
+  
+input_data:
+  - domain:
+      cell_size: 5.5 ang
+      periodic: [true,true,true]
+      expandable: false
+  - read_xyz_file_with_xform:
+      file: "UO2_disturbed.xyz"
+      pbc_adjust_xform: true
+  - copy_charge_specy_to_particle
+ 
+dump_data:
+  - timestep_file: "exastamp/output_%09d.xyz"
+  - write_xyz:
+      fields: [ id , type, force]
+
++first_iteration:
+  - dump_data

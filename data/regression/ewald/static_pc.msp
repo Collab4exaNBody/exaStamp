@@ -54,9 +54,16 @@ compute_force_pair_multimat:
     - { type_a: O2  , type_b: Xx  , potential: zero }
     - { type_a: Xx  , type_b: Xx  , potential: lj   , rcut: 24.0 ang , parameters: { epsilon: 0.0 J , sigma: 1.0 m } }
 
+init_parameters:
+  - ewald_init:
+      epsilon: 1.0E-05
+      alpha: 0.0
+      radius: 24.0 ang
+      kmax: 8
+
 input_data:
   - read_stamp_v3:
-      file: ewald_static.mpio
+      filename: ewald_static.mpio
       bounds_mode: DOMAIN
   - ewald_init:
       epsilon: 1.0E-05
