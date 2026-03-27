@@ -221,7 +221,7 @@ namespace exaStamp
         auto read_unit = [this] ( std::string u ) -> std::string
         {
           //const std::map<std::string,std::string> replace = { {"J/mol.m6","J*m^6   "} , {"ang2","ang^2"} , {"deg","degree"} , {"m6","m^6"} , {"m-1","m^-1"} , {"kcal/mol", "kcal"}};
-          const std::map<std::string,std::string> replace = { {"J.m6","J*m^6   "} , {"ang2","ang^2"} , {"deg","degree"} , {"degreere","degree"}, {"m6","m^6"} , {"m-1","m^-1"} , {"metre", "m"}, {"kcal/mol.ang^6", "kcal/mol*ang^6"}};
+          const std::map<std::string,std::string> replace = { {"J.m6","J*m^6   "} , {"ang2","ang^2"} , {"ang-1","ang^-1"}, {"deg","degree"} , {"degreere","degree"}, {"m6","m^6"} , {"m-1","m^-1"} , {"metre", "m"}, {"kcal/mol.ang^6", "kcal/mol*ang^6"}, {"kcal/mol.ang6", "kcal/mol*ang^6"}};
 
           for(const auto& r : replace)
           {
@@ -360,6 +360,7 @@ namespace exaStamp
               params[p5] = onika::physics::make_quantity( v5 , u5 ).convert();
               const double A=params["a"], B=params["b"], C=params["c"], D=params["d"], rc=params["rc"];
               ldbg << "Exp6v1 : A="<<A<<" , B="<<B<<" , C="<<C<<" , D="<<D<<" , rc="<<rc<<std::endl;
+              std::cout << "Exp6v1 : A="<<A<<" , B="<<B<<" , C="<<C<<" , D="<<D<<" , rc="<<rc<<std::endl;
               pot.m_params.set_exp6_parameters( A, B, C, D, rc ); // set exp6 parameters
             }
             else
@@ -796,6 +797,32 @@ namespace exaStamp
 	            } else if (n1 == 3) {
                       potentials_for_torsions->m_potentials.push_back( TorsionPotential{ ff_pot_kind , {t1,t2,t3,t4} , std::make_shared<IntraMolecularHalfCompassFunctional>(0.0f,0.0f,p1) } );
 	            }
+            }
+            else if ( ff_pot_kind == "torsion_0.5_3cos-" )
+            {
+              double p1, p2, p3;
+              std::string t1, t2, t3, t4;
+              std::string u1, u2, u3;
+              iss >> t1 >> t2 >> t3 >> t4 >> p1 >> u1 >> p2 >> u2 >> p3 >> u3 ;
+              p1 = onika::physics::make_quantity( p1 , read_unit(u1) ).convert(); if( std::isnan(p1) ) p1=0.0;
+              p2 = onika::physics::make_quantity( p2 , read_unit(u2) ).convert(); if( std::isnan(p2) ) p2=0.0;
+              p3 = onika::physics::make_quantity( p3 , read_unit(u3) ).convert(); if( std::isnan(p3) ) p3=0.0;
+              ldbg << "Intramolecular "<<ff_pot_kind<<" for "<<t1<<","<<t2<<","<<t3<<","<<t4<<" : p1="<<p1<<" , p2="<<p2<<" , p3="<<p3<< std::endl;
+              std::cout << "Intramolecular "<<ff_pot_kind<<" for "<<t1<<","<<t2<<","<<t3<<","<<t4<<" : p1="<<p1<<" , p2="<<p2<<" , p3="<<p3<< std::endl;
+              potentials_for_torsions->m_potentials.push_back( TorsionPotential{ ff_pot_kind , {t1,t2,t3,t4} , std::make_shared<IntraMolecularHalfCompassFunctional>(p1,p2,p3) } );
+            }
+
+            else if ( ff_pot_kind == "torsion_compass" || ff_pot_kind == "torsion_3cos-" )
+            {
+              double p1, p2, p3;
+              std::string t1, t2, t3, t4;
+              std::string u1, u2, u3;
+              iss >> t1 >> t2 >> t3 >> t4 >> p1 >> u1 >> p2 >> u2 >> p3 >> u3 ;
+              p1 = onika::physics::make_quantity( p1 , read_unit(u1) ).convert(); if( std::isnan(p1) ) p1=0.0;
+              p2 = onika::physics::make_quantity( p2 , read_unit(u2) ).convert(); if( std::isnan(p2) ) p2=0.0;
+              p3 = onika::physics::make_quantity( p3 , read_unit(u3) ).convert(); if( std::isnan(p3) ) p3=0.0;
+              ldbg << "Intramolecular "<<ff_pot_kind<<" for "<<t1<<","<<t2<<","<<t3<<","<<t4<<" : p1="<<p1<<" , p2="<<p2<<" , p3="<<p3<< std::endl;
+              potentials_for_torsions->m_potentials.push_back( TorsionPotential{ ff_pot_kind , {t1,t2,t3,t4} , std::make_shared<IntraMolecularCompassFunctional>(p1,p2,p3) } );
             }
 
             else if (ff_pot_kind == "torsion_gaff" ) // It can only works if there are 3 lines or less for the same torsion gaff
