@@ -360,7 +360,6 @@ namespace exaStamp
               params[p5] = onika::physics::make_quantity( v5 , u5 ).convert();
               const double A=params["a"], B=params["b"], C=params["c"], D=params["d"], rc=params["rc"];
               ldbg << "Exp6v1 : A="<<A<<" , B="<<B<<" , C="<<C<<" , D="<<D<<" , rc="<<rc<<std::endl;
-              std::cout << "Exp6v1 : A="<<A<<" , B="<<B<<" , C="<<C<<" , D="<<D<<" , rc="<<rc<<std::endl;
               pot.m_params.set_exp6_parameters( A, B, C, D, rc ); // set exp6 parameters
             }
             else
@@ -808,7 +807,6 @@ namespace exaStamp
               p2 = onika::physics::make_quantity( p2 , read_unit(u2) ).convert(); if( std::isnan(p2) ) p2=0.0;
               p3 = onika::physics::make_quantity( p3 , read_unit(u3) ).convert(); if( std::isnan(p3) ) p3=0.0;
               ldbg << "Intramolecular "<<ff_pot_kind<<" for "<<t1<<","<<t2<<","<<t3<<","<<t4<<" : p1="<<p1<<" , p2="<<p2<<" , p3="<<p3<< std::endl;
-              std::cout << "Intramolecular "<<ff_pot_kind<<" for "<<t1<<","<<t2<<","<<t3<<","<<t4<<" : p1="<<p1<<" , p2="<<p2<<" , p3="<<p3<< std::endl;
               potentials_for_torsions->m_potentials.push_back( TorsionPotential{ ff_pot_kind , {t1,t2,t3,t4} , std::make_shared<IntraMolecularHalfCompassFunctional>(p1,p2,p3) } );
             }
 
