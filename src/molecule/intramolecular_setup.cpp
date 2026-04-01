@@ -252,7 +252,7 @@ namespace exaStamp
         }
         else if( all_exp6 )
         {
-          const double rc = pot.m_rf.rc;
+          const double rc = pot.m_rcut;
           const double A = pot.m_A;
           const double B = pot.m_B_ISEXP6;
           const double C = pot.m_C_EPSILON;
