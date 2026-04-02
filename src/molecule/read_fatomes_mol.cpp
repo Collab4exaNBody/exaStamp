@@ -744,7 +744,9 @@ namespace exaStamp
               iss >> t1 >> t2 >> p1 >> u1 >> p2 >> u2 >> p3 >> u3 >> p4 >> u4;
               double r0 = onika::physics::make_quantity( p1 , read_unit(u1) ).convert(); if( std::isnan(r0) ) r0=0.0;
               double k  = onika::physics::make_quantity( p2 , read_unit(u2) ).convert(); if( std::isnan(k)  ) k=0.0;
-	          if (ff_pot_kind == "bond_gaff" || ff_pot_kind == "bond_0.5_harm" || ff_pot_kind == "bond_charmm") k = k/2.0;
+              if (ff_pot_kind == "bond_0.5_harm" || ff_pot_kind == "bond_charmm") k = k/2.0;
+            //	          if (ff_pot_kind == "bond_gaff" || ff_pot_kind == "bond_0.5_harm" || ff_pot_kind == "bond_charmm") k = k/2.0;
+            
               // p3 = onika::physics::make_quantity( p3 , read_unit(u3) ).convert(); if( std::isnan(p3) ) p3=0.0; // 2nd and 3rd parameter ignored
               // p4 = onika::physics::make_quantity( p4 , read_unit(u4) ).convert(); if( std::isnan(p4) ) p4=0.0;
               ldbg << "Intramolecular "<<ff_pot_kind<<" for "<<t1<<","<<t2<<" : r0="<<r0<<" , k="<<k << std::endl;
@@ -758,7 +760,9 @@ namespace exaStamp
               iss >> t1 >> t2 >> t3 >> p1 >> u1 >> p2 >> u2 >> p3 >> u3 >> p4 >> u4;
               double phi0 = onika::physics::make_quantity( p1 , read_unit(u1) ).convert(); if( std::isnan(phi0) ) phi0=0.0;
               double k    = onika::physics::make_quantity( p2 , read_unit(u2) ).convert(); if( std::isnan(k)    ) k=0.0;
-              if (ff_pot_kind == "angle_gaff" || ff_pot_kind == "angle_0.5_harm" || ff_pot_kind == "angle_charmm" ) k = k/2.0;
+              if (ff_pot_kind == "angle_0.5_harm" || ff_pot_kind == "angle_charmm" ) k = k/2.0;
+              //              if (ff_pot_kind == "angle_gaff" || ff_pot_kind == "angle_0.5_harm" || ff_pot_kind == "angle_charmm" ) k = k/2.0;
+              
               // p3 = onika::physics::make_quantity( p3 , read_unit(u3) ).convert(); if( std::isnan(p3) ) p3=0.0;  // 2nd and 3rd parameter ignored
               // p4 = onika::physics::make_quantity( p4 , read_unit(u4) ).convert(); if( std::isnan(p4) ) p4=0.0;
               ldbg << "Intramolecular "<<ff_pot_kind<<" for "<<t1<<","<<t2<<" : "<<t3<<" : phi0="<<phi0<<" , k="<<k << std::endl;
@@ -900,6 +904,7 @@ namespace exaStamp
                       fatal_error() << " n = 4 for force field type torsion_gaff is not available "<<std::endl;
 	            } else {
 		            double kOPLS[3];
+                double energy_offset = 0.0;
 		            int indexn = 0;
 		            kOPLS[0] = kOPLS[1] = kOPLS[2] = 0.0;
 
@@ -910,13 +915,14 @@ namespace exaStamp
 		            indexn = int(fabs(p3))-1;
 		            if (indexn > -1) {
 		              kOPLS[indexn] = 2.*p1/p2;
-                              if (int(fabs(p3)) == 1 || int(fabs(p3)) == 3) {
+                  if (int(fabs(p3)) == 1 || int(fabs(p3)) == 3) {
 		                if (p4 > 0.0) kOPLS[indexn] *= -1.;
 		              } else if (int(fabs(p3)) == 2) {
 		                if (p4 == 0.0) kOPLS[indexn] *= -1.;
-		              }
+                  }
+                  energy_offset += kOPLS[indexn] * std::pow(-1,indexn) * cos(p4/2.+(indexn+1)*M_PI/2.);
 		            }
-
+                
 		            /* second line */
 		            indexn = int(fabs(p7))-1;
                 if (indexn > -1) {
@@ -926,8 +932,9 @@ namespace exaStamp
                   } else if (int(fabs(p7)) == 2) {
                     if (p8 == 0.0) kOPLS[indexn] *= -1.;
                   }
+                  energy_offset += kOPLS[indexn] * std::pow(-1,indexn) * cos(p8/2.+(indexn+1)*M_PI/2.);                              
                 }
-
+                
 		            /* third line */
                 indexn = int(fabs(p11))-1;
                 if (indexn > -1) {
@@ -937,9 +944,9 @@ namespace exaStamp
                   } else if (int(fabs(p11)) == 2) {
                     if (p12 == 0.0) kOPLS[indexn] *= -1.;
                   }
+                  energy_offset += kOPLS[indexn] * std::pow(-1,indexn) * cos(p12/2.+(indexn+1)*M_PI/2.);                              
                 }
-                potentials_for_torsions->m_potentials.push_back( TorsionPotential{ ff_pot_kind , {t1,t2,t3,t4} , std::make_shared<IntraMolecularCosOPLSFunctional>(kOPLS[0], kOPLS[1], kOPLS[2]) } );
-
+                potentials_for_torsions->m_potentials.push_back( TorsionPotential{ ff_pot_kind , {t1,t2,t3,t4} , std::make_shared<IntraMolecularCosOPLSFunctional>(kOPLS[0], kOPLS[1], kOPLS[2], energy_offset) } );
 	            }
 
             }
