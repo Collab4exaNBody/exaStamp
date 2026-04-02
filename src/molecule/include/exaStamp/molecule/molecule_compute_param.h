@@ -87,6 +87,7 @@ namespace exaStamp
     double p2 = 0.0;
     float x0 = 0.0;
     float coeff = 0.0;
+    double e0 = 0.0;
     ONIKA_HOST_DEVICE_FUNC inline bool is_null() const { return p0==0.0 && p1==0.0 && p2==0.0 && x0==0.0f && coeff==0.0f; }
     inline bool operator < (const MoleculeGenericFuncParam& m) const
     {

@@ -54,7 +54,8 @@ namespace exaStamp
     const auto k2 = m.p1;
     const auto k3 = m.p2;
     x = x - m.x0;
-
+    const auto energy_offset = m.e0;
+    
     if( m.coeff == 0.0 ) // this is the signal for a linear form of the functional
     {
       const double x2 = pow(x,2);
@@ -66,7 +67,8 @@ namespace exaStamp
              ,
              ( k1 * x2
              + k2 * x3
-             + k3 * x4 ) 
+             + k3 * x4
+             + energy_offset ) 
              };  
     }
     else if ( m.coeff == 1.0 || m.coeff == -1.0 )// coeff=1 or coeff=-1 in case of an angular form of the functional
@@ -86,6 +88,7 @@ namespace exaStamp
                k1 * ( 1 - opls_fac * cos_1phi )
              + k2 * ( 1 -            cos_2phi )
              + k3 * ( 1 - opls_fac * cos_3phi )
+             + energy_offset
              };
     }
     else if (m.coeff == 248.0 )
@@ -104,6 +107,7 @@ namespace exaStamp
                k1/2 * ( 1 - cos_2phi )
              + k2/2 * ( 1 - cos_4phi )
              + k3/2 * ( 1 - cos_8phi )
+             + energy_offset               
              };
     }
   }
@@ -271,7 +275,7 @@ namespace exaStamp
   class IntraMolecularCosOPLSFunctional : public IntraMolecularPotentialFunctional
   {
   public:
-    inline IntraMolecularCosOPLSFunctional(double _k1, double _k2, double _k3) : k1(_k1), k2(_k2), k3(_k3) {}
+    inline IntraMolecularCosOPLSFunctional(double _k1, double _k2, double _k3, double _offset = 0.0 ) : k1(_k1), k2(_k2), k3(_k3), offset(_offset) {}
     inline ScalarForceEnergy force_energy(double phi) const override final
     {
       return intramolecular_func( generic_parameters() , phi );
@@ -287,14 +291,15 @@ namespace exaStamp
     }
     inline MoleculeGenericFuncParam generic_parameters() const override final
     {
-      return {k1/2,k2/2,k3/2,0.0f,-1.0f};
+      return {k1/2,k2/2,k3/2,0.0f,-1.0f, offset};
     }
   private:
     double k1 = 0.0;
     double k2 = 0.0;
     double k3 = 0.0;
+    double offset = 0.0;
   };
-
+  
   // CosTwo potential
   class IntraMolecularCosTwoFunctional : public IntraMolecularPotentialFunctional
   {
