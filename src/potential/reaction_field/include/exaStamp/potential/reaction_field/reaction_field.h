@@ -48,8 +48,15 @@ namespace exaStamp
     assert( r > 0. );
     const double r2 = r * r;
     // double c  = c1 * c2;
-    e  = (                 p_rc.RF0/r  - p_rc.RF2                   + p_rc.RF1*r2 ) * c;
-    de = ( - p_rc.RF0/r2                          + 2.*p_rc.RF1 * r               ) * c;
+
+    double e_coul  =   c * p_rc.RF0/r;
+    double de_coul = - c * p_rc.RF0/r2;
+
+    double e_corr  =   c * ( p_rc.RF1*r2  - p_rc.RF2 );
+    double de_corr =   c * 2. * p_rc.RF1 * r;
+    
+    e  =  e_coul +  e_corr;
+    de = de_coul + de_corr;
   }
 
   // core computation kernel for reaction field potential
@@ -62,8 +69,14 @@ namespace exaStamp
     // e  = ( (                 p_rc.RF0/r  - p_rc.RF2                   + p_rc.RF1*r2 ) - p_rc.ecut ) * c;
     // de =   ( - p_rc.RF0/r2                          + 2.*p_rc.RF1 * r               ) * c;
 
-    e  =  (                 weight * p_rc.RF0/r  - p_rc.RF2                   + p_rc.RF1*r2 ) * c;
-    de =  ( - weight * p_rc.RF0/r2                          + 2.*p_rc.RF1 * r               ) * c;
+    double e_coul  =   c * weight * p_rc.RF0/r;
+    double de_coul = - c * weight * p_rc.RF0/r2;
+
+    double e_corr  = c * ( p_rc.RF1*r2  - p_rc.RF2 );
+    double de_corr = c * 2. * p_rc.RF1 * r;
+    
+    e  =  e_coul +  e_corr;
+    de = de_coul + de_corr;
     
   }
   
