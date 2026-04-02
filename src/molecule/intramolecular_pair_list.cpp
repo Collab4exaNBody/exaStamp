@@ -60,31 +60,58 @@ namespace exaStamp
       ProfilingTimer T;
       profiling_timer_start( T );
 
-      // first build list of interaction pair to be excluded form standard neighbor list
-      // and for which a pair weight is applied
-      // this map is built using original ids, not localized ones transformed in the second parallel section
+      // first build list of interaction pair to be excluded from standard neighbor list
+      // and for which a pair weight is applied.
+      // this map is built using original ids, not localized ones transformed in the second parallel section.
+      //
+      // Rules:
+      //   - canonical key (min(i,j), max(i,j)) deduplicates (i,j)/(j,i) for 1-4 torsion pairs
+      //   - if a pair appears in multiple lists, keep the shortest-path interaction (lowest priority):
+      //       0 = 1-2 bond,  1 = 1-3 angle,  2 = 1-4 torsion
+      //   - ChemicalPairPotMap is a MultiThreadedConcurrentMap, so concurrent insertions are safe
+
+      // Helper: insert with canonical key; if key already exists, keep the lower priority value (shorter path).
+      // We lock the meta-bucket manually (same pattern as MultiThreadedConcurrentMap::insert()) to make
+      // the find+insert/update atomic and thread-safe.
+      auto try_insert = [&](uint64_t a, uint64_t b, int priority)
+      {
+        if (a > b) std::swap(a, b);  // canonical: smaller id first, deduplicates (i,j)/(j,i)
+        const ChemicalPairPotMap::key_type key = {a, b};
+        const size_t mb = ChemicalPairPotMap::meta_bucket( key );
+        chemical_pair_pot_map->m_meta_bucket_locks[ mb ].lock();
+        auto& bucket = chemical_pair_pot_map->m_meta_bucket[ mb ];
+        auto [it, inserted] = bucket.insert( { key, priority } );
+        if ( !inserted && priority < it->second )
+        {
+          it->second = priority;  // shorter path takes precedence
+        }
+        chemical_pair_pot_map->m_meta_bucket_locks[ mb ].unlock();
+      };
+
 #     pragma omp parallel
       {
-        // parallel construction of chemical link map : extrema pair -> link type (0 bond, 1 angle, 2 torsion)
-#       pragma omp for schedule(static)
-        for(size_t i=0;i<n_torsions;i++)
+        // 1-4 torsion pairs  (priority 2)
+#       pragma omp for schedule(static) nowait
+        for (size_t i = 0; i < n_torsions; i++)
         {
           const auto& torsion = (*chemical_torsions)[i];
-          chemical_pair_pot_map->insert( { { torsion[0] , torsion[3] } , 2 } );
+          try_insert(torsion[0], torsion[3], 2);
         }
-        
-#       pragma omp for schedule(static)
-        for(size_t i=0;i<n_bends;i++)
+
+        // 1-3 angle pairs  (priority 1)
+#       pragma omp for schedule(static) nowait
+        for (size_t i = 0; i < n_bends; i++)
         {
-          const auto & angle = (*chemical_angles)[i];
-          chemical_pair_pot_map->insert( { { angle[0] , angle[2] } , 1 } );
+          const auto& angle = (*chemical_angles)[i];
+          try_insert(angle[0], angle[2], 1);
         }
-        
-#       pragma omp for schedule(static)
-        for(size_t i=0;i<n_bonds;i++)
+
+        // 1-2 bond pairs  (priority 0)
+#       pragma omp for schedule(static) nowait
+        for (size_t i = 0; i < n_bonds; i++)
         {
-          const auto & bond = (*chemical_bonds)[i];
-          chemical_pair_pot_map->insert( { { bond[0] , bond[1] } , 0 } );
+          const auto& bond = (*chemical_bonds)[i];
+          try_insert(bond[0], bond[1], 0);
         }
       }
 
