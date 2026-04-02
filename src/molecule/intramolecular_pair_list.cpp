@@ -139,10 +139,8 @@ namespace exaStamp
           const int pair_id = unique_pair_id(ta,tb);
           const auto & potparm = molecule_compute_parameters->m_pair_params[ n_type_pairs * chemicalLinkType + pair_id ];
           int param_idx = -1;
-          if( potparm.m_pair_weight != 0.0f || potparm.m_rf_weight != 0.0f )
-          {
-             param_idx = n_type_pairs * chemicalLinkType + pair_id ;
-          }
+          // Since weight is only applied on the Coulombic part of RF, we still need that parameters set to be considered
+          param_idx = n_type_pairs * chemicalLinkType + pair_id ;
           intramolecular_parameters->m_pair_param_idx[ pair_idx ] = param_idx;
           //x.second = param_idx;
           ++ pair_idx;
