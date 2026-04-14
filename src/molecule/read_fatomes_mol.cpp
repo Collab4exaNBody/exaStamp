@@ -106,7 +106,8 @@ namespace exaStamp
     ADD_SLOT( LJExp6RFMultiParms               , potentials_for_pairs     , INPUT_OUTPUT , LJExp6RFMultiParms{} );
     ADD_SLOT( IntramolecularPairWeighting      , mol_pair_weights         , INPUT_OUTPUT , IntramolecularPairWeighting{} );
     ADD_SLOT( IntraFFtypes                     , ffnameVector             , INPUT_OUTPUT);
-
+    ADD_SLOT( bool                             , rf_self_pairs            , OUTPUT, true);
+    ADD_SLOT( bool                             , long_range_correction    , OUTPUT, true);
     ADD_SLOT( double                           , rcut_max                 , INPUT_OUTPUT , 0.0 );
 
   public:
@@ -1079,8 +1080,18 @@ namespace exaStamp
             //ldbg << "READ "<<k<<" = "<<v<<std::endl;
             init[k] = v;
           }
+          if( init["CorrectionVdwLongueDistance"] == 1 ) {
+            *long_range_correction = true;
+          } else {
+            *long_range_correction = false;
+          }
           if( init["ReactionField"] == 1 )
           {
+            if( init["ReactionField_selfpairs"] == 1 ) {
+              *rf_self_pairs = true;
+            } else {
+              *rf_self_pairs = false;
+            }
             double rf_epsilon = init["ReactionField_epsilon"];
             double rf_rc = init["ReactionField_rc"];
             rf_rc = EXASTAMP_QUANTITY( rf_rc * m ); // StampV4 has implicit meter unit for distances
