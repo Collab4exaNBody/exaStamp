@@ -160,6 +160,13 @@ namespace exaStamp
 
       return { pair_de + rf_de , pair_e + rf_e };
     }
+
+    ONIKA_HOST_DEVICE_FUNC double compute_self_energy(double charge_product) const
+    {
+      double rf_self_e;
+      reaction_field_compute_self_energy( m_rf,  charge_product, rf_self_e);
+      return rf_self_e;
+    }    
     
     ONIKA_HOST_DEVICE_FUNC inline void update_ecut()
     {

@@ -79,6 +79,13 @@ namespace exaStamp
     de = de_coul + de_corr;
     
   }
+
+  // core computation kernel for reaction field potential
+  ONIKA_HOST_DEVICE_FUNC
+  inline void reaction_field_compute_self_energy(const ReactionFieldParms& p_rc, double c, double& e)
+  {
+    e  = - c * p_rc.RF2;
+  }
   
   inline void init_rf(ReactionFieldParms& v, double rc, double epsilon)
   {
