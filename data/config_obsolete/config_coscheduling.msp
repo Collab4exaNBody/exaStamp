@@ -1,0 +1,11 @@
+ghost_full_update:
+  - ghost_comm_scheme
+  - ghost_update_comm_buffer_r
+  - ghost_update_all_no_fv
+
+update_particles_fast_body:
+  parallel_tasks: true
+  body:
+    - ghost_async_send_r
+    - ghost_async_recv_r
+
