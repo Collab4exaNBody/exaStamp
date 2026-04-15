@@ -1,15 +1,4 @@
-
-# Native exaNBody dump format for flexible molecules
-dump_data_molecule:
-  - timestep_file: "molecule_%09d.MpiIO"
-  - message: { mesg: "Write dump " , endl: false }
-  - print_dump_file:
-      rebind: { mesg: filename }
-      body:
-        - message: { endl: true }
-  - write_dump_molecule
-
-dump_data: dump_data_molecule
+write_restart: write_restart_molecule
 
 extramolecular_neighbors:
   config:

@@ -1,8 +1,0 @@
-# debug operators
-
-dbg:
-  - simulation_thermodynamic_state
-  - print_thermodynamic_state
-  - dump_thermodynamic_state
-  - grid_stats
-

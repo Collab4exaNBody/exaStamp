@@ -1,0 +1,74 @@
+write_restart: nop
+
+trigger_restart:
+  rebind: { freq: simulation_restart_frequency , result: trigger_restart }
+  body:
+    - nth_timestep
+
+write_restart_if_triggered:
+  condition: trigger_restart
+  body:
+    - write_restart
+
+write_restart_exastamp_v4:
+  rebind: { thermodynamic_state: thermodynamic_state_4_dump }
+  body:
+    - timestep_file: "ExaStampV4prot_%09d.MpiIO"
+    - message: { mesg: "Write restart " , endl: false }
+    - print_restart_file:
+        rebind: { mesg: filename }
+        body:
+          - message: { endl: true }
+    - simulation_thermodynamic_state
+    - write_exastamp_v4
+
+write_restart_stamp_v4:
+  rebind: { thermodynamic_state: thermodynamic_state_4_dump }
+  body:
+    - timestep_file: "StampV4prot_%09d.MpiIO"
+    - message: { mesg: "Write restart " , endl: false }
+    - print_restart_file:
+        rebind: { mesg: filename }
+        body:
+          - message: { endl: true }
+    - simulation_thermodynamic_state
+    - write_stamp_v4
+
+write_restart_stamp_v3:
+  - timestep_file: "StampV3prot_%09d.MpiIO"
+  - message: { mesg: "Write restart " , endl: false }
+  - print_restart_file:
+      rebind: { mesg: filename }
+      body:
+        - message: { endl: true }
+  - write_stamp_v3
+
+# Native ExaNB restart format for single atoms
+write_restart_atoms:
+  - timestep_file: "atoms_%09d.MpiIO"
+  - message: { mesg: "Write restart " , endl: false }
+  - print_restart_file:
+      rebind: { mesg: filename }
+      body:
+        - message: { endl: true }
+  - write_dump_atoms
+
+# Native ExaNB restart format for rigid molecules
+write_restart_rigid_molecule:
+  - timestep_file: "rigidmol_%09d.MpiIO"
+  - message: { mesg: "Write restart " , endl: false }
+  - print_restart_file:
+      rebind: { mesg: filename }
+      body:
+        - message: { endl: true }
+  - write_dump_rigidmol
+
+# Native exaNBody restart format for flexible molecules
+write_restart_molecule:
+  - timestep_file: "molecule_%09d.MpiIO"
+  - message: { mesg: "Write restart " , endl: false }
+  - print_restart_file:
+      rebind: { mesg: filename }
+      body:
+        - message: { endl: true }
+  - write_dump_molecule

@@ -17,29 +17,33 @@
 # under the License.
 # 
 
-
 # default global values
 global:
-  dt: 1.0e-3 ps
-  rcut_inc: 1.0 ang   # additional distance so that we d'ont have to rebuild neighbor list each time step
-  compute_loop_continue: true
-  simulation_end_iteration: 10000
-  simulation_log_frequency: 10
-  simulation_load_balance_frequency: 100
-  simulation_dump_frequency: 1000         # 0 means no dump at all
-  simulation_dump_thermo_frequency: 10
-  analysis_dump_frequency: 0
-  trigger_thermo_state: true
-  timestep: 0
-  physical_time: 0.
+  max_iteration: 1000                            # number of timesteps
+  start_iteration: 0                             # number of timesteps  
+  rcut_inc: 1.0 ang                              # skin distance for neighbor list 
+  timestep: 0                                    # starting timestep
+  physical_time: 0.                              # starting physical time
+  dt: 1.0e-3 ps                                  # timestep
+  log_mode: mechanical                           # set to chemistry or default
+  
+  simulation_restart_frequency: 1000             # restart frequency
+  simulation_snapshot_frequency: 1000            # snapshot frequency  
+  simulation_analysis_frequency: 1000            # analysis frequency
+  simulation_thermostate_file_frequency: 10      # thermostate to file frequency
+  thermostate_file: "thermodynamic_state.csv"    # default name of .csv thermostate file
+  simulation_thermostate_screen_frequency: 10    # thermostate to screen frequency
+  
+  simulation_load_balance_frequency: 100         # load balancing frequency
+  enable_load_balance: true                      # enable load balancing
+  trigger_cost_model_fitting: false              # for load balancing
+  cost_model_coefs: [ 0.0 , 0.0 , 1.0 , 0.0 ]    # for load balancing (RCB)
+  enable_task_graph: false                       # ??
+  enable_grid_compact: true                      # ??
   init_temperature: -1.0
   scale_temperature: -1.0
-  enable_load_balance: true
-  enable_task_graph: false
-  enable_grid_compact: true
-  trigger_cost_model_fitting: false
-  cost_model_coefs: [ 0.0 , 0.0 , 1.0 , 0.0 ]
-  log_mode: mechanical # set to chemistry or default
+  md_loop_continue: true                         # needed for the computation loop to start
+  trigger_thermo_state: true                     # needed to get the initial thermo state
 
 # default grid variant we use
 grid_flavor: grid_flavor_full
