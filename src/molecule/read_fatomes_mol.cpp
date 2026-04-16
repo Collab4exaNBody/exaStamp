@@ -1278,6 +1278,56 @@ namespace exaStamp
         ffnameVector->at(i) = & ff_names[i*FF_TYPE_NAME_MAX_LEN];
       }
 
+      /////////////////////////////////////////////////////////////////////////////////////////////
+      // P. Lafourcade : This is a temporary fix to allow for polymer multiprocessor simulations //
+      /////////////////////////////////////////////////////////////////////////////////////////////
+      // Broadcast species data from rank 0 to all other ranks
+      {
+        static constexpr size_t SPECIES_NAME_MAX_LEN = 32;
+        int nspecies = (rank == 0) ? species->size() : 0;
+        MPI_Bcast(&nspecies, 1, MPI_INT, 0, *mpi);
+
+        std::vector<char>   sp_names   (nspecies * SPECIES_NAME_MAX_LEN, '\0');
+        std::vector<char>   sp_ffnames (nspecies * SPECIES_NAME_MAX_LEN, '\0');
+        std::vector<double> sp_charges (nspecies);
+        std::vector<double> sp_masses  (nspecies);
+        std::vector<int>    sp_fftypeids(nspecies);
+
+        if (rank == 0) {
+          for (int i = 0; i < nspecies; i++) {
+            std::strncpy(&sp_names  [i*SPECIES_NAME_MAX_LEN], species->at(i).name()  .c_str(), SPECIES_NAME_MAX_LEN-1);
+            std::strncpy(&sp_ffnames[i*SPECIES_NAME_MAX_LEN], species->at(i).FFname().c_str(), SPECIES_NAME_MAX_LEN-1);
+            sp_charges  [i] = species->at(i).m_charge;
+            sp_masses   [i] = species->at(i).m_mass;
+            sp_fftypeids[i] = species->at(i).m_FFtypeId;
+          }
+        }
+        MPI_Bcast(sp_names   .data(), nspecies * SPECIES_NAME_MAX_LEN, MPI_CHAR,   0, *mpi);
+        MPI_Bcast(sp_ffnames .data(), nspecies * SPECIES_NAME_MAX_LEN, MPI_CHAR,   0, *mpi);
+        MPI_Bcast(sp_charges .data(), nspecies,                        MPI_DOUBLE, 0, *mpi);
+        MPI_Bcast(sp_masses  .data(), nspecies,                        MPI_DOUBLE, 0, *mpi);
+        MPI_Bcast(sp_fftypeids.data(), nspecies,                       MPI_INT,    0, *mpi);
+
+        if (rank != 0) {
+          species->clear();
+          species->resize(nspecies);
+          for (int i = 0; i < nspecies; i++) {
+            const std::string sname  (&sp_names  [i*SPECIES_NAME_MAX_LEN]);
+            const std::string sffname(&sp_ffnames[i*SPECIES_NAME_MAX_LEN]);
+            species->at(i).set_name  (sname);
+            species->at(i).set_FFname(sffname);
+            species->at(i).m_charge       = sp_charges  [i];
+            species->at(i).m_mass         = sp_masses   [i];
+            species->at(i).m_FFtypeId     = sp_fftypeids[i];
+            species->at(i).m_rigid_atoms[0]  = { Vec3d{0.,0.,0.} , -1 };
+            species->at(i).set_rigid_atom_name(0, sname);
+            species->at(i).m_rigid_atom_count = 1;
+          }
+        }
+      }
+      /////////////////////////////////////////////////////////////////////////////////////////////
+      //                                                                                         //
+      /////////////////////////////////////////////////////////////////////////////////////////////
 
       // Broadcast domain parameters computed on MPI rank 0
       MPI_Bcast( domain.get_pointer() , sizeof(Domain), MPI_CHARACTER, 0, *mpi);

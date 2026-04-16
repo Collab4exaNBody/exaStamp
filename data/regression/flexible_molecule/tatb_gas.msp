@@ -1,10 +1,9 @@
-# no-mpi
 includes:
   - config_molecule.msp
 
 input_data:
   - domain:
-      cell_size: 10. ang      
+      cell_size: 4. ang      
       periodic: [ false, false, false ]
       expandable: false
   - read_fatomes_mol:

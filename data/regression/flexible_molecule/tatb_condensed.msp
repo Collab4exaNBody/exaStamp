@@ -1,13 +1,6 @@
 # no-mpi
 includes:
   - config_molecule.msp
-
-update_ghost_config:
-  gpu_buffer_pack: true
-  async_buffer_pack: true
-  staging_buffer: true
-  serialize_pack_send: true
-  wait_all: false
   
 input_data:
   - domain:
@@ -18,12 +11,24 @@ input_data:
       filename: "FAtomes_tatb_condensed"
       stampinput: "DONNEES_tatb_condensed"
 #  - replicate_molecule_domain
+
+parallel_update_particles:
+  - migrate_cell_particles
+  - rebuild_amr
+  - backup_r
+  - ghost_full_update
+  - grid_post_processing
+  - id_map
+  - mol_extract_connectivity
+  - intramolecular_pair_list
+  - mol_optimize_connectivity
+  - update_particle_neighbors
       
 global:
   dt: 0.5e-15 s
   rcut_inc: 2.0 ang
-  simulation_end_iteration: 100
-  simulation_log_frequency: 10
+  simulation_end_iteration: 10
+  simulation_log_frequency: 1
   simulation_dump_frequency: -1
   simulation_dump_thermo_frequency: 10
   file: "thermodynamic_state.csv"
@@ -43,45 +48,16 @@ replicate_molecule_domain:
 
 final_dump: nop
 
-compute_bonding_forces:
-  - compute_force_bond:
-      compute_virial: true
-  - compute_force_bend:
-      compute_virial: true
-  - compute_force_torsion:
-      compute_virial: true
-  - compute_force_improper:
-      compute_virial: true
-  - intramolecular_pair_force:
-      compute_virial: true
-
-######## simulation program description #################
-simulation:
-  name: sim
-  body:
-    - print_logo_banner
-    - hw_device_init   # provide MPI_COMM_WORLD as a default communicator
-    - make_empty_grid
-    - grid_flavor
-    - global
-    - init_parameters
-    - generate_default_species
-    - particle_regions
-    - preinit_rcut_max
-    - domain
-    - init_prolog
-    - input_data
-    - species: { verbose: false , fail_if_empty: true }
-    - grid_post_processing
-    - reduce_species_after_read
-    - init_rcut_max
-    - print_domain
-    - performance_adviser: { verbose: true }
-    - do_init_temperature
-    - init_epilog
-    # - species: { verbose: true , fail_if_empty: true }
-    # - first_iteration
-    # - compute_loop
-    # - simulation_epilog
-    # - hw_device_finalize
+compute_nonbonding_forces: nop
+compute_bonding_forces: nop
+  # - compute_force_bond:
+  #     compute_virial: true
+  # - compute_force_bend:
+  #     compute_virial: true
+  # - compute_force_torsion:
+  #     compute_virial: true
+  # - compute_force_improper:
+  #     compute_virial: true
+  # - intramolecular_pair_force:
+  #     compute_virial: true
       
