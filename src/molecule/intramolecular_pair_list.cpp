@@ -56,7 +56,7 @@ namespace exaStamp
 
       // index chemical links by their extrema to rapidly find if an atom pair belongs to a chemical link
       // ChemicalPairPotMap chemical_pair_pot_map;
-
+      
       ProfilingTimer T;
       profiling_timer_start( T );
 
