@@ -1,7 +1,7 @@
 includes:
   - config_molecule.msp
 
-input_data:
+setup_system:
   - domain:
       cell_size: 4. ang      
       periodic: [ false, false, false ]
@@ -13,10 +13,10 @@ input_data:
 global:
   dt: 0.5e-15 s
   rcut_inc: 2.0 ang
-  simulation_end_iteration: 100
-  simulation_log_frequency: 1
-  simulation_dump_frequency: -1
-  simulation_dump_thermo_frequency: 10
+  max_iteration: 100
+  simulation_thermostate_screen_frequency: 1
+  simulation_snapshot_frequency: -1
+  simulation_thermostate_file_frequency: 10
   file: "thermodynamic_state.csv"
 
 final_dump: nop
