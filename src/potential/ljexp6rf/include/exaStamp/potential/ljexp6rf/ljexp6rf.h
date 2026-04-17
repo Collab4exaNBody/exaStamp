@@ -107,12 +107,12 @@ namespace exaStamp
         p.m_C_EPSILON *= pair_weight;
         p.m_D_SIGMA   *= pair_weight;
       }
-      p.m_ecut        *= pair_weight;
+      //      p.m_ecut        *= pair_weight;
       
       p.m_rf.RF0      *= rf_weight;
       p.m_rf.RF1      *= rf_weight;
       p.m_rf.RF2      *= rf_weight;
-      p.m_rf.ecut     *= rf_weight;
+      //      p.m_rf.ecut     *= rf_weight;
       
       return p;
     }
@@ -152,13 +152,21 @@ namespace exaStamp
       // reaction field part
       double rf_e = 0.0;
       double rf_de = 0.0;
-      reaction_field_compute_energy( m_rf,  charge_product, r, rf_e, rf_de );
-      rf_e *= rf_weight;
-      rf_de *= rf_weight;
-      //printf("r=%.5e pair_de=%.5e rf_de=%.5e\n",r,pair_de,rf_de);
+      reaction_field_compute_energy_weighted( m_rf,  charge_product, r, rf_e, rf_de , rf_weight);      
+      //      printf("rf weight = %5.8f\n", rf_weight);
+      //      rf_e *= rf_weight;
+      //      rf_de *= rf_weight;
+      //      printf("r=%.5e pair_de=%.5e rf_de=%.5e\n",r,pair_de,rf_de);
 
       return { pair_de + rf_de , pair_e + rf_e };
     }
+
+    ONIKA_HOST_DEVICE_FUNC double compute_self_energy(double charge_product) const
+    {
+      double rf_self_e;
+      reaction_field_compute_self_energy( m_rf,  charge_product, rf_self_e);
+      return rf_self_e;
+    }    
     
     ONIKA_HOST_DEVICE_FUNC inline void update_ecut()
     {

@@ -1,0 +1,254 @@
+*#####################################################################*
+*                       Fichier issu de Stamp                         *
+*                        (Iteration        0)                         *
+*#####################################################################*
+*
+* ======================= 
+* Bibliotheque des atomes 
+* ======================= 
+NbTypesAtomes    6
+* Description du type atomique    1
+nom	TATB_Cno2
+nomXYZ	C
+nomFF	Cno2
+type	Atome
+masse	 1.2011000000e-02 kg/mol
+charge	 3.4068000000e-01 e-
+structure	FICHIER
+maille_long	13.500001 13.500001 13.500001 ang
+maille_angle	90.000000 90.000000 90.000000 deg
+maille_orient	0
+maille_ref	1
+* Description du type atomique    2
+nom	TATB_Cnh2
+nomXYZ	C
+nomFF	Cnh2
+type	Atome
+masse	 1.2011000000e-02 kg/mol
+charge	-2.4300000000e-01 e-
+* Description du type atomique    3
+nom	TATB_No2
+nomXYZ	N
+nomFF	No2
+type	Atome
+masse	 1.4000000000e-02 kg/mol
+charge	 6.7980000000e-01 e-
+* Description du type atomique    4
+nom	TATB_Nh2
+nomXYZ	N
+nomFF	Nh2
+type	Atome
+masse	 1.4000000000e-02 kg/mol
+charge	-6.9300000000e-01 e-
+* Description du type atomique    5
+nom	TATB_O
+nomXYZ	O
+nomFF	O_
+type	Atome
+masse	 1.6000000000e-02 kg/mol
+charge	-5.1024000000e-01 e-
+* Description du type atomique    6
+nom	TATB_H
+nomXYZ	H
+nomFF	H_
+type	Atome
+masse	 1.0080000000e-03 kg/mol
+charge	 4.6800000000e-01 e-
+* ============================ 
+* Potentiels intermoleculaires 
+* ============================ 
+Potentiel 0 0   Exp6v1   a 107023.9 kcal/mol     b 3.6405     ang-1      c 554.01      kcal/mol.ang6     d 5.0e-5 kcal/mol       rc 11.0 ang
+Potentiel 0 1   Exp6v1   a 107023.9 kcal/mol     b 3.6405     ang-1      c 554.01      kcal/mol.ang6     d 5.0e-5 kcal/mol       rc 12.5 ang
+Potentiel 0 2   Exp6v1   a 37111.29 kcal/mol     b 3.46350030 ang-1      c 484.2991571 kcal/mol.ang6     d 5.0e-5 kcal/mol       rc 12.5 ang
+Potentiel 0 3   Exp6v1   a 62222.18 kcal/mol     b 3.45198059 ang-1      c 679.5264931 kcal/mol.ang6     d 5.0e-5 kcal/mol       rc 12.5 ang
+Potentiel 0 4   Exp6v1   a 41281.14 kcal/mol     b 3.64254596 ang-1      c 363.9329206 kcal/mol.ang6     d 5.0e-5 kcal/mol       rc 12.5 ang
+Potentiel 0 5   Exp6v1   a 16829.52 kcal/mol     b 4.01774768 ang-1      c 67.52408681 kcal/mol.ang6     d 5.0e-5 kcal/mol       rc 12.5 ang
+Potentiel 1 1   Exp6v1   a 107023.9 kcal/mol     b 3.6405     ang-1      c 554.01      kcal/mol.ang6     d 5.0e-5 kcal/mol       rc 11.0 ang
+Potentiel 1 2   Exp6v1   a 37111.29 kcal/mol     b 3.46350030 ang-1      c 484.2991571 kcal/mol.ang6     d 5.0e-5 kcal/mol       rc 12.5 ang
+Potentiel 1 3   Exp6v1   a 62222.18 kcal/mol     b 3.45198059 ang-1      c 679.5264931 kcal/mol.ang6     d 5.0e-5 kcal/mol       rc 12.5 ang
+Potentiel 1 4   Exp6v1   a 41281.14 kcal/mol     b 3.64254596 ang-1      c 363.9329206 kcal/mol.ang6     d 5.0e-5 kcal/mol       rc 12.5 ang
+Potentiel 1 5   Exp6v1   a 16829.52 kcal/mol     b 4.01774768 ang-1      c 67.52408681 kcal/mol.ang6     d 5.0e-5 kcal/mol       rc 12.5 ang
+Potentiel 2 2   Exp6v1   a 13789.9  kcal/mol     b 3.3333     ang-1      c 423.36      kcal/mol.ang6     d 5.0e-5 kcal/mol       rc 11.0 ang
+Potentiel 2 3   Exp6v1   a 23215.03 kcal/mol     b 3.32446940 ang-1      c 594.0219632 kcal/mol.ang6     d 5.0e-5 kcal/mol       rc 12.5 ang
+Potentiel 2 4   Exp6v1   a 14302.04 kcal/mol     b 3.46494293 ang-1      c 318.1393959 kcal/mol.ang6     d 5.0e-5 kcal/mol       rc 12.5 ang
+Potentiel 2 5   Exp6v1   a 4828.685 kcal/mol     b 3.70361219 ang-1      c 59.02755966 kcal/mol.ang6     d 5.0e-5 kcal/mol       rc 12.5 ang
+Potentiel 3 3   Exp6v1   a 39091.8  kcal/mol     b 3.3158     ang-1      c 833.48      kcal/mol.ang6     d 5.0e-5 kcal/mol       rc 11.0 ang
+Potentiel 3 4   Exp6v1   a 23978.15 kcal/mol     b 3.45338993 ang-1      c 446.3855549 kcal/mol.ang6     d 5.0e-5 kcal/mol       rc 12.5 ang
+Potentiel 3 5   Exp6v1   a 8017.401 kcal/mol     b 3.68530023 ang-1      c 82.82234240 kcal/mol.ang6     d 5.0e-5 kcal/mol       rc 12.5 ang
+Potentiel 4 4   Exp6v1   a 15923.1  kcal/mol     b 3.6446     ang-1      c 239.07      kcal/mol.ang6     d 5.0e-5 kcal/mol       rc 11.0 ang
+Potentiel 4 5   Exp6v1   a 6509.200 kcal/mol     b 4.02183407 ang-1      c 44.35702988 kcal/mol.ang6     d 5.0e-5 kcal/mol       rc 12.5 ang
+Potentiel 5 5   Exp6v1   a 7584.2   kcal/mol     b 5.2846     ang-1      c 8.23        kcal/mol.ang6     d 5.0e-5 kcal/mol       rc 11.0 ang
+* =================== 
+* Positions atomiques 
+* =================== 
+PositionDesAtomesCart ang
+24
+TATB_Cno2       1.2985092200       4.5811352600       3.2507813700
+TATB_Cnh2       0.8322193700       3.8771740300       4.4172343000
+TATB_Cno2       0.8431798700       2.4373417700       4.3981842800
+TATB_Cnh2       1.3054596100       1.7014244600       3.2500017300
+TATB_Cno2       1.7641800500       2.4401863100       2.1022184200
+TATB_Cnh2       1.7681902000       3.8800648100       2.0839481200
+TATB_No2       1.2950650700       6.0081310500       3.2511677700
+TATB_O       1.7024687400       6.5639711800       2.2323625900
+TATB_O       0.8849844300       6.5614464000       4.2702732000
+TATB_No2       0.3848054100       1.7224228800       5.5449679800
+TATB_O       0.0000000000       2.3947401700       6.5003811300
+TATB_O       0.4133318300       0.4944233200       5.4809109400
+TATB_No2       2.2259987000       1.7281093600       0.9550483800
+TATB_O       2.2034003800       0.4999519500       1.0184404200
+TATB_O       2.6075529900       2.4027935800       0.0000000000
+TATB_Nh2       0.4043817500       4.5368555900       5.4799945000
+TATB_H       0.4543002300       5.5371850600       5.3498054200
+TATB_H       0.1095715200       3.9141242200       6.2185014300
+TATB_Nh2       1.3086502900       0.3794283400       3.2496437900
+TATB_H       0.9609198500       0.0000000000       4.1186764600
+TATB_H       1.6582069700       0.0021536200       2.3804062900
+TATB_Nh2       2.1928370400       4.5423793300       1.0215457700
+TATB_H       2.4906488600       3.9214781900       0.2827022000
+TATB_H       2.1380906300       5.5423854600       1.1522764200
+* 
+* ================== 
+* Vitesses atomiques 
+* ================== 
+VitesseDesAtomes m/s
+      0.0808130089     -33.5299800206      -0.0083854397
+     10.1984209082     -15.7251897616     -25.3337789673
+     10.7704873746      16.7983916152     -26.9457761087
+     -0.0764118949      31.5132764214       0.0084210311
+    -10.8509401829      16.7312242806      26.9551475580
+    -10.1224237955     -15.7878402523      25.3241137455
+      0.6346399050    -262.8772095584      -0.0717013018
+   -172.6051470511     533.5632955394     427.2192928169
+    170.0268724455     534.6214839493    -426.9296564999
+     84.4403198872     131.7002636300    -211.2571215802
+    -84.9392984752    -665.8179191301     215.5698819887
+   -258.1790484207     130.6617850620     642.8605434635
+    -85.0751867027     131.1773438267     211.3288083917
+    257.5445022783     132.2541443245    -642.7892575168
+     88.1522358135    -665.2830601722    -215.9307909677
+    122.6023650283    -189.0397884656    -304.5472913077
+  -2184.7787893975     631.1374303103    5442.7792295225
+  -1308.7739186216    4755.5622133429    3235.2998794755
+     -0.9141926559     378.8345544242       0.1025485028
+    898.9789664205   -5394.7129352744   -2210.0557768499
+   -872.9255613170   -5400.1849082240    2207.1328673983
+   -121.6879664147    -189.7948145381     304.4451511978
+   1285.7988757403    4763.5762793518   -3232.7239082943
+   2181.6995179240     644.6227640183   -5442.4348965862
+* 
+* ================= 
+* Charges atomiques 
+* ================= 
+ModificationChargeDesAtomes e-
+24
+0 0.340680
+1 -0.243000
+2 0.340680
+3 -0.243000
+4 0.340680
+5 -0.243000
+6 0.679800
+7 -0.510240
+8 -0.510240
+9 0.679800
+10 -0.510240
+11 -0.510240
+12 0.679800
+13 -0.510240
+14 -0.510240
+15 -0.693000
+16 0.468000
+17 0.468000
+18 -0.693000
+19 0.468000
+20 0.468000
+21 -0.693000
+22 0.468000
+23 0.468000
+* 
+* =============== 
+* Champ de forces 
+* =============== 
+ChampDeForces
+23
+bond_0.5_harm        Cno2    Cnh2    1.440 ang   500 kcal/mol/ang2
+bond_0.5_harm        Cno2    No2     1.427 ang   300 kcal/mol/ang2
+bond_0.5_harm        Cnh2    Nh2     1.322 ang   672 kcal/mol/ang2
+bond_0.5_harm        No2     O_      1.230 ang   878 kcal/mol/ang2
+bond_0.5_harm        Nh2     H_      1.010 ang   850 kcal/mol/ang2
+angle_0.5_harm       Cno2    Cnh2    Cno2    118.4 degre     64  kcal/mol
+angle_0.5_harm       Cno2    Cnh2    Nh2     121.7 degre     60  kcal/mol
+angle_0.5_harm       Cno2    No2     O_      116.8 degre     140 kcal/mol
+angle_0.5_harm       Cnh2    Cno2    Cnh2    121.6 degre     64  kcal/mol
+angle_0.5_harm       Cnh2    Cno2    No2     119.2 degre     60  kcal/mol
+angle_0.5_harm       Cnh2    Nh2     H_      112.0 degre     64  kcal/mol
+angle_0.5_harm       O_      No2     O_      117.3 degre     95  kcal/mol
+angle_0.5_harm       H_      Nh2     H_      119.0 degre     64  kcal/mol
+torsion_0.5_3cos-    Cno2    Cnh2    Cno2    Cnh2    0.0 kcal/mol    5.35 kcal/mol   0.0 kcal/mol
+torsion_0.5_3cos-    Cno2    Cnh2    Cno2    No2     0.0 kcal/mol    20.0 kcal/mol   0.0 kcal/mol
+torsion_0.5_3cos-    Cno2    Cnh2    Nh2     H_      0.0 kcal/mol    8.88 kcal/mol   0.0 kcal/mol
+torsion_0.5_3cos-    Cnh2    Cno2    Cnh2    Nh2     0.0 kcal/mol    20.0 kcal/mol   0.0 kcal/mol
+torsion_0.5_3cos-    Cnh2    Cno2    No2     O_      0.0 kcal/mol    1.60 kcal/mol   0.0 kcal/mol
+torsion_0.5_3cos-    Nh2     Cnh2    Cno2    No2     0.0 kcal/mol    20.0 kcal/mol   0.0 kcal/mol
+impropre_0.5_harm    Cno2    Cnh2    Cnh2    No2     0.0 degre       36.5 kcal/mol
+impropre_0.5_harm    Cnh2    Cno2    Cno2    Nh2     0.0 degre       36.5 kcal/mol
+impropre_0.5_harm    No2     Cno2    O_      O_      0.0 degre       89.3 kcal/mol
+impropre_0.5_harm    Nh2     Cnh2    H_      H_      0.0 degre       2.1  kcal/mol
+* 
+* ============ 
+* Connectivite 
+* ============ 
+Zmatrice
+24
+0 5 1 6 
+1 2 0 15 
+2 3 9 1 
+3 18 4 2 
+4 12 5 3 
+5 4 21 0 
+6 0 7 8 
+7 6 
+8 6 
+9 2 11 10 
+10 9 
+11 9 
+12 13 14 4 
+13 12 
+14 12 
+15 1 17 16 
+16 15 
+17 15 
+18 20 19 3 
+19 18 
+20 18 
+21 22 23 5 
+22 21 
+23 21 
+* 
+* ======================================================== 
+* Contribution de dispersion/repulsion en intramoleculaire 
+* ======================================================== 
+ContribDispRepIntra
+21
+TATB_Cno2 TATB_Cno2 0.0 0.0 0.4 0.0 0.0 0.76
+TATB_Cno2 TATB_Cnh2 0.0 0.0 0.4 0.0 0.0 0.76
+TATB_Cno2 TATB_No2 	0.0 0.0 0.4 0.0 0.0 0.76
+TATB_Cno2 TATB_Nh2 	0.0 0.0 0.4 0.0 0.0 0.76
+TATB_Cno2 TATB_O 	  0.0 0.0 0.4 0.0 0.0 0.76
+TATB_Cno2 TATB_H 	  0.0 0.0 0.4 0.0 0.0 0.76
+TATB_Cnh2 TATB_Cnh2 0.0 0.0 0.4 0.0 0.0 0.76
+TATB_Cnh2 TATB_No2 	0.0 0.0 0.4 0.0 0.0 0.76
+TATB_Cnh2 TATB_Nh2 	0.0 0.0 0.4 0.0 0.0 0.76
+TATB_Cnh2 TATB_O 	  0.0 0.0 0.4 0.0 0.0 0.76
+TATB_Cnh2 TATB_H 	  0.0 0.0 0.4 0.0 0.0 0.76
+TATB_No2 TATB_No2 	0.0 0.0 0.4 0.0 0.0 0.76
+TATB_No2 TATB_Nh2 	0.0 0.0 0.4 0.0 0.0 0.76
+TATB_No2 TATB_O 	  0.0 0.0 0.4 0.0 0.0 0.76
+TATB_No2 TATB_H 	  0.0 0.0 0.4 0.0 0.0 0.76
+TATB_Nh2 TATB_Nh2 	0.0 0.0 0.4 0.0 0.0 0.76
+TATB_Nh2 TATB_O 	  0.0 0.0 0.4 0.0 0.0 0.76
+TATB_Nh2 TATB_H 	  0.0 0.0 0.4 0.0 0.0 0.76
+TATB_O TATB_O 	    0.0 0.0 0.4 0.0 0.0 0.76
+TATB_O TATB_H 	    0.0 0.0 0.4 0.0 0.0 0.76
+TATB_H TATB_H 	    0.0 0.0 0.4 0.0 0.0 0.76
