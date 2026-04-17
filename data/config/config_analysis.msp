@@ -1,0 +1,23 @@
+perform_analysis: nop
+
+trigger_analysis:
+  rebind: { freq: simulation_analysis_frequency , result: trigger_analysis }
+  body:
+    - nth_timestep
+
+perform_analysis_if_triggered:
+  condition: trigger_analysis
+  body:
+    - perform_analysis
+
+perform_analysis_ccl:
+  - grid_flavor
+  - resize_grid_cell_values
+  - atom_cell_projection
+  - cc_label
+  - timestep_file: "cc_%09d"
+  - write_grid_vtk
+  - timestep_file: "cc_table_%09d"
+  - write_cc_table
+
+  

@@ -1,15 +1,18 @@
-# default input : read last dump with legacy StampV3 format 
+# Default setup_system : read last dump with legacy StampV3 format
 
+# StampV3 reader
 read_stamp_v3:
   file: lastLegacyDump
   filename: lastLegacyDump
   bounds_mode: FILE
 
+# Operator that tests if file exists
 has_legacy_dump_file:
   rebind: { result: has_dump_file }
   body: [ file_exists: { filename: lastLegacyDump } ]
 
-input_data:
+# Definition of setup_system operator  
+setup_system:
   - has_legacy_dump_file
   - read_lastLegacyDump:
       condition: has_dump_file
