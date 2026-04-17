@@ -1,0 +1,66 @@
+* ----------------------------------------------------------
+* Definition de la molecule (geometrie, maille et potentiel)
+* ----------------------------------------------------------
+FichierAtomes			./FAtomes.in
+EcritureFichierFAtomes		0
+* ----------------------------------------------------------
+*  Parallelisation
+* ----------------------------------------------------------
+Parallele			2 2 2
+* ----------------------------------------------------------
+*  Dimension et forme du systeme
+* ----------------------------------------------------------
+Decoupage			1 1 1
+* ----------------------------------------------------------
+* Ensemble thermodynamique
+* ----------------------------------------------------------
+Ensemble			LNVT
+*Ensemble			NVE
+Trequis				413.0
+FrictionLangevin		1e12
+* ----------------------------------------------------------
+* Table de marche
+* ----------------------------------------------------------
+StepLimit			10
+StepAvg				1
+*StopInitialisation		1
+Deltatemps			0.1e-15
+* ----------------------------------------------------------
+* Pas de temps adaptatif
+* ----------------------------------------------------------
+DtAdapt				1
+DtAdaptbase			2
+DtAdaptdr			0.02e-10
+* ----------------------------------------------------------
+* Conditons aux limites
+* ----------------------------------------------------------
+ConditionX			Periodique
+ConditionY			Periodique
+ConditionZ			Periodique
+* ----------------------------------------------------------
+* Protection / reprise
+* ----------------------------------------------------------
+Protection			10
+ProtectionExaStamp		1
+Reprise				0
+* ----------------------------------------------------------
+* Reglages divers
+* ----------------------------------------------------------
+Schema				verlet
+drVerlet			3.e-10
+Vitesse				1
+TransfertDesForces  		1
+* --------------------------------------------------------------------
+*  Systemes Moleculaires
+* --------------------------------------------------------------------
+Molecule			1
+Molecule_CalculIntra		2       ** 0=SANS_INTRA ; 1=SANS_LISTE_DDL ; 2=AVEC_LISTE_DDL
+Molecule_ContribVdwIntra12	0.0
+Molecule_ContribVdwIntra13	0.0
+Molecule_ContribVdwIntra14	0.5
+* --------------------------------------------------------------------
+*   Reaction Field
+* --------------------------------------------------------------------
+ReactionField			1
+ReactionField_epsilon		50.0
+ReactionField_rc		12.5e-10
