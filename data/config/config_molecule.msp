@@ -1,4 +1,17 @@
+######################################################################################################
+###################### Default configuration for flexible molecules calculations #####################
+######################################################################################################
+
+######################################################################################################
+######################################### Restart function ###########################################
+
 write_restart: write_restart_molecule
+
+######################################################################################################
+######################################################################################################
+
+######################################################################################################
+################################### Neighbors list update  ###########################################
 
 extramolecular_neighbors:
   config:
@@ -22,29 +35,46 @@ parallel_update_particles:
   - intramolecular_pair_list
   - mol_optimize_connectivity
   - update_particle_neighbors
+  
+######################################################################################################
+######################################################################################################
 
+######################################################################################################
+################################### Force calculation procedure ######################################
+
+# Prolog: add long range energy correction if needed
+compute_force_prolog: zero_force_energy_with_correction
+
+# Default configuration of ljexp6rf_pc
 ljexp6rf_pc:
   enable_pair_weights: false
   per_atom_charge: true
   use_symmetry: false
   compute_virial: false
 
-compute_force_prolog: zero_force_energy_with_correction
-  
-compute_force:
-  - compute_nonbonding_forces
-  - compute_bonding_forces
-
+# Non bonding forces (default = ljexp6rf_pc)
 compute_nonbonding_forces:
   rebind: { parameters: potentials_for_pairs }
   body: [ ljexp6rf_pc ]
-  
+
+# Bonding forces
 compute_bonding_forces:
   - compute_force_bond
   - compute_force_bend
   - compute_force_torsion
   - compute_force_improper
   - intramolecular_pair_force
+
+# Total forces (nonbonding + bonding)  
+compute_force:
+  - compute_nonbonding_forces
+  - compute_bonding_forces
+
+######################################################################################################
+######################################################################################################
+
+######################################################################################################
+############################## Some default operators for molecules ##################################
 
 preinit_rcut_max: nop
 
@@ -54,4 +84,8 @@ preinit_rcut_max: nop
 domain:
   cell_size: 8 ang
   periodic: [true, true, true]
+  expandable: false
+  
+######################################################################################################
+######################################################################################################
 
