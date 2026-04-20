@@ -31,7 +31,7 @@ global:
   simulation_thermostate_screen_frequency: 1
   simulation_snapshot_frequency: -1
   simulation_thermostate_file_frequency: 10
-  file: "thermodynamic_state.csv"
+  thermostate_file: "thermodynamic_state.csv"
 
 replicate_domain_cmol:
   repeat: [ 4 , 4 , 2 ]

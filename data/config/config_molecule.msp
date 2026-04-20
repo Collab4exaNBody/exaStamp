@@ -48,7 +48,7 @@ compute_bonding_forces:
 
 preinit_rcut_max: nop
 
-init_epilog:
++init_epilog:
   - intramolecular_setup
 
 domain:

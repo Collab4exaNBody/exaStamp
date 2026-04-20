@@ -185,6 +185,7 @@ particles_regions: []
 init_parameters: nop
 
 # Initialization part prolog + epilog
+# These can be customized in other config files (see config_nose_hoover.msp or config_molecule.msp for examples)
 init_prolog: nop
 init_epilog: nop
 
