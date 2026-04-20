@@ -1,10 +1,6 @@
 species:
   - Copper: { mass: 105.486E-27 kg, z: 29, charge: 0 e- }
 
-domain:
-  grid_dims: [12,12,12]
-  periodic: [true,true,true]
-
 setup_system:
   - domain:
       cell_size: 3.0 ang
@@ -26,14 +22,14 @@ global:
   simulation_thermostate_screen_frequency: 1
   rcut_inc: 1.0 ang
 
-simulation_epilog:
-  - histogram_energy: { samples: 50 }
-  - print_histogram: { message: "energy" }
-
 compute_force: lj_compute_force
 
 lj_compute_force:
   parameters: { epsilon: 9.340E-20 J , sigma: 0.227E-09 m }
   rcut: 5.68 ang
+
+simulation_epilog:
+  - histogram_energy: { samples: 50 }
+  - print_histogram: { message: "energy" }
 
 

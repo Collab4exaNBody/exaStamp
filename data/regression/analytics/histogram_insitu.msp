@@ -1,14 +1,5 @@
-configuration:
-  profiling:
-    summary: true
-    vite: trace.vite
-
 species:
   - Copper: { mass: 105.486E-27 kg, z: 29, charge: 0 e- }
-
-domain:
-  grid_dims: [12,12,12]
-  periodic: [true,true,true]
 
 setup_system:
   - domain:
