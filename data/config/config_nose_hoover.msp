@@ -1,8 +1,8 @@
-init_prolog:
++init_prolog:
   - deformation_xform:
       defbox: { extension: [ 1.0 , 1.0 , 1.0 ] }
   
-init_epilog:
++init_epilog:
   - init_nose_hoover
 
 nose_hoover_additional_step:  
