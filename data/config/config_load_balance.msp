@@ -1,4 +1,6 @@
-########################### Load balancing ############################
+#######################################################################################
+##################### Default configuration for load balancing ########################
+
 # trigger load balance whenever domain size changed, whatever freq has been requested
 # extend_domain has an input named enable_domain_extension to control if domain extension is allowed
 # enable_domain_extension is defined as false in 'global'
@@ -26,10 +28,11 @@ load_balancing_if_triggered:
   condition: trigger_load_balance
   body:
     - load_balance
-#######################################################################
 
 # Auto tuning of cost model is disabled by default
 # To enable it, include config_load_balance_auto_tune.msp 
 load_balance_auto_tune_start: nop
 load_balance_auto_tune_end: nop
 
+#######################################################################################
+#######################################################################################
