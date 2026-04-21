@@ -8,8 +8,8 @@ setup_system:
       periodic: [ false, false, false ]
       expandable: false
   - read_fatomes_mol:
-      filename: "FAtomes_thf_gas"
-      stampinput: "DONNEES_thf_gas"
+      filename: "../../potentials/FAtomes_thf_gas"
+      stampinput: "../../potentials/DONNEES_thf_gas"
       
 global:
   dt: 0.5e-15 s
@@ -17,10 +17,9 @@ global:
   max_iteration: 100
   simulation_thermostate_screen_frequency: 1
   simulation_snapshot_frequency: -1
-  simulation_thermostate_file_frequency: 10
+  simulation_restart_frequency: 50
+  simulation_thermostate_file_frequency: 1
   thermostate_file: "thermodynamic_state.csv"
-  
-final_dump: nop
 
 compute_bonding_forces:
   - compute_force_bond:

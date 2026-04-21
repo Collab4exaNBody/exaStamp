@@ -46,8 +46,6 @@ replicate_molecule_domain:
   - load_balance_rcb
   - migrate_cell_particles: { ghost_dist: 0. ang }
 
-final_dump: nop
-
 compute_nonbonding_forces: nop
 compute_bonding_forces: nop
   # - compute_force_bond:

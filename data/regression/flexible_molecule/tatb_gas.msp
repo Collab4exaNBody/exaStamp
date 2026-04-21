@@ -18,8 +18,6 @@ global:
   simulation_snapshot_frequency: -1
   simulation_thermostate_file_frequency: 10
   thermostate_file: "thermodynamic_state.csv"
-
-final_dump: nop
   
 compute_bonding_forces:
   - compute_force_bond:

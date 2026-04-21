@@ -20,8 +20,6 @@ global:
   simulation_thermostate_file_frequency: 10
   file: "thermodynamic_state.csv"
 
-final_dump: nop
-
 compute_bonding_forces:
   - compute_force_bond:
       compute_virial: true
