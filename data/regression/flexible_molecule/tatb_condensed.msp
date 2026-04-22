@@ -2,7 +2,7 @@
 includes:
   - config_molecule.msp
   
-input_data:
+setup_system:
   - domain:
       cell_size: 4.45 ang
       periodic: [true,true,true]
@@ -27,11 +27,11 @@ parallel_update_particles:
 global:
   dt: 0.5e-15 s
   rcut_inc: 2.0 ang
-  simulation_end_iteration: 10
-  simulation_log_frequency: 1
-  simulation_dump_frequency: -1
-  simulation_dump_thermo_frequency: 10
-  file: "thermodynamic_state.csv"
+  max_iteration: 10
+  simulation_thermostate_screen_frequency: 1
+  simulation_snapshot_frequency: -1
+  simulation_thermostate_file_frequency: 10
+  thermostate_file: "thermodynamic_state.csv"
 
 replicate_domain_cmol:
   repeat: [ 4 , 4 , 2 ]
@@ -45,8 +45,6 @@ replicate_molecule_domain:
   - load_balance_cost_model
   - load_balance_rcb
   - migrate_cell_particles: { ghost_dist: 0. ang }
-
-final_dump: nop
 
 compute_nonbonding_forces: nop
 compute_bonding_forces: nop

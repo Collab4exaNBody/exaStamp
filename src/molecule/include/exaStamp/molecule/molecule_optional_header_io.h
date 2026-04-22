@@ -24,6 +24,7 @@ under the License.
 #include <exaStamp/molecule/torsions_potentials_parameters.h>
 #include <exaStamp/potential/ljexp6rf/ljexp6rf.h>
 #include <exaStamp/molecule/intramolecular_pair_weight.h>
+#include <exaStamp/molecule/iFFname.h>
 
 namespace exaStamp
 {
@@ -36,6 +37,10 @@ namespace exaStamp
     static inline constexpr uint64_t header_version = 101; // Version 1.1 adds potential and weighting parameters in optional header
   
     // since version 1.0
+    IntraFFtypes& m_ffnameVector = nullptr;
+    bool& m_rf_self_pairs;
+    bool& m_long_range_correction;    
+    
     double& m_bond_max_dist;
     double& m_bond_max_stretch;
     MoleculeSpeciesVector * m_molecules = nullptr;
@@ -50,6 +55,8 @@ namespace exaStamp
     LJExp6RFMultiParms * m_potentials_for_pairs = nullptr;
     IntramolecularPairWeighting * m_mol_pair_weights = nullptr;
     
+    struct FFNameBuf { char name[32]; };
+
     struct IntramolecularFunctionalIO
     {
       char m_type[4][32];
@@ -76,6 +83,8 @@ namespace exaStamp
       const int vermin = header_version%100;
       out << std::defaultfloat << std::endl;
       out << "molecule ext. v"<<vermaj<<'.'<<vermin <<std::endl;
+      out << "mol. rf self pairs = "<<m_rf_self_pairs<<std::endl;
+      out << "mol. long range correction  = "<<m_long_range_correction<<std::endl;
       out << "mol. max dist = "<<m_bond_max_dist<<std::endl;
       out << "mol. stretch  = "<<m_bond_max_stretch<<std::endl;
       out << std::setprecision(6) << std::endl;
@@ -147,12 +156,23 @@ namespace exaStamp
       const int vermin = header_version%100;
       size_t n_bytes = 0;
       size_t n_molecules = 0;
+      size_t n_ffname = 0;
+      if( m_ffnameVector.size() > 0 ) n_ffname = m_ffnameVector.size();
       if( m_molecules != nullptr ) n_molecules = m_molecules->m_molecules.size();
       if(verbose) lout << "molecule ext. v"<<vermaj<<'.'<<vermin <<std::endl;
       if(verbose) lout << "mol. max dist = "<<m_bond_max_dist<<std::endl;
       if(verbose) lout << "mol. stretch  = "<<m_bond_max_stretch<<std::endl;
       if(verbose) lout << "mol. species  = "<<n_molecules<<std::endl;
       n_bytes += write_func( header_version );
+      n_bytes += write_func( n_ffname );
+      for(size_t i=0;i<n_ffname;i++)
+        {
+          FFNameBuf buf = {};
+          std::strncpy( buf.name, m_ffnameVector[i].c_str(), 31 );
+          n_bytes += write_func( buf );
+        }
+      n_bytes += write_func( m_rf_self_pairs );
+      n_bytes += write_func( m_long_range_correction );      
       n_bytes += write_func( m_bond_max_dist );
       n_bytes += write_func( m_bond_max_stretch );
       n_bytes += write_func( n_molecules );
@@ -270,10 +290,27 @@ namespace exaStamp
       uint64_t header_version = 100;
       size_t n_bytes = 0;
       size_t n_molecules = 0;
+      size_t n_ffname = 0;
+      m_rf_self_pairs = m_long_range_correction = false;
       m_bond_max_dist = m_bond_max_stretch = 0.0;
       n_bytes += read_func( header_version );
       const int vermaj = header_version/100;
       const int vermin = header_version%100;
+      n_bytes += read_func( n_ffname );
+      // if( n_ffname>0 && m_ffnameVector.size() < 1 )
+      // {
+      //   fatal_error() << "Missing ffnameVector container to read ffnames" << std::endl;
+      // }
+      //      if( m_ffnameVector.size() > 0 ) m_ffnameVector.resize( n_ffname );
+      m_ffnameVector.resize( n_ffname );
+      for(size_t i=0;i<n_ffname;i++)
+      {
+        FFNameBuf buf = {};
+        n_bytes += read_func( buf );
+        m_ffnameVector[i] = buf.name;
+      }
+      n_bytes += read_func( m_rf_self_pairs );
+      n_bytes += read_func( m_long_range_correction );
       n_bytes += read_func( m_bond_max_dist );
       n_bytes += read_func( m_bond_max_stretch );
       n_bytes += read_func( n_molecules );
