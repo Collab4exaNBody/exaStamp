@@ -1,3 +1,11 @@
+######################################################################################################
+############################## Main configuration of exaStamp simulations ############################
+######################################################################################################
+
+######################################################################################################
+############################## exaStamp logo banner + version information ############################
+######################################################################################################
+
 print_logo_banner:
   profiling: false
   body:
@@ -11,49 +19,33 @@ print_logo_banner:
         ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝╚═╝     ╚═╝╚═╝           ╚═══╝  ╚═════╝
     - version_info
 
+######################################################################################################
+######################################################################################################
+
+######################################################################################################
+############################### Default inclusion of configuration files #############################
+######################################################################################################
+
 includes:
-  - config_defaults.msp
-  - config_debug.msp
-  - config_move_particles.msp
-  - config_numerical_schemes.msp
-  - config_globals.msp
-  - config_iteration_log.msp
-  - config_iteration_dump.msp
-  - config_end_iteration.msp
-  - config_init_temperature.msp
-  - config_input.msp
+  - config_defaults.msp                # Configuration block default definition
+  - config_move_particles.msp          # Operators for updating particles/neighbors positions + move across domain + neighbor lists
+  - config_numerical_schemes.msp       # Numerical schemes (NVE, LNVT, BNVT, NHNVT, NHNPT)
+  - config_globals.msp                 # Global block definition with simulation-wide default variables (global control of simulation)
+  - config_thermostate.msp             # Thermodynamic state trigger + print/write operators (screen/file/compute)
+  - config_snapshot.msp                # Snapshots trigger + write operators (for visualization)
+  - config_restart.msp                 # Restarts trigger + write operatos (to continue a stopped simulation)
+  - config_analysis.msp                # Analysis trigger + compute operators (for on-the-fly analysis)
+  - config_setup_system.msp            # Default setup_system operator for setting up the system
+  
+######################################################################################################
+######################################################################################################
 
-# set various defaults
-memory_stats: { graph_res_mem: false }
+######################################################################################################
+############################ Cutoff radius pre-calculation + initialization ##########################
+######################################################################################################
 
-# usually outputs ParticleSpecies type to a slot named species, in case the data reader doesn't provide species description
-reduce_species_after_read: nop
-
-############### compute loop stop condition #############
-compute_loop_stop:
-  profiling: false
-  rebind: { end_at: simulation_end_iteration , result: compute_loop_continue }
-  body:
-    - sim_continue
-
-# default force computation does nothing, these are placeholders used later on
-compute_loop_prolog: nop
-compute_loop_epilog: nop
-init_prolog: nop
-init_epilog: nop
-
-# executing potential sub nodes initializes rcut_max
-# won't actually compute anything since grid is empty at this time
-init_rcut_max:
-  profiling: false
-  rebind: { grid: null_grid, chunk_neighbors: null_neighbors }
-  body:
-    - compute_force    # executed on an empty grid, just here to update rcut_max
-    - nbh_dist:        # compute neighborhood distance in grid space (nbh_dist),
-        verbose: true  # also computes maximum particle move tolerance in grid space (max_displ)
-                       # and ghost_dist, a constant scaling of of nbh_dist using scale factor nbh_ghost_scale
-
-# executed once (whitout verbosity) first to enable automatic cell_size calculation
+# Pre-calculation of cutoff radius
+# Executed once (whitout verbosity) at start to enable automatic cell_size calculation
 preinit_rcut_max:
   profiling: false
   rebind: { grid: null_grid, chunk_neighbors: null_neighbors, domain: empty_domain }
@@ -65,79 +57,196 @@ preinit_rcut_max:
     - compute_force
     - nbh_dist
 
-first_iteration:
-  - init_particles
-  - compute_all_forces_energy
-  - default_thermodynamic_state
-  - default_print_thermodynamic_state: { lb_flag: false , move_flag: false , print_header: true }
-  - default_dump_thermodynamic_state
-  - next_time_step
+# Initialization of cutoff radius    
+# Executing potential sub nodes initializes rcut_max
+# won't actually compute anything since grid is empty at this time
+init_rcut_max:
+  profiling: false
+  rebind: { grid: null_grid, chunk_neighbors: null_neighbors }
+  body:
+    - compute_force    # Executed on an empty grid, just here to update rcut_max
+    - nbh_dist:        # Compute neighborhood distance in grid space (nbh_dist) + physical space
+        verbose: true  # also computes maximum particle move tolerance in grid space (max_displ) + physical space
+                       # and ghost_dist, a constant scaling of of nbh_dist using scale factor nbh_ghost_scale
 
-# definin this enables user to use --set-init_cuda-enable_cuda false to disable cuda
+######################################################################################################
+######################################################################################################
+
+######################################################################################################
+############################# Hardware setup and finalization operators ##############################
+######################################################################################################
+
+# This enables the user to use --set-init_cuda-enable_cuda false to disable cuda
 init_cuda:
   enable_cuda: true
 
+# Hardware setup (communicator + CUDA initialization) + ghost configuration
 hw_device_init:
   - mpi_comm_world
   - init_cuda
-#  - update_ghost_config # uncomment when future-mpi-feature-compatibility is merged into exaNBody
+  - update_ghost_config
 
+# Hardware finalization (CUDA)
 hw_device_finalize:
   - finalize_cuda
+  
+######################################################################################################
+######################################################################################################
+
+######################################################################################################
+############################## Simulation epilog (Write restart file) ################################
+######################################################################################################
 
 simulation_epilog:
-  - default_thermodynamic_state
-  - final_dump
+  - default_thermostate_compute
+  - write_restart
 
-# by default, species use the default definition of species operator to generate initial species
+######################################################################################################
+######################################################################################################
+
+######################################################################################################
+################################## Default initial species generation ################################
+######################################################################################################
+
 species: { species: [ ] , verbose: false }
 generate_default_species: species
 
-compute_loop:
+######################################################################################################
+######################################################################################################
+
+######################################################################################################
+####################################### Simulation compute loop ######################################
+######################################################################################################
+
+# Trigger operators to know what to do later
+begin_iteration:
+  - trigger_restart
+  - trigger_analysis
+  - trigger_snapshot
+  - trigger_thermostate_screen
+  - trigger_thermostate_file
+  - trigger_thermostate_compute
+
+# Perform compute/print/write operations if triggered
+end_iteration:
+  - thermostate_compute_if_triggered
+  - thermostate_screen_if_triggered
+  - thermostate_file_if_triggered
+  - write_restart_if_triggered
+  - perform_analysis_if_triggered
+  - write_snapshot_if_triggered
+
+# First iteration of MD trajectory
+first_iteration:
+  - init_particles
+  - compute_all_forces_energy
+  - default_thermostate_compute
+  - default_thermostate_screen: { lb_flag: false , move_flag: false , print_header: true }
+  - default_thermostate_file
+  - nose_hoover_additional_step
+  - next_time_step
+
+# If Nose-Hoover scheme is used an additional step is required
+# By default, it does nothing. This is defined in the config_nose_hoover.msp file
+nose_hoover_additional_step: nop
+
+# MD Simulation loop    
+md_trajectory_loop:
   loop: true
-  #unroll: 4
-  name: loop
-  condition: compute_loop_continue
+  name: md_loop
+  condition: md_loop_continue
   body:
-    - compute_loop_prolog
+    - md_loop_prolog
     - begin_iteration
     - numerical_scheme
     - end_iteration
-    - compute_loop_epilog
+    - md_loop_epilog
     - next_time_step
-    - compute_loop_stop
+    - md_loop_stop
     
+# Prolog + epilog operations (nop by default)    
+md_loop_prolog: nop
+md_loop_epilog: nop
+
+# Condition for stopping the MD simulation loop
+# This condition is fulfilled when the current timestep reaches max_iteration
+md_loop_stop:
+  profiling: false
+  rebind: { end_at: max_iteration , result: md_loop_continue }
+  body:
+    - sim_continue
+
+######################################################################################################
+######################################################################################################
+
+######################################################################################################
+##################################### Additional default definitions #################################
+######################################################################################################
+  
+# Memory statistics
+memory_stats: { graph_res_mem: false }
+
+# In case the data reader (in setup_system) doesn't provide any species description
+# Usually outputs ParticleSpecies type to a slot named species
+reduce_species_after_read: nop
+
+# Default grid variant we use
+grid_flavor: grid_flavor_full
+
+make_empty_grid:
+  rebind: { grid: null_grid }
+  body:
+    - grid_flavor
+
+# Default domain parameters
+domain:
+  grid_dims: [ 0 , 0 , 0 ] # deduced from cell_size
+  cell_size: 0.0 ang # deduced from max rcut (a.k.a. output slot ghost_dist from nbh_dist node)
+  expandable: false
+
+# Empty regions by default
 particles_regions: []
 
+# No additional parameters by default
 init_parameters: nop
 
-######## simulation program description #################
-simulation:
-  name: sim
-  body:
-    - print_logo_banner
-    - hw_device_init   # provide MPI_COMM_WORLD as a default communicator
-    - make_empty_grid
-    - grid_flavor
-    - global
-    - init_parameters
-    - generate_default_species
-    - particle_regions
-    - preinit_rcut_max
-    - domain
-    - init_prolog
-    - input_data
-    - species: { verbose: false , fail_if_empty: true }
-    - grid_post_processing
-    - reduce_species_after_read
-    - init_rcut_max
-    - print_domain
-    - performance_adviser: { verbose: true }
-    - do_init_temperature
-    - init_epilog
-    - species: { verbose: true , fail_if_empty: true }
-    - first_iteration
-    - compute_loop
-    - simulation_epilog
-    - hw_device_finalize
+# Initialization part prolog + epilog
+init_prolog: nop
+init_epilog: nop
 
+######################################################################################################
+######################################################################################################
+
+######################################################################################################
+################################# exaStamp default simulation graph ##################################
+######################################################################################################
+simulation:
+  name: exaStamp_simulation
+  body:
+    - print_logo_banner # Print exaStamp banner
+    - hw_device_init # Hardware setup (communicator + CUDA initialization)
+    - make_empty_grid # Simulation grid setup
+    - grid_flavor # Grid flavor == what mandatory per-particle data is stored
+    - global # Global setup
+    - init_parameters # Additional parameters
+    - generate_default_species # Default species
+    - particle_regions # Region initialization
+    - preinit_rcut_max # Automatic cell_size calculation
+    - domain # Domain definition
+    - init_prolog # Init prolog
+    - setup_system # Setup system and populate it with particles
+    - species: { verbose: false , fail_if_empty: true } # Grid memory compaction
+    - grid_post_processing # Reduce species
+    - reduce_species_after_read # Update particle species 
+    - init_rcut_max # Update cutoff radius + displacement tolerance
+    - print_domain # Print domain
+    - performance_adviser: { verbose: true } # Print performance recommendations
+    - init_epilog # Init epilog
+    - species: { verbose: true , fail_if_empty: true }  # Species sanity check
+    - first_iteration # Simulation first iteration 
+    - md_trajectory_loop # Simulation compute loop
+    - simulation_epilog # Simulation finalization
+    - hw_device_finalize # CUDA finalization
+
+######################################################################################################
+######################################################################################################

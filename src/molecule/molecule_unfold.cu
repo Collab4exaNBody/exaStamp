@@ -28,8 +28,9 @@ under the License.
 #include <exaStamp/molecule/id_map.h>
 #include <exaStamp/molecule/periodic_r_delta.h>
 
-#include <mpi.h>
 #include <exanb/mpi/grid_update_ghosts.h>
+#include <exanb/mpi/update_ghost_functors.h>
+#include <mpi.h>
 
 #include <exanb/core/grid_fields.h>
 XNB_DECLARE_FIELD( exanb::Vec3d, molufpos, "molecule unfolded particle position" );
@@ -53,7 +54,7 @@ namespace exaStamp
     ADD_SLOT( IdMap       , id_map        , INPUT , REQUIRED );
     ADD_SLOT( IdMapGhosts , id_map_ghosts , INPUT , REQUIRED );
 
-    ADD_SLOT( UpdateGhostsScratch      , ghost_comm_buffers, PRIVATE );
+    ADD_SLOT( UpdateGhostConfig        , update_ghost_config , INPUT_OUTPUT , UpdateGhostConfig{} );
     ADD_SLOT( GhostCommunicationScheme , ghost_comm_scheme , INPUT_OUTPUT , REQUIRED );
 
   public:
@@ -66,9 +67,18 @@ namespace exaStamp
       static constexpr uint64_t null_id = std::numeric_limits<uint64_t>::max();
       static constexpr uint64_t null_loc = std::numeric_limits<uint64_t>::max();
       static constexpr size_t null_index = std::numeric_limits<size_t>::max();
+      static constexpr GridCellValues * null_cell_values = nullptr;
 
       // basic assumption
       assert( domain->origin() == grid->origin() );
+
+/*
+      const auto ghost_update_fields = onika::make_flat_tuple( idmol_field ); 
+      auto ghost_comm_buffers = UpdateGhostsUtils::make_forward_ghost_update_manager( cells, ghost_update_fields );
+        grid_update_ghosts( exanb::ldbg, *mpi, *ghost_comm_scheme, *grid, *domain, nullptr,
+                            ghost_comm_buffers, pecfunc, peqfunc, ghost_update_fields, *update_ghost_config );
+
+*/
 
       // those two lambdas are used to launch parallel kernels within a function exterior to this OperatorNode's implementation
       auto pecfunc = [self=this](auto ... args) { return self->parallel_execution_context(args ...); };
@@ -95,9 +105,10 @@ namespace exaStamp
       do
       {
         const auto ghost_update_fields = onika::make_flat_tuple( idmol_field ); 
-        grid_update_ghosts( exanb::ldbg, *mpi, *ghost_comm_scheme, *grid, *domain, nullptr,
-                            *ghost_comm_buffers, pecfunc, peqfunc, ghost_update_fields,
-                            *mpi_tag, true, true, true, true, false, std::false_type{} );
+        auto ghost_comm_buffers = UpdateGhostsUtils::make_forward_ghost_update_manager( cells, ghost_update_fields );
+        grid_update_ghosts( exanb::ldbg, *mpi, *ghost_comm_scheme, grid.get_pointer(), *domain, null_cell_values,
+                            ghost_comm_buffers, pecfunc, peqfunc, ghost_update_fields, *update_ghost_config );
+
         update_count = 0;
         for(size_t cell_i=0;cell_i<n_cells;cell_i++) if( ! grid->is_ghost_cell(cell_i) )
         {
@@ -255,9 +266,9 @@ namespace exaStamp
 
         // propagate ghost updates
         const auto ghost_update_fields = onika::make_flat_tuple( idmol_field, ufpos_field );
-        grid_update_ghosts( exanb::ldbg, *mpi, *ghost_comm_scheme, *grid, *domain, nullptr,
-                            *ghost_comm_buffers, pecfunc,peqfunc, ghost_update_fields,
-                            *mpi_tag, true, true, true, true, false, std::false_type{} );        
+        auto ghost_comm_buffers = UpdateGhostsUtils::make_forward_ghost_update_manager( cells, ghost_update_fields );
+        grid_update_ghosts( exanb::ldbg, *mpi, *ghost_comm_scheme, grid.get_pointer(), *domain, null_cell_values,
+                            ghost_comm_buffers, pecfunc, peqfunc, ghost_update_fields, *update_ghost_config );      
 
         // gather updates from ghosts (from neighbor sub-domains)
         update_count = 0;

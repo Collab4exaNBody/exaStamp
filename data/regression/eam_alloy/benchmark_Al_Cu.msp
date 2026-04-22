@@ -107,7 +107,8 @@ replicate_domain:
 domain:
   cell_size: 16. ang
   periodic: [true,true,true]
-
+  expandable: false
+  
 +first_iteration:
   - grid_stats
   - chunk_neighbors_stats

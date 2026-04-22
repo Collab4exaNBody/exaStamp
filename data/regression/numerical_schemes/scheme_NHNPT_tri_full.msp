@@ -1,0 +1,31 @@
+includes:
+  - baseline.yaml
+  - config_nose_hoover.msp
+
+numerical_scheme: verlet_nhnpt
+
+init_nose_hoover:
+  algo: NPT
+  Tstart: 150. K
+  Tend:   150. K
+  Tdamp:  0.05 ps
+  tchain: 3
+  Pxxstart: 1.0e9
+  Pxxend:   1.0e9
+  Pxxdamp:  0.5 ps
+  Pyystart: 1.0e9
+  Pyyend:   1.0e9
+  Pyydamp:  0.5 ps
+  Pzzstart: 1.0e9
+  Pzzend:   1.0e9
+  Pzzdamp:  0.5 ps
+  Pyzstart: 0.0
+  Pyzend:   0.0
+  Pyzdamp:  0.5 ps
+  Pxzstart: 0.0
+  Pxzend:   0.0
+  Pxzdamp:  0.5 ps
+  Pxystart: 0.0
+  Pxyend:   0.0
+  Pxydamp:  0.5 ps
+  pchain: 3

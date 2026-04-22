@@ -115,7 +115,6 @@ domain:
 
 dump_data:
 #  - write_xyz_file
-#  - write_vtk: {is_binary: false}
 #  - copy_grid
 #  - restore_ghost_r0:
 #      rebind: { grid: grid_copy }

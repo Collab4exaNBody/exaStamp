@@ -41,14 +41,11 @@ update_particle_neighbors: nop
 dump_data_if_triggered:
   condition: trigger_dump_data
   body:
-#    - cleanup_before_dump
     - dump_data
 
 final_dump:
-    - cleanup_before_dump
+    - init_particles
     - dump_data_stamp_v3
-
-#cleanup_before_dump: nop
 
 # atoms descriptions
 species:
@@ -106,7 +103,6 @@ domain:
 
 dump_data:
   - write_xyz_file
-#  - write_vtk: {is_binary: false}
 #  - copy_grid
 #  - restore_ghost_r0:
 #      rebind: { grid: grid_copy }

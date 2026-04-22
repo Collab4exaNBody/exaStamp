@@ -1,0 +1,78 @@
+######################################################################################################
+################################# Default configuration for snapshot  ################################
+######################################################################################################
+
+######################################################################################################
+############################# Default snapshot operator : no snapshot  ###############################
+
+write_snapshot: nop
+
+######################################################################################################
+######################################################################################################
+
+######################################################################################################
+#################################### Snapshot trigger function  ######################################
+
+trigger_snapshot:
+  rebind: { freq: simulation_snapshot_frequency , result: trigger_snapshot }
+  body:
+    - nth_timestep
+
+######################################################################################################
+######################################################################################################
+
+######################################################################################################
+################################ Conditional operator for snapshot  ##################################
+
+write_snapshot_if_triggered:
+  condition: trigger_snapshot
+  body:
+    - write_snapshot
+
+######################################################################################################
+######################################################################################################
+
+######################################################################################################
+########################### Collection of pre-defined snapshot operators #############################
+
+write_snapshot_paraview:
+  - timestep_file: "paraview/output_%09d"
+  - message: { mesg: "Write paraview file" , endl: false }
+  - print_dump_file:
+      rebind: { mesg: filename }
+      body:
+        - message: { endl: true }
+  - write_paraview
+
+write_snapshot_grid_vtk:
+  - grid_flavor
+  - resize_grid_cell_values
+  - atom_cell_projection
+  - timestep_file: "grid_%09d"
+  - message: { mesg: "Write grid vtk file" , endl: false }
+  - print_dump_file:
+      rebind: { mesg: filename }
+      body:
+        - message: { endl: true }
+  - write_grid_vtk
+
+write_snapshot_xyz:
+  - timestep_file: "exaStamp_%09d.xyz"
+  - message: { mesg: "Write xyz file" , endl: false }
+  - print_dump_file:
+      rebind: { mesg: filename }
+      body:
+        - message: { endl: true }
+  - write_xyz_file
+
+write_snapshot_lammps_data:
+  - timestep_file: "exaStamp_%09d.lmp"
+  - message: { mesg: "Write lammps data file" , endl: false }
+  - print_dump_file:
+      rebind: { mesg: filename }
+      body:
+        - message: { endl: true }
+  - write_lmp_file
+
+######################################################################################################
+######################################################################################################

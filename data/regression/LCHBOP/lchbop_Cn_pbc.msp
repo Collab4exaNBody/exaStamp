@@ -85,7 +85,7 @@ domain:
 #   cell_size: 2.2138777985714286 ang
 
 dump_data:
-  - write_vtk: {is_binary: false}
+  - write_paraview
 
 init_rcut_max: nbh_dist
 
