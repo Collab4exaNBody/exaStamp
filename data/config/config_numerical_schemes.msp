@@ -103,8 +103,13 @@ verlet_nhnvt:
     - nhc_temp_integrate
     - nh_v_temp:
         rebind: { value: vscale }
-        body:
-          - scale_v
+        body: [ scale_v ]
+    - compute_vel_bias:
+        rebind: { out: vbias }
+        body: [ avg_v_m ]
+    - remove_vel_bias:
+        rebind: { value: vbias }
+        body: [ shift_v ]
     - push_f_v: { dt_scale: 0.5, xform_mode: IDENTITY }
     - push_v_r: { dt_scale: 1.0, xform_mode: INV_XFORM }
     - check_and_update_particles
@@ -115,8 +120,7 @@ verlet_nhnvt:
     - nhc_temp_integrate
     - nh_v_temp:
         rebind: { value: vscale }
-        body:
-          - scale_v
+        body: [ scale_v ]
     - load_balance_auto_tune_end
 
 ######################################################################################################
@@ -134,6 +138,12 @@ verlet_nhnpt:
     - nh_v_temp:
         rebind: { value: vscale }
         body: [ scale_v ]
+    - compute_vel_bias:
+        rebind: { out: vbias }
+        body: [ avg_v_m ]
+    - remove_vel_bias:
+        rebind: { value: vbias }
+        body: [ shift_v ]
     - simulation_thermodynamic_state
     - couple_npt  
     - nh_omega_dot
