@@ -33,6 +33,7 @@ under the License.
 #include <exaStamp/io/atom_dump_filter.h>
 #include <exaStamp/molecule/molecule_species.h>
 #include <exaStamp/molecule/molecule_optional_header_io.h>
+#include <exaStamp/molecule/iFFname.h>
 
 namespace exaStamp
 {
@@ -62,6 +63,10 @@ namespace exaStamp
     ADD_SLOT( LJExp6RFMultiParms               , potentials_for_pairs     , INPUT, OPTIONAL );
     ADD_SLOT( IntramolecularPairWeighting      , mol_pair_weights         , INPUT, OPTIONAL );
 
+    ADD_SLOT( IntraFFtypes                     , ffnameVector             , INPUT, REQUIRED);
+    ADD_SLOT( bool                             , rf_self_pairs            , INPUT, REQUIRED);
+    ADD_SLOT( bool                             , long_range_correction    , INPUT, REQUIRED);
+    
     ADD_SLOT(double , bond_max_dist     , INPUT , 0.0 , DocString{"molecule bond max distance, in physical space"} );
     ADD_SLOT(double , bond_max_stretch  , INPUT , 0.0 , DocString{"fraction of bond_max_dist."} );
 
@@ -76,6 +81,9 @@ namespace exaStamp
       lout << "writing bond_max_stretch = "<< *bond_max_stretch << std::endl;
 
       MolIOExt molecule_io = {
+        *ffnameVector,
+        *rf_self_pairs,
+        *long_range_correction,
         *bond_max_dist ,
         *bond_max_stretch ,
         molecules.get_pointer() ,
