@@ -1,0 +1,34 @@
+includes:
+  - dir.configs/config_eam.msp
+  
+compute_force: nop
+
+species:
+  - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+
+setup_system:
+  - domain:
+      cell_size: 6.6 ang
+      grid_dims: [50, 5, 5]
+      bounds: [[0 ang, 0 ang, 0 ang], [330 ang, 33 ang, 33 ang]]
+      xform: [[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
+      periodic: [false, true, true]
+      expandable: true
+  - init_rcb_grid
+  - lattice:
+      structure: SC
+      types: [ Ta ]
+      size: [ 5 ang , 5 ang , 5 ang ]
+
+write_snapshot: nop
+
++first_iteration:
+  - write_snapshot
+
+global:
+  max_iteration: 10
+  simulation_thermostate_screen_frequency: 1
+  simulation_thermostate_file_frequency: -1
+  simulation_snapshot_frequency: -1
+  rcut_inc: 2.0 ang
+  dt: 5.0e-3 ps

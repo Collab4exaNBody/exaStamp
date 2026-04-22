@@ -1,0 +1,87 @@
+includes:
+  - dir.configs/config_eam.msp
+  - dir.configs/config_load_balance.msp
+  
+langevin_thermostat:
+  T: 100. K
+  gamma: 0.1 ps^-1
+
+trigger_nvt_to_nve:
+  rebind: { value: physical_time, result: is_nve }
+  body: [ greater_than: { threshold: 0.25 ps } ]
+
+integrate_nvt:
+  condition: not is_nve
+  body: [ eam_alloy, langevin_thermostat ]
+  
+integrate_nve:
+  condition: is_nve
+  body: [ eam_alloy]
+  
+assign_velocities:
+  condition: apply_vel
+  body:
+    - shift_v: { value: [  3000 m/s, 0., 0.], region: SPHERE1 }
+    - shift_v: { value: [ -3000 m/s, 0., 0.], region: SPHERE2 }
+  
+trigger_vel:
+  rebind: { value: timestep, result: apply_vel }
+  body:
+    - nth_timestep: { at_timestep: 50 }
+
+compute_force:
+  - trigger_nvt_to_nve:
+  - integrate_nvt
+  - integrate_nve
+  - trigger_vel
+  - assign_velocities    
+
+species:
+  - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+
+setup_system:
+  - domain:
+      cell_size: 10.0 ang
+      grid_dims: [40, 40, 40]
+      bounds: [[0 ang, 0 ang, 0 ang], [ 400 ang, 400 ang, 400 ang]]
+      xform: [[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
+      periodic: [true, true, true]
+      expandable: false
+  - particle_regions:
+      - SPHERE1:
+          quadric:
+            shape: sphere
+            transform:
+              - scale: [ 20 ang , 80 ang , 80 ang ]
+              - translate: [ 170 ang , 200 ang , 200 ang ]
+      - SPHERE2:
+          quadric:
+            shape: sphere
+            transform:
+              - scale: [ 50 ang , 20 ang , 20 ang ]
+              - translate: [ 260 ang , 200 ang , 200 ang ]
+  - init_rcb_grid
+  - lattice:
+      structure: BCC
+      types: [ Ta, Ta]
+      size: [ 3.3 ang , 3.3 ang , 3.3 ang ]
+      region: SPHERE1 or SPHERE2
+
+write_snapshot:
+  - timestep_file: "dir.outputs/impact_%09d.xyz"
+  - write_xyz:
+      fields: [ "id", "velocity", "force", "processor_id" ]
+
++first_iteration:
+  - write_snapshot
+
+global:
+  max_iteration: 2000
+  simulation_thermostate_screen_frequency: 10
+  simulation_thermostate_file_frequency: -1
+  simulation_snapshot_frequency: 50
+  rcut_inc: 2.0 ang
+  dt: 5.0e-3 ps
+  enable_load_balance: true
+  simulation_load_balance_frequency: 100
+  
