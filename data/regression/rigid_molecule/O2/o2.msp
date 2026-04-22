@@ -1,0 +1,66 @@
+# enable-if-XSTAMP_BUILD_PAIR_zero enable-if-XSTAMP_BUILD_PAIR_lennard_jones
+includes:
+  - config_species_rigidmol.cfg
+
+# define potential we'll reuse later
+compute_force_rf:
+  - compute_force_pair_rigidmol:
+      potentials:
+#        - { type_a: O , type_b: O , potential: reaction_field , rcut: 13.0 ang , parameters: { epsilon: 100 , rc: 13 ang } }
+        - { type_a: O , type_b: O , potential: reaction_field , rcut: 13.0 ang , parameters: { epsilon: 0 , rc: 13 ang } }
+
+compute_force_lj:
+  - compute_force_pair_rigidmol:
+      potentials:
+#        - { type_a: O , type_b: O , potential: lj , rcut: 10.0 ang , parameters: { epsilon: 1.28676442064E-21 J , sigma: 0.31589E-09 m } }
+        - { type_a: O , type_b: O , potential: lj , rcut: 8.65 ang , parameters: { epsilon: 1.6284E-21 J , sigma: 0.346E-09 m } }
+
+compute_force: 
+  - compute_force_rf
+  - compute_force_lj
+
+grid_flavor: grid_flavor_rigidmol
+
+input_data:
+  - read_xyz_rigidmol:
+      file: rigid_mol_test_O2.xyz
+      bounds_mode: FILE
+      enlarge_bounds: 3.0 ang
+
+init_epilog:
+  - init_mass_center
+  - init_rigid_mol_inertial_mass
+  - init_angular_momentum: { T: 60 K }
+
+default_thermodynamic_state: simulation_thermodynamic_state_rigidmol
+
+domain:
+#  periodic: [false,false,false]
+  periodic: [true,true,true]
+  grid_dims: [ 1 , 1 , 1 ]
+
+update_particles_fast_body:
+    - ghost_update_rq
+
+default_thermodynamic_state: simulation_thermodynamic_state_rigidmol
+
+default_print_thermodynamic_state: print_thermodynamic_state_rigidmol
+default_dump_thermodynamic_state: dump_thermodynamic_state_rigidmol
+
+global:
+  dt: 1.0e-4 ps
+  simulation_end_iteration: 10000
+  simulation_log_frequency: 10
+  simulation_dump_frequency: 1000000
+  simulation_dump_thermo_frequency: 1
+
+#numerical_scheme: numerical_scheme_verlet_rigidmol_langevin
+numerical_scheme: numerical_scheme_verlet_rigidmol_stamp
+
+#langevin_rigidmol:
+#   T: 280 K
+
+xxx_simulation_epilog:
+  - check_values:
+      file: xxx.dat
+      threshold: 5.e-10

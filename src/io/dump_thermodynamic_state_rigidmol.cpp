@@ -48,7 +48,7 @@ namespace exaStamp
       static const double conv_temperature = 1.e4 * onika::physics::atomicMass / onika::physics::boltzmann ;
       static const double conv_energy = 1.e4 * onika::physics::atomicMass / onika::physics::elementaryCharge;
       static const double conv_pressure = onika::physics::atomicMass * 1e20;
-      static const std::string header = "     Step     Time (ps)     Particles   Tot. E. (eV/part)  Kin. E. (eV/part)  Rot. E. (eV/part)  Pot. E. (eV/part)  Temperature   Pressure     sMises     Volume       Mass  Kin. Tx  Kin. Ty  Kin. Tz  Rot. Tx  Rot. Ty  Rot. Tz ";
+      static const std::string header = "#     Step     Time (ps)     Particles   Tot. E. (eV/part)  Kin. E. (eV/part)  Rot. E. (eV/part)  Pot. E. (eV/part)  Temperature   Pressure     sMises     Volume       Mass  Kin. Tx  Kin. Ty  Kin. Tz  Rot. Tx  Rot. Ty  Rot. Tz ";
 
       // MPI Initialization
       int rank = 0;
@@ -74,7 +74,7 @@ namespace exaStamp
         total_energy_int_unit += *electronic_energy;
       }
 
-      oss << onika::format_string("%9ld % .6e %13ld  % .10e  % .10e  % .10e  % .10e  % 11.3f % .3e % .3e % .3e % .3e % 11.3f % 11.3f % 11.3f % 11.3f % 11.3f % 11.3f /",
+      oss << onika::format_string("%9ld % .6e %13ld  % .10e  % .10e  % .10e  % .10e  % 11.3f % .3e % .3e % .3e % .3e % 11.3f % 11.3f % 11.3f % 11.3f % 11.3f % 11.3f ",
                              *timestep,
                              *physical_time,
                              sim_info.particle_count(),
