@@ -1,17 +1,24 @@
-compute_force: nop
+######################################################################################################
+######################## Default configuration for numerical schemes  ################################
+######################################################################################################
 
-# default is no thermostat
-thermostat: nop
-
-compute_force: nop
+######################################################################################################
+################# Default configuration for forces and energy calculations  ##########################
 
 compute_force_prolog: zero_force_energy
+compute_force: nop
 compute_force_epilog: force_to_accel
 
 compute_all_forces_energy:
   - compute_force_prolog
   - compute_force
   - compute_force_epilog
+
+######################################################################################################
+######################################################################################################
+
+######################################################################################################
+####################################### Velocity-Verlet Steps ########################################
 
 verlet_first_half:
   - push_f_v_r: { dt_scale: 1.0 , xform_mode: INV_XFORM }
@@ -20,30 +27,137 @@ verlet_first_half:
 verlet_second_half:
   - push_f_v: { dt_scale: 0.5 , xform_mode: IDENTITY }
 
-# define the verlet numerical scheme
-numerical_scheme_verlet:
-  name: scheme
+######################################################################################################
+######################################################################################################
+
+######################################################################################################
+#################################### Default numerical scheme: NVE ###################################
+
+numerical_scheme: verlet_nve
+
+######################################################################################################
+######################################################################################################
+
+######################################################################################################
+######################################### Numerical scheme NVE #######################################
+
+verlet_nve:
+  name: NVE_scheme
   body:
     - verlet_first_half
     - check_and_update_particles
     - load_balance_auto_tune_start
     - compute_all_forces_energy
     - verlet_second_half
-    - thermostat
     - load_balance_auto_tune_end
 
-# define the verlet numerical scheme
-numerical_scheme_basic:
-  - compute_all_forces_energy
-  - push_f_v: { xform_mode: IDENTITY }
-  - push_v_r: { xform_mode: INV_XFORM }
-  - check_and_update_particles
-  
-numerical_scheme_overdamped:
-  - compute_all_forces_energy
-  - push_f_r: { xform_mode: INV_XFORM }
-  - check_and_update_particles
+######################################################################################################
+######################################################################################################
 
-numerical_scheme: numerical_scheme_verlet
+######################################################################################################
+#################################### Numerical scheme NVT Langevin ###################################
 
+verlet_lnvt:
+  name: LNVT_scheme
+  body:
+    - verlet_first_half
+    - check_and_update_particles
+    - load_balance_auto_tune_start
+    - compute_force_prolog
+    - compute_force
+    - langevin_thermostat: { T: 300. K, gamma: 0.1 ps^-1 }
+    - compute_force_epilog
+    - verlet_second_half
+    - load_balance_auto_tune_end
+    
+######################################################################################################
+######################################################################################################
 
+######################################################################################################
+################################### Numerical scheme NVT Berendsen ###################################
+
+verlet_bnvt:
+  name: BNVT_scheme
+  body:
+    - verlet_first_half
+    - check_and_update_particles
+    - load_balance_auto_tune_start
+    - compute_force_prolog
+    - compute_force
+    - compute_force_epilog
+    - verlet_second_half
+    - simulation_thermodynamic_state
+    - berendsen_thermostat: { T: 300. K, tau: 0.1 ps }    
+    - load_balance_auto_tune_end
+
+######################################################################################################
+######################################################################################################
+
+######################################################################################################
+################################## Numerical scheme NVT Nosé-Hoover ##################################
+
+verlet_nhnvt:
+  name: NHNVT_scheme
+  body:
+    - simulation_thermodynamic_state
+    - nhc_temp_integrate
+    - nh_v_temp:
+        rebind: { value: vscale }
+        body:
+          - scale_v
+    - push_f_v: { dt_scale: 0.5, xform_mode: IDENTITY }
+    - push_v_r: { dt_scale: 1.0, xform_mode: INV_XFORM }
+    - check_and_update_particles
+    - load_balance_auto_tune_start  
+    - compute_all_forces_energy
+    - push_f_v: {dt_scale: 0.5, xform_mode: IDENTITY}
+    - simulation_thermodynamic_state
+    - nhc_temp_integrate
+    - nh_v_temp:
+        rebind: { value: vscale }
+        body:
+          - scale_v
+    - load_balance_auto_tune_end
+
+######################################################################################################
+######################################################################################################
+
+######################################################################################################
+################################## Numerical scheme NPT Nosé-Hoover ##################################
+
+verlet_nhnpt:
+  name: NHNPT_scheme
+  body:
+    - simulation_thermodynamic_state
+    - nhc_press_integrate
+    - nhc_temp_integrate
+    - nh_v_temp:
+        rebind: { value: vscale }
+        body: [ scale_v ]
+    - simulation_thermodynamic_state
+    - couple_npt  
+    - nh_omega_dot
+    - nh_v_press
+    - push_f_v: { dt_scale: 0.5, xform_mode: IDENTITY }
+    - remap_npt
+    - push_v_r: { dt_scale: 1.0, xform_mode: INV_XFORM }
+    - remap_npt
+    - check_and_update_particles
+    - load_balance_auto_tune_start  
+    - compute_all_forces_energy
+    - push_f_v: {dt_scale: 0.5, xform_mode: IDENTITY}
+    - simulation_thermodynamic_state
+    - nh_v_press
+    - simulation_thermodynamic_state
+    - couple_npt
+    - nh_omega_dot
+    - nhc_temp_integrate
+    - nh_v_temp:
+        rebind: { value: vscale }
+        body: [ scale_v ]
+    - nhc_press_integrate
+    - load_balance_auto_tune_end
+
+######################################################################################################
+######################################################################################################
+        

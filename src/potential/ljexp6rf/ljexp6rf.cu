@@ -23,6 +23,7 @@ under the License.
 #include <onika/math/basic_types.h>
 #include <onika/math/basic_types_operators.h>
 #include <exanb/compute/compute_cell_particle_pairs.h>
+#include <exanb/compute/compute_cell_particles.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <onika/scg/operator.h>
 #include <onika/scg/operator_factory.h>
@@ -41,7 +42,7 @@ namespace exaStamp
   using namespace exanb;
 
   using onika::memory::DEFAULT_ALIGNMENT;
-
+  
   template<bool _ComputeEnergy, bool _ComputeVirial>
   struct LJExp6RFComputeContext
   {
@@ -55,14 +56,15 @@ namespace exaStamp
   };
 
   // Reaction Field Compute functor
-  template<class ChargeFieldT, class TypeFieldT , class VirialFieldT, bool _PerAtomCharge=false, bool _UseSymetry=false, bool _ComputeEnergy = false, bool _ComputeVirial = false>
+  template<class ChargeFieldT, class TypeFieldT , class VirialFieldT, bool _PerAtomCharge=false, bool _UseSymetry=false, bool _ComputeEnergy = false, bool _ComputeVirial = false, bool _ComputeRFSelfPairs = true>
   struct LJExp6RFForceOp
   {
     static inline constexpr bool PerAtomCharge = _PerAtomCharge;
     static inline constexpr bool ComputeEnergy = _ComputeEnergy;
     static inline constexpr bool ComputeVirial = _ComputeVirial;
+    static inline constexpr bool ComputeRFSelfPairs = _ComputeRFSelfPairs;
     static inline constexpr bool UseSymetry = _UseSymetry;
-
+    
     static_assert( !ComputeVirial || ComputeEnergy );
 
     // poetential parameters
@@ -78,14 +80,21 @@ namespace exaStamp
     inline void operator () (ComputeBufferT& ctx, CellParticlesT cells, size_t cell_a , size_t p_a, exanb::ComputePairParticleContextStart ) const
     {
       ctx.ext.f = Vec3d{0.,0.,0.};
+      ctx.ext.type_a = cells[cell_a][field::type][p_a];
+      if constexpr (  PerAtomCharge ) ctx.ext.charge_a = cells[cell_a][m_charge_field][p_a];
+      if constexpr ( !PerAtomCharge ) ctx.ext.charge_a = m_species[ ctx.ext.type_a ].m_charge;
+      
       if constexpr ( ComputeEnergy )
       {
         ctx.ext.ep = 0.0;
         if constexpr ( ComputeVirial ) ctx.ext.virial = Mat3d{0.,0.,0.,0.,0.,0.,0.,0.,0.};
+        if constexpr ( ComputeRFSelfPairs ) {
+          const unsigned int pair_id_self = unique_pair_id(ctx.ext.type_a,ctx.ext.type_a);
+          double e_self = m_params[pair_id_self].compute_self_energy( ctx.ext.charge_a * ctx.ext.charge_a );
+          ctx.ext.ep += 0.5*e_self;
+        }
       }
-      ctx.ext.type_a = cells[cell_a][field::type][p_a];
-      if constexpr (  PerAtomCharge ) ctx.ext.charge_a = cells[cell_a][m_charge_field][p_a];
-      if constexpr ( !PerAtomCharge ) ctx.ext.charge_a = m_species[ ctx.ext.type_a ].m_charge;
+      
     }
 
     template<class ComputeBufferT, class CellParticlesT>
@@ -190,8 +199,8 @@ namespace exaStamp
 
 namespace exanb
 {
-  template<class ChargeFieldT, class TypeFieldT , class VirialFieldT, bool _PerAtomCharge, bool _UseSymetry, bool _ComputeEnergy, bool _ComputeVirial>
-  struct ComputePairTraits< exaStamp::LJExp6RFForceOp<ChargeFieldT,TypeFieldT,VirialFieldT,_PerAtomCharge,_UseSymetry,_ComputeEnergy,_ComputeVirial> >
+  template<class ChargeFieldT, class TypeFieldT , class VirialFieldT, bool _PerAtomCharge, bool _UseSymetry, bool _ComputeEnergy, bool _ComputeVirial, bool _ComputeRFSelfPairs>
+  struct ComputePairTraits< exaStamp::LJExp6RFForceOp<ChargeFieldT,TypeFieldT,VirialFieldT,_PerAtomCharge,_UseSymetry,_ComputeEnergy,_ComputeVirial,_ComputeRFSelfPairs> >
   {
     static inline constexpr bool RequiresBlockSynchronousCall = false;
     static inline constexpr bool ComputeBufferCompatible      = false;
@@ -226,6 +235,7 @@ namespace exaStamp
     ADD_SLOT( bool                      , per_atom_charge     , INPUT, true );
     ADD_SLOT( bool                      , use_symmetry        , INPUT, false );
     ADD_SLOT( bool                      , compute_virial      , INPUT, false );
+    ADD_SLOT( bool                      , rf_self_pairs       , INPUT, true );
     ADD_SLOT( bool                      , trigger_thermo_state, INPUT , OPTIONAL );
     ADD_SLOT( Domain                    , domain              , INPUT , REQUIRED );
     ADD_SLOT( ParticleSpecies           , species             , INPUT , REQUIRED );    
@@ -278,6 +288,7 @@ namespace exaStamp
       const bool need_virial = log_energy ; // && *compute_virial;
       const bool pair_weights = compact_nbh_weight.has_value() && ( *enable_pair_weights );
       const bool need_ghost = *use_symmetry;
+      const bool compute_rf_self_pairs = *rf_self_pairs;
 
       if( need_particle_locks && ! particle_locks.has_value() )
       {
@@ -291,6 +302,7 @@ namespace exaStamp
            <<" , need_virial="<< need_virial
            <<" , use_symmetry="<< *use_symmetry
            <<" , ghost="<< need_ghost
+           <<" , RF self pairs="<< compute_rf_self_pairs
            <<" , per_atom_charge="<< *per_atom_charge
            <<" , need_locks="<< need_particle_locks << std::endl;
 
@@ -350,21 +362,39 @@ namespace exaStamp
       {
         // template<class CPLocksT, class ChargeFieldT, class TypeFieldT , class VirialFieldT, bool _PerAtomCharge=false, bool _UseSymetry=false, bool _ComputeEnergy = false, bool _ComputeVirial = false>
         if( log_energy )
-        {
-          using ForceOp = LJExp6RFForceOp<ChargeFieldT,TypeFieldT,VirialFieldT,true,false,true,true>;
-          using CPBufT = ComputePairBuffer2<false,false, LJExp6RFComputeContext<true,true> >;
-          compute_force_energy( cp_weight, ForceOp{scratch->m_potentials.data(), species->data(), particle_locks->data(), charge_field, type_field, virial_field} , make_compute_pair_buffer<CPBufT>() );
-        }
+          {
+            if ( compute_rf_self_pairs )
+              {
+                using ForceOp = LJExp6RFForceOp<ChargeFieldT,TypeFieldT,VirialFieldT,true,false,true,true,true>;
+                using CPBufT = ComputePairBuffer2<false,false, LJExp6RFComputeContext<true,true> >;
+                compute_force_energy( cp_weight, ForceOp{scratch->m_potentials.data(), species->data(), particle_locks->data(), charge_field, type_field, virial_field} , make_compute_pair_buffer<CPBufT>() );
+              }
+            else
+              {
+                using ForceOp = LJExp6RFForceOp<ChargeFieldT,TypeFieldT,VirialFieldT,true,false,true,true,false>;
+                using CPBufT = ComputePairBuffer2<false,false, LJExp6RFComputeContext<true,true> >;
+                compute_force_energy( cp_weight, ForceOp{scratch->m_potentials.data(), species->data(), particle_locks->data(), charge_field, type_field, virial_field} , make_compute_pair_buffer<CPBufT>() );
+              }
+          }
         else
-        {
-          using ForceOp = LJExp6RFForceOp<ChargeFieldT,TypeFieldT,VirialFieldT,true,false,false,false>;
-          using CPBufT = ComputePairBuffer2<false,false, LJExp6RFComputeContext<false,false> >;
-          compute_force_energy( cp_weight, ForceOp{scratch->m_potentials.data(), species->data(), particle_locks->data(), charge_field, type_field, virial_field} , make_compute_pair_buffer<CPBufT>() );
-        }
+          {
+            using ForceOp = LJExp6RFForceOp<ChargeFieldT,TypeFieldT,VirialFieldT,true,false,false,false>;
+            using CPBufT = ComputePairBuffer2<false,false, LJExp6RFComputeContext<false,false> >;
+            compute_force_energy( cp_weight, ForceOp{scratch->m_potentials.data(), species->data(), particle_locks->data(), charge_field, type_field, virial_field} , make_compute_pair_buffer<CPBufT>() );
+          }
       };
-
+      
       if( pair_weights ) compute_force_energy_opt_weights( CompactPairWeightIterator{ compact_nbh_weight->m_cell_weights.data() } );
       else               compute_force_energy_opt_weights( ComputePairNullWeightIterator{} );
+
+      // // Self RF
+      // if( self_rf )
+      //   {
+      //     using EnergyOp = ReactionFieldSelfOp<ChargeFieldT,TypeFieldT,true>;
+      //     auto ep = grid->field_accessor( field::ep );
+      //     compute_cell_particles( *grid , false , EnergyOp{scratch->m_potentials.data(), species->data(), charge_field, type_field}, ep , parallel_execution_context() );
+      //   }
+      
     }
 
   };

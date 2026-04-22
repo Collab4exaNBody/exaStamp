@@ -60,8 +60,8 @@ namespace exaStamp
     ADD_SLOT( ParticleSpecies, species , INPUT , REQUIRED );
     ADD_SLOT( double         , dt      , INPUT , REQUIRED );
     ADD_SLOT( long           , timestep     , INPUT , REQUIRED );
-    ADD_SLOT( long           , simulation_end_iteration , INPUT , REQUIRED );    
-    ADD_SLOT( long           , simulation_start_iteration , INPUT , 0 );    
+    ADD_SLOT( long           , max_iteration , INPUT , REQUIRED );    
+    ADD_SLOT( long           , start_iteration , INPUT , 0 );    
     ADD_SLOT( ParticleRegions   , particle_regions , INPUT , OPTIONAL );
     ADD_SLOT( ParticleRegionCSG , region           , INPUT , OPTIONAL );
     ADD_SLOT( double         , gamma   , INPUT , 0.1 );
@@ -147,8 +147,8 @@ namespace exaStamp
       if (constant_T) {
         Ttarget = *T;
       } else if (linear_T) {
-        double delta = (*timestep)-(*simulation_start_iteration);
-        double frac = delta/((*simulation_end_iteration) - (*simulation_start_iteration));
+        double delta = (*timestep)-(*start_iteration);
+        double frac = delta/((*max_iteration) - (*start_iteration));
         Ttarget = *Tstart + frac * ( (*Tstop)-(*Tstart) );
       } else if (interpolated_T) {
         double tcurrent = dt * (*timestep);
@@ -172,8 +172,8 @@ namespace exaStamp
       IJK dims = grid.dimension();
       ssize_t gl = grid.ghost_layers();      
       IJK gstart { gl, gl, gl };
-      IJK gend = dims - IJK{ gl, gl, gl };
-      IJK gdims = gend - gstart;
+      //IJK gend = dims - IJK{ gl, gl, gl };
+      //IJK gdims = gend - gstart;
       const auto dom_dims = domain->grid_dimension();
       const auto dom_start = grid.offset();
 
