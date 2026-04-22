@@ -1,0 +1,27 @@
+init_parameters:
+  rebind: { parameters: eam_alloy_parameters }
+  body:
+    - eam_alloy_init: { parameters: { file: "dir.potentials/Ta.eam.alloy" } }
+      
+eam_alloy:
+  rebind: { parameters: eam_alloy_parameters }
+  body:
+    - eam_rho_sym
+    - update_opt_from_ghost: { opt_fields: [ "rho_dEmb" ] }
+    - eam_rho2emb
+    - ghost_update_opt: { opt_fields: [ "rho_dEmb" ] }
+    - eam_force_sym
+
+eam_rho_sym:
+  - eam_alloy_force: { rcut: 5.3 ang , eam_rho: true , eam_rho2emb: false , eam_ghost: false , eam_force: false , eam_symmetry: false, compute_virial: true, trigger_thermo_state: true}
+eam_rho2emb:
+  - eam_alloy_force: { rcut: 5.3 ang , eam_rho: false , eam_rho2emb: true , eam_ghost: false , eam_force: false , eam_symmetry: false, compute_virial: true, trigger_thermo_state: true}
+eam_force_sym:
+  - eam_alloy_force: { rcut: 5.3 ang , eam_rho: false , eam_rho2emb: false, eam_ghost: false , eam_force: true  , eam_symmetry: true, compute_virial: true, trigger_thermo_state: true}
+
+compute_all_forces_energy:
+  - zero_force_energy: { ghost: true }
+  - compute_force
+  - update_virial_force_energy_from_ghost  
+  - force_to_accel
+  
