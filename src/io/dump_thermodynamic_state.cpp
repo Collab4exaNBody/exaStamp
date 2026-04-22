@@ -58,7 +58,7 @@ namespace exaStamp
       static const double conv_density = onika::physics::atomicMass*1e3*1e24; 					// internal units to g/cm^3
 	
 //     static const std::string header = "###  Step     Time (ps)     Particles  Tot. E. (eV/part)  Kin. E. (eV/part)  Pot. E. (eV/part)  Temp. (K)                     Tx/Ty/Tz (K)    Press. (Pa)                                            Pxx/Pyy/Pzz (Pa) Pxy/Pxz/Pyz (Pa)   sMises (Pa)                            A/B/C (ang)    alpha/beta/gamma (deg)     Vol. (ang^3)  Rho (g/cm^3)";
-     static const std::string header = "# Step     Time (ps)     Particles  Tot. E. (eV/part)  Kin. E. (eV/part)  Pot. E. (eV/part)  Temp. (K) Pxx Pyy Pzz Pxy Pxz Pyz (Pa) A/B/C (ang)    alpha/beta/gamma (deg)     Vol. (ang^3)  Rho (g/cm^3)";     
+     static const std::string header = "# [1]Step  [2]Time (ps)  [3]Num. Part.  [4]Etot(eV/part)  [5]Ekin (eV/part)  [6]Epot (eV/part)   [7]Temp. (K)       [8]Pxx (Pa)          [9]Pyy (Pa)          [10]Pzz (Pa)         [11]Pxy (Pa)         [12]Pxz (Pa)         [13]Pyz (Pa)         [14]A (ang)         [15]B (ang)         [16]C (ang)         [17]alpha (deg)     [18]beta (deg)       [19]gamma (deg)     [20]Vol. (ang^3)    [21]Rho (g/cm^3)";     
 
       bool is_dump_virial = *(this->is_dump_virial);      
 
@@ -98,7 +98,7 @@ namespace exaStamp
       double BETA  = acos(dot(c,a)/(B*C))/acos(-1.)*180. ;
       double GAMMA = acos(dot(a,b)/(B*C))/acos(-1.)*180. ;
 
-      oss <<onika::format_string("%9ld % .6e %13ld  % .10e  % .10e  % .10e  % 9.12f  % 9.12f  % 9.12f  % 9.12f  % 9.12f  % 9.12f % 9.12f % 12.12f % 12.12f % 12.12f % 9.12f % 9.12f % 9.12f % 16.12f % 13.12f ",
+      oss <<onika::format_string("%9ld % .6e %13ld  % .10e  % .10e  % .10e  % 9.12f  % .12e  % .12e  % .12e  % .12e  % .12e % .12e % .12e % .12e % .12e % .12e % .12e % .12e % .12e % .12e ",
         *timestep,
         *physical_time,
         sim_info.particle_count(),
