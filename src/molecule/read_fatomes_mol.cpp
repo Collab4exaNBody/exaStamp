@@ -90,25 +90,25 @@ namespace exaStamp
   template<typename GridT>
   class ReadFAtomesMolecules : public OperatorNode
   {
-    ADD_SLOT( MPI_Comm        , mpi          , INPUT , MPI_COMM_WORLD  );
-    ADD_SLOT( std::string     , filename     , INPUT , REQUIRED );
-    ADD_SLOT( std::string     , stampinput   , INPUT , OPTIONAL );
-    ADD_SLOT( Domain          , domain       , INPUT_OUTPUT );
-    ADD_SLOT( GridT           , grid         , INPUT_OUTPUT );
-
-    ADD_SLOT( ParticleSpecies , species      , INPUT_OUTPUT ); 
-    ADD_SLOT( MoleculeSpeciesVector , molecules , INPUT_OUTPUT, MoleculeSpeciesVector{} , DocString{"Molecule descriptions"} );
-
+    ADD_SLOT( MPI_Comm                         , mpi                      , INPUT       , MPI_COMM_WORLD  );
+    ADD_SLOT( std::string                      , filename                 , INPUT       , REQUIRED );
+    ADD_SLOT( std::string                      , stampinput               , INPUT       , OPTIONAL );
+    ADD_SLOT( Domain                           , domain                   , INPUT_OUTPUT );
+    ADD_SLOT( GridT                            , grid                     , INPUT_OUTPUT );
+    
+    ADD_SLOT( ParticleSpecies                  , species                  , INPUT_OUTPUT );
+    ADD_SLOT( MoleculeSpeciesVector            , molecules                , INPUT_OUTPUT, MoleculeSpeciesVector{} , DocString{"Molecule descriptions"} );
     ADD_SLOT( BondsPotentialParameters         , potentials_for_bonds     , INPUT_OUTPUT, BondsPotentialParameters{} );
     ADD_SLOT( BendsPotentialParameters         , potentials_for_angles    , INPUT_OUTPUT, BendsPotentialParameters{} );
     ADD_SLOT( TorsionsPotentialParameters      , potentials_for_torsions  , INPUT_OUTPUT, TorsionsPotentialParameters{} );
     ADD_SLOT( ImpropersPotentialParameters     , potentials_for_impropers , INPUT_OUTPUT, ImpropersPotentialParameters{} );    
-    ADD_SLOT( LJExp6RFMultiParms               , potentials_for_pairs     , INPUT_OUTPUT , LJExp6RFMultiParms{} );
-    ADD_SLOT( IntramolecularPairWeighting      , mol_pair_weights         , INPUT_OUTPUT , IntramolecularPairWeighting{} );
-    ADD_SLOT( IntraFFtypes                     , ffnameVector             , INPUT_OUTPUT);
-    ADD_SLOT( bool                             , rf_self_pairs            , OUTPUT, false);
-    ADD_SLOT( bool                             , long_range_correction    , OUTPUT, false);
-    ADD_SLOT( double                           , rcut_max                 , INPUT_OUTPUT , 0.0 );
+    ADD_SLOT( LJExp6RFMultiParms               , potentials_for_pairs     , INPUT_OUTPUT, LJExp6RFMultiParms{} );
+    ADD_SLOT( IntramolecularPairWeighting      , mol_pair_weights         , INPUT_OUTPUT, IntramolecularPairWeighting{} );
+    
+    ADD_SLOT( IntraFFtypes                     , ffnameVector             , INPUT_OUTPUT );
+    ADD_SLOT( bool                             , rf_self_pairs            , OUTPUT      , false );
+    ADD_SLOT( bool                             , long_range_correction    , OUTPUT      , false );
+    ADD_SLOT( double                           , rcut_max                 , INPUT_OUTPUT, 0.0 );
 
   public:
     inline void execute () override final
@@ -1226,6 +1226,9 @@ namespace exaStamp
       double bond_max_dist = 0.0;
       double bond_max_stretch = 0.0;
       MolIOExt molecule_io = {
+        *ffnameVector,
+        *rf_self_pairs,
+        *long_range_correction,
         bond_max_dist ,
         bond_max_stretch ,
         molecules.get_pointer() ,
