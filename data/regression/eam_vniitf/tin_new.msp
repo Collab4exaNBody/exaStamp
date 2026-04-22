@@ -22,7 +22,7 @@ dump_data: nop
   #     fields: ["ep"]
 
 global:
-  simulation_end_iteration: 1000
+  simulation_end_iteration: 100
   simulation_log_frequency: 50
   simulation_dump_frequency: 50
   simulation_dump_thermo_frequency: 10

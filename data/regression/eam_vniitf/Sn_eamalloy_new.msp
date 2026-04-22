@@ -1,5 +1,5 @@
 compute_force:
-  - eam_alloy_force: { rcut: 5.599 ang , parameters: { file: "../../../scripts/python/pytab-eam-alloy/Sn.eam.alloy" } , eam_rho: true , eam_rho2emb: true , eam_ghost: true , eam_force: true , eam_symmetry: false }
+  - eam_alloy_force: { rcut: 5.599 ang , parameters: { file: "Sn.eam.alloy" } , eam_rho: true , eam_rho2emb: true , eam_ghost: true , eam_force: true , eam_symmetry: false }
 
 species:
   - Sn: { mass: 118.69 Da, z: 50, charge: 0 e- }
@@ -22,7 +22,7 @@ dump_data: nop
   #     fields: ["ep"]
   
 global:
-  simulation_end_iteration: 1000
+  simulation_end_iteration: 100
   simulation_log_frequency: 50
   simulation_dump_frequency: 50
   simulation_dump_thermo_frequency: 10

@@ -1,0 +1,17 @@
+* --------------------------------------------------------------------
+*	Systemes Moleculaires
+* --------------------------------------------------------------------
+Molecule					1    * Block molecule. ponderation potentiel de paire appliqué aux en intra moleculaire
+Molecule_ContribVdwIntra12			0.0  * VdwIntra12 => bond (coefficiebnt pour LJ/Exp6)
+Molecule_ContribVdwIntra13			0.0  * VdwIntra13 => bend/angle (coefficiebnt pour LJ/Exp6)
+Molecule_ContribVdwIntra14			0.5  * VdwIntra14 => torsion (coefficiebnt pour LJ/Exp6)
+Molecule_ContribElecIntra12                     0.0  * ElecIntra12 => bond (coefficient pour RF)
+Molecule_ContribElecIntra13                     0.0  * ElecIntra13 => bend/angle (coefficient pour RF)
+Molecule_ContribElecIntra14                     0.5  * ElecIntra14 => torsion (coefficient pour RF)
+CorrectionVdwLongueDistance                     1    * ? A voir
+* --------------------------------------------------------------------
+*   Reaction Field
+* --------------------------------------------------------------------
+ReactionField               1
+ReactionField_epsilon       2.2
+ReactionField_rc            12.5e-10

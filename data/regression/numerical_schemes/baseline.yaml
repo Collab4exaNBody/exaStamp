@@ -1,0 +1,52 @@
+includes:
+  - config_update_symmetric_forces.msp
+  
+write_restart:
+  - message: { mesg: "Writing restart" }
+write_snapshot:
+  - message: { mesg: "Writing snapshot" }
+perform_analysis:
+  - message: { mesg: "Performing analysis" }
+    
+species:
+  - Ni: { mass: 58.693 Da , z: 28 , charge: 0.0 e- }
+
+setup_system:
+  - particle_types:
+      particle_type_map: { Ni: 0 }
+  - particle_type_add_properties:
+      Ni: { mass: 58.693 Da , z: 28 }
+  - domain:
+      cell_size: 13.92 ang
+      grid_dims: [ 4 , 4 , 4 ]
+      bounds: [ [ 0.0 um , 0.0 um , 0.0 um ] , [ 55.68 ang , 55.68 ang , 55.68 ang ] ]
+      periodic: [ true , true , true ]
+      expandable: false
+      xform: [ [ 1 , 0 , 0 ] , [ 0 , 1 , 0 ] , [ 0 , 0 , 1 ] ]
+  - init_rcb_grid
+  - lattice:
+      structure: FCC
+      types: [ Ni , Ni , Ni , Ni]
+      size: [ 3.48 ang , 3.48 ang , 3.48 ang ]
+  - init_temperature_new:
+      T: 50. K
+      override_velocities: true
+      add_velocities: false
+      scale_velocities: false
+      zero_linear_momentum: true
+      distribution: "gaussian"
+      
+compute_force:
+  - lj_compute_force:
+      parameters: { epsilon: 0.3729 eV , sigma: 2.2808 ang }
+      rcut: 4.1 ang
+    
+global:
+  dt: 1e-3 ps
+  rcut_inc: 2.0 ang
+  simulation_restart_frequency: 10
+  simulation_snapshot_frequency: 5
+  simulation_analysis_frequency: 20
+  simulation_thermostate_file_frequency: 5
+  simulation_thermostate_screen_frequency: 10
+  max_iteration: 100
