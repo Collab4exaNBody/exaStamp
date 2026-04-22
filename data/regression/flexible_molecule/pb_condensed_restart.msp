@@ -1,0 +1,30 @@
+# no-seq
+includes:
+  - config_molecule.msp
+
+setup_system:
+  - read_dump_molecule:
+      filename: "molecule_000000005.MpiIO"
+
+global:
+  dt: 0.5 fs
+  rcut_inc: 2.0 ang
+  max_iteration: 10
+  simulation_thermostate_screen_frequency: 1
+  simulation_snapshot_frequency: -1
+  simulation_thermostate_file_frequency: 1
+  thermostate_file: "thermodynamic_state_restart.csv"
+
+compute_bonding_forces:
+  - compute_force_bond:
+      compute_virial: true
+  - compute_force_bend:
+      compute_virial: true
+  - compute_force_torsion:
+      compute_virial: true
+  - compute_force_improper:
+      compute_virial: true
+  - intramolecular_pair_force:
+      compute_virial: true
+
+
