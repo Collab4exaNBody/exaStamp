@@ -1,16 +1,19 @@
 ######################################################################################################
-####################### Default configuration for symmetric forces contribution ######################
+############################ Nose-Hoover specific init functions  ####################################
 ######################################################################################################
 
-# Zero force and energy everywhere and in the ghosts as well
-compute_force_prolog:
-  - zero_force_energy: { ghost: true }
++init_prolog:
+  - deformation_xform:
+      defbox: { extension: [ 1.0 , 1.0 , 1.0 ] }
+  
++init_epilog:
+  - init_nose_hoover
 
-# Update forces of non-ghost particles from their ghosts before pushing total force to acceleration
-compute_force_epilog:
-  - update_force_energy_from_ghost
-  - force_to_accel
+nose_hoover_additional_step:  
+  - setup_nose_hoover
+  - couple_npt
 
 ######################################################################################################
 ######################################################################################################
   
+    

@@ -34,12 +34,12 @@ namespace exaStamp
 {
   using namespace exanb;
   
-  struct SetupNPTNode : public OperatorNode
+  struct SetupNoseHooverNode : public OperatorNode
   {
     
     ADD_SLOT( double                  , dt         , INPUT , REQUIRED );
     ADD_SLOT( long                    , timestep   , INPUT , REQUIRED );
-    ADD_SLOT( long                    , simulation_end_iteration , INPUT , REQUIRED );
+    ADD_SLOT( long                    , max_iteration , INPUT , REQUIRED );
     ADD_SLOT( NPTContext              , npt_ctx    , INPUT_OUTPUT );
     ADD_SLOT( Domain                  , domain     , INPUT );    
     ADD_SLOT( ThermodynamicState      , thermodynamic_state , INPUT );
@@ -53,7 +53,7 @@ namespace exaStamp
       npt_ctx->tdof = 3 * natoms - 3;
       
       if ( npt_ctx->tstat_flag) {
-        npt_ctx->update_target_T_KE(*timestep, *(simulation_end_iteration));
+        npt_ctx->update_target_T_KE(*timestep, *(max_iteration));
         npt_ctx->eta_mass[0] = npt_ctx->tdof * npt_ctx->boltz * npt_ctx->t_target / (npt_ctx->t_freq*npt_ctx->t_freq);
         for (int ich = 1; ich < npt_ctx->mtchain; ich++) npt_ctx->eta_mass[ich] = npt_ctx->boltz * npt_ctx->t_target / (npt_ctx->t_freq*npt_ctx->t_freq);
         for (int ich = 1; ich < npt_ctx->mtchain; ich++) npt_ctx->eta_dotdot[ich] = (npt_ctx->eta_mass[ich-1]*npt_ctx->eta_dot[ich-1]*npt_ctx->eta_dot[ich-1] - npt_ctx->boltz * npt_ctx->t_target) / npt_ctx->eta_mass[ich];
@@ -62,7 +62,7 @@ namespace exaStamp
       npt_ctx->t0 = 0.;
       if ( npt_ctx->pstat_flag ) {
         npt_ctx->p_hydro = 0.0;
-        npt_ctx->update_target_P(*timestep, *(simulation_end_iteration));
+        npt_ctx->update_target_P(*timestep, *(max_iteration));
         if (npt_ctx->deviatoric_flag) npt_ctx->update_sigma();
         
         double kt = npt_ctx->boltz * npt_ctx->t_target;
@@ -88,9 +88,9 @@ namespace exaStamp
   };
   
   // === register factories ===  
-  ONIKA_AUTORUN_INIT(setup_npt)
+  ONIKA_AUTORUN_INIT(setup_nose_hoover)
   {
-   OperatorNodeFactory::instance()->register_factory( "setup_npt", make_compatible_operator< SetupNPTNode > );
+   OperatorNodeFactory::instance()->register_factory( "setup_nose_hoover", make_compatible_operator< SetupNoseHooverNode > );
   }
 
 }
