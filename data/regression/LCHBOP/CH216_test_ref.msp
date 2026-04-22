@@ -94,7 +94,6 @@ domain:
 
 dump_data:
 #  - write_xyz_file
-#  - write_vtk: {is_binary: false}
 
 #init_rcut_max: nbh_dist        # change for less updates
 init_rcut_max:

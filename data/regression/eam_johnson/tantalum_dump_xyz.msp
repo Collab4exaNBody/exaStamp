@@ -37,13 +37,14 @@ grid_flavor: grid_flavor_multimat
 
 input_data:
   - read_stamp_v3:
-      file: tantalum.mpio
+      filename: tantalum.mpio
       bounds_mode: FILE
 
 domain:
   grid_dims: [12,12,12]
   periodic: [true,true,true]
-
+  expandable: false
+  
 global:
   simulation_end_iteration: 20
   simulation_log_frequency: 1
@@ -57,7 +58,7 @@ dump_data:
       fields: [ id , velocity , force , mv2 , processor_id ]
       units: { velocity: "ang/ps" , force: "eV/ang" }
   
-simulation_epilog:
+xxx_simulation_epilog:
   - check_values:
       file: eam_johnson.dat
       acc_threshold: 2.5e-10

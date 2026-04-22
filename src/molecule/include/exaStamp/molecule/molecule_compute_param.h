@@ -56,6 +56,7 @@ namespace exaStamp
     assert( t2 >= 0 && t2 < (1<<15) );
     assert( t3 >= 0 && t3 < (1<<15) );
     if( t0 > t3 ) { std::swap( t0 , t3 ); std::swap( t1 , t2 ); }
+    else if (t0 == t3 && t1 > t2 ) {std::swap( t0 , t3 ); std::swap( t1 , t2 ); }
     return ( uint64_t(t0)<<48 ) | ( uint64_t(t1)<<32 ) | ( uint64_t(t2)<<16 ) | uint64_t(t3);
   }
 
@@ -86,6 +87,7 @@ namespace exaStamp
     double p2 = 0.0;
     float x0 = 0.0;
     float coeff = 0.0;
+    double e0 = 0.0;
     ONIKA_HOST_DEVICE_FUNC inline bool is_null() const { return p0==0.0 && p1==0.0 && p2==0.0 && x0==0.0f && coeff==0.0f; }
     inline bool operator < (const MoleculeGenericFuncParam& m) const
     {
