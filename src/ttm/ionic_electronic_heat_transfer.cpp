@@ -552,7 +552,7 @@ while ionic temperature (Ti) commes from particles kinetic energy.
       AABB contrib_box = { r - sp_size*0.5 , r + sp_size*0.5 };
       AABB sub_contrib_box = intersection( contrib_box , cell_box );
       double w = 0.0;
-      if( ! is_nil(sub_contrib_box) ) { w = bounds_volume(sub_contrib_box) / (sp_size*sp_size*sp_size); }
+      if( ! is_empty(sub_contrib_box) ) { w = bounds_volume(sub_contrib_box) / (sp_size*sp_size*sp_size); }
       assert( w>=0. && w<=(1.0+1.e-13) );
       return w;
     }

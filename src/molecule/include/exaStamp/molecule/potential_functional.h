@@ -54,7 +54,8 @@ namespace exaStamp
     const auto k2 = m.p1;
     const auto k3 = m.p2;
     x = x - m.x0;
-
+    const auto energy_offset = m.e0;
+    
     if( m.coeff == 0.0 ) // this is the signal for a linear form of the functional
     {
       const double x2 = pow(x,2);
@@ -66,10 +67,11 @@ namespace exaStamp
              ,
              ( k1 * x2
              + k2 * x3
-             + k3 * x4 ) 
+             + k3 * x4
+             + energy_offset ) 
              };  
     }
-    else // coeff=1 or coeff=-1 in case of an angular form of the functional
+    else if ( m.coeff == 1.0 || m.coeff == -1.0 )// coeff=1 or coeff=-1 in case of an angular form of the functional
     {
       const auto opls_fac = m.coeff;
       const double sin_1phi = sin(x);
@@ -86,6 +88,26 @@ namespace exaStamp
                k1 * ( 1 - opls_fac * cos_1phi )
              + k2 * ( 1 -            cos_2phi )
              + k3 * ( 1 - opls_fac * cos_3phi )
+             + energy_offset
+             };
+    }
+    else if (m.coeff == 248.0 )
+    {
+      const double sin_2phi = sin(2*x);
+      const double sin_4phi = sin(4*x);
+      const double sin_8phi = sin(8*x);
+      const double cos_2phi = cos(2*x);
+      const double cos_4phi = cos(4*x);
+      const double cos_8phi = cos(8*x);
+      return {
+                   k1/2 * sin_2phi
+             + 4 * k2/2 * sin_4phi
+             + 8 * k3/2 * sin_8phi
+             ,
+               k1/2 * ( 1 - cos_2phi )
+             + k2/2 * ( 1 - cos_4phi )
+             + k3/2 * ( 1 - cos_8phi )
+             + energy_offset               
              };
     }
   }
@@ -253,7 +275,7 @@ namespace exaStamp
   class IntraMolecularCosOPLSFunctional : public IntraMolecularPotentialFunctional
   {
   public:
-    inline IntraMolecularCosOPLSFunctional(double _k1, double _k2, double _k3) : k1(_k1), k2(_k2), k3(_k3) {}
+    inline IntraMolecularCosOPLSFunctional(double _k1, double _k2, double _k3, double _offset = 0.0 ) : k1(_k1), k2(_k2), k3(_k3), offset(_offset) {}
     inline ScalarForceEnergy force_energy(double phi) const override final
     {
       return intramolecular_func( generic_parameters() , phi );
@@ -269,14 +291,15 @@ namespace exaStamp
     }
     inline MoleculeGenericFuncParam generic_parameters() const override final
     {
-      return {k1/2,k2/2,k3/2,0.0f,-1.0f};
+      return {k1/2,k2/2,k3/2,0.0f,-1.0f, offset};
     }
   private:
     double k1 = 0.0;
     double k2 = 0.0;
     double k3 = 0.0;
+    double offset = 0.0;
   };
-
+  
   // CosTwo potential
   class IntraMolecularCosTwoFunctional : public IntraMolecularPotentialFunctional
   {
@@ -300,6 +323,35 @@ namespace exaStamp
     double k = 0.0;
     float phi0 = 0.0;
   };
+
+  // NCos248 fonctionnal
+  class IntraMolecularNCos248Functional : public IntraMolecularPotentialFunctional
+  {
+  public:
+    inline IntraMolecularNCos248Functional(double _k1, double _k2, double _k3) : k1(_k1), k2(_k2), k3(_k3) {}
+    inline ScalarForceEnergy force_energy(double phi) const override final
+    {
+      return intramolecular_func( generic_parameters() , phi );
+/*      return {
+           n1*k1 * sin(n1*phi)
+         + n2*k2 * sin(n2*phi)
+         + n3*k3 * sin(n3*phi)
+       ,
+           k1 * ( 1 - cos(n1*phi) )
+         + k2 * ( 1 - cos(n2*phi) )
+         + k3 * ( 1 - cos(n3*phi) )
+       }; */
+    }
+    inline MoleculeGenericFuncParam generic_parameters() const override final
+    {
+      return {k1,k2,k3,0.0f,248.0f};
+    }
+  private:
+    double k1 = 0.0;
+    double k2 = 0.0;
+    double k3 = 0.0;
+  };
+
 
 
 }

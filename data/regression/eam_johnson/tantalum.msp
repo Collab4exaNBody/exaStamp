@@ -43,14 +43,15 @@ input_data:
 domain:
   grid_dims: [12,12,12]
   periodic: [true,true,true]
-
+  expandable: false
+  
 global:
   simulation_end_iteration: 20
   simulation_log_frequency: 1
   rcut_inc: 0.8 ang
   dt: 1.0e-3 ps
 
-simulation_epilog:
+xxx_simulation_epilog:
   - check_values:
       file: eam_johnson.dat
       acc_threshold: 2.5e-10

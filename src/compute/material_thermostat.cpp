@@ -126,8 +126,8 @@ namespace exaStamp
       ssize_t gl = grid->ghost_layers();
       const double dt = *(this->dt);    
       IJK gstart { gl, gl, gl };
-      IJK gend = dims - IJK{ gl, gl, gl };
-      IJK gdims = gend - gstart;
+      //      IJK gend = dims - IJK{ gl, gl, gl };
+      //      IJK gdims = gend - gstart;
       const auto dom_dims = domain->grid_dimension();
       const auto dom_start = grid->offset();
 
