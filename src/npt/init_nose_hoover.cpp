@@ -36,7 +36,7 @@ namespace exaStamp
 {
   using namespace exanb;
 
-  struct InitNPTNode : public OperatorNode
+  struct InitNoseHooverNode : public OperatorNode
   {
     static constexpr Mat3d all_one_matrix { 1.,1.,1., 1.,1.,1., 1.,1.,1. };
 
@@ -416,9 +416,9 @@ namespace exaStamp
   };
 
   // === register factories ===  
-  ONIKA_AUTORUN_INIT(init_npt)
+  ONIKA_AUTORUN_INIT(init_nose_hoover)
   {
-   OperatorNodeFactory::instance()->register_factory( "init_npt", make_compatible_operator< InitNPTNode > );
+   OperatorNodeFactory::instance()->register_factory( "init_nose_hoover", make_compatible_operator< InitNoseHooverNode > );
   }
 
 }
