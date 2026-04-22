@@ -134,8 +134,15 @@ namespace exaStamp
 
         if constexpr ( ComputeVirial )
         {
+          //the total virial must satisfy  W = r0 x Fa + r1 x Fb + r2 x Fc + r3 x Fd
+          //as the sum of all forces is 0, Fb = - (Fa+Fc+Fd)
+          //this leads to : W = (r0-r1)xFa + (r2-r1)x(Fc+Fd) + (r3-r2)xFd
+          //                  = vira       + virc            + vird
+          // half of  vira is attributed (arbitrarily) to atom 0/a and the other half to 1/b
+          // half of virc is attributed ti 1/b and the other half to 2/c
+          // half of vird is attributed to 3/d and the other half to 2/c
           const Mat3d vira = tensor (Fa,r10) * 0.5;
-          const Mat3d virc = tensor (Fc,r12) * 0.5;
+          const Mat3d virc = tensor (Fc+Fd,r12) * 0.5;
           const Mat3d vird = tensor (Fd,r23) * 0.5;
           
           const Mat3d virac = vira + virc;
