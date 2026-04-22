@@ -8,8 +8,8 @@ setup_system:
       periodic: [ true, true, true ]
       expandable: false
   - read_fatomes_mol:
-      filename: "../../potentials/FAtomes_pb_condensed"
-      stampinput: "../../potentials/DONNEES_pb_condensed"
+      filename: "FAtomes_pb_condensed"
+      stampinput: "DONNEES_pb_condensed"
 
 global:
   dt: 0.5 fs

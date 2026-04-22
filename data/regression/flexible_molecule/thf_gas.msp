@@ -8,8 +8,8 @@ setup_system:
       periodic: [ false, false, false ]
       expandable: false
   - read_fatomes_mol:
-      filename: "../../potentials/FAtomes_thf_gas"
-      stampinput: "../../potentials/DONNEES_thf_gas"
+      filename: "FAtomes_thf_gas"
+      stampinput: "DONNEES_thf_gas"
       
 global:
   dt: 0.5e-15 s

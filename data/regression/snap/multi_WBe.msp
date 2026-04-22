@@ -60,11 +60,7 @@ domain:
   periodic: [true,true,true]
 
 global:
-<<<<<<< HEAD
-  simulation_end_iteration: 500
-=======
   simulation_end_iteration: 4
->>>>>>> bd37fd3c9a39398dcd40c0bc2dcc6aa07a411d01
   simulation_log_frequency: 10
   rcut_inc: 2.0 ang
   dt: 1.0e-3 ps

@@ -1,7 +1,16 @@
+######################################################################################################
+####################### Default configuration for symmetric forces contribution ######################
+######################################################################################################
+
+# Zero force and energy everywhere and in the ghosts as well
 compute_force_prolog:
   - zero_force_energy: { ghost: true }
 
+# Update forces of non-ghost particles from their ghosts before pushing total force to acceleration
 compute_force_epilog:
   - update_force_energy_from_ghost
   - force_to_accel
 
+######################################################################################################
+######################################################################################################
+  
