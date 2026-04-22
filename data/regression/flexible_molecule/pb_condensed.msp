@@ -1,0 +1,37 @@
+# no-seq
+includes:
+  - config_molecule.msp
+
+input_data:
+  - domain:
+      cell_size: 5.0 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_fatomes_mol:
+      filename: "FAtomes_pb_condensed"
+      stampinput: "DONNEES_pb_condensed"
+
+global:
+  dt: 0.5 fs
+  rcut_inc: 2.0 ang
+  simulation_end_iteration: 10
+  simulation_log_frequency: 1
+  simulation_dump_frequency: -1
+  simulation_dump_thermo_frequency: 10
+  file: "thermodynamic_state.csv"
+
+final_dump: nop
+
+compute_bonding_forces:
+  - compute_force_bond:
+      compute_virial: true
+  - compute_force_bend:
+      compute_virial: true
+  - compute_force_torsion:
+      compute_virial: true
+  - compute_force_improper:
+      compute_virial: true
+  - intramolecular_pair_force:
+      compute_virial: true
+
+

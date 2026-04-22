@@ -1,0 +1,33 @@
+######################################################################################################
+############################### Default configuration for setup_system ###############################
+######################################################################################################
+
+# StampV3 reader
+read_stamp_v3:
+  file: lastLegacyDump
+  filename: lastLegacyDump
+  bounds_mode: FILE
+
+# Operator that tests if file exists
+has_legacy_dump_file:
+  rebind: { result: has_dump_file }
+  body: [ file_exists: { filename: lastLegacyDump } ]
+
+# Definition of setup_system operator  
+setup_system:
+  - has_legacy_dump_file
+  - read_lastLegacyDump:
+      condition: has_dump_file
+      body: [ read_stamp_v3 ]
+  - reset_input_data:
+      condition: not has_dump_file
+      body:
+        - message: "No input data"
+        - grid_flavor
+        - species:
+            verbose: false
+            species:
+              - XX: { mass: 1.0 Da , z: 1 , charge: 0.0 e- }
+
+######################################################################################################
+######################################################################################################

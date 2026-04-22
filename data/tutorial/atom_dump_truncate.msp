@@ -1,0 +1,36 @@
+# override parameters with command line options :
+# -----------------------------------------------
+#
+# exaStamp  atom_dump_truncate.msp --set-read_dump_atoms-bounds "[ [ 0 , 0 , 0 ] , [ 1 , 1 , 1 ] ]" --set-global-inputfile input.dump --set-global-outputfile atoms.dump
+#
+
+compute_force: nop
+
+global:
+  ghost_dist: 0.0 ang
+  inputfile: lastLegacyDump
+  outputfile: atoms.dump
+
+read_dump_atoms:
+  bounds: [ [ 0 , 0 , 0 ] , [ 1 , 1 , 1 ] ]
+  shrink_to_fit: true
+
+simulation:
+  - mpi_comm_world
+  - grid_flavor_multimat
+  - global
+  - domain
+  - species
+  - read_block:
+      rebind: { filename: inputfile }
+      body: [ read_dump_atoms ]
+  - reduce_species
+  - simple_cost_model
+  - load_balance_rcb
+  - migrate_cell_particles
+  - simulation_thermodynamic_state
+  - print_thermodynamic_state
+  - write_output_file:
+      rebind: { filename: outputfile }
+      body: [ write_dump_atoms ]
+
