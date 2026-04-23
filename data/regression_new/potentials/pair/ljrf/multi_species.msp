@@ -1,0 +1,11 @@
+includes:
+  - baseline_multi_species.yaml
+
+ljrf_multi_force:
+  rcut: 8. ang
+  common_parameters: { rf: { epsilon: 100., rc: 12.5 ang }, lj: { epsilon: 0.01 kcal/mol, sigma: 3.830864488 ang } }
+  parameters:
+    - { type_a: C  , type_b: C, potential: ljrf, rcut: 12.5 ang, parameters: { rf: { epsilon: 100., rc: 12.5 ang }, lj: { epsilon: 0.01 kcal/mol, sigma: 3.830864488 ang } } }
+    - { type_a: C  , type_b: N, potential: ljrf, rcut: 12.5 ang, parameters: { rf: { epsilon: 100., rc: 12.5 ang }, lj: { epsilon: 0.01 kcal/mol, sigma: 3.830864488 ang } } }
+
+compute_force: ljrf_multi_force

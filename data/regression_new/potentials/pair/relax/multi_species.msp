@@ -1,0 +1,11 @@
+includes:
+  - baseline_multi_species.yaml
+
+relax_multi_force:
+  rcut: 12.5 ang
+  common_parameters: { r1: 4. ang, rc: 6. ang }
+  parameters:
+    - { type_a: C , type_b: C , rcut: 12.5 ang , parameters: { r1: 4. ang, rc: 6. ang } }
+    - { type_a: C , type_b: N , rcut: 12.5 ang , parameters: { r1: 4. ang, rc: 6. ang } }
+
+compute_force: relax_multi_force

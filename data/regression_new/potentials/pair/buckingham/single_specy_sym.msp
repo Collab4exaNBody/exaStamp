@@ -1,0 +1,8 @@
+includes:
+  - baseline_single_specy.yaml
+
+buckingham_compute_force_symetric:
+  rcut: 5.0 ang
+  parameters: { A: 3.2 eV , Rho: 0.4 ang , C: 0.2 eV*ang^6 }
+
+compute_force: buckingham_compute_force_symetric

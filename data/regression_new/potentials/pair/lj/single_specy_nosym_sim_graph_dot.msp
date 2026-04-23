@@ -1,0 +1,15 @@
+includes:
+  - baseline_single_specy.yaml
+
+configuration:
+  debug:
+    graph: true
+    graph_lod: 1    # 2 to show unconnected nodes
+    graph_fmt: dot
+    graph_filter: [ '.*\.do_init_temperature' , '.*\.end_iteration' ]
+
+lj_compute_force:
+  parameters: { epsilon: 0.0104 eV , sigma: 3.4 ang }
+  rcut: 8.0 ang
+
+compute_force: lj_compute_force

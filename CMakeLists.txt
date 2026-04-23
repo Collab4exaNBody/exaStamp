@@ -40,6 +40,8 @@ if (NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
 endif()
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+include(AddSingleTest)
+include(AddRegressionTestSimple)
 
 # ======================================
 # === exaStamp package specializations ===
@@ -68,7 +70,6 @@ find_package(exaNBody)
 add_subdirectory(src)
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/exaStamp DESTINATION include)
 
-
 # =================================================
 # === generate and install config and test data ===
 # =================================================
@@ -77,8 +78,7 @@ if(ONIKA_REGRESSION_TEST_ENABLE)
   #  AddRegressionTestDir("${CMAKE_SOURCE_DIR}/data/regression")
   file(GLOB_RECURSE POTENTIAL_FILES "${CMAKE_SOURCE_DIR}/data/potentials/*")
   file(COPY ${POTENTIAL_FILES} DESTINATION ${CMAKE_BINARY_DIR})
-  AddRegressionTestDir("${CMAKE_SOURCE_DIR}/data/regression_new/eam_potentials")
-  AddRegressionTestDir("${CMAKE_SOURCE_DIR}/data/regression_new/pair_potentials")
+  add_subdirectory(data/regression_new)
 endif()
 
 # =======================================

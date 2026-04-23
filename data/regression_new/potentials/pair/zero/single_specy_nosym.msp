@@ -1,0 +1,8 @@
+includes:
+  - baseline_single_specy.yaml
+
+zero_compute_force:
+  rcut: 8.0 ang
+  parameters: nop
+
+compute_force: zero_compute_force

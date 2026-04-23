@@ -1,0 +1,9 @@
+includes:
+  - config_speculative_verlet.msp
+  - baseline_single_specy.yaml
+
+lj_compute_force_symetric:
+  parameters: { epsilon: 0.0104 eV , sigma: 3.4 ang }
+  rcut: 8.0 ang
+
+compute_force: lj_compute_force_symetric

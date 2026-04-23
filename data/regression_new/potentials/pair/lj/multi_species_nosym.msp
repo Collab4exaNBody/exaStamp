@@ -1,0 +1,11 @@
+includes:
+  - baseline_multi_species.yaml
+
+lj_multi_force:
+  rcut: 8. ang
+  common_parameters: { epsilon: 0.0 , sigma: 0.0 }
+  parameters:
+    - { type_a: Zn , type_b: Zn , rcut: 6.10 ang , parameters: { epsilon: 2.522E-20 J , sigma: 0.244E-09 m } }
+    - { type_a: Cu , type_b: Zn , rcut: 5.89 ang , parameters: { epsilon: 4.853E-20 J , sigma: 0.236E-09 m } }
+
+compute_force: lj_multi_force

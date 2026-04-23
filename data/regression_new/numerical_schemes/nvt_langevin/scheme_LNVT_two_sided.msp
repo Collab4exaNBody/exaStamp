@@ -1,0 +1,13 @@
+includes:
+  - baseline.yaml
+
+numerical_scheme: verlet_nve
+
+two_sided_langevin_thermostat:
+  T_a: 1. K
+  gamma_a: 0.1 ps^-1
+  T_b: 200. K
+  gamma_b: 0.1 ps^-1
+  planes: [ [ 1.0 , 0.0 , 0.0 , -27.0 ang ] ]
+
++compute_force: two_sided_langevin_thermostat

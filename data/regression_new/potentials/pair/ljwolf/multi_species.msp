@@ -1,0 +1,11 @@
+includes:
+  - baseline_multi_species.yaml
+
+ljwolf_multi_force:
+  rcut: 12.5 ang
+  common_parameters: { coul_wolf: { alpha: 0.2 1/ang, rc: 12.5 ang }, lj_rcut: 11.0 ang, shiftlj: true, lj: { epsilon: 0.01 kcal/mol, sigma: 3.830864488 ang } }
+  parameters:
+    - { type_a: C  , type_b: C, rcut: 12.5 ang, parameters: { coul_wolf: { alpha: 0.2 1/ang, rc: 12.5 ang }, lj_rcut: 11.0 ang, shiftlj: true, lj: { epsilon: 0.01 kcal/mol, sigma: 3.830864488 ang } } }
+    - { type_a: C  , type_b: N, rcut: 12.5 ang, parameters: { coul_wolf: { alpha: 0.3 1/ang, rc: 12.5 ang }, lj_rcut: 11.0 ang, shiftlj: true, lj: { epsilon: 0.01 kcal/mol, sigma: 3.830864488 ang } } }
+
+compute_force: ljwolf_multi_force

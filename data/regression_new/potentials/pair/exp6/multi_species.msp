@@ -1,0 +1,11 @@
+includes:
+  - baseline_multi_species.yaml
+
+exp6_multi_force:
+  rcut: 12.5 ang
+  common_parameters: { A: 107023.90 Da*kcal/g, B: 3.64050000 1/ang, C: 554.0100000 Da*kcal*ang^6/g, D: 5.0e-5 Da*kcal/g }
+  parameters:
+    - { type_a: C  , type_b: C , rcut: 12.5 ang, parameters: { A: 107023.90 Da*kcal/g, B: 3.64050000 1/ang, C: 554.0100000 Da*kcal*ang^6/g, D: 5.0e-5 Da*kcal/g } }
+    - { type_a: C  , type_b: N , rcut: 12.5 ang, parameters: { A:  37111.29 Da*kcal/g, B: 3.46350030 1/ang, C: 484.2991571 Da*kcal*ang^6/g, D: 5.0e-5 Da*kcal/g } }
+
+compute_force: exp6_multi_force
