@@ -43,6 +43,10 @@ AddRegressionTestSimple("${CMAKE_CURRENT_SOURCE_DIR}/potentials/pair")
 # Layout: potentials/eam/<testcase>/<variant>.msp
 AddRegressionTestSimple("${CMAKE_CURRENT_SOURCE_DIR}/potentials/eam")
 
+# Regression tests for eam potentials
+# Layout: potentials/eam/<testcase>/<variant>.msp
+AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/random")
+
 # AddRegressionTestDir("${CMAKE_SOURCE_DIR}/data/regression_new/potentials/pair")
 # AddRegressionTestDir("${CMAKE_SOURCE_DIR}/data/regression_new/potentials/eam")
 
