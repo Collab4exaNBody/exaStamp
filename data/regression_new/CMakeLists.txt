@@ -6,6 +6,18 @@ AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/analytics")
 # Layout: boundary_conditions/<variant>.msp
 AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/boundary_conditions")
 
+# Regression tests for testing constraints
+# Layout: boundary_conditions/<variant>.msp
+AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/constraints/generic_vec3")
+
+# Regression tests for testing constraints
+# Layout: boundary_conditions/<variant>.msp
+AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/constraints/walls")
+
+# Regression tests for testing domain-related operators
+# Layout: boundary_conditions/<variant>.msp
+AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/domain")
+
 # Regression tests for testing local average
 # Layout: compute_local_average/<variant>.msp
 AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/compute_local_average")
