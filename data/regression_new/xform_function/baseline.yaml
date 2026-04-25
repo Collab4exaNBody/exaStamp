@@ -1,0 +1,37 @@
+includes:
+  - config_deformation.msp
+
+species:
+  - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+
+eam_alloy_force:
+  rcut: 5.30 ang
+  parameters:
+    file: "Ta1_Ravelo_2013.eam.alloy"
+
+compute_force:
+  - eam_alloy_force
+
+setup_system:
+  - domain:
+      cell_size: 6.6 ang
+      grid_dims: [ 10, 10, 10 ]
+      bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 66. ang, 66. ang, 66. ang ] ]
+      xform: [ [ 1, 0, 0 ], [ 0, 1, 0 ], [ 0, 0, 1 ] ]
+      periodic: [ true, true, true ]
+      expandable: false
+  - init_rcb_grid
+  - lattice:
+      structure: BCC
+      types: [ Ta, Ta ]
+      size: [ 3.3 ang, 3.3 ang, 3.3 ang ]
+  - init_temperature_new:
+      T: 300.0 K
+
+global:
+  max_iteration: 2
+  simulation_thermostate_screen_frequency: 20
+  simulation_thermostate_file_frequency: -1
+  simulation_snapshot_frequency: -1
+  rcut_inc: 3.0 ang
+  dt: 1.0e-3 ps

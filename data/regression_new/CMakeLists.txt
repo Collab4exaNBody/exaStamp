@@ -67,3 +67,7 @@ AddRegressionTestSimple("${CMAKE_CURRENT_SOURCE_DIR}/potentials/eam")
 # Regression tests for eam potentials
 # Layout: potentials/eam/<testcase>/<variant>.msp
 AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/random")
+
+# Regression tests for applied deformation using xform_function
+# Layout: potentials/eam/<testcase>/<variant>.msp
+AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/xform_function")

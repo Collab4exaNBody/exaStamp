@@ -1,10 +1,8 @@
-# no-seq
-
 includes:
-  - xform_base.cfg
+  - baseline.yaml
 
 xform_time_interpolate_byparts:
-  time_serie: [0.0, 50.0e-3, 100e-3, 150e-3, 200e-3]    
+  time_serie: [0.0, 0.2, 0.3, 0.5, 1]   
   xform_serie: [ [ [1.0, 0.0, 0.0],  [0.0, 1.0, 0.0],  [0.0, 0.0, 1.0] ],
             	 [ [1.34, 0.24, 0.0],  [0.24, 1.0, 0.0],  [0.0, 0.0, 1.0] ],
             	 [ [1.0, 0.32, 0.0],  [0.0, 1.2, 0.0],  [0.0, 0.0, 1.0] ],
@@ -12,9 +10,3 @@ xform_time_interpolate_byparts:
 		           [ [1.0, 0.0, 0.0],  [0.0, 1.0, 0.0],  [0.0, 0.0, 1.0] ] ]			
 
 xform_function: xform_time_interpolate_byparts
-
-xxx_simulation_epilog:
-  - check_values:
-      file: eam_sc_xform_time_interpolate_byparts.dat
-      threshold: 1.5e-10
-
