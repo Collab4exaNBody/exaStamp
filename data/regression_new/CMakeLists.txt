@@ -52,6 +52,10 @@ AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/lattice")
 # Layout: numerical_schemes/<testcase>/<variant>.msp
 AddRegressionTestSimple("${CMAKE_CURRENT_SOURCE_DIR}/numerical_schemes")
 
+# Regression tests for testing particle regions
+# Layout: compute_local_strain/<variant>.msp
+AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/particle_regions")
+
 # Regression tests for pair potentials
 # Layout: potentials/pair/<testcase>/<variant>.msp
 AddRegressionTestSimple("${CMAKE_CURRENT_SOURCE_DIR}/potentials/pair")
