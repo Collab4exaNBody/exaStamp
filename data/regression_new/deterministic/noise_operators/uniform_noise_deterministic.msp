@@ -1,0 +1,17 @@
+includes:
+  - baseline.yaml
+
++global:
+  deterministic_noise: true
+
++setup_system:
+  - uniform_noise_r: { sigma: 0.1 ang, sigma_cut: 0.5 ang }
+  - uniform_noise_v: { sigma: 0.2 ang/ps, sigma_cut: 2 ang/ps }
+
+simulation_epilog:
+  - check_values:
+      file: check_uniform.dat
+      samples: 1000
+      pos_threshold: 1e-10
+      acc_threshold: 1e-10
+      vel_threshold: 1e-10
