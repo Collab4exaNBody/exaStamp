@@ -1,0 +1,21 @@
+includes:
+  - baseline.yaml
+  - snapshot.yaml
+
+left_wall:
+  - wall:
+      normal: [ 1.0, 0.0, 0.0 ]
+      offset: 17.0 ang # positionned at the limit of the domain
+      cutoff: 2.2 ang
+      epsilon: 1.0e-19 J
+
+right_wall:
+  - wall:
+      normal: [ -1, 0.0, 0.0 ]
+      offset: -83.0 ang # positionned at the limit of the domain
+      cutoff: 2.2 ang
+      epsilon: 1.0e-19 J
+
++compute_force:
+  - left_wall
+  - right_wall

@@ -1,0 +1,27 @@
+includes:
+  - baseline.yaml
+  - snapshot.yaml
+
+left_wall:
+  - move_wall:
+      init_normal: [ 1.0, 0.0, 0.0 ]
+      init_offset: 5.0 ang # positionned at the limit of the domain
+      init_cutoff: 2.2 ang
+      init_epsilon: 1.0e-19 J
+      init_time: 0.5 ps
+      init_velocity: 1000 m/s
+  - wall
+
+right_wall:
+  - move_wall:
+      init_normal: [ -1, 0.0, 0.0 ]
+      init_offset: -95.0 ang # positionned at the limit of the domain
+      init_cutoff: 2.2 ang
+      init_epsilon: 1.0e-19 J
+      init_time: 0.5 ps
+      init_velocity: 500 m/s
+  - wall
+
++compute_force:
+  - left_wall
+  - right_wall
