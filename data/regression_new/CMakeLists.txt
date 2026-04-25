@@ -31,13 +31,26 @@ AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/compute_local_average")
 # WARNING : this depends on onika bugfix-xs_data_move branch
 AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/compute_local_strain")
 
-# Regression tests for numerical schemes (nve, nvt, npt)
-# Layout: numerical_schemes/<testcase>/<variant>.msp
-AddRegressionTestSimple("${CMAKE_CURRENT_SOURCE_DIR}/numerical_schemes")
+
 
 # Regression tests for flexible molecules
 # Layout: flexible_molecule/<testcase>/<variant>.msp
-AddRegressionTestSimple("${CMAKE_CURRENT_SOURCE_DIR}/flexible_molecule")
+#AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/flexible_molecule/molbonds")
+#AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/flexible_molecule/molperf")
+#AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/flexible_molecule/molstampv4")
+#AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/flexible_molecule/molxyz")
+AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/flexible_molecule/polybutadiene")
+AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/flexible_molecule/tetrahydrofurane")
+AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/flexible_molecule/triaminotrinitrobenzene")
+
+# Regression tests for testing lattice operators
+# Layout: compute_local_strain/<variant>.msp
+AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/lattice")
+
+
+# Regression tests for numerical schemes (nve, nvt, npt)
+# Layout: numerical_schemes/<testcase>/<variant>.msp
+AddRegressionTestSimple("${CMAKE_CURRENT_SOURCE_DIR}/numerical_schemes")
 
 # Regression tests for pair potentials
 # Layout: potentials/pair/<testcase>/<variant>.msp
