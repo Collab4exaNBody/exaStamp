@@ -1,0 +1,19 @@
+######################################################################################################
+######################## Deformation-related specific init functions  ################################
+######################################################################################################
+
+# Initialize an applied deformation that does nothing
++init_prolog:
+  - deformation_xform:
+      defbox: { extension: [ 1.0, 1.0, 1.0 ] }
+
+# End of MD loop : apply deformation
+md_loop_prolog:
+  - xform_function
+  - nbh_dist
+
+# No deformation function by default: F = I
+xform_function: nop
+
+######################################################################################################
+######################################################################################################
