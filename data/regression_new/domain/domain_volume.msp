@@ -1,0 +1,10 @@
+includes:
+  - baseline.yaml
+
++setup_system:
+  - print_domain
+  - domain_volume
+  - print_volume:
+      rebind: { value: volume }
+      body:
+        - print_real: { prefix: "Domain volume equals : ", suffix: " ang^3\n\n" }
