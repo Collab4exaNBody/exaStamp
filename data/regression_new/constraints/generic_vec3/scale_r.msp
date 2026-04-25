@@ -1,0 +1,5 @@
+includes:
+  - baseline.yaml
+
++setup_system:
+  - scale_r: { value: [ 0.9, 0.9, 0.9 ] }

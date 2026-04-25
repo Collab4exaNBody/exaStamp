@@ -1,0 +1,5 @@
+includes:
+  - baseline.yaml
+
++setup_system:
+  - set_force: { value: [ 0, 0, 0 ] }

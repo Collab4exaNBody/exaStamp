@@ -1,0 +1,5 @@
+includes:
+  - baseline.yaml
+
++setup_system:
+  - set_velocity: { value: [ 100 m/s, 0 m/s, 30 m/s ] }
