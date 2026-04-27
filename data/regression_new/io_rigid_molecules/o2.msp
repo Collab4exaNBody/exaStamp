@@ -62,11 +62,15 @@ init_epilog:
   - init_rigid_mol_inertial_mass
 
 write_snapshot: nop
-write_restart: nop
+
+write_restart:
+  - timestep_file: "rigidmol_%04d.mpiio"
+  - write_dump_rigidmol
 
 global:
   dt: 1.0e-3 ps
   max_iteration: 10
-  simulation_thermostate_screen_frequency: 10
+  simulation_thermostate_screen_frequency: 1
   simulation_snapshot_frequency: -1
+  simulation_restart_frequency: 5
   simulation_thermostate_file_frequency: -1

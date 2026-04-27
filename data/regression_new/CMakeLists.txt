@@ -41,9 +41,13 @@ AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/flexible_molecule/polybutadie
 AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/flexible_molecule/tetrahydrofurane")
 AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/flexible_molecule/triaminotrinitrobenzene")
 
-# Regression tests for testing input output operators
+# Regression tests for testing input output operators for atoms
 # Layout: compute_local_strain/<variant>.msp
 AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/io_atoms")
+
+# Regression tests for testing input output operators for rigid molecules
+# Layout: compute_local_strain/<variant>.msp
+AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/io_rigid_molecules")
 
 # Regression tests for testing lattice operators
 # Layout: compute_local_strain/<variant>.msp
@@ -68,6 +72,11 @@ AddRegressionTestSimple("${CMAKE_CURRENT_SOURCE_DIR}/potentials/eam")
 # Regression tests for eam potentials
 # Layout: potentials/eam/<testcase>/<variant>.msp
 AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/random")
+
+# Regression tests for rigid molecules
+# Layout: rigid_molecule/<testcase>/<variant>.msp
+AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/rigid_molecule/H2O")
+AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/rigid_molecule/O2")
 
 # Regression tests for TTM
 # Layout: potentials/ttm/<testcase>/<variant>.msp
