@@ -1,5 +1,5 @@
 species:
-  - Ta: { mass: 180.95 Da , z: 73 , charge: 0 e- }
+  - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
 
 eam_alloy_force:
   rcut: 5.30 ang
@@ -7,25 +7,25 @@ eam_alloy_force:
     file: "Ta1_Ravelo_2013.eam.alloy"
 
 compute_force: eam_alloy_force
-    
+
 setup_system:
   - domain:
       cell_size: 6.6 ang
-      grid_dims: [10,10,10]
-      bounds: [[0 ang ,0 ang,0 ang],[66. ang, 66. ang, 66. ang]]
-      xform: [[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
-      periodic: [true,true,true]
+      grid_dims: [ 10, 10, 10 ]
+      bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 66. ang, 66. ang, 66. ang ] ]
+      xform: [ [ 1, 0, 0 ], [ 0, 1, 0 ], [ 0, 0, 1 ] ]
+      periodic: [ true, true, true ]
       expandable: false
   - init_rcb_grid
   - lattice:
       structure: BCC
-      types: [ Ta, Ta]
-      size: [ 3.3 ang , 3.3 ang , 3.3 ang ]
-  - gaussian_noise_v: { sigma: 200. m/s }  
+      types: [ Ta, Ta ]
+      size: [ 3.3 ang, 3.3 ang, 3.3 ang ]
+  - gaussian_noise_v: { sigma: 200. m/s }
 
 init_epilog:
   - backup_r_lt
-  
+
 global:
   max_iteration: 10
   simulation_thermostate_screen_frequency: 5
@@ -34,7 +34,7 @@ global:
   rcut_inc: 1.0 ang
   dt: 5.0e-3 ps
 
-write_reference_state:  
+write_reference_state:
   - copy_grid
   - restore_ghost_r0:
       rebind: { grid: grid_copy }
@@ -47,12 +47,11 @@ write_reference_state:
       body:
         - timestep_file: "reference_config_%09d.xyz"
         - write_xyz: { fields: [ id, type ] }
-          
-write_current_state:  
+
+write_current_state:
   - timestep_file: "current_config_%09d.xyz"
   - write_xyz: { fields: [ id, type ] }
-          
+
 write_snapshot:
   - write_reference_state
   - write_current_state
-  
