@@ -49,7 +49,6 @@ AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/io_atoms")
 # Layout: compute_local_strain/<variant>.msp
 AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/lattice")
 
-
 # Regression tests for numerical schemes (nve, nvt, npt)
 # Layout: numerical_schemes/<testcase>/<variant>.msp
 AddRegressionTestSimple("${CMAKE_CURRENT_SOURCE_DIR}/numerical_schemes")
@@ -69,6 +68,10 @@ AddRegressionTestSimple("${CMAKE_CURRENT_SOURCE_DIR}/potentials/eam")
 # Regression tests for eam potentials
 # Layout: potentials/eam/<testcase>/<variant>.msp
 AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/random")
+
+# Regression tests for TTM
+# Layout: potentials/ttm/<testcase>/<variant>.msp
+AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/ttm")
 
 # Regression tests for applied deformation using xform_function
 # Layout: potentials/eam/<testcase>/<variant>.msp

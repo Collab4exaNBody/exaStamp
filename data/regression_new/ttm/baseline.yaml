@@ -1,0 +1,50 @@
+species:
+  - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+
+eam_alloy_force:
+  rcut: 6.6825 ang
+  parameters:
+    file: "Ta1_Ravelo_2013.eam.alloy"
+  eam_rho: true
+  eam_rho2emb: true
+  eam_ghost: true
+  eam_force: true
+  eam_symmetry: false
+
+compute_force:
+  - eam_alloy_force
+
+setup_system:
+  - domain:
+      cell_size: 6.6 ang
+      grid_dims: [ 20, 20, 5 ]
+      bounds: [ [ 0.0 um, 0.0 um, 0.0 um ], [ 132.00 ang, 132.00 ang, 33.00 ang ] ]
+      periodic: [ true, true, true ]
+      expandable: false
+      xform: [ [ 1, 0, 0 ], [ 0, 1, 0 ], [ 0, 0, 1 ] ]
+  - init_rcb_grid
+  - lattice:
+      structure: BCC
+      types: [ Ta, Ta ]
+      size: [ 3.3 ang, 3.3 ang, 3.3 ang ]
+  - gaussian_noise_r: { sigma: 0.1 ang }
+  - init_temperature_new:
+      T: 300. K
+      override_velocities: true
+      add_velocities: false
+      scale_velocities: false
+      zero_linear_momentum: true
+      distribution: "gaussian"
+
+global:
+  dt: 1e-3 ps
+  rcut_inc: 2.0 ang
+  simulation_restart_frequency: 10
+  simulation_snapshot_frequency: 10
+  simulation_analysis_frequency: -1
+  simulation_thermostate_file_frequency: -1
+  simulation_thermostate_screen_frequency: 10
+  max_iteration: 10
+
+write_restart:
+  - message: { mesg: "Writing restart" }
