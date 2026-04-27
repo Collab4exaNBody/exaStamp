@@ -6,6 +6,15 @@ AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/analytics")
 # Layout: boundary_conditions/<variant>.msp
 AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/boundary_conditions")
 
+# Regression tests for testing local average
+# Layout: compute_local_average/<variant>.msp
+AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/compute_local_average")
+
+# Regression tests for testing compute local strain
+# Layout: compute_local_strain/<variant>.msp
+# WARNING : this depends on onika bugfix-xs_data_move branch
+AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/compute_local_strain")
+
 # Regression tests for testing generic_vec3 operators
 # Layout: boundary_conditions/<variant>.msp
 AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/constraints/generic_vec3")
@@ -22,17 +31,6 @@ AddRegressionTestSimple("${CMAKE_CURRENT_SOURCE_DIR}/deterministic")
 # Layout: boundary_conditions/<variant>.msp
 AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/domain")
 
-# Regression tests for testing local average
-# Layout: compute_local_average/<variant>.msp
-AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/compute_local_average")
-
-# Regression tests for testing compute local strain
-# Layout: compute_local_strain/<variant>.msp
-# WARNING : this depends on onika bugfix-xs_data_move branch
-AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/compute_local_strain")
-
-
-
 # Regression tests for flexible molecules
 # Layout: flexible_molecule/<testcase>/<variant>.msp
 #AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/flexible_molecule/molbonds")
@@ -42,6 +40,10 @@ AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/compute_local_strain")
 AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/flexible_molecule/polybutadiene")
 AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/flexible_molecule/tetrahydrofurane")
 AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/flexible_molecule/triaminotrinitrobenzene")
+
+# Regression tests for testing input output operators
+# Layout: compute_local_strain/<variant>.msp
+AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/io_atoms")
 
 # Regression tests for testing lattice operators
 # Layout: compute_local_strain/<variant>.msp

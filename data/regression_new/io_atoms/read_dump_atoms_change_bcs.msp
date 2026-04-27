@@ -1,0 +1,13 @@
+includes:
+  - baseline.yaml
+
+setup_system:
+  - read_dump_atoms:
+      filename: "input_Ta.mpiio"
+      bounds: [ [ 0, 0, 0 ], [ 20, 20, 20 ] ]
+      periodic: [ false, true, true ]
+      mirror: [ X ]
+      shrink_to_fit: true
+
+global:
+  max_iteration: 40

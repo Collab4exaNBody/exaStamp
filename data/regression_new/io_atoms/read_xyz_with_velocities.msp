@@ -1,0 +1,7 @@
+includes:
+  - baseline.yaml
+
+setup_system:
+  - read_xyz_file_with_xform:
+      filename: "input_Ta.xyz"
+      read_velocities: true

@@ -1,0 +1,11 @@
+includes:
+  - baseline.yaml
+
+setup_system:
+  - read_stamp_v3:
+      filename: "input_Ta_stamp_v3.mpiio"
+      bounds_mode: COMPUTED
+      enlarge_bounds: 10.0 ang
+
+global:
+  max_iteration: 40
