@@ -62,6 +62,32 @@ endif()
 find_package(exaNBody)
 
 
+# ====================================
+# === PACE potential external libs ===
+# ====================================
+option(EXASTAMP_BUILD_PACE "Build PACE potential" OFF)
+set(PACE_GIT_REPO "git@github.com:Collab4exaNBody/exaStamp_mlip_pace.git" CACHE STRING "Git repository URL for PACE compute libraries")
+set(PACE_GIT_TAG "main" CACHE STRING "Git tag/branch for PACE compute libraries")
+set(PACE_EXTERNAL_DIR "${CMAKE_BINARY_DIR}/external/pace")
+set(YAML_CPP_INSTALL_DIR "" CACHE PATH "yaml-cpp installation directory (forwarded to PACE build)")
+
+if(EXASTAMP_BUILD_PACE)
+  if(NOT EXISTS "${PACE_EXTERNAL_DIR}/.git")
+    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/external")
+    message(STATUS "Cloning PACE libraries from ${PACE_GIT_REPO} (${PACE_GIT_TAG}) into ${PACE_EXTERNAL_DIR}")
+    execute_process(
+      COMMAND git clone --branch ${PACE_GIT_TAG} ${PACE_GIT_REPO} pace
+      WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external"
+      RESULT_VARIABLE _pace_clone_result
+    )
+    if(NOT _pace_clone_result EQUAL 0)
+      message(FATAL_ERROR "Failed to clone PACE repository (exit code: ${_pace_clone_result})")
+    endif()
+  else()
+    message(STATUS "PACE libraries already present in ${PACE_EXTERNAL_DIR}")
+  endif()
+endif()
+
 # ==========================================
 # === build application plugins and libs ===
 # ==========================================
