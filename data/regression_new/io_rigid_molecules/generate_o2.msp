@@ -64,7 +64,7 @@ init_epilog:
 write_snapshot: nop
 
 write_restart:
-  - timestep_file: "rigidmol_%04d.mpiio"
+  - timestep_file: "rigidmol_o2_%04d.mpiio"
   - write_dump_rigidmol
 
 global:
