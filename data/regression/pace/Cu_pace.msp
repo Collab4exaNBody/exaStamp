@@ -1,0 +1,48 @@
+configuration:
+  profiling:
+    summary: true
+
+species:
+  - Cu: { mass: 63.546, z: 29, charge: 0 e- }
+
+init_parameters:
+  - species
+  - pace_init:
+      parameters:
+        coef: "Cu-PBE-core-rep.ace"
+        algorithm: "recursive"
+
+compute_force:
+  - pace_force
+
+setup_system:
+  - domain:
+      cell_size: 7.230 ang
+      grid_dims: [ 5, 5, 5 ]
+      bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 36.15 ang, 36.15 ang, 36.15 ang ] ]
+      xform: [ [ 1, 0, 0 ], [ 0, 1, 0 ], [ 0, 0, 1 ] ]
+      periodic: [ true, true, true ]
+      expandable: false
+  - init_rcb_grid
+  - lattice:
+      structure: FCC
+      types: [ Cu, Cu, Cu, Cu ]
+      size: [ 3.615 ang, 3.615 ang, 3.615 ang ]
+  - gaussian_noise_r: { sigma: 0.1 ang }
+  - init_temperature_new: { T: 300. K }
+
+write_snapshot:
+  - timestep_file: "Cu_test_%09d.xyz"
+  - write_xyz:
+      fields: [ "id", "force" ]
+      units: { force: "eV/ang" }
+
+numerical_scheme: verlet_nve
+
+global:
+  max_iteration: 100
+  simulation_thermostate_screen_frequency: 20
+  simulation_thermostate_file_frequency: -1
+  simulation_snapshot_frequency: -1
+  rcut_inc: 1.0 ang
+  dt: 0.001 ps

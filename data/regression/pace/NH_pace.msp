@@ -1,0 +1,44 @@
+configuration:
+  profiling:
+    summary: true
+
+species:
+  - N: { z: 7, mass: 14.007 Da, charge: 0.0 e- }
+  - H: { z: 1, mass: 1.00794 Da, charge: -0.4680 e- }
+
+init_parameters:
+  - species
+  - pace_init:
+      parameters:
+        coef: "NH_ACE_WillmanJCP2025.yace"
+        algorithm: "recursive"
+
+compute_force:
+  - pace_force
+
+setup_system:
+  - domain:
+      cell_size: 4.0 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_xyz_file_with_xform:
+      file: NH432.xyz
+      pbc_adjust_xform: true
+  - replicate_domain: [ 2, 2, 2 ]
+  - gaussian_noise_r: { sigma: 0.1 ang }
+
+write_snapshot:
+  - timestep_file: "NH_test_%09d.xyz"
+  - write_xyz:
+      fields: [ "id", "force" ]
+      units: { force: "eV/ang" }
+
+numerical_scheme: verlet_nve
+
+global:
+  max_iteration: 1000
+  simulation_thermostate_screen_frequency: 20
+  simulation_thermostate_file_frequency: -1
+  simulation_snapshot_frequency: 10
+  rcut_inc: 1.0 ang
+  dt: 0.001 ps

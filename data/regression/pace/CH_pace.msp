@@ -1,3 +1,7 @@
+configuration:
+  profiling:
+    summary: true
+
 species:
   - C: { z: 12, mass: 12.0107 Da, charge: 0.0 e- }
   - H: { z: 1, mass: 1.00794 Da, charge: -0.4680 e- }
@@ -8,20 +12,20 @@ init_parameters:
       parameters:
         coef: "CH_ACE_Willman_JCP2024.yace"
         algorithm: "recursive"
+        #algorithm: "non-recursive"
 
 compute_force:
   - pace_force
 
 setup_system:
+  - domain:
+      cell_size: 4.0 ang
+      periodic: [ true, true, true ]
+      expandable: false
   - read_xyz_file_with_xform:
       file: CH216.xyz
       pbc_adjust_xform: true
   - replicate_domain: [ 2, 2, 2 ]
-
-domain:
-  cell_size: 4.0 ang
-  periodic: [ true, true, true ]
-  expandable: false
 
 write_snapshot:
   - timestep_file: "CH_test_%09d.xyz"
@@ -32,9 +36,9 @@ write_snapshot:
 numerical_scheme: verlet_nve
 
 global:
-  max_iteration: 1000
-  simulation_thermostate_screen_frequency: 10
-  simulation_thermostate_file_frequency: 1
+  max_iteration: 100
+  simulation_thermostate_screen_frequency: 20
+  simulation_thermostate_file_frequency: -1
   simulation_snapshot_frequency: -1
   rcut_inc: 1.0 ang
   dt: 0.001 ps
