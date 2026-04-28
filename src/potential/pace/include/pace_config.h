@@ -19,30 +19,24 @@ under the License.
 
 #pragma once
 
+#include <memory>
 #include <vector>
 
-struct ACEImpl {
-  ACEImpl() : basis_set(nullptr), ace(nullptr) {}
-  ~ACEImpl()
-  {
-    delete basis_set;
-    delete ace;
-  }
-  ACECTildeBasisSet *basis_set;
-  ACERecursiveEvaluator *ace;
-};
+#include "ace-evaluator/ace_c_basis.h"
+#include "ace-evaluator/ace_recursive.h"
 
-struct PaceThreadContext
+#include "pace_utils.h"
+
+struct ACEImpl
 {
-  ACEImpl * aceimpl = nullptr;
+  std::unique_ptr<ACECTildeBasisSet>     basis_set;
+  std::unique_ptr<ACERecursiveEvaluator> ace;
 };
 
 struct PaceContext
 {
-  ACEImpl* aceimpl = nullptr;
-
+  std::unique_ptr<ACEImpl>              aceimpl;
   std::vector<std::shared_ptr<ACEImpl>> m_test;
-
   bool recursive = true;
-  int nspecies = 1;
+  int  nspecies  = 1;
 };

@@ -20,21 +20,16 @@ under the License.
 #pragma once
 
 #include <yaml-cpp/yaml.h>
-#include <onika/physics/units.h>
-
 #include <string>
 
-using namespace exanb;
-// PACE Parameters
 struct PaceParams
 {
   std::string pace_coef;
-  bool recursive = true;
-  int nt = 1;
-  int chunksize = 2048;
+  bool recursive  = true;
+  int  nt         = 1;
+  int  chunksize  = 2048;
 };
 
-// Yaml conversion operators, allows to read potential parameters from config file
 namespace YAML
 {
   template<> struct convert<PaceParams>
@@ -42,13 +37,11 @@ namespace YAML
     static bool decode(const Node& node, PaceParams& v)
     {
       if( !node.IsMap() ) { return false; }
-      if( ! node["coef"] ) { return false; }
-      if( node["coef"] ) { v.pace_coef = node["coef"].as<std::string>(); }
-      if( node["algorithm"] ) {
-        v.recursive = ( node["algorithm"].as<std::string>() == "recursive" );
-      }
-      if( node["nspecies"] ) { v.nt = node["nspecies"].as<int>(); }
-      if( node["chunksize"] ) { v.nt = node["chunksize"].as<int>(); }
+      if( !node["coef"] ) { return false; }
+      v.pace_coef = node["coef"].as<std::string>();
+      if( node["algorithm"] ) { v.recursive  = ( node["algorithm"].as<std::string>() == "recursive" ); }
+      if( node["nspecies"]  ) { v.nt         = node["nspecies"].as<int>();  }
+      if( node["chunksize"] ) { v.chunksize  = node["chunksize"].as<int>(); }
       return true;
     }
   };
