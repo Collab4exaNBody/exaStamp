@@ -20,6 +20,7 @@ under the License.
 #include <onika/physics/units.h>
 #include <onika/physics/constants.h>
 #include <exaStamp/unit_system.h>
+#include <exanb/core/concurent_add_contributions.h>
 
 #include "eapod.h"
 #include "pod_config.h"
@@ -90,7 +91,7 @@ namespace exaStamp
       (int jnum, ComputeBufferT& buf, double& en, double& fx, double& fy, double& fz,
        int type, Mat3dT& virial, CellParticlesT cells, GridCellLocksT locks, ParticleLockT& lock_a) const
     {
-      static constexpr bool compute_virial = std::is_same_v<Mat3dT, Mat3d>;
+      static constexpr bool vflag = std::is_same_v<Mat3dT, Mat3d>;
 
       Mat3dT _vir;
       double _en = 0.;
@@ -112,33 +113,32 @@ namespace exaStamp
         const double fy_j = pod.soa_fij[jj*3+1] * conv_energy_factor;
         const double fz_j = pod.soa_fij[jj*3+2] * conv_energy_factor;
 
-        if constexpr (compute_virial) {
-          _vir += tensor(Vec3d{fx_j, fy_j, fz_j},
-                         Vec3d{buf.drx[jj], buf.dry[jj], buf.drz[jj]}) * -1.0;
-        }
-
         _fx += fx_j;
         _fy += fy_j;
         _fz += fz_j;
 
         size_t cell_b = 0, p_b = 0;
         buf.nbh.get(jj, cell_b, p_b);
-        auto& lock_b = locks[cell_b][p_b];
-        lock_b.lock();
-        cells[cell_b][field::fx][p_b] -= fx_j;
-        cells[cell_b][field::fy][p_b] -= fy_j;
-        cells[cell_b][field::fz][p_b] -= fz_j;
-        lock_b.unlock();
+        atomic_add_contribution(cells[cell_b][field::fx][p_b], -fx_j);
+        atomic_add_contribution(cells[cell_b][field::fy][p_b], -fy_j);
+        atomic_add_contribution(cells[cell_b][field::fz][p_b], -fz_j);
+
+        //
+        if constexpr (vflag)
+        {
+          const Mat3d virial_contrib = tensor(Vec3d{fx_j, fy_j, fz_j}, Vec3d{buf.drx[jj], buf.dry[jj], buf.drz[jj]});
+          _vir -= virial_contrib;
+        }
+
       }
 
-      lock_a.lock();
-      if (eflag) { _en += e * conv_energy_factor; }
-      en += _en;
-      fx += _fx;
-      fy += _fy;
-      fz += _fz;
-      if constexpr (compute_virial) { virial += _vir; }
-      lock_a.unlock();
+      if constexpr (vflag)
+        atomic_add_contribution(virial, _vir);
+      if (eflag)
+        atomic_add_contribution(en, e * conv_energy_factor);
+      atomic_add_contribution(fx, _fx);
+      atomic_add_contribution(fy, _fy);
+      atomic_add_contribution(fz, _fz);
     }
   };
 

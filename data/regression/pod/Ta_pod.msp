@@ -58,7 +58,8 @@ numerical_scheme: verlet_nve
 global:
   max_iteration: 200
   simulation_thermostate_screen_frequency: 10
-  simulation_thermostate_file_frequency: 10
+  simulation_thermostate_file_frequency: 1
   simulation_snapshot_frequency: -1
   rcut_inc: 1.0 ang
   dt: 0.005 ps
+  force_flush_file: true
