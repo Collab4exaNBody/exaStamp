@@ -147,19 +147,19 @@ namespace exaStamp
         fij[1] = acecalc.ace->neighbours_forces(jj,1) * conv_energy_factor;
         fij[2] = acecalc.ace->neighbours_forces(jj,2) * conv_energy_factor;
 
-        // Contribution to central particle
+        // Always collect forces contribution
         _fx += fij[0];
         _fy += fij[1];
         _fz += fij[2];
 
-        // Reciprocal force contribution to neighbor
+        // Always send reciprocal force contribution to neighbors
         size_t cell_b=0, p_b=0;
         buf.nbh.get(jj, cell_b, p_b);        
         atomic_add_contribution( cells[cell_b][field::fx][p_b], -fij[0]);
         atomic_add_contribution( cells[cell_b][field::fy][p_b], -fij[1]);
         atomic_add_contribution( cells[cell_b][field::fz][p_b], -fij[2]);
 
-        // 
+        // Collect the virial cobtribution to the central atom only if needed
         if constexpr ( vflag ) 
         { 
           const Mat3d virial_contrib = tensor( Vec3d{ fij[0], fij[1], fij[2] }, Vec3d{ buf.drx[jj], buf.dry[jj], buf.drz[jj] } );
@@ -168,9 +168,11 @@ namespace exaStamp
 
       }
 
+      // Collect the virial cobtribution to the central atom only if needed
       if constexpr ( vflag ) atomic_add_contribution( virial, _vir );
+      // Collect the energy cobtribution to the central atom only if needed
       if ( eflag ) atomic_add_contribution( en, acecalc.ace->e_atom * conv_energy_factor);
-      atomic_add_contribution( en, acecalc.ace->e_atom * conv_energy_factor);
+      // Always collect forces contributions
       atomic_add_contribution( fx, _fx);
       atomic_add_contribution( fy, _fy);
       atomic_add_contribution( fz, _fz);
