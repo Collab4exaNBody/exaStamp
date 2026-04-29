@@ -62,7 +62,7 @@ namespace exaStamp
     ADD_SLOT( MPI_Comm                   , mpi                 , INPUT        , REQUIRED );
     ADD_SLOT( double                     , rcut_max            , INPUT_OUTPUT , 0.0 );
     ADD_SLOT( exanb::GridChunkNeighbors  , chunk_neighbors     , INPUT        , exanb::GridChunkNeighbors{}, DocString{"neighbor list"} );
-    ADD_SLOT( bool                       , ghost               , INPUT        , true );
+    ADD_SLOT( bool                       , ghost               , INPUT        , false );
     ADD_SLOT( bool                       , conv_coef_units     , INPUT        , true );
     ADD_SLOT( bool                       , trigger_thermo_state, INPUT        , OPTIONAL );
     ADD_SLOT( GridT                      , grid                , INPUT_OUTPUT );
