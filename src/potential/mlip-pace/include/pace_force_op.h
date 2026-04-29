@@ -20,17 +20,21 @@ under the License.
 #include <onika/physics/units.h>
 #include <onika/physics/constants.h>
 #include <exaStamp/unit_system.h>
+#include <exanb/core/concurent_add_contributions.h>
 
 namespace exaStamp
 {
 
   using namespace exanb;
 
+  // This is the additional information needed on central particle's neighbors
+  // Here: we need the neighbors type 
   struct alignas(onika::memory::DEFAULT_ALIGNMENT) PaceComputeBuffer
   {
     alignas(onika::memory::DEFAULT_ALIGNMENT) int type[exanb::MAX_PARTICLE_NEIGHBORS];
   };
 
+  // This is the functor that populates the extra array (type) from the grid type field
   struct CopyParticleType
   {
     template<class ComputeBufferT, class FieldArraysT>
@@ -122,8 +126,9 @@ namespace exaStamp
       ParticleLockT& lock_a
       ) const
     {
-      static constexpr bool compute_virial = std::is_same_v<Mat3dT, Mat3d>;
 
+      static constexpr bool vflag = std::is_same_v<Mat3dT, Mat3d>;
+    
       Mat3dT _vir;
       double _en = 0.;
       double _fx = 0.;
@@ -142,32 +147,33 @@ namespace exaStamp
         fij[1] = acecalc.ace->neighbours_forces(jj,1) * conv_energy_factor;
         fij[2] = acecalc.ace->neighbours_forces(jj,2) * conv_energy_factor;
 
-        if constexpr ( compute_virial ) {
-          _vir += tensor( Vec3d{ fij[0], fij[1], fij[2] }, Vec3d{ buf.drx[jj], buf.dry[jj], buf.drz[jj] } ) * -1.0;
-        }
-
+        // Contribution to central particle
         _fx += fij[0];
         _fy += fij[1];
         _fz += fij[2];
 
+        // Reciprocal force contribution to neighbor
         size_t cell_b=0, p_b=0;
-        buf.nbh.get(jj, cell_b, p_b);
-        auto& lock_b = locks[cell_b][p_b];
-        lock_b.lock();
-        cells[cell_b][field::fx][p_b] -= fij[0];
-        cells[cell_b][field::fy][p_b] -= fij[1];
-        cells[cell_b][field::fz][p_b] -= fij[2];
-        lock_b.unlock();
+        buf.nbh.get(jj, cell_b, p_b);        
+        atomic_add_contribution( cells[cell_b][field::fx][p_b], -fij[0]);
+        atomic_add_contribution( cells[cell_b][field::fy][p_b], -fij[1]);
+        atomic_add_contribution( cells[cell_b][field::fz][p_b], -fij[2]);
+
+        // 
+        if constexpr ( vflag ) 
+        { 
+          const Mat3d virial_contrib = tensor( Vec3d{ fij[0], fij[1], fij[2] }, Vec3d{ buf.drx[jj], buf.dry[jj], buf.drz[jj] } );
+          _vir -= virial_contrib;
+        }
+
       }
 
-      lock_a.lock();
-      if (eflag) { _en += acecalc.ace->e_atom * conv_energy_factor; }
-      en += _en;
-      fx += _fx;
-      fy += _fy;
-      fz += _fz;
-      if constexpr ( compute_virial ) { virial += _vir; }
-      lock_a.unlock();
+      if constexpr ( vflag ) atomic_add_contribution( virial, _vir );
+      if ( eflag ) atomic_add_contribution( en, acecalc.ace->e_atom * conv_energy_factor);
+      atomic_add_contribution( en, acecalc.ace->e_atom * conv_energy_factor);
+      atomic_add_contribution( fx, _fx);
+      atomic_add_contribution( fy, _fy);
+      atomic_add_contribution( fz, _fz);
     }
   };
 
