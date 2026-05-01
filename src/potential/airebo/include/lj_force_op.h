@@ -23,7 +23,7 @@ under the License.
 #include <exanb/core/concurent_add_contributions.h>
 
 #include "airebo_params.h"
-#include "rebo_force_op_cached.h"   // rebo_Sp, rebo_Sp2, rebo_gSpline, spline helpers
+#include "airebo_force_op_cached.h"   // rebo_Sp, rebo_Sp2, rebo_gSpline, spline helpers
 
 namespace exaStamp
 {

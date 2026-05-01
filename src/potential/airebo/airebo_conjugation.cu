@@ -63,7 +63,7 @@ namespace exaStamp
     ADD_SLOT( ParticleSpecies           , species             , INPUT        , REQUIRED );
     ADD_SLOT( AireboParams              , parameters          , INPUT        , REQUIRED );
 
-    using ComputeBufferNconj     = ComputePairBuffer2<false,false,NconjOpExtStorage>;
+    using ComputeBufferAireboNconj     = ComputePairBuffer2<false,false,AireboNconjOpExtStorage>;
 
   public:
 
@@ -79,7 +79,7 @@ namespace exaStamp
       // ------------------------------------------------------------------------------ //
       ComputePairOptionalLocks<false> cp_locks {};
       exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
-      auto compute_buf_nconj = make_compute_pair_buffer<ComputeBufferNconj>();
+      auto compute_buf_nconj = make_compute_pair_buffer<ComputeBufferAireboNconj>();
       
       // Accessor for NijC, NijH and Nconj
       auto nijc_acc  = grid->field_accessor( field::mk_generic_real( "NijC") );
@@ -87,7 +87,7 @@ namespace exaStamp
       auto nconj_acc = grid->field_accessor( field::mk_generic_real( "Nconj") );
 
       // Conjugation operation declaration
-      NconjOp<decltype(nijc_acc),decltype(nijh_acc),decltype(nconj_acc)> compute_op_nconj = { &params_ro , nijc_acc, nijh_acc, nconj_acc };
+      AireboNconjOp<decltype(nijc_acc),decltype(nijh_acc),decltype(nconj_acc)> compute_op_nconj = { &params_ro , nijc_acc, nijh_acc, nconj_acc };
       LinearXForm cp_xform { domain->xform() };
       auto optional = make_compute_pair_optional_args( nbh_it, ComputePairNullWeightIterator{} , cp_xform, cp_locks );
       static constexpr onika::FlatTuple<> compute_field_set = {};

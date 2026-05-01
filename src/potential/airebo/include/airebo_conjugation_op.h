@@ -25,7 +25,7 @@ under the License.
 #include <exanb/compute/compute_cell_particle_pairs.h>
 
 #include "airebo_params.h"
-#include "rebo_force_op_cached.h"  // rebo_Sp
+#include "airebo_force_op_cached.h"  // rebo_Sp
 
 namespace exaStamp
 {
@@ -35,7 +35,7 @@ namespace exaStamp
   // Operator to compute per atom bond order
   // ===========================================================================
 
-  struct NconjOpExtStorage
+  struct AireboNconjOpExtStorage
   {
     int    itype = 0;    // central atom type, cached at ContextStart
     double nconj  = 0.0;
@@ -43,7 +43,7 @@ namespace exaStamp
 
   
   template<class NijcFieldT, class NijhFieldT, class NconjFieldT>
-  struct alignas(onika::memory::DEFAULT_ALIGNMENT) NconjOp
+  struct alignas(onika::memory::DEFAULT_ALIGNMENT) AireboNconjOp
   {
     const AireboParamsRO* m_params  = nullptr;
     NijcFieldT  m_nijc_field  = {};   // read neighbour's nC
@@ -104,7 +104,7 @@ namespace exaStamp
 namespace exanb
 {
   template<class NijcFieldT, class NijhFieldT, class NconjFieldT>
-  struct ComputePairTraits< exaStamp::NconjOp<NijcFieldT, NijhFieldT, NconjFieldT> >
+  struct ComputePairTraits< exaStamp::AireboNconjOp<NijcFieldT, NijhFieldT, NconjFieldT> >
   {
     static inline constexpr bool ComputeBufferCompatible = false;
     static inline constexpr bool BufferLessCompatible    = true;

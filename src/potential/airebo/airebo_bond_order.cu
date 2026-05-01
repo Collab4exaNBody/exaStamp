@@ -63,7 +63,7 @@ namespace exaStamp
     ADD_SLOT( ParticleSpecies           , species             , INPUT        , REQUIRED );
     ADD_SLOT( AireboParams              , parameters          , INPUT        , REQUIRED );
 
-    using ComputeBufferBondOrder = ComputePairBuffer2<false,false,BondOrderOpExtStorage>;
+    using ComputeBufferAireboBondOrder = ComputePairBuffer2<false,false,AireboBondOrderOpExtStorage>;
 
   public:
 
@@ -79,7 +79,7 @@ namespace exaStamp
       // ------------------------------------------------------------------------------ //
       ComputePairOptionalLocks<false> cp_locks {};
       exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
-      auto compute_buf_bondorder = make_compute_pair_buffer<ComputeBufferBondOrder>();    
+      auto compute_buf_bondorder = make_compute_pair_buffer<ComputeBufferAireboBondOrder>();    
 
       // Accessor for NijC and NijH
       auto nijc_acc  = grid->field_accessor( field::mk_generic_real( "NijC") );
@@ -87,7 +87,7 @@ namespace exaStamp
 
       
       // Bond order operator declaration
-      BondOrderOp<decltype(nijc_acc), decltype(nijh_acc)> compute_op_bondorder = { &params_ro , nijc_acc, nijh_acc };
+      AireboBondOrderOp<decltype(nijc_acc), decltype(nijh_acc)> compute_op_bondorder = { &params_ro , nijc_acc, nijh_acc };
       LinearXForm cp_xform { domain->xform() };
       auto optional = make_compute_pair_optional_args( nbh_it, ComputePairNullWeightIterator{} , cp_xform, cp_locks );
       static constexpr onika::FlatTuple<> compute_field_set = {};

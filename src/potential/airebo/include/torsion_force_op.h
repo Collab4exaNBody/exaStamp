@@ -23,7 +23,7 @@ under the License.
 #include <exanb/core/concurent_add_contributions.h>
 
 #include "airebo_params.h"
-#include "rebo_force_op_cached.h"   // shared buffer, helpers (rebo_Sp, rebo_Sp2, ...)
+#include "airebo_force_op_cached.h"   // shared buffer, helpers (rebo_Sp, rebo_Sp2, ...)
 
 namespace exaStamp
 {

@@ -38,7 +38,7 @@ under the License.
 #include <mpi.h>
 
 #include "airebo_params.h"
-#include "rebo_force_op_cached.h"
+#include "airebo_force_op_cached.h"
 #include "lj_force_op.h"
 #include "torsion_force_op.h"
 
@@ -71,7 +71,7 @@ namespace exaStamp
 
     static constexpr bool UseWeights   = false;
     static constexpr bool UseNeighbors = true;
-    using ComputeBufferRebo = ComputePairBuffer2<UseWeights, UseNeighbors,
+    using ComputeBufferAiRebo = ComputePairBuffer2<UseWeights, UseNeighbors,
                                              AireboComputeBuffer, CopyParticleType,
                                              AIREBO_MAX_NEIGHBORS>;
 
@@ -113,7 +113,7 @@ namespace exaStamp
       LinearXForm cp_xform { domain->xform() };
  
       ComputePairNullWeightIterator cp_weight{};
-      auto compute_buf_rebo = make_compute_pair_buffer<ComputeBufferRebo>();
+      auto compute_buf_rebo = make_compute_pair_buffer<ComputeBufferAiRebo>();
 
       const bool use_locks = omp_get_max_threads() > 1 && particle_locks.has_value();
       auto force_op_fields = make_field_tuple_from_field_set( ComputeFields{} , nijc_acc, nijh_acc, nconj_acc );
@@ -168,7 +168,7 @@ namespace exaStamp
         else           with_locks(ComputePairOptionalLocks<false>{});
       };
 
-      run_rebo( REBOForceOp<decltype(nijc_acc),decltype(nijh_acc),decltype(nconj_acc)> { &params_ro, nijc_acc, nijh_acc, nconj_acc } );
+      run_rebo( AIREBOForceOp<decltype(nijc_acc),decltype(nijh_acc),decltype(nconj_acc)> { &params_ro, nijc_acc, nijh_acc, nconj_acc } );
       if (parameters->ljflag)  run_lj( LJForceOp<decltype(nijc_acc),decltype(nijh_acc),decltype(nconj_acc)> { &params_ro, nijc_acc, nijh_acc, nconj_acc } );
       if (parameters->torflag) run( TorsionForceOp  { &params_ro } );
     }

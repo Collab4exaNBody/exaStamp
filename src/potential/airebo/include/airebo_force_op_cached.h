@@ -304,7 +304,7 @@ namespace exaStamp
   // ===========================================================================
 
   template<class NijcFieldT, class NijhFieldT, class NconjFieldT>
-  struct alignas(onika::memory::DEFAULT_ALIGNMENT) REBOForceOp
+  struct alignas(onika::memory::DEFAULT_ALIGNMENT) AIREBOForceOp
   {
     const AireboParamsRO* m_params = nullptr;
     NijcFieldT  m_nijc_field  = {};   // read neighbour's nC

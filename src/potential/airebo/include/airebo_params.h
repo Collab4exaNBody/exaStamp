@@ -133,9 +133,421 @@ namespace exaStamp
     onika::memory::CudaMMVector<double> Tijdom_data;
     onika::memory::CudaMMVector<double> Tijc_data;
 
+    // Rebuild all spline coefficient arrays from hardcoded knot values.
+    // Mirrors LAMMPS PairAIREBO::spline_init(). Must be called after reading
+    // the parameter file and before finalize_spline_data().
+    inline void airebo_spline_init()
+    {
+      // integer power helper
+      auto powint = [](double x, int n) -> double {
+        double r = 1.0;
+        for (int i = 0; i < n; ++i) r *= x;
+        return r;
+      };
+
+      // --- bicubic helpers ---
+
+      auto Spbicubic_patch_adjust = [&powint](double* dl, double wid, double lo, char dir) {
+        int rowL = (dir == 'R') ? 1 : 4;
+        int colL = (dir == 'L') ? 1 : 4;
+        const double bin[4] = {1, 1, 2, 6};
+        for (int row = 0; row < 4; row++)
+          for (int col = 0; col < 4; col++) {
+            double acc = 0;
+            for (int k = col; k < 4; k++)
+              acc += dl[rowL*row + colL*k] * powint(wid,-k) * powint(-lo, k-col)
+                   * bin[k] / bin[col] / bin[k-col];
+            dl[rowL*row + colL*col] = acc;
+          }
+      };
+
+      auto Spbicubic_patch_coeffs = [&](double xmin, double xmax, double ymin, double ymax,
+                                         double* y, double* y1, double* y2, double* dl) {
+        const double C_inv[16][12] = {
+          { 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0},
+          {-3, 3, 0, 0, 0, 0, 0, 0,-2,-1, 0, 0},
+          { 2,-2, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0},
+          { 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0,-3, 3, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 2,-2, 0, 0, 0, 0, 0, 0},
+          {-3, 0, 3, 0,-2, 0,-1, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0,-3, 0, 3, 0},
+          { 9,-9,-9, 9, 6,-6, 3,-3, 6, 3,-6,-3},
+          {-6, 6, 6,-6,-4, 4,-2, 2,-3,-3, 3, 3},
+          { 2, 0,-2, 0, 1, 0, 1, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 2, 0,-2, 0},
+          {-6, 6, 6,-6,-3, 3,-3, 3,-4,-2, 4, 2},
+          { 4,-4,-4, 4, 2,-2, 2,-2, 2, 2,-2,-2}
+        };
+        double dx = xmax - xmin, dy = ymax - ymin;
+        double x[12];
+        for (int i = 0; i < 4; i++) {
+          x[i+0*4] = y[i];
+          x[i+1*4] = y1[i] * dx;
+          x[i+2*4] = y2[i] * dy;
+        }
+        for (int i = 0; i < 16; i++) {
+          dl[i] = 0;
+          for (int k = 0; k < 12; k++) dl[i] += x[k] * C_inv[i][k];
+        }
+        Spbicubic_patch_adjust(dl, dx, xmin, 'R');
+        Spbicubic_patch_adjust(dl, dy, ymin, 'L');
+      };
+
+      // --- tricubic helpers ---
+
+      auto Sptricubic_patch_adjust = [&powint](double* dl, double wid, double lo, char dir) {
+        int rowOuterL = 16, rowInnerL = 1, colL = 4;
+        if      (dir == 'R') { rowOuterL = 4;  colL = 16; }
+        else if (dir == 'M') { colL = 4; }
+        else if (dir == 'L') { rowInnerL = 4;  colL = 1;  }
+        const double bin[4] = {1, 1, 2, 6};
+        for (int ro = 0; ro < 4; ro++)
+          for (int ri = 0; ri < 4; ri++)
+            for (int col = 0; col < 4; col++) {
+              double acc = 0;
+              for (int k = col; k < 4; k++)
+                acc += dl[rowOuterL*ro + rowInnerL*ri + colL*k]
+                     * powint(wid,-k) * powint(-lo, k-col)
+                     * bin[k] / bin[col] / bin[k-col];
+              dl[rowOuterL*ro + rowInnerL*ri + colL*col] = acc;
+            }
+      };
+
+      auto Sptricubic_patch_coeffs = [&](double xmin, double xmax, double ymin, double ymax,
+                                          double zmin, double zmax,
+                                          double* y, double* y1, double* y2, double* y3, double* dl) {
+        const double C_inv[64][32] = {
+          { 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
+          {-3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,-2,-1, 0, 0, 0, 0, 0, 0},
+          { 2,-2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,-3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2,-2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          {-3, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,-2, 0,-1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,-3, 0, 3, 0, 0, 0, 0, 0},
+          { 9,-9,-9, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6,-6, 3,-3, 0, 0, 0, 0, 6, 3,-6,-3, 0, 0, 0, 0},
+          {-6, 6, 6,-6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,-4, 4,-2, 2, 0, 0, 0, 0,-3,-3, 3, 3, 0, 0, 0, 0},
+          { 2, 0,-2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0,-2, 0, 0, 0, 0, 0},
+          {-6, 6, 6,-6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,-3, 3,-3, 3, 0, 0, 0, 0,-4,-2, 4, 2, 0, 0, 0, 0},
+          { 4,-4,-4, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2,-2, 2,-2, 0, 0, 0, 0, 2, 2,-2,-2, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0,-3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 2,-2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0,-3, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 9,-9,-9, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0,-6, 6, 6,-6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 2, 0,-2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0,-6, 6, 6,-6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 4,-4,-4, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          {-3, 0, 0, 0, 3, 0, 0, 0,-2, 0, 0, 0,-1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,-3, 0, 0, 0, 3, 0, 0, 0},
+          { 9,-9, 0, 0,-9, 9, 0, 0, 6,-6, 0, 0, 3,-3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 3, 0, 0,-6,-3, 0, 0},
+          {-6, 6, 0, 0, 6,-6, 0, 0,-4, 4, 0, 0,-2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,-3,-3, 0, 0, 3, 3, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,-3, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9,-9, 0, 0,-9, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,-6, 6, 0, 0, 6,-6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 9, 0,-9, 0,-9, 0, 9, 0, 6, 0,-6, 0, 3, 0,-3, 0, 6, 0, 3, 0,-6, 0,-3, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9, 0,-9, 0,-9, 0, 9, 0},
+          {-27,27,27,-27,27,-27,-27,27,-18,18,18,-18,-9,9,9,-9,-18,18,-9,9,18,-18,9,-9,-18,-9,18,9,18,9,-18,-9},
+          {18,-18,-18,18,-18,18,18,-18,12,-12,-12,12,6,-6,-6,6,12,-12,6,-6,-12,12,-6,6,9,9,-9,-9,-9,-9,9,9},
+          {-6, 0, 6, 0, 6, 0,-6, 0,-4, 0, 4, 0,-2, 0, 2, 0,-3, 0,-3, 0, 3, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,-6, 0, 6, 0, 6, 0,-6, 0},
+          {18,-18,-18,18,-18,18,18,-18,12,-12,-12,12,6,-6,-6,6,9,-9,9,-9,-9,9,-9,9,12,6,-12,-6,-12,-6,12,6},
+          {-12,12,12,-12,12,-12,-12,12,-8,8,8,-8,-4,4,4,-4,-6,6,-6,6,6,-6,6,-6,-6,-6,6,6,6,6,-6,-6},
+          { 2, 0, 0, 0,-2, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0,-2, 0, 0, 0},
+          {-6, 6, 0, 0, 6,-6, 0, 0,-3, 3, 0, 0,-3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,-4,-2, 0, 0, 4, 2, 0, 0},
+          { 4,-4, 0, 0,-4, 4, 0, 0, 2,-2, 0, 0, 2,-2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 0, 0,-2,-2, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0,-2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,-6, 6, 0, 0, 6,-6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4,-4, 0, 0,-4, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          {-6, 0, 6, 0, 6, 0,-6, 0,-3, 0, 3, 0,-3, 0, 3, 0,-4, 0,-2, 0, 4, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,-6, 0, 6, 0, 6, 0,-6, 0},
+          {18,-18,-18,18,-18,18,18,-18,9,-9,-9,9,9,-9,-9,9,12,-12,6,-6,-12,12,-6,6,12,6,-12,-6,-12,-6,12,6},
+          {-12,12,12,-12,12,-12,-12,12,-6,6,6,-6,-6,6,6,-6,-8,8,-4,4,8,-8,4,-4,-6,-6,6,6,6,6,-6,-6},
+          { 4, 0,-4, 0,-4, 0, 4, 0, 2, 0,-2, 0, 2, 0,-2, 0, 2, 0, 2, 0,-2, 0,-2, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0,-4, 0,-4, 0, 4, 0},
+          {-12,12,12,-12,12,-12,-12,12,-6,6,6,-6,-6,6,6,-6,-6,6,-6,6,6,-6,6,-6,-8,-4,8,4,8,4,-8,-4},
+          { 8,-8,-8, 8,-8, 8, 8,-8, 4,-4,-4, 4, 4,-4,-4, 4, 4,-4, 4,-4,-4, 4,-4, 4, 4, 4,-4,-4,-4,-4, 4, 4}
+        };
+        double dx = xmax - xmin, dy = ymax - ymin, dz = zmax - zmin;
+        double x[32];
+        for (int i = 0; i < 8; i++) {
+          x[i+0*8] = y[i];
+          x[i+1*8] = y1[i] * dx;
+          x[i+2*8] = y2[i] * dy;
+          x[i+3*8] = y3[i] * dz;
+        }
+        for (int i = 0; i < 64; i++) {
+          dl[i] = 0;
+          for (int k = 0; k < 32; k++) dl[i] += x[k] * C_inv[i][k];
+        }
+        Sptricubic_patch_adjust(dl, dx, xmin, 'R');
+        Sptricubic_patch_adjust(dl, dy, ymin, 'M');
+        Sptricubic_patch_adjust(dl, dz, zmin, 'L');
+      };
+
+      // -----------------------------------------------------------------------
+      // Temporary knot-value arrays (all zero-initialised)
+      // -----------------------------------------------------------------------
+      double PCCf[5][5]         = {};
+      double PCCdfdx[5][5]      = {};
+      double PCCdfdy[5][5]      = {};
+      double PCHf[5][5]         = {};
+      double PCHdfdx[5][5]      = {};
+      double PCHdfdy[5][5]      = {};
+      double piCCf[5][5][11]    = {};
+      double piCCdfdx[5][5][11] = {};
+      double piCCdfdy[5][5][11] = {};
+      double piCCdfdz[5][5][11] = {};
+      double piCHf[5][5][11]    = {};
+      double piCHdfdx[5][5][11] = {};
+      double piCHdfdy[5][5][11] = {};
+      double piCHdfdz[5][5][11] = {};
+      double piHHf[5][5][11]    = {};
+      double piHHdfdx[5][5][11] = {};
+      double piHHdfdy[5][5][11] = {};
+      double piHHdfdz[5][5][11] = {};
+      double Tf[5][5][10]       = {};
+      double Tdfdx[5][5][10]    = {};
+      double Tdfdy[5][5][10]    = {};
+      double Tdfdz[5][5][10]    = {};
+
+      // -----------------------------------------------------------------------
+      // pCC / pCH knot values (from Brenner 2002, AIREBO variant)
+      // -----------------------------------------------------------------------
+      PCCf[0][2] = -0.00050;
+      PCCf[0][3] =  0.0161253646;
+      PCCf[1][1] = -0.010960;
+      PCCf[1][2] =  0.00632624824;
+      // PCCf[2][0] differs between REBO and AIREBO (Favata et al., CPC 2016)
+      PCCf[2][0] = -0.0276030;
+      PCCf[2][1] =  0.00317953083;
+
+      PCHf[0][1] =  0.2093367328250380;
+      PCHf[0][2] = -0.064449615432525;
+      PCHf[0][3] = -0.303927546346162;
+      PCHf[1][0] =  0.010;
+      PCHf[1][1] = -0.1251234006287090;
+      PCHf[1][2] = -0.298905245783;
+      PCHf[2][0] = -0.1220421462782555;
+      PCHf[2][1] = -0.3005291724067579;
+      PCHf[3][0] = -0.307584705066;
+
+      // Compute bicubic pCC and pCH coefficients
+      for (int nH = 0; nH < 4; nH++) {
+        for (int nC = 0; nC < 4; nC++) {
+          double y[4]={0}, y1[4]={0}, y2[4]={0};
+          y[0]=PCCf[nC][nH]; y[1]=PCCf[nC][nH+1];
+          y[2]=PCCf[nC+1][nH]; y[3]=PCCf[nC+1][nH+1];
+          Spbicubic_patch_coeffs(nC, nC+1, nH, nH+1, y, y1, y2, pCC[nC][nH]);
+          y[0]=PCHf[nC][nH]; y[1]=PCHf[nC][nH+1];
+          y[2]=PCHf[nC+1][nH]; y[3]=PCHf[nC+1][nH+1];
+          Spbicubic_patch_coeffs(nC, nC+1, nH, nH+1, y, y1, y2, pCH[nC][nH]);
+        }
+      }
+
+      // -----------------------------------------------------------------------
+      // piCC knot values
+      // -----------------------------------------------------------------------
+      for (int i = 3; i < 10; i++) piCCf[0][0][i] = 0.0049586079;
+      piCCf[1][0][1] = 0.021693495;
+      piCCf[0][1][1] = 0.021693495;
+      for (int i = 2; i < 10; i++) piCCf[1][0][i] = 0.0049586079;
+      for (int i = 2; i < 10; i++) piCCf[0][1][i] = 0.0049586079;
+      piCCf[1][1][1] =  0.05250;
+      piCCf[1][1][2] = -0.002088750;
+      for (int i = 3; i < 10; i++) piCCf[1][1][i] = -0.00804280;
+      piCCf[2][0][1] =  0.024698831850;
+      piCCf[0][2][1] =  0.024698831850;
+      piCCf[2][0][2] = -0.00597133450;
+      piCCf[0][2][2] = -0.00597133450;
+      for (int i = 3; i < 10; i++) piCCf[2][0][i] = 0.0049586079;
+      for (int i = 3; i < 10; i++) piCCf[0][2][i] = 0.0049586079;
+      piCCf[2][1][1] =  0.00482478490;
+      piCCf[1][2][1] =  0.00482478490;
+      piCCf[2][1][2] =  0.0150;
+      piCCf[1][2][2] =  0.0150;
+      piCCf[2][1][3] = -0.010;
+      piCCf[1][2][3] = -0.010;
+      piCCf[2][1][4] = -0.01168893870;
+      piCCf[1][2][4] = -0.01168893870;
+      piCCf[2][1][5] = -0.013377877400;
+      piCCf[1][2][5] = -0.013377877400;
+      piCCf[2][1][6] = -0.015066816000;
+      piCCf[1][2][6] = -0.015066816000;
+      for (int i = 7; i < 10; i++) piCCf[2][1][i] = -0.015066816000;
+      for (int i = 7; i < 10; i++) piCCf[1][2][i] = -0.015066816000;
+      piCCf[2][2][1] =  0.0472247850;
+      piCCf[2][2][2] =  0.0110;
+      piCCf[2][2][3] =  0.0198529350;
+      piCCf[2][2][4] =  0.01654411250;
+      piCCf[2][2][5] =  0.013235290;
+      piCCf[2][2][6] =  0.00992646749999;
+      piCCf[2][2][7] =  0.006617644999;
+      piCCf[2][2][8] =  0.00330882250;
+      piCCf[3][0][1] = -0.05989946750;
+      piCCf[0][3][1] = -0.05989946750;
+      piCCf[3][0][2] = -0.05989946750;
+      piCCf[0][3][2] = -0.05989946750;
+      for (int i = 3; i < 10; i++) piCCf[3][0][i] = 0.0049586079;
+      for (int i = 3; i < 10; i++) piCCf[0][3][i] = 0.0049586079;
+      piCCf[3][1][2] = -0.0624183760;
+      piCCf[1][3][2] = -0.0624183760;
+      for (int i = 3; i < 10; i++) piCCf[3][1][i] = -0.0624183760;
+      for (int i = 3; i < 10; i++) piCCf[1][3][i] = -0.0624183760;
+      piCCf[3][2][1] = -0.02235469150;
+      piCCf[2][3][1] = -0.02235469150;
+      for (int i = 2; i < 10; i++) piCCf[3][2][i] = -0.02235469150;
+      for (int i = 2; i < 10; i++) piCCf[2][3][i] = -0.02235469150;
+
+      piCCdfdx[2][1][1] = -0.026250;
+      piCCdfdx[2][1][5] = -0.0271880;
+      piCCdfdx[2][1][6] = -0.0271880;
+      for (int i = 7; i < 10; i++) piCCdfdx[2][1][i] = -0.0271880;
+      piCCdfdx[1][3][2] =  0.0187723882;
+      for (int i = 2; i < 10; i++) piCCdfdx[2][3][i] = 0.031209;
+
+      piCCdfdy[1][2][1] = -0.026250;
+      piCCdfdy[1][2][5] = -0.0271880;
+      piCCdfdy[1][2][6] = -0.0271880;
+      for (int i = 7; i < 10; i++) piCCdfdy[1][2][i] = -0.0271880;
+      piCCdfdy[3][1][2] =  0.0187723882;
+      for (int i = 2; i < 10; i++) piCCdfdy[3][2][i] = 0.031209;
+
+      piCCdfdz[1][1][2] = -0.0302715;
+      piCCdfdz[2][1][4] = -0.0100220;
+      piCCdfdz[1][2][4] = -0.0100220;
+      piCCdfdz[2][1][5] = -0.0100220;
+      piCCdfdz[1][2][5] = -0.0100220;
+      for (int i = 4; i < 9; i++) piCCdfdz[2][2][i] = -0.0033090;
+
+      // make top end of piCC flat
+      { int i=4;
+        for (int j = 0; j < 4; j++)
+          for (int k = 1; k < 11; k++)
+            piCCf[i][j][k] = piCCf[i-1][j][k]; }
+      // enforce symmetry
+      for (int i = 0; i < 4; i++)
+        for (int j = i+1; j < 5; j++)
+          for (int k = 1; k < 11; k++)
+            piCCf[i][j][k] = piCCf[j][i][k];
+      for (int k = 1; k < 11; k++) piCCf[4][4][k] = piCCf[3][4][k];
+      { int k=10;
+        for (int i = 0; i < 5; i++)
+          for (int j = 0; j < 5; j++)
+            piCCf[i][j][k] = piCCf[i][j][k-1]; }
+
+      // -----------------------------------------------------------------------
+      // piCH knot values
+      // -----------------------------------------------------------------------
+      piCHf[1][1][1] = -0.050;
+      piCHf[1][1][2] = -0.050;
+      piCHf[1][1][3] = -0.30;
+      for (int i = 4; i < 10; i++) piCHf[1][1][i] = -0.050;
+      for (int i = 5; i < 10; i++) piCHf[2][0][i] = -0.004523893758064;
+      for (int i = 5; i < 10; i++) piCHf[0][2][i] = -0.004523893758064;
+      piCHf[2][1][2] = -0.250;
+      piCHf[1][2][2] = -0.250;
+      piCHf[2][1][3] = -0.250;
+      piCHf[1][2][3] = -0.250;
+      piCHf[3][1][1] = -0.10;
+      piCHf[1][3][1] = -0.10;
+      piCHf[3][1][2] = -0.125;
+      piCHf[1][3][2] = -0.125;
+      piCHf[3][1][3] = -0.125;
+      piCHf[1][3][3] = -0.125;
+      for (int i = 4; i < 10; i++) piCHf[3][1][i] = -0.10;
+      for (int i = 4; i < 10; i++) piCHf[1][3][i] = -0.10;
+
+      // make top end of piCH flat
+      { int i=4;
+        for (int j = 0; j < 4; j++)
+          for (int k = 1; k < 11; k++)
+            piCHf[i][j][k] = piCHf[i-1][j][k]; }
+      for (int i = 0; i < 4; i++)
+        for (int j = i+1; j < 5; j++)
+          for (int k = 1; k < 11; k++)
+            piCHf[i][j][k] = piCHf[j][i][k];
+      for (int k = 1; k < 11; k++) piCHf[4][4][k] = piCHf[3][4][k];
+      { int k=10;
+        for (int i = 0; i < 5; i++)
+          for (int j = 0; j < 5; j++)
+            piCHf[i][j][k] = piCHf[i][j][k-1]; }
+
+      // -----------------------------------------------------------------------
+      // piHH / Tij knot values
+      // -----------------------------------------------------------------------
+      piHHf[1][1][1] = 0.124915958;
+
+      Tf[2][2][1] = -0.035140;
+      for (int i = 2; i < 10; i++) Tf[2][2][i] = -0.0040480;
+
+      // -----------------------------------------------------------------------
+      // Compute tricubic piCC / piCH / piHH / Tijc coefficients
+      // -----------------------------------------------------------------------
+#define FILL_KNOTS_TRI(dest, src, nc, nh, nconj)               \
+      dest[0] = src[nc+0][nh+0][nconj+0];                      \
+      dest[1] = src[nc+0][nh+0][nconj+1];                      \
+      dest[2] = src[nc+0][nh+1][nconj+0];                      \
+      dest[3] = src[nc+0][nh+1][nconj+1];                      \
+      dest[4] = src[nc+1][nh+0][nconj+0];                      \
+      dest[5] = src[nc+1][nh+0][nconj+1];                      \
+      dest[6] = src[nc+1][nh+1][nconj+0];                      \
+      dest[7] = src[nc+1][nh+1][nconj+1];
+
+      for (int nH = 0; nH < 4; nH++) {
+        for (int nC = 0; nC < 4; nC++) {
+          for (int nConj = 0; nConj < 9; nConj++) {
+            double y[8]={0}, y1[8]={0}, y2[8]={0}, y3[8]={0};
+
+            FILL_KNOTS_TRI(y,  piCCf,    nC, nH, nConj)
+            FILL_KNOTS_TRI(y1, piCCdfdx, nC, nH, nConj)
+            FILL_KNOTS_TRI(y2, piCCdfdy, nC, nH, nConj)
+            FILL_KNOTS_TRI(y3, piCCdfdz, nC, nH, nConj)
+            Sptricubic_patch_coeffs(nC, nC+1, nH, nH+1, nConj, nConj+1, y, y1, y2, y3, piCC[nC][nH][nConj]);
+
+            FILL_KNOTS_TRI(y,  piCHf,    nC, nH, nConj)
+            FILL_KNOTS_TRI(y1, piCHdfdx, nC, nH, nConj)
+            FILL_KNOTS_TRI(y2, piCHdfdy, nC, nH, nConj)
+            FILL_KNOTS_TRI(y3, piCHdfdz, nC, nH, nConj)
+            Sptricubic_patch_coeffs(nC, nC+1, nH, nH+1, nConj, nConj+1, y, y1, y2, y3, piCH[nC][nH][nConj]);
+
+            FILL_KNOTS_TRI(y,  piHHf,    nC, nH, nConj)
+            FILL_KNOTS_TRI(y1, piHHdfdx, nC, nH, nConj)
+            FILL_KNOTS_TRI(y2, piHHdfdy, nC, nH, nConj)
+            FILL_KNOTS_TRI(y3, piHHdfdz, nC, nH, nConj)
+            Sptricubic_patch_coeffs(nC, nC+1, nH, nH+1, nConj, nConj+1, y, y1, y2, y3, piHH[nC][nH][nConj]);
+
+            FILL_KNOTS_TRI(y,  Tf,       nC, nH, nConj)
+            FILL_KNOTS_TRI(y1, Tdfdx,    nC, nH, nConj)
+            FILL_KNOTS_TRI(y2, Tdfdy,    nC, nH, nConj)
+            FILL_KNOTS_TRI(y3, Tdfdz,    nC, nH, nConj)
+            Sptricubic_patch_coeffs(nC, nC+1, nH, nH+1, nConj, nConj+1, y, y1, y2, y3, Tijc[nC][nH][nConj]);
+          }
+        }
+      }
+#undef FILL_KNOTS_TRI
+    }
+
     // Copy all spline arrays into their GPU-accessible CudaMMVector mirrors.
     // Must be called once after the parameter file has been fully read.
-    inline void finalize_spline_data()
+    inline void airebo_finalize_spline_data()
     {
       auto fill = [](onika::memory::CudaMMVector<double>& dst, const double* src, size_t n) {
         dst.resize(n);
@@ -530,8 +942,11 @@ namespace YAML
               read_n(v.Tijc[i][j][k], 64);
       }
 
+      // Overwrite file-read spline data with hardcoded knot values (mirrors LAMMPS spline_init)
+      v.airebo_spline_init();
+
       // Populate GPU-accessible flat mirrors
-      v.finalize_spline_data();
+      v.airebo_finalize_spline_data();
 
       lout << "AIREBO potential file read successfully." << std::endl;
       return true;
