@@ -8,24 +8,20 @@ species:
 
 init_parameters:
   - species
-  - airebo_init:
+  - rebo_init:
       parameters:
-        potential_file: "CH.airebo"
-        cutlj: 3.0 ang
-        ljflag: false
-        torflag: false
-        morseflag: false
+        potential_file: "CH.rebo"
 
 # Zero force and energy everywhere and in the ghosts as well
 compute_force_prolog:
   - zero_force_energy: { ghost: true }
 
 compute_force:
-  - airebo_bond_order
+  - rebo_bond_order
   - ghost_update_opt: { opt_fields: [ "NijC", "NijH" ] }
-  - airebo_conjugation
+  - rebo_conjugation
   - ghost_update_opt: { opt_fields: [ "Nconj" ] }
-  - airebo_force
+  - rebo_force
 
 # Update forces of non-ghost particles from their ghosts before pushing total force to acceleration
 compute_force_epilog:
@@ -61,6 +57,6 @@ global:
   simulation_thermostate_screen_frequency: 50
   simulation_thermostate_file_frequency: 1
   simulation_snapshot_frequency: -1
-  rcut_inc: 0.3 ang
+  rcut_inc: 0.5 ang
   dt: 0.000125 ps
-  thermostate_file: "thermo_exastamp_airebo.txt"
+  thermostate_file: "thermo_exastamp_rebo.txt"
