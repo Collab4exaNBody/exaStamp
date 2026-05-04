@@ -35,7 +35,7 @@ setup_system:
       periodic: [ true, true, true ]
       expandable: false
   - read_xyz_file_with_xform:
-      file: CH216.xyz
+      filename: CH216.xyz
       pbc_adjust_xform: true
   - replicate_domain: [ 2, 2, 2 ]
 
@@ -44,16 +44,16 @@ setup_system:
   - chunk_neighbors_stats
   - memory_stats
 
-write_snapshot:
-  - timestep_file: "Paraview/CH_test_%09d"
-  - write_paraview:
-      fields: [ "id", "type", "mass" ]
-      write_ghost: true
+write_snapshot: nop
+  # - timestep_file: "Paraview/CH_test_%09d"
+  # - write_paraview:
+  #     fields: [ "id", "type", "mass" ]
+  #     write_ghost: true
 
 numerical_scheme: verlet_nve
 
 global:
-  max_iteration: 500
+  max_iteration: 100
   simulation_thermostate_screen_frequency: 50
   simulation_thermostate_file_frequency: 1
   simulation_snapshot_frequency: -1
