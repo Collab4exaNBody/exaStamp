@@ -23,7 +23,7 @@ setup_system:
       periodic: [ true, true, true ]
       expandable: false
   - read_xyz_file_with_xform:
-      file: CH216.xyz
+      filename: CH216.xyz
       pbc_adjust_xform: true
   - replicate_domain: [ 2, 2, 2 ]
 
@@ -36,7 +36,7 @@ write_snapshot:
 numerical_scheme: verlet_nve
 
 global:
-  max_iteration: 100
+  max_iteration: 10
   simulation_thermostate_screen_frequency: 20
   simulation_thermostate_file_frequency: -1
   simulation_snapshot_frequency: -1

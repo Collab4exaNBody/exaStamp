@@ -87,6 +87,7 @@ if(EXASTAMP_BUILD_PACE)
     endif()
   else()
     message(STATUS "PACE libraries already present in ${PACE_EXTERNAL_DIR}")
+  endif()
 endif()
 
 # ====================================
