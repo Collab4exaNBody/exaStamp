@@ -1,0 +1,8 @@
+includes:
+  - baseline_single_specy.yaml
+
+reaction_field_compute_force_symetric:
+  rcut: 12.5 ang
+  parameters: { epsilon: 100., rc: 12.5 ang }
+
+compute_force: reaction_field_compute_force_symetric

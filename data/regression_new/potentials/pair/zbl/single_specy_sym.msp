@@ -1,0 +1,8 @@
+includes:
+  - baseline_single_specy.yaml
+
+zbl_compute_force_symetric:
+  rcut: 5.68 ang
+  parameters: { r1: 5.0 ang, rc: 5.68 ang }
+
+compute_force: zbl_compute_force_symetric
