@@ -14,30 +14,19 @@
 # specific language governing permissions and limitations
 # under the License.
 #
+# ====================================
+# ===== exaStamp POD potential   =====
+# ====================================
 
-# Pair potentials
-add_subdirectory(reaction_field)
-add_subdirectory(ljexp6rf)
-add_subdirectory(pair_potential_template)
-add_subdirectory(pair_potentials)
-add_subdirectory(multimat_pair_potential)
-
-# EAM potentials
-add_subdirectory(eam)
-add_subdirectory(eam_potential_template)
-add_subdirectory(eam_potentials)
-
-add_subdirectory(LCHBOP)
-add_subdirectory(meam)
-add_subdirectory(coul_dsf)
-add_subdirectory(coul_wolf)
-add_subdirectory(ewald)
-add_subdirectory(snap)
-add_subdirectory(snaplegacy)
-add_subdirectory(snaplmp)
-add_subdirectory(range_potential)
-add_subdirectory(n2p2)
-if(EXASTAMP_BUILD_POD)
-  add_subdirectory(mlip-pod)
+# BLAS and LAPACK are found in the top-level CMakeLists when EXASTAMP_BUILD_POD=ON.
+add_library(eapod STATIC eapod.cpp)
+target_include_directories(eapod PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_features(eapod PUBLIC cxx_std_17)
+set_target_properties(eapod PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_link_libraries(eapod PUBLIC BLAS::BLAS LAPACK::LAPACK)
+if(EAPOD_USE_OPENBLAS)
+  target_compile_definitions(eapod PUBLIC EAPOD_USE_OPENBLAS)
 endif()
 
+set(exaStampPOD_LINK_LIBRARIES exaStampPotential exanbParticleNeighbors eapod)
+onika_add_plugin(exaStampPOD ${CMAKE_CURRENT_SOURCE_DIR})
