@@ -76,6 +76,10 @@ AddRegressionTestSimple("${CMAKE_CURRENT_SOURCE_DIR}/potentials/eam")
 # Layout: potentials/eam/<testcase>/<variant>.msp
 AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/random")
 
+# Regression tests for REBO
+# Layout: potentials/eam/<testcase>/<variant>.msp
+AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/rebo")
+
 # Regression tests for rigid molecules
 # Layout: rigid_molecule/<testcase>/<variant>.msp
 AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/rigid_molecule/H2O")
