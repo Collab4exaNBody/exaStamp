@@ -1,0 +1,17 @@
+includes:
+  - baseline.yaml
+
+write_snapshot:
+  - write_xyz:
+      filename: "input_Ta.xyz"
+      fields: [ velocity ]
+  - write_dump_atoms:
+      filename: "input_Ta.mpiio"
+  - write_stamp_v3:
+      filename: "input_Ta_stamp_v3.mpiio"
+  - write_lmp:
+      filename: "input_Ta.lmp"
+      triclinic: true
+  - write_lmp:
+      filename: "input_Ta_no_velocities.lmp"
+      write_velocities: false

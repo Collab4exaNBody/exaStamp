@@ -1,0 +1,21 @@
+includes:
+  - baseline.yaml
+
++setup_system:
+  - particle_regions:
+      - REG1:
+          quadric:
+            shape: cylz
+            transform:
+              - scale: [ 30 ang, 30 ang, 30 ang ]
+              - translate: [ 66 ang, 66 ang, 66 ang ]
+  - resize_grid_cell_values
+  - init_ttm:
+      te_source:
+        constant: 1.0 eV
+
++compute_force:
+  - ionic_eletronic_heat_transfer:
+      g: 0.0
+      Ke: 1.0
+      splat_size: 2.1 ang

@@ -1,0 +1,8 @@
+includes:
+  - baseline_single_specy.yaml
+
+ljwolf_compute_force_symetric:
+  rcut: 12.5 ang
+  parameters: { rcut: 12.5 ang, coul_wolf: { alpha: 0.2 1/ang, rc: 12.5 ang }, lj_rcut: 11.0 ang, shiftlj: true, lj: { epsilon: 0.01 kcal/mol, sigma: 3.830864488 ang } }
+
+compute_force: ljwolf_compute_force_symetric

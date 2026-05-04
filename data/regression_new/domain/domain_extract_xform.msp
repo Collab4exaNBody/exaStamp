@@ -1,0 +1,7 @@
+includes:
+  - baseline.yaml
+
++setup_system:
+  - domain_extract_xform
+  - apply_xform
+  - print_domain
