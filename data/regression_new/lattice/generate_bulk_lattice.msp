@@ -1,0 +1,17 @@
+species:
+  - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+
+setup_system:
+  - domain:
+      cell_size: 6.4 ang
+  - bulk_lattice:
+      structure: BCC
+      types: [ Ta, Ta ]
+      size: [ 3.321 ang, 3.54 ang, 3.1 ang ]
+      repeat: [ 10, 10, 10 ]
+
+global:
+  max_iteration: 2
+  simulation_thermostate_screen_frequency: 1
+  rcut_inc: 1.0 ang
+  dt: 1.0e-3 ps

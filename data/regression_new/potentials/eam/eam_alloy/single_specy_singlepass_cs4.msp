@@ -1,0 +1,15 @@
+includes:
+  - baseline_single_specy.yaml
+  
+chunk_neighbors:
+  config:
+    chunk_size: 4
+    build_particle_offset: true
+
+eam_alloy_force:
+  rcut: 5.30 ang
+  parameters:
+    file: Ta1_Ravelo_2013.eam.alloy
+  
+compute_force:
+  - eam_alloy_force

@@ -1,0 +1,11 @@
+includes:
+  - baseline_multi_species.yaml
+
+zbl_multi_force:
+  rcut: 8. ang
+  common_parameters: { r1: 3.0 ang , rc: 4.0 ang }
+  parameters:
+    - { type_a: Zn , type_b: Zn , rcut: 6.10 ang , parameters: { r1: 5.03 ang, rc: 5.68 ang } }
+    - { type_a: Cu , type_b: Zn , rcut: 5.89 ang , parameters: { r1: 4.01 ang, rc: 4.93 ang } }
+
+compute_force: zbl_multi_force

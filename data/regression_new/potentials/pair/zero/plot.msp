@@ -1,0 +1,13 @@
+species:
+  - C: { mass: 12.011 Da , z: 6 , charge: 0.0 e- }
+
+zero_plot:
+  rcut: 8.0 ang
+  parameters: nop
+
+plot_graph:
+  - species
+  - zero_plot
+
+simulation: plot_graph
+

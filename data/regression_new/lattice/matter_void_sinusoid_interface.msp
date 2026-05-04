@@ -1,0 +1,69 @@
+compute_force: nop
+
+global:
+  max_iteration: 2
+  simulation_thermostate_screen_frequency: 1
+  rcut_inc: 1.0 ang
+  dt: 1.0e-3 ps
+
+# allow for domain replication using command line options
+# to replicate domain, use --set-replicate_domain-repeat [1,2,2]
+replicate_domain:
+  repeat: [ 1, 1, 1 ]
+
+setup_system:
+  #
+  ###################################
+  #  Common part needed both
+  #  for initial setup and restart
+  ###################################
+  #
+  - has_dump_file:
+      rebind: { result: has_dump_file }
+      body: [ { file_exists: { filename: lastLegacyDump } } ]
+  #
+  ################################
+  #   Initial system setup
+  # ##############################
+  - generate_initial_grid:
+      condition: not has_dump_file
+      body:
+        - message: "Initial run, building system ..."
+        #     *** Species configuration ***
+        - species:
+            verbose: false
+            species:
+              - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+        #     *** Domain configuration ***
+        - domain:
+            cell_size: 10.0 ang
+            grid_dims: [ 60, 30, 30 ]
+            bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 600 ang, 300 ang, 300 ang ] ]
+            xform: [ [ 1, 0, 0 ], [ 0, 1, 0 ], [ 0, 0, 1 ] ]
+            periodic: [ false, true, true ]
+            expandable: false
+        - init_rcb_grid
+        #     *** Generate lattice with geometrical constraints ***
+        - lattice:
+            structure: BCC
+            types: [ Ta, Ta ]
+            size: [ 3. ang, 3. ang, 3. ang ]
+            user_function:
+              wavefront:
+                plane: [ -1, 0, 0, 1500.0 ang ] # first 3 values are interface plane (Pi)'s normal vector (X,Y,Z) , last one is plane offset (position of origin relative to the plane).
+                wave: [ 0, 0.1, 0, 0 ] # wave plane (normal and offset). Oriented distance to the plane, Pw(r), is used to add a sinusoid function sin(P(r))*amplitude to the plane function above
+                amplitude: 30.0 ang # User function is F(r) = Pi(r)+sin(Pw(r))*amplitude , interface is implicit surface F(r)=0, atoms are placed everywhere where F(r)>=0
+        - gaussian_noise_v
+        - init_temperature:
+            T: 300 K
+
+  ###################################
+  #  Restart from dump file
+  ###################################
+  - read_from_last_dump:
+      condition: has_dump_file
+      body:
+        - message: "Restart from last dump ..."
+        - read_dump_atoms:
+            filename: lastLegacyDump
+  - replicate_domain
