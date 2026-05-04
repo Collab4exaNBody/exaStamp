@@ -1,0 +1,17 @@
+includes:
+  - baseline.yaml
+
+setup_system:
+  - domain:
+      cell_size: 6.6 ang
+      grid_dims: [ 10, 10, 10 ]
+      bounds: [ [ 0.0 um, 0.0 um, 0.0 um ], [ 66.00 ang, 66.00 ang, 66.00 ang ] ]
+      periodic: [ true, true, true ]
+      expandable: false
+      xform: [ [ 1, 0, 0 ], [ 0, 1, 0 ], [ 0, 0, 1 ] ]
+  - init_rcb_grid
+  - read_xyz_file_with_xform:
+      filename: "input_Ta.xyz"
+      #      bounds_mode: FILE
+      #      bounds_mode: COMPUTED
+      bounds_mode: DOMAIN

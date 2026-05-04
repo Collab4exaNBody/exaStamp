@@ -1,0 +1,9 @@
+includes:
+  - baseline_single_specy.yaml
+
+tabpair_compute_force_symetric:
+  parameters:
+    file: "lj_tab.yml"
+  rcut: 5.68 ang
+
+compute_force: tabpair_compute_force_symetric

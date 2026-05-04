@@ -1,0 +1,8 @@
+includes:
+  - baseline_single_specy.yaml
+
+relax_compute_force:
+  rcut: 7.0 ang
+  parameters: { r1: 4. ang, rc: 6. ang }
+
+compute_force: relax_compute_force

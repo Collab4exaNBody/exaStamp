@@ -1,0 +1,12 @@
+includes:
+  - baseline.yaml
+  
+domain:
+  cell_size: 5 ang
+  grid_dims: [ 6 , 6 , 6 ]
+  bounds: [ [ 0.0 um , 0.0 um , 0.0 um ] , [ 30 ang , 30 ang , 30 ang ] ]
+  periodic: [ false , false , false ]
+  mirror: [ X ]
+  expandable: false
+  xform: [ [ 1 , 0 , 0 ] , [ 0 , 1 , 0 ] , [ 0 , 0 , 1 ] ]
+
