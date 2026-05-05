@@ -65,7 +65,8 @@ verlet_lnvt:
     - load_balance_auto_tune_start
     - compute_force_prolog
     - compute_force
-    - langevin_thermostat: { T: 300. K, gamma: 0.1 ps^-1 }
+#    - langevin_thermostat: { T: 300. K, gamma: 0.1 ps^-1 }
+    - langevin_thermostat
     - compute_force_epilog
     - verlet_second_half
     - load_balance_auto_tune_end
@@ -87,7 +88,8 @@ verlet_bnvt:
     - compute_force_epilog
     - verlet_second_half
     - simulation_thermodynamic_state
-    - berendsen_thermostat: { T: 300. K, tau: 0.1 ps }    
+#    - berendsen_thermostat: { T: 300. K, tau: 0.1 ps }
+    - berendsen_thermostat
     - load_balance_auto_tune_end
 
 ######################################################################################################
