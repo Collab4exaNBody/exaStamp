@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 <p align="center">
-  <img src="doc/img/exaStamp-logo.png" alt="Example Stamp Logo" width="200"/>
+  <img src="docs/notes/img/exaStamp-logo.png" alt="Example Stamp Logo" width="200"/>
 </p>
 
 This is the **exaStamp** software package, a high performance molecular dynamics simulation code, originated at CEA/DAM. **exaStamp** stands for **S**imulations **T**emporelles **A**tomistiques et **M**oléculaires **P**arallèles à l'**exa**scale (in French) or **exa**scale **S**imulations of **T**ime-dependent **A**tomistic and **M**olecular systems in **P**arallel (in English). This software is distributed under the Apache 2.0 public license.
@@ -21,7 +21,7 @@ This is the **exaStamp** software package, a high performance molecular dynamics
 <div align="center">
   <table>
     <tr>
-      <td><img src="doc/qr_doc_exastamp.png" width="200"/></td>
+      <td><img src="docs/notes/qr_doc_exastamp.png" width="200"/></td>
       <td><a href="https://collab4exanbody.github.io/doc_exaStamp"> exaStamp Website</a><br><a href="https://github.com/Collab4exaNBody/doc_exaStamp.git"> exaStamp Documentation </a></td>
     </tr>
   </table>
