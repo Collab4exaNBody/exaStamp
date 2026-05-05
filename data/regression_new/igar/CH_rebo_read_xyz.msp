@@ -1,0 +1,94 @@
+configuration:
+  profiling:
+    summary: false
+  debug:
+    graph: true
+    graph_lod: 0
+
+species:
+  - C: { z: 12, mass: 12.0107 Da, charge: 0.0 e- }
+
+init_parameters:
+  - species
+  - rebo_init:
+      parameters:
+        potential_file: "CH.rebo"
+
+# Zero force and energy everywhere and in the ghosts as well
+compute_force_prolog:
+  - zero_force_energy: { ghost: true }
+
+langevin_thermostat:
+  Tstart: 5000. K
+  Tstop: 5000. K
+
+numerical_scheme: verlet_lnvt
+
+compute_force:
+  - rebo_bond_order
+  - ghost_update_opt: { opt_fields: [ "NijC", "NijH" ] }
+  - rebo_conjugation
+  - ghost_update_opt: { opt_fields: [ "Nconj" ] }
+  - rebo_force
+  #  - grid_stats
+  - igar_force: { energy_factor: 20000.0 }
+
+# Update forces of non-ghost particles from their ghosts before pushing total force to acceleration
+compute_force_epilog:
+  - update_force_from_ghost
+  - force_to_accel
+
+setup_system:
+  - domain:
+      cell_size: 12.4 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_xyz_file_with_xform:
+      filename: "liquid_carbon.xyz"
+      bounds_mode: FILE
+  - init_temperature_new:
+      T: 6000. K
+  - read_cell_values:
+      field_name: "igar_ep"
+      field_dim: 1
+      grid_subdiv: 16
+      file_name: "igar_test.vtk"
+  - write_grid_vtk:
+      fields: [ igar_epe ]
+      # adjust_spacing: true
+      # use_point_data: false
+      filename: "VTK/fileread"
+
+# write_qua_state:
+#   - write_grid_vtk:
+#       fields: [ igar_epe ]
+#       # adjust_spacing: true
+#       # use_point_data: false
+#       filename: "VTK/filereadqua"
+
+# +first_iteration:
+#   - write_qua_state
+
+write_snapshot:
+  - timestep_file: "Paraview/test_%09d"
+  - write_paraview:
+      fields: [ id, type, ep, force ]
+  - timestep_file: "VTK/test_%09d"
+  - write_grid_vtk
+
+# check_and_update_particles:
+#   - move_particles
+#   - trigger_load_balance
+#   - load_balancing_if_triggered
+#   - parallel_update_particles
+
+global:
+  max_iteration: 1000
+  simulation_thermostate_screen_frequency: 10
+  simulation_thermostate_file_frequency: 10
+  simulation_snapshot_frequency: -1
+  rcut_inc: 0.5 ang
+  dt: 0.125 fs
+  thermostate_file: "thermo_exastamp_rebo.txt"
+
+# enable_cell_values: true

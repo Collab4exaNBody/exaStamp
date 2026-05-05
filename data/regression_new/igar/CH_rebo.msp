@@ -1,0 +1,82 @@
+configuration:
+  profiling:
+    summary: false
+
+species:
+  - C: { z: 12, mass: 12.0107 Da, charge: 0.0 e- }
+
+init_parameters:
+  - species
+  - rebo_init:
+      parameters:
+        potential_file: "CH.rebo"
+
+# Zero force and energy everywhere and in the ghosts as well
+compute_force_prolog:
+  - zero_force_energy: { ghost: true }
+
+langevin_thermostat:
+  T: 6000. K
+
+numerical_scheme: verlet_lnvt
+
+compute_force:
+  - rebo_bond_order
+  - ghost_update_opt: { opt_fields: [ "NijC", "NijH" ] }
+  - rebo_conjugation
+  - ghost_update_opt: { opt_fields: [ "Nconj" ] }
+  - rebo_force
+#  - igar_force: { energy_factor: 0 }
+
+# Update forces of non-ghost particles from their ghosts before pushing total force to acceleration
+compute_force_epilog:
+  - update_force_from_ghost
+  - force_to_accel
+
+setup_system:
+  - domain:
+      cell_size: 3.1 ang
+      grid_dims: [ 20, 20, 20 ]
+      bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 62. ang, 62. ang, 62. ang ] ]
+      xform: [ [ 1, 0, 0 ], [ 0, 1, 0 ], [ 0, 0, 1 ] ]
+      periodic: [ true, true, true ]
+      expandable: false
+  - init_rcb_grid
+  - lattice:
+      structure: SC
+      types: [ C ]
+      size: [ 1.99 ang, 1.99 ang, 1.99 ang ]
+  - gaussian_noise_r: { sigma: 0.2 ang }
+  - gaussian_noise_v: { sigma: 50. m/s }
+  - read_cell_values:
+      field_name: "ep"
+      field_dim: 1
+      grid_subdiv: 5
+      file_name: "igar_test.vtk"
+  # - write_grid_vtk:
+  #     fields: [ ep ]
+  #     adjust_spacing: true
+  #     use_point_data: false
+  #     filename: "VTK/test"
+
+write_snapshot:
+  - timestep_file: "liquid_carbon_%09d.xyz"
+  - write_xyz:
+      fields: []
+  # - timestep_file: "Paraview/test_%09d"
+  # - write_paraview:
+  #     fields: [ id, type, ep ]
+
++first_iteration:
+  - grid_stats
+  - chunk_neighbors_stats
+  - memory_stats
+
+global:
+  max_iteration: 10000
+  simulation_thermostate_screen_frequency: 20
+  simulation_thermostate_file_frequency: -1
+  simulation_snapshot_frequency: 1000
+  rcut_inc: 0.5 ang
+  dt: 0.25 fs
+  thermostate_file: "thermo_exastamp_rebo.txt"
