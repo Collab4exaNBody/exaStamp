@@ -167,11 +167,11 @@ def populate_3d_array_with_sinusoid(Nx, Ny, Nz, val_min, val_max, n_periods, dir
 
 # Example usage
 if __name__ == "__main__":
-    Nx, Ny, Nz = 80, 80, 80
+    Nx, Ny, Nz = 256, 256, 256
     ordering = 'F'
 
     # Sinusoidal grid: 3 periods along x, values in [0.5, 2.0]
-    data_sin = populate_3d_array_with_sinusoid(Nx, Ny, Nz, val_min=0., val_max=1.0, n_periods=20, direction='z')
+    data_sin = populate_3d_array_with_sinusoid(Nx, Ny, Nz, val_min=0., val_max=1.0, n_periods=18, direction='z')
     write_vtk_structured_points(
 #        "sinusoid_%dx%dx%d_%sorder.vtk" % (Nx, Ny, Nz, ordering),
         "igar_test.vtk",
