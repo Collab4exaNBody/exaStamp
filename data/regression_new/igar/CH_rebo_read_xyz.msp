@@ -13,7 +13,7 @@ compute_force_prolog:
 
 langevin_thermostat:
   Tstart: 5000. K
-  Tstop: 3000. K
+  Tstop: 4000. K
   gamma: 0.1 ps^-1
 
 numerical_scheme: verlet_lnvt
@@ -24,7 +24,7 @@ compute_force:
   - rebo_conjugation
   - ghost_update_opt: { opt_fields: [ "Nconj" ] }
   - rebo_force
-  - igar_force: { energy_factor: 100000.0 }
+  - igar_force: { energy_factor: 20000.0 }
 
 # Update forces of non-ghost particles from their ghosts before pushing total force to acceleration
 compute_force_epilog:
@@ -67,10 +67,10 @@ write_snapshot:
   - write_grid_vtk_ghosts: { adjust_spacing: true, use_point_data: false, write_ghosts: true }
 
 global:
-  max_iteration: 5000
+  max_iteration: 10000
   simulation_thermostate_screen_frequency: 10
-  simulation_thermostate_file_frequency: 10
-  simulation_snapshot_frequency: 50
-  rcut_inc: 0.5 ang
+  simulation_thermostate_file_frequency: -1
+  simulation_snapshot_frequency: 100
+  rcut_inc: 1.0 ang
   dt: 0.5 fs
   thermostate_file: "thermo_exastamp_rebo.txt"
