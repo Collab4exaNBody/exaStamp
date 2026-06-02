@@ -3,7 +3,7 @@ includes:
 
 configuration:
   logging:
-    debug: true
+    debug: false
   debug:
     filter: [ ".*egl_particles_to_vertex_buffer" ]
 
@@ -272,7 +272,7 @@ write_restart: nop
 global:
   dt: 1.0e-3 ps
   max_iteration: 10000
-  simulation_thermostate_screen_frequency: 1
-  simulation_snapshot_frequency: 10
+  simulation_thermostate_screen_frequency: 10
+  simulation_snapshot_frequency: 1
   simulation_thermostate_file_frequency: -1
 
