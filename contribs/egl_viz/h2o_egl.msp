@@ -1,6 +1,12 @@
 includes:
   - config_rigid_molecule.msp
 
+configuration:
+  logging:
+    debug: true
+  debug:
+    filter: [ ".*egl_particles_to_vertex_buffer" ]
+
 +update_particles_full:
   - egl_particles_noghost_elements: { elements: "noghost_atoms" }
   
@@ -13,15 +19,12 @@ visualization_init:
         GL_VERTEX_SHADER: |
           #version 460 core
           layout (location = 0) in vec4 aPos;
-          layout (location = 1) in vec3 aVel;
-          layout (location = 2) in vec3 aForce;
-          //out float vVelocityNorm;
-          //out float vForceNorm;
+          layout (location = 1) in vec4 aQuat;
+          out vec4 vQuat;
           void main()
           {
             gl_Position = aPos;
-            //vForceNorm = sqrt(dot(aForce,aForce));
-            //vVelocityNorm = sqrt(dot(aVel,aVel));
+            vQuat = aQuat;
           }
 
         GL_GEOMETRY_SHADER: |
@@ -32,27 +35,63 @@ visualization_init:
           #include <quadrics/shape>
           #include <color/scalar_color_map>
           layout (points) in;
-          layout (triangle_strip, max_vertices=CVH_TRIANGLE_STRIP_MAX_VERTICES) out;
-          //in float vVelocityNorm[];
-          //in float vForceNorm[];
+          layout (triangle_strip, max_vertices=5*CVH_TRIANGLE_STRIP_MAX_VERTICES) out;
+          in vec4 vQuat[];
           out vec4 fDiffuseColor;
           out mat4 fQuadricsMatrix;
           out mat4 fModelViewVarianceInverse;
-          void main()
+          void generate_atom(mat4 mvp, vec4 pos, float radius, vec3 color)
           {
-            vec4 vPos = gl_in[0].gl_Position;
-            fDiffuseColor = vec4(1,1,1,1); //scalar_pv_colormap( vForceNorm[0], 0.0, 5.e2 );
-            mat4 mvp = projection[0] * modelview[0];
-            mat4 T = quadrics_anisotropic_variance_matrix( vPos , 0.1 );
+            mat4 T = quadrics_anisotropic_variance_matrix( pos , radius );
             mat4 D = quadrics_sphere_matrix();
             mat4 Ti = inverse( T );
             mat4 Tit = transpose( Ti );
             mat4 modelviewInverse = modelview[1];
             mat4 modelviewInverseTranspose = transpose( modelviewInverse );
+            fDiffuseColor = vec4(color,1); //scalar_pv_colormap( vForceNorm[0], 0.0, 5.e2 );
             fModelViewVarianceInverse = Ti * modelviewInverse;
             fQuadricsMatrix = modelviewInverseTranspose * Tit * D * Ti * modelviewInverse;
             ConvexHull2D hull = quadrics_2D_convex_hull( mvp, T );
-            cvh_draw_triangles( hull );
+            cvh_draw_triangles( hull );            
+          }
+          void generate_bond(mat4 mvp, vec4 p1, vec4 p2, float radius, vec3 color)
+          {
+            vec4 center = (p1+p2)*0.5;
+            vec3 direction = p2.xyz - p1.xyz;
+            float length = sqrt( dot(direction,direction) );
+            mat4 T = quadrics_oriented_variance_matrix( center , direction , length , radius );
+            mat4 D = quadrics_zcylinder_matrix();
+            mat4 Ti = inverse( T );
+            mat4 Tit = transpose( Ti );
+            mat4 modelviewInverse = modelview[1];
+            mat4 modelviewInverseTranspose = transpose( modelviewInverse );
+            fDiffuseColor = vec4(color,1); //scalar_pv_colormap( vForceNorm[0], 0.0, 5.e2 );
+            fModelViewVarianceInverse = Ti * modelviewInverse;
+            fQuadricsMatrix = modelviewInverseTranspose * Tit * D * Ti * modelviewInverse;
+            ConvexHull2D hull = quadrics_2D_convex_hull( mvp, T );
+            cvh_draw_triangles( hull );            
+          }
+          mat3 quaternion_to_matrix(vec4 q)
+          {
+            float qx=q.x, qy=q.y, qz=q.z, qw=q.w;
+            return mat3(
+              vec3( 1.0f - 2.0f*qy*qy - 2.0f*qz*qz , 2.0f*qx*qy - 2.0f*qz*qw , 2.0f*qx*qz + 2.0f*qy*qw )
+            , vec3( 2.0f*qx*qy + 2.0f*qz*qw , 1.0f - 2.0f*qx*qx - 2.0f*qz*qz , 2.0f*qy*qz - 2.0f*qx*qw )
+            , vec3( 2.0f*qx*qz - 2.0f*qy*qw, 2.0f*qy*qz + 2.0f*qx*qw, 1.0f - 2.0f*qx*qx - 2.0f*qy*qy ) );
+          }
+          void main()
+          {
+            vec4 vPos = gl_in[0].gl_Position;
+            mat4 mvp = projection[0] * modelview[0];
+            mat3 molmat = quaternion_to_matrix( vQuat[0] );
+            vec3 o_pos = vec3(0,0,0);
+            vec3 h1_pos = molmat * vec3(0.75695033,0.58588228,0);
+            vec3 h2_pos = molmat * vec3(-0.75695033,0.58588228,0);
+            generate_atom(mvp,vPos + vec4(o_pos,0)  , 0.3 , vec3(0.9,0.2,0.2) );
+            generate_atom(mvp,vPos + vec4(h1_pos,0) , 0.2 , vec3(0.5,0.5,0.5) );
+            generate_atom(mvp,vPos + vec4(h2_pos,0) , 0.2 , vec3(0.5,0.5,0.5) );
+            generate_bond(mvp, vPos + vec4(o_pos,0) , vPos + vec4(h1_pos,0) , 0.1 , vec3(1,1,1) );
+            generate_bond(mvp, vPos + vec4(o_pos,0) , vPos + vec4(h2_pos,0) , 0.1 , vec3(1,1,1) );
           }
 
         GL_FRAGMENT_SHADER: |
@@ -122,7 +161,7 @@ visualization_init:
 
 
 write_snapshot:
-  rebind: { sim_continue: compute_loop_continue }
+  rebind: { sim_continue: md_loop_continue }
   body:
     - egl_handle_events: { surface: "onika-egl-window" , camera: "camera" }
     - egl_start_frame: { surface: "onika-egl-window" , camera: "camera" }
@@ -130,6 +169,7 @@ write_snapshot:
         vertex_buffer: "particles"
         vertex_attribs:
           position: 0
+          orient: 1
     - egl_draw: { vertex_buffer: "particles" , shader_program: "atom_quadrics" , elements: "noghost_atoms" , primitive: GL_POINTS }
     - egl_end_frame: { surface: "onika-egl-window" }
 
