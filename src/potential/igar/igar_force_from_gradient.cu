@@ -25,30 +25,53 @@ under the License.
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/grid_cell_particles/grid_cell_values.h>
 
-#include "force_from_grid.h"
+#include "igar_force_from_gradient.h"
 
-namespace exanb
+namespace exaStamp
 {
 
+  using namespace exanb;
+
   template<class GridT, class = AssertGridHasFields<GridT,field::_rx,field::_ry,field::_rz,field::_fx,field::_fy,field::_fz> >
-  class ForceFromGradientGrid : public OperatorNode
+  class IgarForceFromGradient : public OperatorNode
   {
     ADD_SLOT( GridT          , grid             , INPUT_OUTPUT , REQUIRED );
     ADD_SLOT( GridCellValues , grid_cell_values , INPUT        , REQUIRED );
-    ADD_SLOT( double         , force_factor     , INPUT        , 1.0, DocString{"Prefactor applied to -igar_dEdx, -igar_dEdy and -igar_dEdz before adding them to particle forces."} );
+    ADD_SLOT( double         , energy_factor    , INPUT        , 1.0, DocString{"Prefactor applied to -igar_dEdx, -igar_dEdy and -igar_dEdz before adding them to particle forces."} );
 
   public:
 
     inline std::string documentation() const override final
     {
       return R"EOF(
-Adds a force to particles from the grid-cell-value gradient fields igar_dEdx,
-igar_dEdy and igar_dEdz. For each particle, the operator locates the sub-cell
-containing the particle and adds:
+Applies precomputed IGAR gradient fields to particles, accumulating forces
+and potential energy.
 
-  f += -force_factor * (igar_dEdx, igar_dEdy, igar_dEdz)
+Requires igar_compute_gradient to have been called beforehand to populate
+igar_dEdx, igar_dEdy and igar_dEdz in grid_cell_values.
 
-The default force_factor is 1, corresponding to f = -grad(E).
+For each particle, the operator locates its subcell and applies:
+  f += -energy_factor * (igar_dEdx, igar_dEdy, igar_dEdz)
+using nearest-subcell assignment for forces. The potential energy ep is
+accumulated using trilinear interpolation of igar_ep between the 8
+surrounding subcell centers.
+
+Pair with igar_compute_gradient placed in setup_system for best performance
+when igar_ep is a static field.
+
+Example (LJ_igar.msp — gradient precomputed once at setup):
+
+  setup_system:
+    - read_cell_values:
+        field_name: "igar_ep"
+        field_dim: 1
+        grid_subdiv: 64
+        file_name: "igar_test.vtk"
+    - igar_compute_gradient
+
+  compute_force:
+    - lj_compute_force
+    - igar_force_from_gradient: { energy_factor: 20000.0 }
 )EOF";
     }
 
@@ -58,15 +81,15 @@ The default force_factor is 1, corresponding to f = -grad(E).
           ldbg
         , *grid
         , *grid_cell_values
-        , *force_factor );
+        , *energy_factor );
     }
   };
 
-  template<class GridT> using ForceFromGradientGridTmpl = ForceFromGradientGrid<GridT>;
+  template<class GridT> using IgarForceFromGradientTmpl = IgarForceFromGradient<GridT>;
 
-  ONIKA_AUTORUN_INIT(force_from_gradient_grid)
+  ONIKA_AUTORUN_INIT(igar_force_from_gradient)
   {
-    OperatorNodeFactory::instance()->register_factory( "force_from_gradient_grid", make_grid_variant_operator<ForceFromGradientGridTmpl> );
+    OperatorNodeFactory::instance()->register_factory( "igar_force_from_gradient", make_grid_variant_operator<IgarForceFromGradientTmpl> );
   }
 
 }
