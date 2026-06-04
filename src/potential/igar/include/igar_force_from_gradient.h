@@ -66,25 +66,32 @@ namespace exanb
         ldbg << "get_particle_force_from_gradient_grid: no '" << e_name << "' in grid_cell_values, skip" << std::endl;
         return;
       }
-      const GridCellField& e_field = grid_cell_values.field(e_name);
       const GridCellField& dEdx_field = grid_cell_values.field(dEdx_name);
-      const GridCellField& dEdy_field = grid_cell_values.field(dEdy_name);
-      const GridCellField& dEdz_field = grid_cell_values.field(dEdz_name);
       const ssize_t subdiv = static_cast<ssize_t>( dEdx_field.m_subdiv );
-      const ssize_t subcell_count = subdiv * subdiv * subdiv;
       assert( subdiv > 0 );
-      assert( dEdy_field.m_subdiv == static_cast<size_t>(subdiv) );
-      assert( dEdz_field.m_subdiv == static_cast<size_t>(subdiv) );
-      assert( dEdx_field.m_components >= static_cast<size_t>(subcell_count) );
-      assert( dEdy_field.m_components >= static_cast<size_t>(subcell_count) );
-      assert( dEdz_field.m_components >= static_cast<size_t>(subcell_count) );
-      assert( dEdx_field.m_components % static_cast<size_t>(subcell_count) == 0 );
-      assert( dEdy_field.m_components % static_cast<size_t>(subcell_count) == 0 );
-      assert( dEdz_field.m_components % static_cast<size_t>(subcell_count) == 0 );
-      const size_t e_comps = e_field.m_components / static_cast<size_t>(subcell_count);
-      const size_t dEdx_comps = dEdx_field.m_components / static_cast<size_t>(subcell_count);
-      const size_t dEdy_comps = dEdy_field.m_components / static_cast<size_t>(subcell_count);
-      const size_t dEdz_comps = dEdz_field.m_components / static_cast<size_t>(subcell_count);
+#     ifndef NDEBUG
+      {
+        const GridCellField& e_field    = grid_cell_values.field(e_name);
+        const GridCellField& dEdy_field = grid_cell_values.field(dEdy_name);
+        const GridCellField& dEdz_field = grid_cell_values.field(dEdz_name);
+        const ssize_t subcell_count = subdiv * subdiv * subdiv;
+        assert( e_field.m_subdiv    == static_cast<size_t>(subdiv) );
+        assert( dEdy_field.m_subdiv == static_cast<size_t>(subdiv) );
+        assert( dEdz_field.m_subdiv == static_cast<size_t>(subdiv) );
+        assert( e_field.m_components    >= static_cast<size_t>(subcell_count) );
+        assert( dEdx_field.m_components >= static_cast<size_t>(subcell_count) );
+        assert( dEdy_field.m_components >= static_cast<size_t>(subcell_count) );
+        assert( dEdz_field.m_components >= static_cast<size_t>(subcell_count) );
+        assert( e_field.m_components    % static_cast<size_t>(subcell_count) == 0 );
+        assert( dEdx_field.m_components % static_cast<size_t>(subcell_count) == 0 );
+        assert( dEdy_field.m_components % static_cast<size_t>(subcell_count) == 0 );
+        assert( dEdz_field.m_components % static_cast<size_t>(subcell_count) == 0 );
+        assert( e_field.m_components    / static_cast<size_t>(subcell_count) == 1 );
+        assert( dEdx_field.m_components / static_cast<size_t>(subcell_count) == 1 );
+        assert( dEdy_field.m_components / static_cast<size_t>(subcell_count) == 1 );
+        assert( dEdz_field.m_components / static_cast<size_t>(subcell_count) == 1 );
+      }
+#     endif
 
       const IJK dims = grid.dimension();
       const ssize_t gl = grid.ghost_layers();
@@ -140,9 +147,9 @@ namespace exanb
               const ssize_t center_cell_i = grid_ijk_to_index(dims, center_cell_loc);
               const ssize_t center_subcell_i = grid_ijk_to_index(IJK{subdiv,subdiv,subdiv}, center_subcell_loc);
 
-              fx[p] += -energy_factor * dEdx_ptr[center_cell_i * dEdx_stride + center_subcell_i * dEdx_comps];
-              fy[p] += -energy_factor * dEdy_ptr[center_cell_i * dEdy_stride + center_subcell_i * dEdy_comps];
-              fz[p] += -energy_factor * dEdz_ptr[center_cell_i * dEdz_stride + center_subcell_i * dEdz_comps];
+              fx[p] += -energy_factor * dEdx_ptr[center_cell_i * dEdx_stride + center_subcell_i];
+              fy[p] += -energy_factor * dEdy_ptr[center_cell_i * dEdy_stride + center_subcell_i];
+              fz[p] += -energy_factor * dEdz_ptr[center_cell_i * dEdz_stride + center_subcell_i];
 
               // Trilinear interpolation of ep between the 8 surrounding subcell centers.
               // u,v,w ∈ [-0.5, 0.5]: normalized offset from the particle's subcell center.
@@ -170,7 +177,7 @@ namespace exanb
                   const double wx = (bi == 0) ? (1.0 - tu) : tu;
                   const double wy = (bj == 0) ? (1.0 - tv) : tv;
                   const double wz = (bk == 0) ? (1.0 - tw) : tw;
-                  ep_interp += wx * wy * wz * e_ptr[nbh_cell_i * e_stride + nbh_subcell_i * e_comps];
+                  ep_interp += wx * wy * wz * e_ptr[nbh_cell_i * e_stride + nbh_subcell_i];
                 }
               }
               e[p] += ep_interp;

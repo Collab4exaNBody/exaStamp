@@ -22,27 +22,16 @@ under the License.
 #include <exanb/grid_cell_particles/grid_cell_values.h>
 
 #include <exaStamp/compute/physics_functors.h>
-
 #include <exanb/core/grid_particle_field_accessor.h>
-
-#include <exaStamp/compute/physics_functors.h>
 #include <exanb/compute/field_combiners.h>
 #include <exaStamp/compute/field_combiners.h>
-#include <exaStamp/particle_species/particle_specie.h>
-
-//#include <exanb/analytics/particle_cell_projection.h>
 
 #include "igar_force_interp.h"
-
-#include <memory>
-#include <vector>
-#include <mpi.h>
 
 namespace exaStamp
 {
 
   using namespace exanb;
-  using onika::memory::DEFAULT_ALIGNMENT;
 
   template<
     class GridT,
@@ -50,8 +39,6 @@ namespace exaStamp
     >
   class IgarForceInterp : public OperatorNode
   {
-    ADD_SLOT( MPI_Comm                  , mpi                 , INPUT        , REQUIRED );
-    ADD_SLOT( ParticleSpecies           , species             , INPUT        , REQUIRED );
     ADD_SLOT( GridT                     , grid                , INPUT_OUTPUT );
     ADD_SLOT( GridCellValues            , grid_cell_values    , INPUT );
     ADD_SLOT( double                    , energy_factor       , INPUT        , REQUIRED );
@@ -97,16 +84,9 @@ Example (REBO + IGAR, CH_rebo_read_xyz.msp):
     inline void execute() override final
     {
       using namespace ParticleCellProjectionTools;
-
       if( grid->number_of_cells() == 0 ) return;
-        
-      int rank=0;
-      MPI_Comm_rank(*mpi, &rank);
-
       ldbg << "Igar force from grid_cell_values" << std::endl;
-      auto particle_fields = make_field_tuple_from_field_set( grid->field_set );
-      get_particle_force_from_grid( ldbg, *grid, *grid_cell_values, particle_fields, *energy_factor );      
-
+      get_particle_force_from_grid( ldbg, *grid, *grid_cell_values, *energy_factor );
     }
 
   };

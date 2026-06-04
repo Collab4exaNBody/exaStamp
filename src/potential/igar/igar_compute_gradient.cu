@@ -22,27 +22,16 @@ under the License.
 #include <exanb/grid_cell_particles/grid_cell_values.h>
 
 #include <exaStamp/compute/physics_functors.h>
-
 #include <exanb/core/grid_particle_field_accessor.h>
-
-#include <exaStamp/compute/physics_functors.h>
 #include <exanb/compute/field_combiners.h>
 #include <exaStamp/compute/field_combiners.h>
-#include <exaStamp/particle_species/particle_specie.h>
-
-//#include <exanb/analytics/particle_cell_projection.h>
 
 #include "igar_compute_gradient.h"
-
-#include <memory>
-#include <vector>
-#include <mpi.h>
 
 namespace exaStamp
 {
 
   using namespace exanb;
-  using onika::memory::DEFAULT_ALIGNMENT;
 
   template<
     class GridT,
@@ -50,8 +39,6 @@ namespace exaStamp
     >
   class IgarComputeGradient : public OperatorNode
   {
-    ADD_SLOT( MPI_Comm                  , mpi                 , INPUT        , REQUIRED );
-    ADD_SLOT( ParticleSpecies           , species             , INPUT        , REQUIRED );
     ADD_SLOT( GridT                     , grid                , INPUT_OUTPUT );
     ADD_SLOT( GridCellValues            , grid_cell_values    , INPUT_OUTPUT );
 
@@ -93,14 +80,9 @@ Example (LJ_igar.msp — gradient precomputed once at setup):
     inline void execute() override final
     {
       using namespace ParticleCellProjectionTools;
-
       if( grid->number_of_cells() == 0 ) return;
-        
-      int rank=0;
-      MPI_Comm_rank(*mpi, &rank);
-
       ldbg << "Igar gradient from grid_cell_values" << std::endl;
-      compute_energy_gradient( ldbg, *grid, *grid_cell_values );      
+      compute_energy_gradient( ldbg, *grid, *grid_cell_values );
       ldbg << "DONE." << std::endl;
     }
 

@@ -35,12 +35,11 @@ namespace exanb
     // Per-particle triquadratic Lagrange interpolation of igar_ep.
     // Builds a 3x3x3 subcell stencil around each particle and evaluates
     // both energy and its gradient analytically (C1 continuous).
-    template<class LDBGT, class GridT, class FieldTupleT>
+    template<class LDBGT, class GridT>
     inline void get_particle_force_from_grid(
         LDBGT& ldbg
       , GridT& grid
       , GridCellValues& grid_cell_values
-      , [[maybe_unused]] const FieldTupleT& particle_fields
       , double energy_factor )
     {
       static constexpr const char* energy_field_name = "igar_ep";
@@ -113,7 +112,7 @@ namespace exanb
               {
                 const ssize_t nbh_cell_i    = grid_ijk_to_index(dims, nbh_cell_loc);
                 const ssize_t nbh_subcell_i = grid_ijk_to_index(IJK{subdiv,subdiv,subdiv}, nbh_subcell_loc);
-                stencil[ck+1][cj+1][ci+1]  = energy_factor * energy_ptr[ nbh_cell_i * energy_stride + nbh_subcell_i ];
+                stencil[ck+1][cj+1][ci+1]  = energy_ptr[ nbh_cell_i * energy_stride + nbh_subcell_i ];
               }
             }
 
@@ -139,10 +138,10 @@ namespace exanb
               dEdz      += Lu[i]  * Lv[j]  * dLw[k] * e;
             }
 
-            ep[p] = ep_interp;
-            fx[p] += -dEdx * inv_subcell_size;
-            fy[p] += -dEdy * inv_subcell_size;
-            fz[p] += -dEdz * inv_subcell_size;
+            ep[p] += energy_factor * ep_interp;
+            fx[p] += -energy_factor * dEdx * inv_subcell_size;
+            fy[p] += -energy_factor * dEdy * inv_subcell_size;
+            fz[p] += -energy_factor * dEdz * inv_subcell_size;
           }
         }
         GRID_OMP_FOR_END;
