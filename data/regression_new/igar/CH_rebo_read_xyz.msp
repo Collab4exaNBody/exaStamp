@@ -7,7 +7,6 @@ init_parameters:
       parameters:
         potential_file: "CH.rebo"
 
-# Zero force and energy everywhere and in the ghosts as well
 compute_force_prolog:
   - zero_force_energy: { ghost: true }
 
@@ -24,9 +23,11 @@ compute_force:
   - rebo_conjugation
   - ghost_update_opt: { opt_fields: [ "Nconj" ] }
   - rebo_force
-  - igar_force: { energy_factor: 20000.0 }
+  - igar_force_interp: { energy_factor: 50000.0 }
 
-# Update forces of non-ghost particles from their ghosts before pushing total force to acceleration
+# Update forces of non-ghost particles from their ghosts
+# before pushing total force to acceleration
+# Do not upate the gcv that needs to stay constant
 compute_force_epilog:
   - update_force_from_ghost_no_gcv
   - force_to_accel
@@ -50,27 +51,20 @@ setup_system:
       field_dim: 1
       grid_subdiv: 64
       file_name: "igar_test.vtk"
-  - write_grid_vtk_ghosts:
-      {
-        adjust_spacing: true,
-        use_point_data: false,
-        filename: "VTK/initfile",
-        write_ghosts: true,
-      }
+# Uncomment for 2nd method      
+#  - igar_compute_gradient
 
 write_snapshot:
   - timestep_file: "Paraview/test_%09d"
   - write_paraview:
       fields: [ id, type, ep, processor_id ]
   - timestep_file: "VTK/test_%09d"
-  #  - ghost_update_all
-  - write_grid_vtk_ghosts: { adjust_spacing: true, use_point_data: false, write_ghosts: true }
 
 global:
-  max_iteration: 10000
+  max_iteration: 10
   simulation_thermostate_screen_frequency: 10
   simulation_thermostate_file_frequency: -1
-  simulation_snapshot_frequency: 100
+  simulation_snapshot_frequency: 50
   rcut_inc: 1.0 ang
   dt: 0.5 fs
   thermostate_file: "thermo_exastamp_rebo.txt"

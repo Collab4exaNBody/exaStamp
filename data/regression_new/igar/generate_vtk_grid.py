@@ -167,7 +167,7 @@ def populate_3d_array_with_sinusoid(Nx, Ny, Nz, val_min, val_max, n_periods, dir
 
 # Example usage
 if __name__ == "__main__":
-    Nx, Ny, Nz = 256, 256, 256
+    Nx, Ny, Nz = 256,256,256
     ordering = 'F'
 
     # Sinusoidal grid: 3 periods along x, values in [0.5, 2.0]

@@ -1,3 +1,7 @@
+configuration:
+  profiling:
+    summary: true
+    
 species:
   - Ar: { mass: 39.948 Da, z: 18, charge: 0.0 e- }
 
@@ -12,30 +16,28 @@ langevin_thermostat:
 
 numerical_scheme: verlet_lnvt
 
-compute_force:
-  - lj_compute_force
-  # - igar_force: { energy_factor: 50000.0 }
-  - igar_gradient
-  - force_from_gradient_grid: { force_factor: 50000.0 }
+compute_force_prolog:
+  - zero_force_energy: { ghost: true }
+
+# 1st solution : on-the-fly triquadratic Lagrange interpolation
+compute_force_A:
+  - igar_force_interp: { energy_factor: 20000.0 }
+
+# 2nd solution : precomputed finite-difference gradient, then per-particle assignment (slower)
+compute_force_B:
+  - igar_force_from_gradient: { energy_factor: 20000.0 }
+
+compute_force: compute_force_A
 
 check_and_update_particles:
   - trigger_move_particles
   - update_particles_full_body
 
-#ghost_update_all_impl: ghost_update_all_no_fv_no_gcv
-
+compute_force_epilog:
+  - update_force_from_ghost_no_gcv
+  - force_to_accel
+  
 setup_system:
-  - particle_regions:
-      - BOX:
-          bounds: [ [ -1000 ang, -1000 ang, -1000 ang ], [ 40 ang, 40 ang, 40 ang ] ]
-  # - particle_types:
-  #     particle_type_map: { Ar: 0 }
-  # - particle_type_add_properties:
-  #     Ar: { mass: 39.948 Da, z: 18, charge: 0.0 e- }
-  # - particle_types:
-  #     particle_type_map: { Ar: 0 }
-  # - particle_type_add_properties:
-  #     Ar: { mass: 39.948 Da, z: 18, charge: 0.0 e- }
   - domain:
       cell_size: 15.5 ang
       grid_dims: [ 4, 4, 4 ]
@@ -44,56 +46,33 @@ setup_system:
       periodic: [ true, true, true ]
       expandable: false
   - init_rcb_grid
-  # - domain:
-  #     cell_size: 5 ang
-  #     grid_dims: [ 8, 8, 8 ]
-  #     bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 40. ang, 40. ang, 40. ang ] ]
-  #     xform: [ [ 1, 0, 0 ], [ 0, 1, 0 ], [ 0, 0, 1 ] ]
-  #     periodic: [ true, true, true ]
-  #     expandable: false
-  # - init_rcb_grid
   - lattice:
       structure: SC
       types: [ Ar ]
-      size: [ 3.1 ang, 3.1 ang, 3.1 ang ]
-  #  - gaussian_noise_r: { sigma: 0.1 ang }
-  #  - gaussian_noise_v: { sigma: 50. m/s }
-  # - lattice:
-  #     structure: SC
-  #     types: [ Ar ]
-  #     size: [ 1.99 ang, 1.99 ang, 1.99 ang ]
-  # - gaussian_noise_r: { sigma: 0.2 ang }
+      size: [ 2.1 ang, 2.1 ang, 2.1 ang ]
+  - gaussian_noise_r:
+      sigma: 0.2 ang
   - init_temperature_new:
       T: 2000. K
   - read_cell_values:
       field_name: "igar_ep"
       field_dim: 1
-      grid_subdiv: 32
+      grid_subdiv: 64
       file_name: "igar_test.vtk"
-  - write_grid_vtk_ghosts:
-      {
-        adjust_spacing: true,
-        use_point_data: false,
-        filename: "VTK/initfile",
-        write_ghosts: true,
-      }
-
-+init_epilog:
-  - grid_stats
+# Uncomment for 2nd method      
+#  - igar_compute_gradient
 
 write_snapshot:
   - timestep_file: "Paraview/test_%09d"
   - write_paraview:
       fields: [ id, type, ep, processor_id ]
   - timestep_file: "VTK/test_%09d"
-  #  - ghost_update_all
-  - write_grid_vtk_ghosts: { adjust_spacing: true, use_point_data: false, write_ghosts: true }
 
 global:
-  max_iteration: 10000
+  max_iteration: 10
   simulation_thermostate_screen_frequency: 50
-  simulation_thermostate_file_frequency: 50
+  simulation_thermostate_file_frequency: -1
   simulation_snapshot_frequency: 100
-  rcut_inc: 2.0 ang
+  rcut_inc: 1.0 ang
   dt: 0.5 fs
-  thermostate_file: "thermo_exastamp_rebo.txt"
+  thermostate_file: "thermo_exastamp_lj.txt"
