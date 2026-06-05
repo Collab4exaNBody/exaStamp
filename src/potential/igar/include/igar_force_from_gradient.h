@@ -22,6 +22,7 @@ under the License.
 #include <exanb/grid_cell_particles/grid_cell_values.h>
 #include <exanb/grid_cell_particles/grid_cell_values_utils.h>
 #include <exanb/core/grid_particle_field_accessor.h>
+#include <exanb/compute/compute_cell_particles.h>
 #include <onika/math/quaternion_operators.h>
 #include <onika/cuda/cuda.h>
 
@@ -29,41 +30,49 @@ namespace exaStamp
 {
   using namespace exanb;
 
-  template<class CellsT, class FieldT>
-  struct InterpolateCellScalarFieldToParticle
+  struct CellScalarForceToParticleFunctor
   {
-    Vec3d grid_origin:
-    IJK grid_dims;
+    Vec3d grid_origin = {0.,0.,0.};
+    IJK grid_offset = {0,0,0};
+    IJK grid_dims = {0,0,0};
+    ssize_t subdiv = 0;
+
     double cell_size = 0.0;
     double subcell_size = 0.0;
     double inv_subcell_size = 0.0;
 
+    double energy_factor = 0.0;
+
     const double* __restrict__ e_ptr = nullptr;
-    const double* __restrict__ dEdx_ptr = nullptr
+    const double* __restrict__ dEdx_ptr = nullptr;
     const double* __restrict__ dEdy_ptr = nullptr;
     const double* __restrict__ dEdz_ptr = nullptr;
-    const size_t e_stride = 0;
-    const size_t dEdx_stride = 0;
-    const size_t dEdy_stride = 0;
-    const size_t dEdz_stride = 0;
+    
+    size_t e_stride = 0;
+    size_t dEdx_stride = 0;
+    size_t dEdy_stride = 0;
+    size_t dEdz_stride = 0;
 
     ONIKA_HOST_DEVICE_FUNC inline void operator () ( size_t cell_i, size_t p_i, double rx, double ry, double rz, double& fx, double& fy, double fz, double& en ) const
     {
-      cell_origin = cell_i to cell origin ...
+      using GridCellValuesUtils::localize_subcell;
+      using GridCellValuesUtils::subcell_neighbor;
+      const IJK cell_loc = grid_index_to_ijk(grid_dims,cell_i);
+      const Vec3d cell_origin = grid_origin + ( ( grid_offset + cell_loc ) * cell_size );      
       const Vec3d rco = { rx - cell_origin.x, ry - cell_origin.y, rz - cell_origin.z };
 
       IJK center_cell_loc, center_subcell_loc;
       localize_subcell(rco, cell_size, subcell_size, subdiv, center_cell_loc, center_subcell_loc);
       center_cell_loc = center_cell_loc + cell_loc;
 
-      if( grid.contains(center_cell_loc) )
+      if( grid_contains(grid_dims, center_cell_loc) )
       {
-        const ssize_t center_cell_i = grid_ijk_to_index(dims, center_cell_loc);
+        const ssize_t center_cell_i = grid_ijk_to_index(grid_dims, center_cell_loc);
         const ssize_t center_subcell_i = grid_ijk_to_index(IJK{subdiv,subdiv,subdiv}, center_subcell_loc);
 
-        fx[p] += -energy_factor * dEdx_ptr[center_cell_i * dEdx_stride + center_subcell_i];
-        fy[p] += -energy_factor * dEdy_ptr[center_cell_i * dEdy_stride + center_subcell_i];
-        fz[p] += -energy_factor * dEdz_ptr[center_cell_i * dEdz_stride + center_subcell_i];
+        fx += -energy_factor * dEdx_ptr[center_cell_i * dEdx_stride + center_subcell_i];
+        fy += -energy_factor * dEdy_ptr[center_cell_i * dEdy_stride + center_subcell_i];
+        fz += -energy_factor * dEdz_ptr[center_cell_i * dEdz_stride + center_subcell_i];
 
         // Trilinear interpolation of ep between the 8 surrounding subcell centers.
         // u,v,w ∈ [-0.5, 0.5]: normalized offset from the particle's subcell center.
@@ -84,9 +93,9 @@ namespace exaStamp
           IJK nbh_cell_loc, nbh_subcell_loc;
           subcell_neighbor(center_cell_loc, center_subcell_loc, subdiv,
                            IJK{bi*di, bj*dj, bk*dk}, nbh_cell_loc, nbh_subcell_loc);
-          if( grid.contains(nbh_cell_loc) )
+          if( grid_contains(grid_dims, nbh_cell_loc) )
           {
-            const ssize_t nbh_cell_i    = grid_ijk_to_index(dims, nbh_cell_loc);
+            const ssize_t nbh_cell_i    = grid_ijk_to_index(grid_dims, nbh_cell_loc);
             const ssize_t nbh_subcell_i = grid_ijk_to_index(IJK{subdiv,subdiv,subdiv}, nbh_subcell_loc);
             const double wx = (bi == 0) ? (1.0 - tu) : tu;
             const double wy = (bj == 0) ? (1.0 - tv) : tv;
@@ -94,18 +103,16 @@ namespace exaStamp
             ep_interp += wx * wy * wz * e_ptr[nbh_cell_i * e_stride + nbh_subcell_i];
           }
         }
-        e[p] += ep_interp;
+        en += ep_interp;
       }
-
     }
-
   };
 
 }
 
 namespace exanb
 {
-  template<class CellsT, class FieldT> struct InterpolateCellScalarFieldToParticle< exanb::GLVertexAttribCopyFromParticles<CellsT,FieldT> >
+  template<> struct ComputeCellParticlesTraits< exaStamp::CellScalarForceToParticleFunctor >
   {
     static inline constexpr bool CudaCompatible = true;
   };
@@ -119,10 +126,11 @@ namespace exaStamp
 
     // Nearest-subcell lookup of precomputed igar_dEdx/y/z gradient fields.
     // Requires igar_compute_gradient to have been called first.
-    template<class LDBGT, class GridT>
+    template<class LDBGT, class GridT, class PECFuncT>
     inline void get_particle_force_from_gradient_grid(
         LDBGT& ldbg
       , GridT& grid
+      , const PECFuncT& parallel_execution_context
       , const GridCellValues& grid_cell_values
       , double energy_factor )
     {
@@ -203,6 +211,17 @@ namespace exaStamp
       ldbg << "get_particle_force_from_gradient_grid: apply force from igar_dEdx/igar_dEdy/igar_dEdz"
            << " subdiv=" << subdiv << " energy_factor=" << energy_factor << std::endl;
 
+      CellScalarForceToParticleFunctor func =
+        { grid.origin(), grid.offset(), grid.dimension()
+        , subdiv, cell_size, subcell_size, inv_subcell_size
+        , inv_subcell_size
+        , e_ptr, dEdx_ptr, dEdy_ptr, dEdz_ptr
+        , e_stride, dEdx_stride, dEdy_stride, dEdz_stride };
+
+      auto cp_fields = onika::make_flat_tuple( grid.field_accessor(field::rx), grid.field_accessor(field::ry), grid.field_accessor(field::rz)
+                                             , grid.field_accessor(field::fx), grid.field_accessor(field::fy), grid.field_accessor(field::fz), grid.field_accessor(field::ep) );
+      compute_cell_particles( grid , false , func , cp_fields , parallel_execution_context() );
+/*
 #     pragma omp parallel
       {
         GRID_OMP_FOR_BEGIN(dims_no_gl, _cell_flat_i, cell_loc_no_gl, schedule(static))
@@ -271,8 +290,8 @@ namespace exaStamp
         }
         GRID_OMP_FOR_END;
       }
+*/
     }
-
   } // ParticleCellProjectionTools
 
 } // exanb

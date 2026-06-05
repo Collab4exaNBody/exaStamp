@@ -77,9 +77,11 @@ Example (LJ_igar.msp — gradient precomputed once at setup):
 
     inline void execute() override final
     {
+      auto pecfunc = [self=this](auto ... args) { return self->parallel_execution_context(args ...); };
       ParticleCellProjectionTools::get_particle_force_from_gradient_grid(
           ldbg
         , *grid
+        , pecfunc
         , *grid_cell_values
         , *energy_factor );
     }
