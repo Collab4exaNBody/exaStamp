@@ -25,9 +25,94 @@ under the License.
 #include <onika/math/quaternion_operators.h>
 #include <onika/cuda/cuda.h>
 
+namespace exaStamp
+{
+  using namespace exanb;
+
+  template<class CellsT, class FieldT>
+  struct InterpolateCellScalarFieldToParticle
+  {
+    Vec3d grid_origin:
+    IJK grid_dims;
+    double cell_size = 0.0;
+    double subcell_size = 0.0;
+    double inv_subcell_size = 0.0;
+
+    const double* __restrict__ e_ptr = nullptr;
+    const double* __restrict__ dEdx_ptr = nullptr
+    const double* __restrict__ dEdy_ptr = nullptr;
+    const double* __restrict__ dEdz_ptr = nullptr;
+    const size_t e_stride = 0;
+    const size_t dEdx_stride = 0;
+    const size_t dEdy_stride = 0;
+    const size_t dEdz_stride = 0;
+
+    ONIKA_HOST_DEVICE_FUNC inline void operator () ( size_t cell_i, size_t p_i, double rx, double ry, double rz, double& fx, double& fy, double fz, double& en ) const
+    {
+      cell_origin = cell_i to cell origin ...
+      const Vec3d rco = { rx - cell_origin.x, ry - cell_origin.y, rz - cell_origin.z };
+
+      IJK center_cell_loc, center_subcell_loc;
+      localize_subcell(rco, cell_size, subcell_size, subdiv, center_cell_loc, center_subcell_loc);
+      center_cell_loc = center_cell_loc + cell_loc;
+
+      if( grid.contains(center_cell_loc) )
+      {
+        const ssize_t center_cell_i = grid_ijk_to_index(dims, center_cell_loc);
+        const ssize_t center_subcell_i = grid_ijk_to_index(IJK{subdiv,subdiv,subdiv}, center_subcell_loc);
+
+        fx[p] += -energy_factor * dEdx_ptr[center_cell_i * dEdx_stride + center_subcell_i];
+        fy[p] += -energy_factor * dEdy_ptr[center_cell_i * dEdy_stride + center_subcell_i];
+        fz[p] += -energy_factor * dEdz_ptr[center_cell_i * dEdz_stride + center_subcell_i];
+
+        // Trilinear interpolation of ep between the 8 surrounding subcell centers.
+        // u,v,w ∈ [-0.5, 0.5]: normalized offset from the particle's subcell center.
+        const double u = rco.x * inv_subcell_size - (center_subcell_loc.i + 0.5);
+        const double v = rco.y * inv_subcell_size - (center_subcell_loc.j + 0.5);
+        const double w = rco.z * inv_subcell_size - (center_subcell_loc.k + 0.5);
+        const int di = (u >= 0.0) ? 1 : -1;
+        const int dj = (v >= 0.0) ? 1 : -1;
+        const int dk = (w >= 0.0) ? 1 : -1;
+        const double tu = (u >= 0.0) ? u : (1.0 + u);
+        const double tv = (v >= 0.0) ? v : (1.0 + v);
+        const double tw = (w >= 0.0) ? w : (1.0 + w);
+        double ep_interp = 0.0;
+        for(int bk=0; bk<=1; bk++)
+        for(int bj=0; bj<=1; bj++)
+        for(int bi=0; bi<=1; bi++)
+        {
+          IJK nbh_cell_loc, nbh_subcell_loc;
+          subcell_neighbor(center_cell_loc, center_subcell_loc, subdiv,
+                           IJK{bi*di, bj*dj, bk*dk}, nbh_cell_loc, nbh_subcell_loc);
+          if( grid.contains(nbh_cell_loc) )
+          {
+            const ssize_t nbh_cell_i    = grid_ijk_to_index(dims, nbh_cell_loc);
+            const ssize_t nbh_subcell_i = grid_ijk_to_index(IJK{subdiv,subdiv,subdiv}, nbh_subcell_loc);
+            const double wx = (bi == 0) ? (1.0 - tu) : tu;
+            const double wy = (bj == 0) ? (1.0 - tv) : tv;
+            const double wz = (bk == 0) ? (1.0 - tw) : tw;
+            ep_interp += wx * wy * wz * e_ptr[nbh_cell_i * e_stride + nbh_subcell_i];
+          }
+        }
+        e[p] += ep_interp;
+      }
+
+    }
+
+  };
+
+}
+
 namespace exanb
 {
+  template<class CellsT, class FieldT> struct InterpolateCellScalarFieldToParticle< exanb::GLVertexAttribCopyFromParticles<CellsT,FieldT> >
+  {
+    static inline constexpr bool CudaCompatible = true;
+  };
+}
 
+namespace exaStamp
+{
   namespace ParticleCellProjectionTools
   {
     using namespace GridCellValuesUtils;
