@@ -6,7 +6,7 @@ species:
   - Ar: { mass: 39.948 Da, z: 18, charge: 0.0 e- }
 
 lj_compute_force:
-  parameters: { epsilon: 0.0104 eV, sigma: 3.4 ang }
+  parameters: { epsilon: 0.0 eV, sigma: 3.4 ang }
   rcut: 5.0 ang
 
 langevin_thermostat:
@@ -19,23 +19,20 @@ numerical_scheme: verlet_lnvt
 compute_force_prolog:
   - zero_force_energy: { ghost: true }
 
-# 1st solution : on-the-fly triquadratic Lagrange interpolation
-compute_force_A:
+compute_force:
+  - lj_compute_force
   - igar_force_interp: { energy_factor: 20000.0 }
 
-# 2nd solution : precomputed finite-difference gradient, then per-particle assignment (slower)
-compute_force_B:
-  - igar_force_from_gradient: { energy_factor: 20000.0 }
-
-compute_force: compute_force_A
-
-check_and_update_particles:
-  - trigger_move_particles
-  - update_particles_full_body
-
-compute_force_epilog:
-  - update_force_from_ghost_no_gcv
-  - force_to_accel
+preinit_rcut_max:
+  profiling: false
+  rebind: { grid: null_grid, chunk_neighbors: null_neighbors, domain: empty_domain }
+  body:
+    - domain:
+        cell_size: 0.0 ang
+        grid_dims: [ 0 , 0 , 0 ]
+        periodic: [ true , true , true ]
+    - lj_compute_force
+    - nbh_dist
   
 setup_system:
   - domain:
@@ -57,22 +54,18 @@ setup_system:
   - read_cell_values:
       field_name: "igar_ep"
       field_dim: 1
-      grid_subdiv: 64
+      grid_subdiv: 32
       file_name: "igar_test.vtk"
-# Uncomment for 2nd method      
-#  - igar_compute_gradient
-
-write_snapshot:
-  - timestep_file: "Paraview/test_%09d"
-  - write_paraview:
-      fields: [ id, type, ep, processor_id ]
-  - timestep_file: "VTK/test_%09d"
+  
+write_snapshot: nop
 
 global:
-  max_iteration: 10
-  simulation_thermostate_screen_frequency: 50
+  enable_cell_values: true
+  max_iteration: 200
+  simulation_thermostate_screen_frequency: 1
   simulation_thermostate_file_frequency: -1
-  simulation_snapshot_frequency: 100
+  simulation_snapshot_frequency: -1
   rcut_inc: 1.0 ang
   dt: 0.5 fs
   thermostate_file: "thermo_exastamp_lj.txt"
+  
