@@ -1,0 +1,9 @@
+includes:
+  - baseline.yaml
+
++setup_system:
+  - uniform_noise_r: { sigma: 0.3 ang, ghost: true, deterministic_noise: false }
+  - uniform_noise_v: { sigma: 1 ang/ps, ghost: false, deterministic_noise: false }
+
++compute_force:
+  - uniform_noise_f: { sigma: 0.1 eV/ang, ghost: false, deterministic_noise: false }

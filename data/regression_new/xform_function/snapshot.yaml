@@ -1,0 +1,3 @@
+write_snapshot:
+  - timestep_file: "walltest_%09d.xyz"
+  - write_xyz: { fields: [ id, type ] }
