@@ -69,7 +69,6 @@ add_subdirectory(snap)
 add_subdirectory(snaplegacy)
 add_subdirectory(snaplmp)
 
-add_subdirectory(n2p2)
 add_subdirectory(kim)
 # ======================================================= #
 
