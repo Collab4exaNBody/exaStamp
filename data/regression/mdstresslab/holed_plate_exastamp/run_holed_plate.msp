@@ -10,17 +10,17 @@ compute_force:
 grid_flavor: grid_flavor_full
 
 global:
-  simulation_end_iteration: 2000
-  simulation_log_frequency: 10
-  simulation_dump_thermo_frequency: -1
-  simulation_dump_frequency: 50
-  rcut_inc: 1.0 ang
+  max_iteration: 2000
+  simulation_thermostate_screen_frequency: 10
+  simulation_thermostate_file_frequency: -1
+  simulation_snapshot_frequency: 100
+  rcut_inc: 2.0 ang
   dt: 0.005 ps
 
 species:
   - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
 
-input_data:
+setup_system:
   - domain:
       cell_size: 3.3 ang
       grid_dims: [60, 5, 60]
@@ -49,16 +49,12 @@ input_data:
       size: [ 3.3 ang , 3.3 ang , 3.3 ang ]
       region: not ( CYLY1 or CYLY2 )
 
-init_epilog:
-  - backup_r_lt
-  - backup_xform
-
 final_dump: nop
 
 xform_time_interpolate_byparts:
   time_serie: [0.0, 10.0]    
   xform_serie: [ [ [1.0, 0.0, 0.0],  [0.0, 1.0, 0.0],  [0.0, 0.0, 1.0] ],
-            	   [ [1.3, 0.0, 0.0],  [0.0, 1.0, 0.0],  [0.0, 0.0, 1.3] ] ]
+            	   [ [1.3, 0.0, 0.0],  [0.0, 1.0, 0.0],  [0.0, 0.0, 0.7] ] ]
 
 xform_function: xform_time_interpolate_byparts
 
@@ -66,15 +62,19 @@ init_prolog:
   - deformation_xform:
       defbox: { extension: [ 1.0 , 1.0 , 1.0 ] }
 
-compute_loop_prolog:
+md_loop_prolog:
   - xform_function
   - nbh_dist
 
-dump_data:
+init_epilog:
+  - backup_r_lt
+  - backup_xform
+
+write_snapshot:
   - test_xyz:
       body:
         - timestep_file: "dir.outputs/my_xyz_file_%09d.xyz"
-        - write_xyz: { fields: [ "id", "velocity" , "virial" ] }
+        - write_xyz: { fields: [ "id", "velocity" , "virial" , "processor_id" ] }
   - copy_grid
   - restore_ghost_r0:
       rebind: { grid: grid_copy }
@@ -88,6 +88,7 @@ dump_data:
       body:
         - compute_stress_grid_mdstresslab:
             modelnames: ["EAM_Dynamo_RaveloGermannGuerrero_2013Ta1_Ta__MO_816821594689_001"]
-      
+            read_from_file: false
+            
 +first_iteration:
-  - dump_data
+  - write_snapshot

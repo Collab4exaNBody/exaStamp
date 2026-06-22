@@ -137,7 +137,7 @@ struct alignas(onika::memory::DEFAULT_ALIGNMENT) KimForceOp
     // put central at origin; neighbors are already r_ij = (drx, dry, drz)
     std::vector<double> coords(3 * static_cast<size_t>(np), 0.0);
     std::vector<int> species_codes(np, 0);
-    species_codes[0] = type;
+    species_codes[0] = kim_particle_codes[type];
     for (int i = 0; i < static_cast<int>(n); ++i) {
       coords[3 * ( i + 1 ) + 0] = buf.drx[i];
       coords[3 * ( i + 1 ) + 1] = buf.dry[i];

@@ -18,7 +18,7 @@
 # === micro-stamp pair potential compute operator library library  ===
 # ====================================================================
 
-set(ONIKA_BUILD_exaStampMDStressLab_DEFAULT ON)
+set(ONIKA_BUILD_exaStampMDStressLab_DEFAULT OFF)
 
 find_package(MDStressLab++ REQUIRED)
 set(exaStampMDStressLab_LINK_LIBRARIES exaStampParticleSpecies exanbGridCellParticles exanbCompute MDStressLab++::MDStressLab++)

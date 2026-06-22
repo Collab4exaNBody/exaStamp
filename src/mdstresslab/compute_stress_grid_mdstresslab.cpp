@@ -53,7 +53,7 @@ namespace exaStamp
 
   template<
     class GridT ,
-    class = AssertGridHasFields< GridT, field::_vx, field::_vy, field::_vz , field::_fx, field::_fy, field::_fz >
+    class = AssertGridHasFields< GridT, field::_vx, field::_vy, field::_vz , field::_fx, field::_fy, field::_fz , field::_type >
     >
   class StressGridMDStressLab : public OperatorNode
   {
@@ -70,10 +70,14 @@ namespace exaStamp
     ADD_SLOT( Domain , domain       , INPUT , REQUIRED );
     
     // Reference configuration
-    ADD_SLOT( GridT  , grid_t0                     , INPUT, OPTIONAL);
-    ADD_SLOT( Mat3d  , xform_t0                    , INPUT, OPTIONAL);
+    ADD_SLOT( GridT  , grid_t0                     , INPUT, REQUIRED);
+    ADD_SLOT( Mat3d  , xform_t0                    , INPUT, REQUIRED);
 
     // MDStressLab++ specific input files
+    // 'filename' may end up populated by an unrelated operator's output slot of the same
+    // name when this operator is wired into a larger pipeline; 'read_from_file' makes the
+    // choice of execution mode explicit and independent of that auto-connection.
+    ADD_SLOT( bool        , read_from_file , INPUT, false );
     ADD_SLOT( std::string , filename , INPUT, OPTIONAL );
     ADD_SLOT( std::vector<std::string> , modelnames , INPUT, REQUIRED );
     ADD_SLOT( int64_t         , timestep       , INPUT , REQUIRED );    
@@ -86,7 +90,10 @@ namespace exaStamp
     inline void execute ()  override final
     {
 
-      if (filename.has_value()) {
+      if (*read_from_file) {
+
+        if( ! filename.has_value() ) MY_ERROR("read_from_file is true but the 'filename' slot has no value");
+
         std::cout << "Compute stress field on grid of external file using MDStressLab++" << std::endl;
       
         // compile time constant indicating if grid has type field
@@ -108,7 +115,7 @@ namespace exaStamp
       
         // int numberOfParticles = grid.number_of_particles();
         // if (numberOfParticles < 0) MY_ERROR("Error: Negative number of particles.\n");
-w
+
         BoxConfiguration body{numberOfParticles,referenceAndFinal};
         body.read(configFileName,referenceAndFinal);
         //	-------------------------------------------------------------------
@@ -254,12 +261,12 @@ w
         {
           GRID_OMP_FOR_BEGIN(dims,i,cell_loc, schedule(dynamic) )
             {
-              GridFieldSetPointerTuple< GridT, FieldSet<field::_rx,field::_ry,field::_rz,field::_vx,field::_vy,field::_vz> > ptrs;
+              GridFieldSetPointerTuple< GridT, FieldSet<field::_rx,field::_ry,field::_rz,field::_vx,field::_vy,field::_vz,field::_type> > ptrs;
 
-              GridFieldSetPointerTuple< GridT, FieldSet<field::_rx,field::_ry,field::_rz> > ptrs_t0;              
+              GridFieldSetPointerTuple< GridT, FieldSet<field::_rx,field::_ry,field::_rz> > ptrs_t0;
               cells[i].capture_pointers( ptrs );
               cells_t0[i].capture_pointers( ptrs_t0 );
-              
+
               const auto* __restrict__ rx = ptrs[field::rx];
               const auto* __restrict__ ry = ptrs[field::ry];
               const auto* __restrict__ rz = ptrs[field::rz];
@@ -267,7 +274,9 @@ w
               const auto* __restrict__ vx = ptrs[field::vx];
               const auto* __restrict__ vy = ptrs[field::vy];
               const auto* __restrict__ vz = ptrs[field::vz];
-              
+
+              const auto* __restrict__ type = ptrs[field::type];
+
               const auto* __restrict__ rx0 = ptrs_t0[field::rx];
               const auto* __restrict__ ry0 = ptrs_t0[field::ry];
               const auto* __restrict__ rz0 = ptrs_t0[field::rz];
@@ -286,11 +295,11 @@ w
                   body.velocities(iloc,0) = vx[j];
                   body.velocities(iloc,1) = vy[j];
                   body.velocities(iloc,2) = vz[j];
-                  body.species[iloc] = "Ta";
+                  body.species[iloc] = (*species)[ type[j] ].name();
                 }
 
               const unsigned int n0 = cells_t0[i].size();
-              for(unsigned int j=0;j<n;j++)
+              for(unsigned int j=0;j<n0;j++)
                 {
                   size_t iloc = cell_offsets[i]+j;                  
                   Vec3d r0 = { rx0[j], ry0[j], rz0[j] };

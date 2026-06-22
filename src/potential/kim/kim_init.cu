@@ -135,14 +135,10 @@ namespace exaStamp
             }
         }
 
-      for (int i=0; i<(*kim_particle_codes).size();i++) {
-        std::cout << "\t Specy code = " << (*kim_particle_codes)[i] << std::endl;;
+      for (size_t i=0; i<(*kim_particle_codes).size();i++) {
+        std::cout << "\t Specy code = " << (*kim_particle_codes)[i] << std::endl;
       }
       
-      KIM::ComputeArguments * computeArguments;
-      error = kim_local_model->ComputeArgumentsCreate(&computeArguments);
-      if (error) { MY_ERROR("Unable to create a ComputeArguments object."); }
-
       const double* cutoffs;
       double influencedistance;
       
@@ -163,12 +159,12 @@ namespace exaStamp
       parameters->rcut = influencedistance;
       
       std::cout << "Model influence distance = " << influencedistance << std::endl;
-      // Replace rcut_max by influence distance
+
       KIM::Log::PopDefaultVerbosity();
       std::cout << "=================================\n" << std::endl;
+
+      KIM::Model::Destroy(&kim_local_model);
     }
-    
-    //    (*parameters).rcut = *rcut;    
   };
 
   // === register factories ===  

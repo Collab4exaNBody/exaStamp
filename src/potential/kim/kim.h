@@ -49,10 +49,9 @@ struct KIMThreadContext
 
 struct KIMContext
 {
-  KIM::Model * kim_model = nullptr;
   std::vector<KIMThreadContext> m_thread_ctx;
-  //  std::vector<std::shared_ptr<KIM::Model*>> m_test;
-  //  std::vector<KIM::Model> m_test;
+  // max cutoff over the model's neighbor lists, for diagnostics only;
+  // the cutoff actually driving neighbor search is KIMParams::rcut (influence distance)
   double rcut = 0;
 };
 
@@ -65,8 +64,6 @@ namespace YAML
       if( !node.IsMap()   ) { return false; }
       if( ! node["model"] ) { return false; }
       if(   node["model"] ) { v.model = node["model"].as<std::string>(); }
-      // if( ! node["rcut"]  ) { return false; }
-      // if(   node["rcut"]  ) { v.rcut = node["rcut"].as<Quantity>().convert(); }
       return true;
     }
   };
