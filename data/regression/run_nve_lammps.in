@@ -1,0 +1,33 @@
+boundary    p p p
+units       metal
+atom_style  atomic
+
+read_data   Ta_disturbed.lmp
+
+pair_style  eam/alloy
+pair_coeff  * * Ta.eam.alloy Ta
+
+variable    nats equal atoms
+variable    sst  equal step
+variable    teat equal etotal/atoms
+variable    keat equal ke/atoms
+variable    peat equal pe/atoms
+variable    pstime equal step*dt
+variable    TK equal temp
+variable    vvv equal vol
+variable    sxx equal 1.0e5*pxx
+variable    syy equal 1.0e5*pyy
+variable    szz equal 1.0e5*pzz
+variable    sxy equal 1.0e5*pxy
+variable    sxz equal 1.0e5*pxz
+variable    syz equal 1.0e5*pyz
+
+thermo_style custom step v_pstime atoms etotal ke pe temp pxx pyy pzz pxy pyz pxz press
+thermo       10
+
+timestep     0.001
+
+fix		       extra all print 1 "${sst} ${pstime} ${nats} ${teat} ${keat} ${peat} ${TK} ${sxx} ${syy} ${szz} ${sxy} ${sxz} ${syz}" file thermodynamic_state_lmp.csv
+
+fix          1 all nve
+run          100

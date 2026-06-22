@@ -1,0 +1,166 @@
+#includes:
+#  - config_update_symmetric_forces.msp
+
+# ghost_config: &ghost_update_params
+#   gpu_buffer_pack: true
+#   async_buffer_pack: true
+#   staging_buffer: true
+#   serialize_pack_send: true
+#   wait_all: false
+
+# ghost_config_opt: &ghost_update_opt_params
+#   gpu_buffer_pack: true
+#   async_buffer_pack: true
+#   staging_buffer: true
+#   serialize_pack_send: true
+#   wait_all: true
+#   opt_fields: [ "rho_dEmb" ]
+  
+# update_force_energy_from_ghost: *ghost_update_params
+# ghost_update_r: *ghost_update_params
+# ghost_update_all_no_fv: *ghost_update_params
+# ghost_update_opt: *ghost_update_opt_params
+
+init_parameters:
+  rebind: { parameters: eam_alloy_parameters }
+  body:
+    - eam_alloy_init:
+        parameters:
+          file: "dir.pots/Ta1_Ravelo_2013.eam.alloy"
+
+chunk_neighbors:
+  config:
+    chunk_size: 1
+    build_particle_offset: true
+  
+# eam_rho:
+#   - eam_alloy_force: { rcut: 5.30 ang , eam_rho: true , eam_rho2emb: false , eam_ghost: false , eam_force: false , eam_symmetry: false }
+
+# eam_rho2emb:
+#   - eam_alloy_force: { rcut: 5.30 ang , eam_rho: false , eam_rho2emb: true , eam_ghost: false , eam_force: false , eam_symmetry: false }
+
+# eam_force:
+#   - eam_alloy_force: { rcut: 5.30 ang , eam_rho: false , eam_rho2emb: false, eam_ghost: false , eam_force: true , eam_symmetry: false }
+
+# compute_force:
+#   rebind: { parameters: eam_alloy_parameters }
+#   body:
+#     - eam_rho
+#     - eam_rho2emb
+#     - ghost_update_opt
+#     - eam_force
+
+
+compute_force:
+  rebind: { parameters: eam_alloy_parameters }
+  body:
+    - eam_alloy_force: { rcut: 5.30 ang , eam_rho: true , eam_rho2emb: true, eam_ghost: true , eam_force: true , eam_symmetry: false }
+    - move_wall:
+        init_normal: [ 1.0, 0.0, 0.0 ]
+        init_offset: 15.0 ang
+        init_cutoff: 3.0 ang
+        init_epsilon: 10.0 eV
+        init_time: 2.0 ps
+        init_velocity: 1000 m/s
+    - wall
+
+# eam_alloy_force:
+#   rcut: 5.30 ang
+#   parameters:
+#     file: "dir.pots/Ta1_Ravelo_2013.eam.alloy"
+
+
+# init_parameters:
+#   - species
+#   - kim_init:
+#       parameters: { model: "EAM_Dynamo_RaveloGermannGuerrero_2013Ta1_Ta__MO_816821594689_001" }
+
+# compute_force:
+  # - kim_force
+  # - move_wall:
+  #     init_normal: [ 1.0, 0.0, 0.0 ]
+  #     init_offset: 15.0 ang # positionned at the limit of the domain
+  #     init_cutoff: 3.0 ang
+  #     init_epsilon: 10.0 eV
+  #     init_time: 0.0 ps
+  #     init_velocity: 1000 m/s
+  # - wall
+  
+
+# compute_force:
+#   - eam_alloy_force
+# #  - langevin_thermostat: { T: 300. K , gamma: 0.1 ps^-1 }
+
+grid_flavor: grid_flavor_multimat
+
+global:
+  max_iteration: 4000
+  simulation_thermostate_screen_frequency: 50
+  simulation_thermostate_file_frequency: -1
+  simulation_snapshot_frequency: 100
+  simulation_load_balance_frequency: 200
+  rcut_inc: 2.0 ang
+  dt: 0.005 ps
+
+species:
+  - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+
+setup_system:
+  - domain:
+      cell_size: 6.6062 ang
+      grid_dims: [80, 5, 40]
+      bounds: [[0 ang, 0 ang, 0 ang], [528.496 ang, 33.031 ang, 264.248 ang]]
+      xform: [[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
+      periodic: [false, true, true]
+      expandable: true
+  - particle_regions:
+      - BOX:
+          bounds: [ [ 20 ang, 0 ang, 0 ang ], [ 520 ang, 1000 ang, 1000 ang ] ]
+      - CYLY1:
+          quadric:
+            shape: cyly
+            transform:
+              - scale: [50 ang, 1 ang, 50 ang]
+              - translate: [200 ang, 0 ang, 132.128 ang]
+  - init_rcb_grid
+  - lattice:
+      structure: BCC
+      types: [ Ta , Ta ]
+      size: [ 3.3031 ang , 3.3031 ang , 3.3031 ang ]
+      region: BOX and ( not ( CYLY1 ) )      
+  - init_temperature_new:
+      T: 300. K
+      override_velocities: true
+      add_velocities: false
+      scale_velocities: false
+      zero_linear_momentum: true
+      distribution: "gaussian"
+  
+final_dump: nop
+
+init_epilog:
+  - backup_r_lt
+  - backup_xform
+
+write_snapshot:
+  - test_xyz:
+      body:
+        - timestep_file: "/tmp/dir.outputs/my_xyz_file_%09d.xyz"
+        - write_xyz: { fields: [ "id", "velocity" , "virial" , "processor_id" ] }
+  - copy_grid
+  - restore_ghost_r0:
+      rebind: { grid: grid_copy }
+      body:
+        - backup_r_lt_move_data
+        - restore_r_lt
+        - ghost_update_r_v
+  - ghost_update_r_v
+  - compute_stress_grid_mdstresslab_master:
+      rebind: { grid_t0: grid_copy, xform_t0: backup_xform }
+      body:
+        - compute_stress_grid_mdstresslab:
+            modelnames: ["EAM_Dynamo_RaveloGermannGuerrero_2013Ta1_Ta__MO_816821594689_001"]
+            read_from_file: false
+            
++first_iteration:
+  - write_snapshot
