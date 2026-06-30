@@ -1224,13 +1224,6 @@ numerical_scheme_verlet:
     - push_velocity_1st_order: { dt_scale: 0.5 }
     #- debug_impulse
 
-write_vtk:
-   is_binary: true
-   compression: default
-   is_box: true
-   is_ghosts: false
-   is_external_box: true
-
 do_update_particles:
   condition: trigger_move_particles
   body:
@@ -1292,7 +1285,7 @@ simulation:
       body:
         - update_particles
         #- debug_pair_weight
-        - write_vtk
+        - write_paraview
         - numerical_scheme_verlet
         - end_iteration
         - compute_loop_stop

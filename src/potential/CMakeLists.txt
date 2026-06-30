@@ -15,26 +15,64 @@
 # under the License.
 #
 
-# Pair potentials
-add_subdirectory(reaction_field)
-add_subdirectory(ljexp6rf)
+# ======================================================= #
+# ==================== Pair Potentials ================== #
 add_subdirectory(pair_potential_template)
 add_subdirectory(pair_potentials)
 add_subdirectory(multimat_pair_potential)
+# ======================================================= #
 
-# EAM potentials
+# ======================================================= #
+# ============ Embedded Atom Model Potentials =========== #
 add_subdirectory(eam)
 add_subdirectory(eam_potential_template)
 add_subdirectory(eam_potentials)
+# ======================================================= #
 
+# ======================================================= #
+# ================== Reactive Potentials ================ #
 add_subdirectory(LCHBOP)
+add_subdirectory(rebo)
+# ======================================================= #
+
+# ======================================================= #
+# ======== Modified Embedded Atom Model Potentials ====== #
 add_subdirectory(meam)
+# ======================================================= #
+
+# ======================================================= #
+# ================= Coulombic Potentials ================ #
 add_subdirectory(coul_dsf)
 add_subdirectory(coul_wolf)
 add_subdirectory(ewald)
+add_subdirectory(reaction_field)
+# ======================================================= #
+
+# ======================================================= #
+# ================== Combined Potentials ================ #
+add_subdirectory(ljexp6rf)
+# ======================================================= #
+
+# ======================================================= #
+# ======= Machine Learning Interatomic Potentials ======= #
+if(EXASTAMP_BUILD_PACE)
+  add_subdirectory(mlip-pace)
+endif()
+
+if(EXASTAMP_BUILD_POD)
+  add_subdirectory(mlip-pod)
+endif()
+
+add_subdirectory(n2p2)
+
 add_subdirectory(snap)
 add_subdirectory(snaplegacy)
 add_subdirectory(snaplmp)
+# ======================================================= #
+
+# ======================================================= #
+# =============== Experimental Potentials =============== #
 add_subdirectory(range_potential)
-add_subdirectory(n2p2)
+add_subdirectory(igar)
+# ======================================================= #
 

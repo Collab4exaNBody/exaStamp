@@ -1,0 +1,5 @@
+includes:
+  - baseline.yaml
+
+numerical_scheme: verlet_bnvt
+berendsen_thermostat: { tserie: [0, 0.5, 1.2, 2.0], Tserie: [5., 300., 100., 400.], tau: 0.1 ps }

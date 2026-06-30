@@ -132,12 +132,6 @@ numerical_scheme_verlet:
     #- langevin_thermostat: {gamma : 1, T: 0.0000001}
     - push_velocity_1st_order: { dt_scale: 0.5 }
 
-write_vtk:
-   is_binary: false
-   compression: default
-   is_box: true
-   is_ghosts: false
-   is_external_box: true
 
 simulation:
 
@@ -159,7 +153,7 @@ simulation:
       name: "*** Compute loop ***"
       body:
         - update_particles
-        - write_vtk
+        - write_paraview
         - numerical_scheme_verlet
         - end_iteration
         - compute_loop_stop

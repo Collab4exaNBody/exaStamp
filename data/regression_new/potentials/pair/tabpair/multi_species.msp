@@ -1,0 +1,11 @@
+includes:
+  - baseline_multi_species.yaml
+
+tabpair_multi_force:
+  rcut: 5.68 ang
+  common_parameters: { file: "lj_tab.yml" }
+  parameters:
+    - { type_a: Zn , type_b: Zn , rcut: 5.68 ang , parameters: { file: "lj_tab.yml" } }
+    - { type_a: Cu , type_b: Zn , rcut: 5.68 ang , parameters: { file: "lj_tab.yml" } }
+
+compute_force: tabpair_multi_force

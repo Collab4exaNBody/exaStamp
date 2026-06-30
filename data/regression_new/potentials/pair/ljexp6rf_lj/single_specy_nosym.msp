@@ -1,0 +1,8 @@
+includes:
+  - baseline_single_specy.yaml
+
+ljexp6rf_compute_force:
+  rcut: 12.5 ang
+  parameters: { rcut: 12.5 ang, rf: { epsilon: 100., rc: 12.5 ang }, lj: { epsilon: 0.01 kcal/mol, sigma: 3.830864488 ang } }
+
+compute_force: ljexp6rf_compute_force

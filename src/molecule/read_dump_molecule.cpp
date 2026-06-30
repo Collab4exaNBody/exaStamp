@@ -34,6 +34,7 @@ under the License.
 #include <exaStamp/io/atom_dump_filter.h>
 #include <exaStamp/molecule/molecule_species.h>
 #include <exaStamp/molecule/molecule_optional_header_io.h>
+#include <exaStamp/molecule/iFFname.h>
 
 namespace exaStamp
 {
@@ -45,15 +46,14 @@ namespace exaStamp
     using BoolVector = std::vector<bool>;
     using StringVector = std::vector<std::string>;
 
-    ADD_SLOT( MPI_Comm    , mpi             , INPUT );
-    ADD_SLOT( std::string , filename , INPUT );
-    ADD_SLOT( long        , timestep      , INPUT , DocString{"Iteration number"} );
-    ADD_SLOT( double      , physical_time , INPUT , DocString{"Physical time"} );
+    ADD_SLOT( MPI_Comm                         , mpi                      , INPUT );
+    ADD_SLOT( std::string                      , filename                 , INPUT );
+    ADD_SLOT( Domain                           , domain                   , INPUT_OUTPUT );
+    ADD_SLOT( GridT                            , grid                     , INPUT_OUTPUT );
+    ADD_SLOT( ParticleSpecies                  , species                  , INPUT_OUTPUT, REQUIRED );
+    ADD_SLOT( long                             , timestep                 , INPUT       , DocString{"Iteration number"} );
+    ADD_SLOT( double                           , physical_time            , INPUT       , DocString{"Physical time"} );
 
-    ADD_SLOT( GridT           , grid     , INPUT_OUTPUT );
-    ADD_SLOT( Domain          , domain   , INPUT_OUTPUT );
-    ADD_SLOT( ParticleSpecies , species , INPUT_OUTPUT , REQUIRED );
-    
     ADD_SLOT( MoleculeSpeciesVector            , molecules                , INPUT_OUTPUT, MoleculeSpeciesVector{} , DocString{"Molecule descriptions"} );
     ADD_SLOT( BondsPotentialParameters         , potentials_for_bonds     , INPUT_OUTPUT, BondsPotentialParameters{} );
     ADD_SLOT( BendsPotentialParameters         , potentials_for_angles    , INPUT_OUTPUT, BendsPotentialParameters{} );
@@ -62,15 +62,18 @@ namespace exaStamp
     ADD_SLOT( LJExp6RFMultiParms               , potentials_for_pairs     , INPUT_OUTPUT, LJExp6RFMultiParms{} );
     ADD_SLOT( IntramolecularPairWeighting      , mol_pair_weights         , INPUT_OUTPUT, IntramolecularPairWeighting{} );
 
-    ADD_SLOT(double , bond_max_dist     , INPUT_OUTPUT , 0.0 , DocString{"molecule bond max distance, in physical space"} );
-    ADD_SLOT(double , bond_max_stretch  , INPUT_OUTPUT , 1.0 , DocString{"fraction of bond_max_dist."} );
-
-    ADD_SLOT( double      , scale_cell_size , INPUT ,OPTIONAL , DocString{"if set, change cell size stored in file by scaling it with given factor"} );
-    ADD_SLOT( BoolVector  , periodic        , INPUT ,OPTIONAL , DocString{"if set, overrides domain's periodicity stored in file with this value"}  );
-    ADD_SLOT( StringVector, mirror          , INPUT ,OPTIONAL , DocString{"if set, overrides domain's boundary mirror flags in file with provided values"}  );
-    ADD_SLOT( bool        , expandable      , INPUT ,OPTIONAL , DocString{"if set, override domain expandability stored in file"} );
-    ADD_SLOT( AABB        , bounds          , INPUT ,OPTIONAL , DocString{"if set, override domain's bounds, filtering out particles outside of overriden bounds"} );
-    ADD_SLOT( bool        , shrink_to_fit   , INPUT ,OPTIONAL , DocString{"if set to true and bounds was wpecified, try to reduce domain's grid size to the minimum size enclosing fixed bounds"} );
+    ADD_SLOT( IntraFFtypes                     , ffnameVector             , OUTPUT );
+    ADD_SLOT( bool                             , rf_self_pairs            , OUTPUT      , false );
+    ADD_SLOT( bool                             , long_range_correction    , OUTPUT      , false );
+    ADD_SLOT( double                           , bond_max_dist            , INPUT_OUTPUT, 0.0  , DocString{"molecule bond max distance, in physical space"} );
+    ADD_SLOT( double                           , bond_max_stretch         , INPUT_OUTPUT, 1.0  , DocString{"fraction of bond_max_dist."} );
+    
+    ADD_SLOT( double                           , scale_cell_size          , INPUT       , OPTIONAL , DocString{"if set, change cell size stored in file by scaling it with given factor"} );
+    ADD_SLOT( BoolVector                       , periodic                 , INPUT       , OPTIONAL , DocString{"if set, overrides domain's periodicity stored in file with this value"}  );
+    ADD_SLOT( StringVector                     , mirror                   , INPUT       , OPTIONAL , DocString{"if set, overrides domain's boundary mirror flags in file with provided values"}  );
+    ADD_SLOT( bool                             , expandable               , INPUT       , OPTIONAL , DocString{"if set, override domain expandability stored in file"} );
+    ADD_SLOT( AABB                             , bounds                   , INPUT       , OPTIONAL , DocString{"if set, override domain's bounds, filtering out particles outside of overriden bounds"} );
+    ADD_SLOT( bool                             , shrink_to_fit            , INPUT       , OPTIONAL , DocString{"if set to true and bounds was wpecified, try to reduce domain's grid size to the minimum size enclosing fixed bounds"} );
 
   public:
     inline void execute () override final
@@ -79,9 +82,14 @@ namespace exaStamp
       using MolIOExt = MoleculeOptionalHeaderIO<decltype(ldbg)>;
       std::string file_name = onika::data_file_path( *filename );
 
+      bool reader_rf_self_pairs = true;
+      bool reader_long_range_correction = true;      
       double reader_bond_max_dist = 0.0;
       double reader_bond_max_stretch = 0.0;
       MolIOExt molecule_io = {
+        *ffnameVector,
+        reader_rf_self_pairs,
+        reader_long_range_correction,
         reader_bond_max_dist ,
         reader_bond_max_stretch ,
         molecules.get_pointer() ,
@@ -147,8 +155,15 @@ namespace exaStamp
       ldbg << "--- Molecule compute parameters ---" << std::endl;
       molecule_io.print( ldbg , *species );
 
+      //      MPI_Allreduce( MPI_IN_PLACE, &reader_ffnameVector , 1 , MPI_DOUBLE , MPI_MAX , *mpi );
+      MPI_Allreduce( MPI_IN_PLACE, &reader_rf_self_pairs , 1 , MPI_C_BOOL , MPI_LOR , *mpi );
+      MPI_Allreduce( MPI_IN_PLACE, &reader_long_range_correction , 1 , MPI_C_BOOL , MPI_LOR , *mpi );
       MPI_Allreduce( MPI_IN_PLACE, &reader_bond_max_dist , 1 , MPI_DOUBLE , MPI_MAX , *mpi );
       MPI_Allreduce( MPI_IN_PLACE, &reader_bond_max_stretch , 1 , MPI_DOUBLE , MPI_MAX , *mpi );
+
+      *rf_self_pairs = reader_rf_self_pairs;
+      *long_range_correction = reader_long_range_correction;
+      
       *bond_max_dist = std::max( *bond_max_dist , reader_bond_max_dist );
       *bond_max_stretch = std::max( *bond_max_stretch , reader_bond_max_stretch );
       ldbg << "bond max dist = "<< *bond_max_dist << " , bond_max_stretch = " << *bond_max_stretch << std::endl;

@@ -1,0 +1,44 @@
+species:
+  - Copper: { mass: 105.486E-27 kg, z: 29, charge: 0 e- }
+
+setup_system:
+  - domain:
+      cell_size: 3.0 ang
+      grid_dims: [10,10,10]
+      bounds: [[0 ang ,0 ang,0 ang],[30 ang, 30 ang, 30 ang]]
+      xform: [[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
+      periodic: [true,true,true]
+      expandable: false
+  - init_rcb_grid
+  - lattice:
+      structure: FCC
+      types: [ Copper, Copper, Copper, Copper]
+      size: [ 3. ang , 3. ang , 3. ang ]
+  - gaussian_noise_v: { sigma: 0.1 ang/ps }
+    
+global:
+  dt: 1.0e-3 ps
+  max_iteration: 5
+  simulation_thermostate_screen_frequency: 1
+  rcut_inc: 1.0 ang
+
+compute_force: lj_compute_force
+
+lj_compute_force:
+  parameters: { epsilon: 9.340E-20 J , sigma: 0.227E-09 m }
+  rcut: 5.68 ang
+
+simulation_epilog:
+  - average_neighbors_scalar:
+      nbh_field: mass
+      avg_field: avg_mass
+      rcut: 8.0 ang
+  - ghost_update_r_v
+  - average_neighbors_scalar:
+      nbh_field: vz
+      avg_field: avg_vz
+      rcut: 8.0 ang
+  - timestep_file: "xyz/my_xyz_file_%09d.xyz"
+  - write_xyz: { fields: [ mass, avg_mass, vz, avg_vz ] }
+  - timestep_file: "paraview/my_xyz_file_%09d"
+  - write_paraview: { fields: [ mass, avg_mass, vz, avg_vz] }

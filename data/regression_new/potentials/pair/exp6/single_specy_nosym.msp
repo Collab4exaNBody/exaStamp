@@ -1,0 +1,8 @@
+includes:
+  - baseline_single_specy.yaml
+
+exp6_compute_force:
+  rcut: 8. ang
+  parameters: { A: 107023.90 Da*kcal/g, B: 3.64050000 1/ang, C: 554.0100000 Da*kcal*ang^6/g, D: 5.0e-5 Da*kcal/g }
+
+compute_force: exp6_compute_force

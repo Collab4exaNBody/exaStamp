@@ -1,0 +1,24 @@
+################################# exaStamp default simulation graph ##################################
+######################################################################################################
+simulation:
+  name: exaStamp_simulation
+  body:
+    - print_logo_banner # Print exaStamp banner
+    - hw_device_init # Hardware setup (communicator + CUDA initialization)
+    - make_empty_grid # Simulation grid setup
+    - global # Global setup
+    - setup_system # Setup system and populate it with particles
+    - hw_device_finalize # CUDA finalization
+
+######################################################################################################
+######################################################################################################
+
+setup_system:
+  - domain:
+      cell_size: 10.0 ang
+      grid_dims: [ 10, 10, 10 ]
+      bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 100. ang, 100. ang, 100. ang ] ]
+      xform: [ [ 1, 0, 0 ], [ 0, 1, 0 ], [ 0, 0, 1 ] ]
+      periodic: [ true, true, true ]
+      expandable: false
+  - init_rcb_grid

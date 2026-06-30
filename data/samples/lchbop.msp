@@ -94,7 +94,7 @@ simulation:
         - cell_owner_rank
         - LCHBOP_EF
         - push_f_v: { dt_scale: 0.5 }
-        - write_vtk: {is_binary: false}
+        - write_paraview
         - end_iteration
         - compute_loop_stop
 

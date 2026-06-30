@@ -196,7 +196,7 @@ simulation:
       body:
         - update_particles
         - numerical_scheme_verlet
-        - write_vtk: {is_binary: false}
+        - write_paraview
         - end_iteration
         - compute_loop_stop
 

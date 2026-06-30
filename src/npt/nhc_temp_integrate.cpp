@@ -39,7 +39,7 @@ namespace exaStamp
   {
     ADD_SLOT( double                  , dt         , INPUT , REQUIRED );
     ADD_SLOT( long                    , timestep   , INPUT , REQUIRED );
-    ADD_SLOT( long                    , simulation_end_iteration , INPUT , REQUIRED );    
+    ADD_SLOT( long                    , max_iteration , INPUT , REQUIRED );    
     ADD_SLOT( NPTContext              , npt_ctx    , INPUT_OUTPUT );
     ADD_SLOT( Vec3d                   , vscale     , OUTPUT );
     ADD_SLOT( ThermodynamicState      , thermodynamic_state , INPUT );
@@ -54,7 +54,7 @@ namespace exaStamp
       double kecurrent = npt_ctx->tdof * npt_ctx->boltz * npt_ctx->t_current;
       double expfac;
 
-      npt_ctx->update_target_T_KE(*timestep, *(simulation_end_iteration));
+      npt_ctx->update_target_T_KE(*timestep, *(max_iteration));
       npt_ctx->eta_mass[0] = npt_ctx->tdof * npt_ctx->boltz * npt_ctx->t_target / (npt_ctx->t_freq*npt_ctx->t_freq);
       
       for (int ich = 1; ich < npt_ctx->mtchain; ich++)

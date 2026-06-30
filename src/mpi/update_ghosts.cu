@@ -15,33 +15,11 @@ specific language governing permissions and limitations
 under the License.
 */
 
-//  // DO NOT REMOVE THIS LINE !!
-
 #include <onika/scg/operator.h>
-#include <onika/scg/operator_slot.h>
 #include <onika/scg/operator_factory.h>
-#include <onika/log.h>
-#include <onika/math/basic_types_stream.h>
 #include <exanb/core/grid.h>
-#include <exanb/grid_cell_particles/grid_cell_values.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/core/particle_id_codec.h>
-#include <exanb/core/grid_fields.h>
-#include <exanb/core/check_particles_inside_cell.h>
-
-#include <onika/soatl/field_tuple.h>
-
-#include <vector>
-#include <string>
-#include <list>
-#include <algorithm>
-#include <tuple>
-
-#include <mpi.h>
-#include <exanb/mpi/update_ghost_utils.h>
-#include <exanb/mpi/ghosts_comm_scheme.h>
 #include <exanb/mpi/update_ghosts.h>
-#include <onika/mpi/data_types.h>
 
 namespace exaStamp
 {
@@ -49,14 +27,14 @@ namespace exaStamp
   using namespace UpdateGhostsUtils;
 
   // === register factory ===
-  template<typename GridT> using UpdateGhostsRandVandVir = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz,  field::_vx, field::_vy, field::_vz, field::_virial > , false >;
-  template<typename GridT> using UpdateGhostsRandV = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz,  field::_vx, field::_vy, field::_vz > , false >;
+  template<typename GridT> using UpdateGhostsRandVandVir = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz,  field::_vx, field::_vy, field::_vz, field::_virial > , false , true >;
+  template<typename GridT> using UpdateGhostsRandV = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz,  field::_vx, field::_vy, field::_vz > , false , true >;
 
-  template<typename GridT> using UpdateGhostsRandRf = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz, field::_rxf, field::_ryf, field::_rzf > , false >;  
-  template<typename GridT> using UpdateGhostsRandRfandV = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz, field::_rxf, field::_ryf, field::_rzf, field::_vx, field::_vy, field::_vz > , false >;
+  template<typename GridT> using UpdateGhostsRandRf = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz, field::_rxf, field::_ryf, field::_rzf > , false , true >;  
+  template<typename GridT> using UpdateGhostsRandRfandV = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz, field::_rxf, field::_ryf, field::_rzf, field::_vx, field::_vy, field::_vz > , false , true >;
   
-  template<typename GridT> using UpdateGhostsRQ = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz , field::_orient > , false >;
-  template<typename GridT> using UpdateGhostsIdMol = UpdateGhostsNode< GridT , FieldSet<field::_idmol> , false >;
+  template<typename GridT> using UpdateGhostsRQ = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz , field::_orient > , false , true >;
+  template<typename GridT> using UpdateGhostsIdMol = UpdateGhostsNode< GridT , FieldSet<field::_idmol> , false , true >;
 
   ONIKA_AUTORUN_INIT(update_ghosts)
   {

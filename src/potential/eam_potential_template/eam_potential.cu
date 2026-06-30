@@ -151,7 +151,7 @@ namespace exaStamp
           // FieldTuple, used to pack selected neighbor fields, cannot be addressed through dynamic field instances
           // thus, we use different generic field types, field::generic_real_idx<0> , field::generic_real_idx<1> , ...
           // to store and retreive neighbor selected fields in field tuple.
-          using MyType = typename field::generic_real_nth<0>::value_type;
+          //using MyType = typename field::generic_real_nth<0>::value_type;
           using ForceCPBuf = SimpleNbhComputeBuffer< FieldSet< field::_generic_real<0> > >; 
           ComputePairBufferFactory< ForceCPBuf > force_buf;
           ForceOp force_op { *parameters };

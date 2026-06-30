@@ -1,0 +1,11 @@
+species:
+  - C: { mass: 12.011 Da , z: 6 , charge: 0.0 e- }
+
+buckingham_plot:
+  rcut: 5.0 ang
+  parameters: { A: 3.2 eV , Rho: 0.4 ang , C: 0.2 eV*ang^6 }
+
+simulation:
+  - species
+  - buckingham_plot
+

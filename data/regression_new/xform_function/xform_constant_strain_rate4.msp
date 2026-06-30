@@ -1,0 +1,10 @@
+includes:
+  - baseline.yaml
+
+xform_constant_strain_rate:
+  mode: shear
+  strain_rate: 1e+12
+  direction1: [ 0.0, 1.0, -1 ]
+  direction2: [ 1.0, 1.0, 1.0 ]
+
+xform_function: xform_constant_strain_rate
