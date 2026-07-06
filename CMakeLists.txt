@@ -40,6 +40,8 @@ if (NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
 endif()
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+include(AddSingleTest)
+include(AddRegressionTestSimple)
 
 # ======================================
 # === exaStamp package specializations ===
@@ -62,19 +64,65 @@ endif()
 find_package(exaNBody)
 
 
+# ====================================
+# === PACE potential external libs ===
+# ====================================
+option(EXASTAMP_BUILD_PACE "Build PACE potential" OFF)
+set(PACE_GIT_REPO "git@github.com:Collab4exaNBody/exaStamp_mlip_pace.git" CACHE STRING "Git repository URL for PACE compute libraries")
+set(PACE_GIT_TAG "main" CACHE STRING "Git tag/branch for PACE compute libraries")
+set(PACE_EXTERNAL_DIR "${CMAKE_BINARY_DIR}/external/pace")
+set(YAML_CPP_INSTALL_DIR "" CACHE PATH "yaml-cpp installation directory (forwarded to PACE build)")
+
+if(EXASTAMP_BUILD_PACE)
+  if(NOT EXISTS "${PACE_EXTERNAL_DIR}/.git")
+    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/external")
+    message(STATUS "Cloning PACE libraries from ${PACE_GIT_REPO} (${PACE_GIT_TAG}) into ${PACE_EXTERNAL_DIR}")
+    execute_process(
+      COMMAND git clone --branch ${PACE_GIT_TAG} ${PACE_GIT_REPO} pace
+      WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external"
+      RESULT_VARIABLE _pace_clone_result
+    )
+    if(NOT _pace_clone_result EQUAL 0)
+      message(FATAL_ERROR "Failed to clone PACE repository (exit code: ${_pace_clone_result})")
+    endif()
+  else()
+    message(STATUS "PACE libraries already present in ${PACE_EXTERNAL_DIR}")
+  endif()
+endif()
+
+# ====================================
+# === POD potential external libs ====
+# ====================================
+option(EXASTAMP_BUILD_POD "Build POD potential" OFF)
+set(EXASTAMP_POD_BLAS_VENDOR "" CACHE STRING
+    "BLAS vendor for the POD potential (e.g. OpenBLAS, Intel10_64lp, Generic). Empty means CMake auto-selects.")
+if(EXASTAMP_BUILD_POD)
+  if(EXASTAMP_POD_BLAS_VENDOR)
+    set(BLA_VENDOR ${EXASTAMP_POD_BLAS_VENDOR})
+    message(STATUS "POD BLAS vendor: ${EXASTAMP_POD_BLAS_VENDOR}")
+  endif()
+  find_package(BLAS REQUIRED)
+  find_package(LAPACK REQUIRED)
+  if(EXASTAMP_POD_BLAS_VENDOR STREQUAL "OpenBLAS")
+    set(EAPOD_USE_OPENBLAS ON)
+  endif()
+endif()
+
 # ==========================================
 # === build application plugins and libs ===
 # ==========================================
 add_subdirectory(src)
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/exaStamp DESTINATION include)
 
-
 # =================================================
 # === generate and install config and test data ===
 # =================================================
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/data DESTINATION ${CMAKE_INSTALL_PREFIX})
 if(ONIKA_REGRESSION_TEST_ENABLE)
-  AddRegressionTestDir("${CMAKE_SOURCE_DIR}/data/regression")
+  #  AddRegressionTestDir("${CMAKE_SOURCE_DIR}/data/regression")
+  file(GLOB_RECURSE POTENTIAL_FILES "${CMAKE_SOURCE_DIR}/data/potentials/*")
+  file(COPY ${POTENTIAL_FILES} DESTINATION ${CMAKE_BINARY_DIR})
+  add_subdirectory(data/regression_new)
 endif()
 
 # =======================================

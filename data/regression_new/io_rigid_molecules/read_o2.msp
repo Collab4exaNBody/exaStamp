@@ -1,0 +1,42 @@
+includes:
+  - config_rigid_molecule.msp
+
+# Lennard-Jones + Reaction Field combined potential
+ljrf_rigidmol_force:
+  type: O2
+  rcut: 8 ang
+  parameters:
+    - {
+        type_a: O,
+        type_b: O,
+        rcut: 8 ang,
+        parameters:
+          {
+            rf_rcut: 8 ang,
+            rf: { epsilon: 100, rc: 8 ang },
+            lj_rcut: 8 ang,
+            lj: { epsilon: 1.286776984E-21 J, sigma: 0.31589E-09 m },
+          },
+      }
+
+# Total potential = list of operators
+compute_force:
+  - ljrf_rigidmol_force
+
+# Important!
+grid_flavor: grid_flavor_rigidmol
+
+setup_system:
+  - read_dump_rigidmol:
+      filename: "rigidmol_o2_0005.mpiio"
+
+write_snapshot: nop
+write_restart: nop
+
+global:
+  dt: 1.0e-3 ps
+  max_iteration: 10
+  simulation_thermostate_screen_frequency: 1
+  simulation_snapshot_frequency: -1
+  simulation_restart_frequency: 5
+  simulation_thermostate_file_frequency: -1

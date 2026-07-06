@@ -1,0 +1,49 @@
+*
+*       ================================================
+*               Cas test Stamp
+*               Potentiel LJ(12/6)
+*               Limite periodique
+*				Mode cellules
+*               Ensemble NVE
+*       ================================================
+Ensemble			NVE **/LNVT/NPT/NPH
+Trequis				100.
+ConvForce			1.e-12
+*
+Schema				verlet
+Deltatemps			0.5e-15
+StepLimit			50
+StepAvg				1
+StopInitialisation		0
+*
+FichierAtomes			FAtomes
+Decoupage			1 1 1
+Parallele			1 1 1
+*ConditionX			Periodique
+*ConditionY			Periodique
+*ConditionZ			Periodique
+*
+drVerlet			1.e-10
+*
+ReactionField                                   1
+ReactionField_epsilon                           50.0
+ReactionField_rc                                12.5e-10
+ReactionField_selfpairs                         1
+*  
+Protection			1
+ProtectionExaStamp		1
+Reprise				0
+*
+TransfertDesForces		1
+*
+Molecule			1
+Molecule_CalculIntra		1       ** 0=SANS_INTRA ; 1=SANS_LISTE_DDL ; 2=AVEC_LISTE_DDL
+Molecule_ExclusionVdWIntra	0
+*
+FrequencesVibrationnelles	0
+*
+EcritureFichierFAtomes    10
+Molecule_ContribVdwIntra12    0.
+Molecule_ContribVdwIntra13    0.
+Molecule_ContribVdwIntra14    0.5
+CorrectionVdwLongueDistance                     1

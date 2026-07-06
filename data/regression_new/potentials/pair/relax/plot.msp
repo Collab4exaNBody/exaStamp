@@ -1,0 +1,10 @@
+species:
+  - C: { mass: 12.011 Da , z: 6 , charge: 0.0 e- }
+
+relax_plot:
+  rcut: 7.0 ang
+  parameters: { r1: 4. ang, rc: 6. ang }
+  
+simulation:
+  - species
+  - relax_plot

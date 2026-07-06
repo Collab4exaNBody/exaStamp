@@ -39,7 +39,7 @@ namespace exaStamp
     
     ADD_SLOT( double                  , dt         , INPUT , REQUIRED );
     ADD_SLOT( long                    , timestep   , INPUT , REQUIRED );
-    ADD_SLOT( long                    , simulation_end_iteration , INPUT , REQUIRED );
+    ADD_SLOT( long                    , max_iteration , INPUT , REQUIRED );
     ADD_SLOT( NPTContext              , npt_ctx    , INPUT_OUTPUT );
     ADD_SLOT( Domain                  , domain     , INPUT );    
     ADD_SLOT( ThermodynamicState      , thermodynamic_state , INPUT );
@@ -57,7 +57,7 @@ namespace exaStamp
       double f_omega;
 
       npt_ctx->p_hydro = 0.0;
-      npt_ctx->update_target_P(*timestep, *(simulation_end_iteration));
+      npt_ctx->update_target_P(*timestep, *(max_iteration));
       
       if (npt_ctx->deviatoric_flag) {
         npt_ctx->update_sigma();

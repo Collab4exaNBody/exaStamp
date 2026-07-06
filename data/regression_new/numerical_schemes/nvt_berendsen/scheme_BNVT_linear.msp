@@ -1,0 +1,5 @@
+includes:
+  - baseline.yaml
+
+numerical_scheme: verlet_bnvt
+berendsen_thermostat: { Tstart: 50. K , Tstop: 300. K, tau: 0.1 ps }

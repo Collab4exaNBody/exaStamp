@@ -1,0 +1,278 @@
+includes:
+  - config_rigid_molecule.msp
+
+configuration:
+  logging:
+    debug: false
+  debug:
+    filter: [ ".*egl_particles_to_vertex_buffer" ]
+
++update_particles_full:
+  - egl_particles_noghost_elements: { elements: "noghost_atoms" }
+  
+visualization_init:
+  - egl_init
+  - egl_create_surface: { surface: "onika-egl-window" , width: 800 , height: 600 }
+  - egl_create_shader_program:
+      shader_program: "atom_quadrics"
+      sources:
+        GL_VERTEX_SHADER: |
+          #version 460 core
+          layout (location = 0) in vec4 aPos;
+          layout (location = 1) in vec4 aQuat;
+          out vec4 vQuat;
+          void main()
+          {
+            gl_Position = aPos;
+            vQuat = aQuat;
+          }
+
+        GL_GEOMETRY_SHADER: |
+          #version 460 core
+          #extension GL_ARB_shading_language_include : require
+          #include <uniform/camera>
+          #include <quadrics/convex_hull>
+          #include <quadrics/shape>
+          #include <color/scalar_color_map>
+          layout (points) in;
+          layout (triangle_strip, max_vertices=5*CVH_TRIANGLE_STRIP_MAX_VERTICES) out;
+          in vec4 vQuat[];
+          out vec4 fDiffuseColor;
+          out mat4 fQuadricsMatrix;
+          out mat4 fModelViewVarianceInverse;
+          void generate_atom(mat4 mvp, vec4 pos, float radius, vec3 color)
+          {
+            mat4 T = quadrics_anisotropic_variance_matrix( pos , radius );
+            mat4 D = quadrics_sphere_matrix();
+            mat4 Ti = inverse( T );
+            mat4 Tit = transpose( Ti );
+            mat4 modelviewInverse = modelview[1];
+            mat4 modelviewInverseTranspose = transpose( modelviewInverse );
+            fDiffuseColor = vec4(color,1); //scalar_pv_colormap( vForceNorm[0], 0.0, 5.e2 );
+            fModelViewVarianceInverse = Ti * modelviewInverse;
+            fQuadricsMatrix = modelviewInverseTranspose * Tit * D * Ti * modelviewInverse;
+            ConvexHull2D hull = quadrics_2D_convex_hull( mvp, T );
+            cvh_draw_triangles( hull );            
+          }
+          void generate_bond(mat4 mvp, vec4 p1, vec4 p2, float radius, vec3 color)
+          {
+            vec4 center = (p1+p2)*0.5;
+            vec3 direction = p2.xyz - p1.xyz;
+            float length = sqrt( dot(direction,direction) );
+            mat4 T = quadrics_oriented_variance_matrix( center , direction , length , radius );
+            mat4 D = quadrics_zcylinder_matrix();
+            mat4 Ti = inverse( T );
+            mat4 Tit = transpose( Ti );
+            mat4 modelviewInverse = modelview[1];
+            mat4 modelviewInverseTranspose = transpose( modelviewInverse );
+            fDiffuseColor = vec4(color,1); //scalar_pv_colormap( vForceNorm[0], 0.0, 5.e2 );
+            fModelViewVarianceInverse = Ti * modelviewInverse;
+            fQuadricsMatrix = modelviewInverseTranspose * Tit * D * Ti * modelviewInverse;
+            ConvexHull2D hull = quadrics_2D_convex_hull( mvp, T );
+            cvh_draw_triangles( hull );            
+          }
+          mat3 quaternion_to_matrix(vec4 q)
+          {
+            float qx=q.x, qy=q.y, qz=q.z, qw=q.w;
+            return mat3(
+              vec3( 1.0f - 2.0f*qy*qy - 2.0f*qz*qz , 2.0f*qx*qy - 2.0f*qz*qw , 2.0f*qx*qz + 2.0f*qy*qw )
+            , vec3( 2.0f*qx*qy + 2.0f*qz*qw , 1.0f - 2.0f*qx*qx - 2.0f*qz*qz , 2.0f*qy*qz - 2.0f*qx*qw )
+            , vec3( 2.0f*qx*qz - 2.0f*qy*qw, 2.0f*qy*qz + 2.0f*qx*qw, 1.0f - 2.0f*qx*qx - 2.0f*qy*qy ) );
+          }
+          void main()
+          {
+            vec4 vPos = gl_in[0].gl_Position;
+            mat4 mvp = projection[0] * modelview[0];
+            mat3 molmat = quaternion_to_matrix( vQuat[0] );
+            vec3 o_pos = vec3(0,0,0);
+            vec3 h1_pos = molmat * vec3(0.75695033,0.58588228,0);
+            vec3 h2_pos = molmat * vec3(-0.75695033,0.58588228,0);
+            generate_atom(mvp,vPos + vec4(o_pos,0)  , 0.3 , vec3(0.9,0.2,0.2) );
+            generate_atom(mvp,vPos + vec4(h1_pos,0) , 0.2 , vec3(0.5,0.5,0.5) );
+            generate_atom(mvp,vPos + vec4(h2_pos,0) , 0.2 , vec3(0.5,0.5,0.5) );
+            generate_bond(mvp, vPos + vec4(o_pos,0) , vPos + vec4(h1_pos,0) , 0.1 , vec3(1,1,1) );
+            generate_bond(mvp, vPos + vec4(o_pos,0) , vPos + vec4(h2_pos,0) , 0.1 , vec3(1,1,1) );
+          }
+
+        GL_FRAGMENT_SHADER: |
+          #version 460 core
+          #extension GL_ARB_shading_language_include : require
+          #include <uniform/camera>
+          #include <quadrics/raytracing>
+          in vec4 fDiffuseColor;
+          in mat4 fQuadricsMatrix;
+          in mat4 fModelViewVarianceInverse;
+          layout (location = 0) out vec4 FragColor; // first attached output buffer
+          layout (depth_any) out float gl_FragDepth; // free to set depth to arbitrary value
+          void main()
+          {
+            mat4 fProjectionInverse = projection[1];
+            vec2 vp = viewport[0];
+            vec2 vp_rcp = viewport[1];
+            vec3 fc = gl_FragCoord.xyz;
+            fc.xy /= vp;
+            fc *= 2.0;
+            fc -= 1.0;
+            vec4 p = fProjectionInverse * vec4(fc, 1.);
+            vec3 P = rayQuadricsIntersection( fQuadricsMatrix , fModelViewVarianceInverse , vec3(0,0,0), p.xyz / p.w );
+            vec3 N = quadricsSurfaceNormal( fQuadricsMatrix , P );
+            vec4 projP = projection[0] * vec4( P, 1. );
+            gl_FragDepth = 0.5 * (projP.z / projP.w + 1.0);
+            vec4 color;
+            vec3 ambientColor = vec3(0.1,0.1,0.1);
+            vec3 diffuseColor = fDiffuseColor.xyz;
+            vec3 specularColor = vec3(1,1,1);
+            vec3 lightPosition = vec3(0.3,0.3,1); 
+            float d = max( dot( N , normalize(lightPosition) ) , 0 );
+            float s = pow( d , 8 );
+            color.xyz = diffuseColor.xyz * d + specularColor * s + ambientColor;
+            color.w = fDiffuseColor.w;
+            FragColor = color;
+          }
+
+      pipeline_config:
+        gl_enable:
+          - GL_PROGRAM_POINT_SIZE
+          - GL_POINT_SMOOTH
+          - GL_DEPTH_TEST
+        gl_disable:
+          - GL_BLEND
+          - GL_ALPHA_TEST
+          - GL_STENCIL_TEST
+        alpha_func: GL_ALWAYS
+        alpha_func_ref: 0
+        blend_src: GL_ONE
+        blend_dst: GL_ZERO
+        stencil_mask: 0xFF
+        stencil_func: GL_ALWAYS
+        stencil_func_ref: 0
+        stencil_func_mask: 0xFF
+        stencil_op_sfail: GL_KEEP
+        stencil_op_dpfail: GL_KEEP
+        stencil_op_dppass: GL_KEEP
+
+  - egl_create_camera:
+      camera: "camera"
+      bond_shaders: [ "atom_quadrics" ]
+      eye: [ 0 , 50 , 100 ]
+      look_at: [ 30 , 30 , 30 ]
+      near: 1.0
+      far: 1000.0
+
+
+write_snapshot:
+  rebind: { sim_continue: md_loop_continue }
+  body:
+    - egl_handle_events: { surface: "onika-egl-window" , camera: "camera" }
+    - egl_start_frame: { surface: "onika-egl-window" , camera: "camera" }
+    - egl_particles_to_vertex_buffer:
+        vertex_buffer: "particles"
+        vertex_attribs:
+          position: 0
+          orient: 1
+    - egl_draw: { vertex_buffer: "particles" , shader_program: "atom_quadrics" , elements: "noghost_atoms" , primitive: GL_POINTS }
+    - egl_end_frame: { surface: "onika-egl-window" }
+
+
+# Lennard-Jones + Reaction Field combined potential
+ljrf_rigidmol_force:
+  rcut: 8 ang
+  parameters:
+    - {
+        type_a: O,
+        type_b: O,
+        rcut: 8 ang,
+        parameters:
+          {
+            rf_rcut: 8 ang,
+            rf: { epsilon: 100, rc: 8 ang },
+            lj_rcut: 8 ang,
+            lj: { epsilon: 1.286776984E-21 J, sigma: 0.31589E-09 m },
+          },
+      }
+    - {
+        type_a: O,
+        type_b: M,
+        rcut: 8 ang,
+        parameters: { rf_rcut: 8 ang, rf: { epsilon: 100, rc: 8 ang } },
+      }
+    - {
+        type_a: O,
+        type_b: H,
+        rcut: 8 ang,
+        parameters: { rf_rcut: 8 ang, rf: { epsilon: 100, rc: 8 ang } },
+      }
+    - {
+        type_a: H,
+        type_b: M,
+        rcut: 8 ang,
+        parameters: { rf_rcut: 8 ang, rf: { epsilon: 100, rc: 8 ang } },
+      }
+    - {
+        type_a: M,
+        type_b: M,
+        rcut: 8 ang,
+        parameters: { rf_rcut: 8 ang, rf: { epsilon: 100, rc: 8 ang } },
+      }
+    - {
+        type_a: H,
+        type_b: H,
+        rcut: 8 ang,
+        parameters: { rf_rcut: 8 ang, rf: { epsilon: 100, rc: 8 ang } },
+      }
+
+# Total potential = list of operators
+compute_force:
+  - ljrf_rigidmol_force
+
+# Important!
+grid_flavor: grid_flavor_rigidmol
+
+generate_H2O_rigidmol_sample:
+  - species:
+      verbose: false
+      species:
+        - H: { mass: 1.007 Da, z: 1, charge: 0.5564 e-, molecule: H2O }
+        - O: { mass: 16 Da, z: 8, charge: 0.0 e-, molecule: H2O }
+        - M: { mass: 0.000 Da, z: 0, charge: -1.1128 e-, molecule: H2O }
+        - H2O:
+            charge: 0.0 e-
+            z: 0
+            mass: 0.0 Da
+            rigid_molecule:
+              - O: [ 0.00000000 ang, 0.00000000 ang, 0.00000000 ang ]
+              - H: [ 0.75695033 ang, 0.58588228 ang, 0.00000000 ang ]
+              - H: [ -0.75695033 ang, 0.58588228 ang, 0.00000000 ang ]
+              - M: [ 0.00000000 ang, 0.15460000 ang, 0.00000000 ang ]
+  - lattice:
+      structure: SC
+      types: [ H2O ]
+      size: [ 3.0 ang, 3.0 ang, 3.0 ang ]
+
+setup_system:
+  - domain:
+      cell_size: 30. ang
+      grid_dims: [ 2, 2, 2 ]
+      bounds: [ [ 0.0 um, 0.0 um, 0.0 um ], [ 60 ang, 60 ang, 60 ang ] ]
+      periodic: [ true, true, true ]
+      expandable: false
+      xform: [ [ 1, 0, 0 ], [ 0, 1, 0 ], [ 0, 0, 1 ] ]
+  - init_rcb_grid
+  - generate_H2O_rigidmol_sample
+  - gaussian_noise_v: { sigma: 200 m/s }
+  - random_orient
+  - visualization_init
+
+init_epilog:
+  - init_mass_center
+  - init_rigid_mol_inertial_mass
+
+write_restart: nop
+
+global:
+  dt: 1.0e-3 ps
+  max_iteration: 10000
+  simulation_thermostate_screen_frequency: 10
+  simulation_snapshot_frequency: 1
+  simulation_thermostate_file_frequency: -1
+

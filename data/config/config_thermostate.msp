@@ -1,0 +1,71 @@
+######################################################################################################
+####################### Default configuration for thermodynamic state functions ######################
+######################################################################################################
+
+######################################################################################################
+############################### Print thermodynamic state to the screen ##############################
+
+# Trigger function
+trigger_thermostate_screen:
+  rebind: { freq: simulation_thermostate_screen_frequency , result: trigger_thermostate_screen, lb_flag: trigger_load_balance , move_flag: trigger_move_particles }
+  body:
+    - nth_timestep: { first: true }
+      
+# Printing function
+thermostate_screen_if_triggered:
+  condition: trigger_thermostate_screen
+  body:
+    - default_thermostate_screen: { print_header: false }
+
+# Default operator
+default_thermostate_screen:  print_thermodynamic_state
+
+######################################################################################################
+######################################################################################################
+
+######################################################################################################
+################################# Write thermodynamic state to a file ################################
+
+# Trigger function
+trigger_thermostate_file:
+  rebind: { freq: simulation_thermostate_file_frequency , result: trigger_thermostate_file }
+  body:
+    - nth_timestep: { first: true }
+
+# Writing function
+thermostate_file_if_triggered:
+  condition: trigger_thermostate_file
+  body:
+    - default_thermostate_file: { print_header: false }
+
+# Default operator
+default_thermostate_file: dump_thermodynamic_state
+
+######################################################################################################
+######################################################################################################
+      
+######################################################################################################
+##################################### Compute thermodynamic state ####################################
+
+# Trigger function
+trigger_thermostate_compute:
+  - combine1:
+      rebind: { in1: trigger_restart , in2: trigger_thermostate_screen , result: output1 }
+      body:
+        - boolean_or
+  - combine2:
+      rebind: { in1: output1 , in2: trigger_thermostate_file , result: trigger_thermostate_compute }
+      body:
+        - boolean_or
+      
+# Compute function
+thermostate_compute_if_triggered:
+  condition: trigger_thermostate_compute
+  body:
+    - default_thermostate_compute
+
+# Default operator
+default_thermostate_compute: simulation_thermodynamic_state
+
+######################################################################################################
+######################################################################################################

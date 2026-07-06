@@ -1,0 +1,8 @@
+includes:
+  - baseline_single_specy.yaml
+
+coul_cut_compute_force_symetric:
+  rcut: 4.0 ang
+  parameters: { dielectric: 1.0, shift: true }
+
+compute_force: coul_cut_compute_force_symetric

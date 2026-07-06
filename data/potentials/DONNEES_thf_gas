@@ -1,0 +1,103 @@
+* ----------------------------------------------------------
+* Definition de la molecule (geometrie, maille et potentiel)
+* ----------------------------------------------------------
+FichierAtomes					./FAtomes
+EcritureFichierFAtomes				500000
+* ----------------------------------------------------------
+*	Parallelisation
+* ----------------------------------------------------------
+Parallele					1 1 1
+* ----------------------------------------------------------
+*	Dimension et forme du systeme
+* ----------------------------------------------------------
+Decoupage					1 1 1
+* ----------------------------------------------------------
+* Ensemble thermodynamique
+* ----------------------------------------------------------
+Ensemble					NVE
+Trequis						300.0
+Pextaniso					1e5 1e5 1e5
+NPTiso						1
+TauNVT						1.e-14
+TauNPT						1e-12 1e-12 1e-12
+FrictionLangevin				1.e12
+* ----------------------------------------------------------
+* Table de marche
+* ----------------------------------------------------------
+StepLimit					50
+*StepLimit					2500000
+StepAvg						1
+*StopInitialisation				1
+Deltatemps					0.5e-15
+* ----------------------------------------------------------
+* Pas de temps adaptatif
+* ----------------------------------------------------------
+DtAdapt						0
+DtAdaptbase					2
+DtAdaptdr					0.02e-10
+* ----------------------------------------------------------
+* Conditons aux limites
+* ----------------------------------------------------------
+* ConditionX					Periodique
+* ConditionY					Periodique
+* ConditionZ					Periodique
+* ----------------------------------------------------------
+* Protection / reprise
+* ----------------------------------------------------------
+Protection					0
+Reprise						0
+*Reprise_Fichier                                 ./StampV4prot_exaStamp_002500000.MpiIO
+ProtectionExaStamp				1
+* ----------------------------------------------------------
+* Sorties ParaView
+* ----------------------------------------------------------
+ParaViewSortie					0
+ParaViewFrequence				5000
+* ----------------------------------------------------------
+* Sorties xyz
+* ----------------------------------------------------------
+XyzSortie 				        1
+XyzOrdonnee 					1
+XyzFrequence					50000
+* ----------------------------------------------------------
+* Sorties gro
+* ----------------------------------------------------------
+GroSortie                                       0
+GroFrequence                                    4000
+* ----------------------------------------------------------
+* Reglages divers
+* ----------------------------------------------------------
+Schema						verlet
+drVerlet					2.e-10
+Vitesse						1
+RandSeed                			777
+*NbVoisins					250
+TransfertDesForces  				1
+* --------------------------------------------------------------------
+* Reaction Field
+* --------------------------------------------------------------------
+ReactionField                                   1
+ReactionField_epsilon                           100.0
+ReactionField_rc                                12.5e-10
+ReactionField_selfpairs                         1
+* --------------------------------------------------------------------
+*  Systemes Moleculaires
+* --------------------------------------------------------------------
+Molecule                        1
+Molecule_CalculIntra            1       ** 0=SANS_INTRA ; 1=SANS_LISTE_DDL ; 2=AVEC_LISTE_DDL
+Molecule_ContribVdwIntra12      0.0
+Molecule_ContribVdwIntra13      0.0
+Molecule_ContribVdwIntra14      0.5
+Molecule_ContribElecIntra12     0.0
+Molecule_ContribElecIntra13     0.0
+Molecule_ContribElecIntra14     0.0
+CorrectionVdwLongueDistance 	  1
+* --------------------------------------------------------------------
+* Performances
+* --------------------------------------------------------------------
+ModeEcoMem			1
+* --------------------------------------------------------------------
+* Sortie Energie Potentielle
+* --------------------------------------------------------------------
+EnergiePotPaireType		0
+TenseurContraintes		1

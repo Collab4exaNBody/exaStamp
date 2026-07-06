@@ -1,0 +1,183 @@
+*#####################################################################*
+*                       Fichier issu de Stamp                         *
+*                        (Iteration        0)                         *
+*#####################################################################*
+*
+* ======================= 
+* Bibliotheque des atomes 
+* ======================= 
+NbTypesAtomes    4
+* Description du type atomique    1
+nom	c3
+nomXYZ	C
+nomFF	c3
+type	Atome
+masse	 1.2000000000e-02 kg/mol
+charge	 0.0000000000e+00 e-
+structure	FICHIER
+maille_long	100.000000 100.000000 100.000000 ang
+maille_angle	90.000000 90.000000 90.000000 deg
+maille_orient	0
+maille_ref	1
+* Description du type atomique    2
+nom	os
+nomXYZ	O
+nomFF	os
+type	Atome
+masse	 1.6000000000e-02 kg/mol
+charge	 0.0000000000e+00 e-
+* Description du type atomique    3
+nom	h1
+nomXYZ	H
+nomFF	h1
+type	Atome
+masse	 1.0000000000e-03 kg/mol
+charge	 0.0000000000e+00 e-
+* Description du type atomique    4
+nom	hc
+nomXYZ	H
+nomFF	hc
+type	Atome
+masse	 1.0000000000e-03 kg/mol
+charge	 0.0000000000e+00 e-
+* ============================ 
+* Potentiels intermoleculaires 
+* ============================
+Potentiel  0  0 LJ sigma   3.4000000000e+00 ang epsilon   0.4577000000 kJ/mol rc   7.0 ang
+Potentiel  1  1 LJ sigma   3.0000000000e+00 ang epsilon   0.7113000000 kJ/mol rc   7.0 ang
+Potentiel  2  2 LJ sigma   2.4710000000e+00 ang epsilon   0.0657000000 kJ/mol rc   7.0 ang
+Potentiel  3  3 LJ sigma   2.6500000000e+00 ang epsilon   0.0657000000 kJ/mol rc   7.0 ang  
+* =================== 
+* Positions atomiques 
+* =================== 
+PositionDesAtomesCart ang
+13
+  c3      23.4220000000      10.5890000000      42.6910000000
+  os      23.0940000000       9.3250000000      43.2730000000
+  c3      21.6780000000       9.1790000000      43.1400000000
+  c3      21.0970000000      10.5700000000      43.2820000000
+  c3      22.2550000000      11.5040000000      42.9960000000
+  h1      23.5430000000      10.4490000000      41.6110000000
+  h1      24.3660000000      10.9550000000      43.1030000000
+  h1      21.3030000000       8.4860000000      43.8980000000
+  h1      21.4670000000       8.7610000000      42.1490000000
+  hc      20.7350000000      10.7290000000      44.3030000000
+  hc      20.2490000000      10.7260000000      42.6090000000
+  hc      22.4700000000      12.1100000000      43.8830000000
+  hc      22.0540000000      12.1950000000      42.1720000000
+* 
+* ================== 
+* Vitesses atomiques 
+* ================== 
+VitesseDesAtomes m/s
+    340.5202104504    -471.9179637660     384.0853667654
+      0.0000000000       0.0000000000       0.0000000000
+    537.4654624467     108.0515815293     427.2750529893
+   -295.4751431853    -333.2687759085    -112.2446894719
+   -582.5105297118     697.1351581452    -699.1157302827
+  -1998.2807651728    1270.7590727141    1586.5177400179
+    373.4777528277   -2701.9591769480    -921.6398849864
+   2316.5229293601     853.0549359973    1455.0001170559
+   -691.7199170150     578.1451682365   -2119.8779720874
+   1337.7609175964    2142.8526857907     339.5564131396
+  -1427.0668170619     857.2170255147    1599.6423596725
+   1797.8293283832   -1225.7004101443     677.0588048045
+  -1708.5234289178   -1774.3693011611   -2616.2575776167
+* 
+* ================= 
+* Charges atomiques 
+* ================= 
+ModificationChargeDesAtomes e-
+13
+0 0.273040
+1 -0.465642
+2 0.273040
+3 -0.064007
+4 -0.064007
+5 -0.012516
+6 -0.012516
+7 -0.012516
+8 -0.012516
+9 0.024410
+10 0.024410
+11 0.024410
+12 0.024410  
+* 0 0.0
+* 1 0.0
+* 2 0.0
+* 3 0.0
+* 4 0.0
+* 5 0.0
+* 6 0.0
+* 7 0.0
+* 8 0.0
+* 9 0.0
+* 10 0.0
+* 11 0.0
+* 12 0.0
+* 
+* =============== 
+* Champ de forces 
+* =============== 
+ChampDeForces
+25
+bond_gaff c3 c3  1.5375 ang 0.0 kcal/mol/ang2 0.0 kcal/mol/ang2  0.0 kcal/mol/ang2
+bond_gaff c3 os  1.4316 ang 308.6 kcal/mol/ang2 0.0 kcal/mol/ang2  0.0 kcal/mol/ang2
+bond_gaff c3 h1  1.0969 ang 330.6 kcal/mol/ang2 0.0 kcal/mol/ang2  0.0 kcal/mol/ang2
+bond_gaff c3 hc  1.0969 ang 330.6 kcal/mol/ang2 0.0 kcal/mol/ang2  0.0 kcal/mol/ang2
+angle_gaff c3 c3 c3   111.51 deg    62.9 kcal/mol
+angle_gaff c3 c3 h1   109.56 deg    46.4 kcal/mol
+angle_gaff c3 c3 hc   109.80 deg    46.3 kcal/mol
+angle_gaff c3 c3 os   107.97 deg    68.0 kcal/mol
+angle_gaff h1 c3 h1   108.46 deg    39.2 kcal/mol
+angle_gaff h1 c3 os   109.78 deg    50.8 kcal/mol
+angle_gaff c3 os c3   112.48 deg    62.7 kcal/mol
+angle_gaff hc c3 hc   107.58 deg    39.4 kcal/mol
+torsion_gaff c3 c3 c3 c3   0.18 kcal/mol   1.0 -    -3. -         0.0 deg
+torsion_gaff c3 c3 c3 c3   0.25 kcal/mol   1.0 -    -2. -       180.0 deg
+torsion_gaff c3 c3 c3 c3   0.20 kcal/mol   1.0 -     1. -       180.0 deg
+torsion_gaff hc c3 c3 os   0.00 kcal/mol   1.0 -    -3. -         0.0 deg
+torsion_gaff hc c3 c3 os   0.25 kcal/mol   1.0 -     1. -         0.0 deg
+torsion_gaff c3 c3 os c3   0.383 kcal/mol  1.0 -    -3. -         0.0 deg
+torsion_gaff c3 c3 os c3   0.1 kcal/mol    1.0 -     2. -       180.0 deg
+torsion_gaff hc c3 c3 hc   0.15 kcal/mol   1.0 -     3. -         0.0 deg
+torsion_gaff hc c3 c3 c3   0.16 kcal/mol   1.0 -     3. -         0.0 deg
+torsion_gaff h1 c3 os c3   1.150 kcal/mol  3.0 -     3.000 -      0.000 deg
+torsion_gaff c3 c3 c3 os   1.400 kcal/mol  9.0 -     3.000 -      0.000 deg
+torsion_gaff h1 c3 c3 c3   1.400 kcal/mol  9.0 -     3.000 -      0.000 deg
+torsion_gaff h1 c3 c3 hc   1.400 kcal/mol  9.0 -     3.000 -      0.000 deg
+* 
+* ============ 
+* Connectivite 
+* ============ 
+Zmatrice
+13
+0 1 4 5 6 
+1 0 2 
+2 1 3 7 8 
+3 2 4 9 10 
+4 3 0 11 12 
+5 0 
+6 0 
+7 2 
+8 2 
+9 3 
+10 3 
+11 4 
+12 4 
+* 
+* ======================================================== 
+* Contribution de dispersion/repulsion en intramoleculaire 
+* ======================================================== 
+ContribDispRepIntra
+10
+c3 c3 	 0.000000 0.000000 0.500000 	 0.000000 0.000000 0.5000000
+c3 os 	 0.000000 0.000000 0.500000 	 0.000000 0.000000 0.5000000
+c3 h1 	 0.000000 0.000000 0.500000 	 0.000000 0.000000 0.5000000
+c3 hc 	 0.000000 0.000000 0.500000 	 0.000000 0.000000 0.5000000
+os os 	 0.000000 0.000000 0.500000 	 0.000000 0.000000 0.5000000
+os h1 	 0.000000 0.000000 0.500000 	 0.000000 0.000000 0.5000000
+os hc 	 0.000000 0.000000 0.500000 	 0.000000 0.000000 0.5000000
+h1 h1 	 0.000000 0.000000 0.500000 	 0.000000 0.000000 0.5000000
+h1 hc 	 0.000000 0.000000 0.500000 	 0.000000 0.000000 0.5000000
+hc hc 	 0.000000 0.000000 0.500000 	 0.000000 0.000000 0.5000000
