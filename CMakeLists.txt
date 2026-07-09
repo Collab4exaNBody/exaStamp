@@ -95,7 +95,7 @@ endif()
 # ====================================
 option(EXASTAMP_BUILD_POD "Build POD potential" OFF)
 set(EXASTAMP_POD_BLAS_VENDOR "" CACHE STRING
-    "BLAS vendor for the POD potential (e.g. OpenBLAS, Intel10_64lp, Generic). Empty means CMake auto-selects.")
+    "BLA_VENDOR hint for the POD potential (e.g. OpenBLAS, Intel10_64lp, Generic). Empty = CMake auto-selects.")
 if(EXASTAMP_BUILD_POD)
   if(EXASTAMP_POD_BLAS_VENDOR)
     set(BLA_VENDOR ${EXASTAMP_POD_BLAS_VENDOR})
@@ -103,9 +103,6 @@ if(EXASTAMP_BUILD_POD)
   endif()
   find_package(BLAS REQUIRED)
   find_package(LAPACK REQUIRED)
-  if(EXASTAMP_POD_BLAS_VENDOR STREQUAL "OpenBLAS")
-    set(EAPOD_USE_OPENBLAS ON)
-  endif()
 endif()
 
 # ==========================================
