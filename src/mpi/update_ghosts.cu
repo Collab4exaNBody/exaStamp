@@ -27,14 +27,14 @@ namespace exaStamp
   using namespace UpdateGhostsUtils;
 
   // === register factory ===
-  template<typename GridT> using UpdateGhostsRandVandVir = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz,  field::_vx, field::_vy, field::_vz, field::_virial > , false >;
-  template<typename GridT> using UpdateGhostsRandV = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz,  field::_vx, field::_vy, field::_vz > , false >;
+  template<typename GridT> using UpdateGhostsRandVandVir = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz,  field::_vx, field::_vy, field::_vz, field::_virial > , false , true >;
+  template<typename GridT> using UpdateGhostsRandV = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz,  field::_vx, field::_vy, field::_vz > , false , true >;
 
-  template<typename GridT> using UpdateGhostsRandRf = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz, field::_rxf, field::_ryf, field::_rzf > , false >;  
-  template<typename GridT> using UpdateGhostsRandRfandV = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz, field::_rxf, field::_ryf, field::_rzf, field::_vx, field::_vy, field::_vz > , false >;
+  template<typename GridT> using UpdateGhostsRandRf = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz, field::_rxf, field::_ryf, field::_rzf > , false , true >;  
+  template<typename GridT> using UpdateGhostsRandRfandV = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz, field::_rxf, field::_ryf, field::_rzf, field::_vx, field::_vy, field::_vz > , false , true >;
   
-  template<typename GridT> using UpdateGhostsRQ = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz , field::_orient > , false >;
-  template<typename GridT> using UpdateGhostsIdMol = UpdateGhostsNode< GridT , FieldSet<field::_idmol> , false >;
+  template<typename GridT> using UpdateGhostsRQ = UpdateGhostsNode< GridT , FieldSet<field::_rx, field::_ry, field::_rz , field::_orient > , false , true >;
+  template<typename GridT> using UpdateGhostsIdMol = UpdateGhostsNode< GridT , FieldSet<field::_idmol> , false , true >;
 
   ONIKA_AUTORUN_INIT(update_ghosts)
   {

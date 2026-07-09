@@ -21,11 +21,11 @@ compute_all_forces_energy:
 ####################################### Velocity-Verlet Steps ########################################
 
 verlet_first_half:
-  - push_f_v_r: { dt_scale: 1.0 , xform_mode: INV_XFORM }
-  - push_f_v: { dt_scale: 0.5  , xform_mode: IDENTITY }  
+  - push_f_v_r: { dt_scale: 1.0, xform_mode: INV_XFORM }
+  - push_f_v: { dt_scale: 0.5, xform_mode: IDENTITY }
 
 verlet_second_half:
-  - push_f_v: { dt_scale: 0.5 , xform_mode: IDENTITY }
+  - push_f_v: { dt_scale: 0.5, xform_mode: IDENTITY }
 
 ######################################################################################################
 ######################################################################################################
@@ -65,12 +65,11 @@ verlet_lnvt:
     - load_balance_auto_tune_start
     - compute_force_prolog
     - compute_force
-#    - langevin_thermostat: { T: 300. K, gamma: 0.1 ps^-1 }
     - langevin_thermostat
     - compute_force_epilog
     - verlet_second_half
     - load_balance_auto_tune_end
-    
+
 ######################################################################################################
 ######################################################################################################
 
@@ -88,7 +87,6 @@ verlet_bnvt:
     - compute_force_epilog
     - verlet_second_half
     - simulation_thermodynamic_state
-#    - berendsen_thermostat: { T: 300. K, tau: 0.1 ps }
     - berendsen_thermostat
     - load_balance_auto_tune_end
 
@@ -115,9 +113,9 @@ verlet_nhnvt:
     - push_f_v: { dt_scale: 0.5, xform_mode: IDENTITY }
     - push_v_r: { dt_scale: 1.0, xform_mode: INV_XFORM }
     - check_and_update_particles
-    - load_balance_auto_tune_start  
+    - load_balance_auto_tune_start
     - compute_all_forces_energy
-    - push_f_v: {dt_scale: 0.5, xform_mode: IDENTITY}
+    - push_f_v: { dt_scale: 0.5, xform_mode: IDENTITY }
     - simulation_thermodynamic_state
     - nhc_temp_integrate
     - nh_v_temp:
@@ -147,7 +145,7 @@ verlet_nhnpt:
         rebind: { value: vbias }
         body: [ shift_v ]
     - simulation_thermodynamic_state
-    - couple_npt  
+    - couple_npt
     - nh_omega_dot
     - nh_v_press
     - push_f_v: { dt_scale: 0.5, xform_mode: IDENTITY }
@@ -155,9 +153,9 @@ verlet_nhnpt:
     - push_v_r: { dt_scale: 1.0, xform_mode: INV_XFORM }
     - remap_npt
     - check_and_update_particles
-    - load_balance_auto_tune_start  
+    - load_balance_auto_tune_start
     - compute_all_forces_energy
-    - push_f_v: {dt_scale: 0.5, xform_mode: IDENTITY}
+    - push_f_v: { dt_scale: 0.5, xform_mode: IDENTITY }
     - simulation_thermodynamic_state
     - nh_v_press
     - simulation_thermodynamic_state
@@ -172,4 +170,3 @@ verlet_nhnpt:
 
 ######################################################################################################
 ######################################################################################################
-        

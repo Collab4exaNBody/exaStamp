@@ -73,5 +73,6 @@ add_subdirectory(snaplmp)
 # ======================================================= #
 # =============== Experimental Potentials =============== #
 add_subdirectory(range_potential)
+add_subdirectory(igar)
 # ======================================================= #
 
