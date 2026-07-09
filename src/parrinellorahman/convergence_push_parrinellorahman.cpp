@@ -30,7 +30,7 @@ under the License.
 #include <onika/physics/units.h>
 #include <onika/physics/constants.h>
 #include <exaStamp/unit_system.h>
-#include <exaStamp/compute/thermodynamic_state.h>
+#include <exaStamp/thermo_state/thermodynamic_state.h>
 #include <onika/math/basic_types_stream.h>
 #include <onika/value_streamer.h>
 

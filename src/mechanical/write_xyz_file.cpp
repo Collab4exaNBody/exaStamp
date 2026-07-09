@@ -26,7 +26,7 @@ under the License.
 #include <onika/math/basic_types_stream.h>
 #include <exanb/core/domain.h>
 #include <onika/string_utils.h>
-#include <exaStamp/compute/thermodynamic_state.h>
+#include <exaStamp/thermo_state/thermodynamic_state.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exanb/core/grid_fields.h>
 

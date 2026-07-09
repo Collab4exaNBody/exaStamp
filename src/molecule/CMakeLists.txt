@@ -34,6 +34,6 @@ set(exaStampMolecule_COMPILE_DEFINITIONS
   -DXSTAMP_MAX_MOLECULE_PAIRS=${XSTAMP_MAX_MOLECULE_PAIRS}
  )
 
-set(exaStampMolecule_LINK_LIBRARIES exanbCompute exaStampCompute exanbParticleNeighbors exaStampParticleSpecies exp6 lennard_jones exaStampLJExp6RFParticleCharge exaStampReactionFieldParticleCharge exaStampPotential exanbIO exaStampIO)
+set(exaStampMolecule_LINK_LIBRARIES exanbCompute exaStampCompute exaStampThermoState exanbParticleNeighbors exaStampParticleSpecies exp6 lennard_jones exaStampLJExp6RFParticleCharge exaStampReactionFieldParticleCharge exaStampPotential exanbIO exaStampIO)
 onika_add_plugin(exaStampMolecule ${CMAKE_CURRENT_SOURCE_DIR})
 
