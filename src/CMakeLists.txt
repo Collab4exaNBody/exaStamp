@@ -32,4 +32,8 @@ add_subdirectory(mechanical)
 add_subdirectory(rigidmol)
 add_subdirectory(tutorial)
 add_subdirectory(npt)
+add_subdirectory(setup_system)
+add_subdirectory(numerical_schemes)
+add_subdirectory(thermo_state)
+add_subdirectory(shock)
 
