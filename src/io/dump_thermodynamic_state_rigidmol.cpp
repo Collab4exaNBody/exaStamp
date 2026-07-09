@@ -21,7 +21,7 @@ under the License.
 #include <onika/log.h>
 #include <onika/string_utils.h>
 #include <onika/print_utils.h>
-#include <exaStamp/compute/thermodynamic_state.h>
+#include <exaStamp/thermo_state/thermodynamic_state.h>
 #include <onika/physics/constants.h>
 
 #include <sstream>

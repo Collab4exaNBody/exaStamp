@@ -14,10 +14,10 @@
 # specific language governing permissions and limitations
 # under the License.
 #
-# ====================================================================
-# === micro-stamp pair potential compute operator library library  ===
-# ====================================================================
+# ==============================
+# === exaStamp core library  ===
+# ==============================
 
-set(exaStampParrinelloRahman_LINK_LIBRARIES exaStampCompute exaStampThermoState exaStampParticleSpecies exanbCore)
-onika_add_plugin(exaStampParrinelloRahman ${CMAKE_CURRENT_SOURCE_DIR})
+set(exaStampThermoState_LINK_LIBRARIES exanbCore exaStampParticleSpecies)
+onika_add_plugin(exaStampThermoState ${CMAKE_CURRENT_SOURCE_DIR})
 

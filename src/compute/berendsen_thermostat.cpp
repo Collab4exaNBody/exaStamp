@@ -30,7 +30,7 @@ under the License.
 #include <onika/physics/units.h>
 #include <onika/memory/allocator.h>
 #include <exanb/grid_cell_particles/particle_region.h>
-#include <exaStamp/compute/thermodynamic_state.h>
+#include <exaStamp/thermo_state/thermodynamic_state.h>
 
 namespace exaStamp
 {
