@@ -37,7 +37,7 @@ namespace exaStamp
       return this->operator() (vx,vy,vz,m_type);
     }
   };
-
+  
   struct KineticEnergyTensorFunctor
   {
     const ParticleSpecie* __restrict__ m_species = nullptr;
@@ -66,6 +66,24 @@ namespace exaStamp
     }
   };
 
+  struct VelocityNormFunctor
+  {
+    const ParticleSpecie* __restrict__ m_species = nullptr;
+    ONIKA_HOST_DEVICE_FUNC inline double operator () (double vx, double vy, double vz) const
+    {
+      return sqrt(vx*vx+vy*vy+vz*vz);
+    }
+  };
+
+  struct ForceNormFunctor
+  {
+    const ParticleSpecie* __restrict__ m_species = nullptr;
+    ONIKA_HOST_DEVICE_FUNC inline double operator () (double fx, double fy, double fz) const
+    {
+      return sqrt(fx*fx+fy*fy+fz*fz);
+    }
+  };
+  
   struct MassFunctor
   {
     const ParticleSpecie* __restrict__ m_species = nullptr;
