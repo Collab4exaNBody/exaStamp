@@ -19,7 +19,7 @@ setup_system:
   - lattice:
       structure: SC
       types: [ Fe ]
-      size: [ 1.0 ang ]
+      size: [ 3.0 ang , 3.0 ang , 3.0 ang ]
   - gaussian_noise_r: { sigma: 0.1 ang }
   - gaussian_noise_v: { sigma: 50. m/s }
 
@@ -29,7 +29,7 @@ write_snapshot:
       fields: [ id, type ]
       
 global:
-  max_iteration: 10000
+  max_iteration: 10
   simulation_thermostate_screen_frequency: 10
   simulation_thermostate_file_frequency: -1
   simulation_snapshot_frequency: 10

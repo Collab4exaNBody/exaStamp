@@ -3,7 +3,7 @@ species:
 
 yukawa_plot:
   rcut: 10.0 ang
-  parameters: { A: 2.43 eV*ang , kappa: 4.1 1./ang }
+  parameters: { A: 2.43 eV*ang , kappa: 4.1 1/ang }
 
 plot_graph:
   - species
