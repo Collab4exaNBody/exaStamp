@@ -33,9 +33,9 @@ under the License.
 
 #include <omp.h>
 
-#ifdef EAPOD_USE_OPENBLAS
-extern "C" void openblas_set_num_threads(int);
-#endif
+// Weak symbols: resolve to the real function when the respective BLAS is linked, null otherwise.
+extern "C" void openblas_set_num_threads(int) __attribute__((weak));
+extern "C" void MKL_Set_Num_Threads(int)      __attribute__((weak));
 
 #include "pod_params.h"
 #include "pod_config.h"
@@ -65,12 +65,17 @@ namespace exaStamp
       pod_ctx->pod_file   = pod_file;
       pod_ctx->coeff_file = coeff_file;
 
-#ifdef EAPOD_USE_OPENBLAS
-      // Prevent OpenBLAS from spawning its own threads inside the OMP parallel
-      // region — each exaStamp thread calls BLAS sequentially for its own atom.
-      openblas_set_num_threads(1);
-      ldbg << "OpenBLAS: set to single-threaded mode (OMP handles parallelism)" << std::endl;
-#endif
+      // Prevent the BLAS library from spawning its own threads inside the OMP
+      // parallel region — each exaStamp thread calls BLAS sequentially per atom.
+      // Weak symbols resolve to null when the respective library is not linked.
+      if (openblas_set_num_threads) {
+        openblas_set_num_threads(1);
+        ldbg << "POD: OpenBLAS set to single-threaded mode" << std::endl;
+      }
+      if (MKL_Set_Num_Threads) {
+        MKL_Set_Num_Threads(1);
+        ldbg << "POD: MKL set to single-threaded mode" << std::endl;
+      }
 
       // Eagerly construct one EAPOD per OpenMP thread.
       // Done here at init time so execute() carries zero thread-setup overhead.
