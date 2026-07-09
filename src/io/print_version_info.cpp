@@ -54,6 +54,7 @@ namespace exaStamp
   ONIKA_AUTORUN_INIT(version_info)
   {
    OperatorNodeFactory::instance()->register_factory( "version_info", make_simple_operator< ApplicationVersionInfo > );
+   OperatorNodeFactory::instance()->register_factory( "print_version_info", make_simple_operator< ApplicationVersionInfo > );
   }
 
 }
