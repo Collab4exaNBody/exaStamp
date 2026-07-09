@@ -28,7 +28,7 @@ set(CMAKE_CXX_EXTENSIONS NO)
 # ===============
 # === Project ===
 # ===============
-project(exaStamp VERSION 3.7 LANGUAGES C CXX)
+project(exaStamp VERSION 3.8 LANGUAGES C CXX)
 set(EXASTAMP_VERSION ${CMAKE_PROJECT_VERSION}) 
 message(STATUS "Project version : ${EXASTAMP_VERSION}")
 
