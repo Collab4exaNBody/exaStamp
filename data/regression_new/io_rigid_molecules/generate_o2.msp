@@ -1,0 +1,76 @@
+includes:
+  - config_rigid_molecule.msp
+
+# Lennard-Jones + Reaction Field combined potential
+ljrf_rigidmol_force:
+  type: O2
+  rcut: 8 ang
+  parameters:
+    - {
+        type_a: O,
+        type_b: O,
+        rcut: 8 ang,
+        parameters:
+          {
+            rf_rcut: 8 ang,
+            rf: { epsilon: 100, rc: 8 ang },
+            lj_rcut: 8 ang,
+            lj: { epsilon: 1.286776984E-21 J, sigma: 0.31589E-09 m },
+          },
+      }
+
+# Total potential = list of operators
+compute_force:
+  - ljrf_rigidmol_force
+
+# Important!
+grid_flavor: grid_flavor_rigidmol
+
+generate_O2_rigidmol_sample:
+  - species:
+      verbose: true
+      species:
+        - O: { mass: 15.999 Da, z: 8, charge: 0.0 e- }
+        - O2:
+            charge: 0.0 e-
+            z: 0
+            mass: 0.0 Da
+            rigid_molecule:
+              - O: [ -0.604 ang, 0.0, 0.0 ]
+              - O: [ 0.604 ang, 0.0, 0.0 ]
+  - lattice:
+      structure: SC
+      types: [ O2 ]
+      size: [ 4.5 ang, 4.5 ang, 4.5 ang ]
+
+setup_system:
+  - domain:
+      cell_size: 5. ang
+      grid_dims: [ 10, 10, 10 ]
+      bounds: [ [ 0.0 um, 0.0 um, 0.0 um ], [ 50.0 ang, 50.0 ang, 50.0 ang ] ]
+      periodic: [ true, true, true ]
+      expandable: false
+      xform: [ [ 1, 0, 0 ], [ 0, 1, 0 ], [ 0, 0, 1 ] ]
+  - init_rcb_grid
+  - generate_O2_rigidmol_sample
+  - gaussian_noise_v: { sigma: 200 m/s }
+  - replicate_domain: [ 2, 2, 2 ]
+  - random_orient
+
+init_epilog:
+  - init_mass_center
+  - init_rigid_mol_inertial_mass
+
+write_snapshot: nop
+
+write_restart:
+  - timestep_file: "rigidmol_o2_%04d.mpiio"
+  - write_dump_rigidmol
+
+global:
+  dt: 1.0e-3 ps
+  max_iteration: 10
+  simulation_thermostate_screen_frequency: 1
+  simulation_snapshot_frequency: -1
+  simulation_restart_frequency: 5
+  simulation_thermostate_file_frequency: -1

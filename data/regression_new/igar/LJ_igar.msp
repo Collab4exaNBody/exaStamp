@@ -1,0 +1,78 @@
+configuration:
+  profiling:
+    summary: true
+    
+species:
+  - Ar: { mass: 39.948 Da, z: 18, charge: 0.0 e- }
+
+lj_compute_force:
+  parameters: { epsilon: 0.0104 eV, sigma: 3.4 ang }
+  rcut: 5.0 ang
+
+langevin_thermostat:
+  Tstart: 2000. K
+  Tstop: 2000. K
+  gamma: 0.1 ps^-1
+
+numerical_scheme: verlet_lnvt
+
+compute_force_prolog:
+  - zero_force_energy: { ghost: true }
+
+# 1st solution : on-the-fly triquadratic Lagrange interpolation
+compute_force_A:
+  - igar_force_interp: { energy_factor: 20000.0 }
+
+# 2nd solution : precomputed finite-difference gradient, then per-particle assignment (slower)
+compute_force_B:
+  - igar_force_from_gradient: { energy_factor: 20000.0 }
+
+compute_force: compute_force_A
+
+check_and_update_particles:
+  - trigger_move_particles
+  - update_particles_full_body
+
+compute_force_epilog:
+  - update_force_from_ghost_no_gcv
+  - force_to_accel
+  
+setup_system:
+  - domain:
+      cell_size: 15.5 ang
+      grid_dims: [ 4, 4, 4 ]
+      bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 62. ang, 62. ang, 62. ang ] ]
+      xform: [ [ 1, 0, 0 ], [ 0, 1, 0 ], [ 0, 0, 1 ] ]
+      periodic: [ true, true, true ]
+      expandable: false
+  - init_rcb_grid
+  - lattice:
+      structure: SC
+      types: [ Ar ]
+      size: [ 2.1 ang, 2.1 ang, 2.1 ang ]
+  - gaussian_noise_r:
+      sigma: 0.2 ang
+  - init_temperature_new:
+      T: 2000. K
+  - read_cell_values:
+      field_name: "igar_ep"
+      field_dim: 1
+      grid_subdiv: 64
+      file_name: "igar_test.vtk"
+# Uncomment for 2nd method      
+#  - igar_compute_gradient
+
+write_snapshot:
+  - timestep_file: "Paraview/test_%09d"
+  - write_paraview:
+      fields: [ id, type, ep, processor_id ]
+  - timestep_file: "VTK/test_%09d"
+
+global:
+  max_iteration: 10
+  simulation_thermostate_screen_frequency: 50
+  simulation_thermostate_file_frequency: -1
+  simulation_snapshot_frequency: 100
+  rcut_inc: 1.0 ang
+  dt: 0.5 fs
+  thermostate_file: "thermo_exastamp_lj.txt"
