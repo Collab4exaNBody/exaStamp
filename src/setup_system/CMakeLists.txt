@@ -18,6 +18,6 @@
 # === exaStamp core library  ===
 # ==============================
 
-set(exaStampSetup_LINK_LIBRARIES exanbCore exanbGridCellParticles)
+set(exaStampSetup_LINK_LIBRARIES exanbCore exanbGridCellParticles exaStampParticleSpecies)
 onika_add_plugin(exaStampSetup ${CMAKE_CURRENT_SOURCE_DIR})
 
