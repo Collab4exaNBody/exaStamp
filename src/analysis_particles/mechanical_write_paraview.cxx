@@ -27,8 +27,8 @@ under the License.
 
 #include <exanb/compute/field_combiners.h>
 #include <exaStamp/compute/field_combiners.h>
-#include <exaStamp/mechanical/cell_particles_local_mechanical_metrics.h>
-#include <exaStamp/mechanical/cell_particles_local_structural_metrics.h>
+#include <exaStamp/analysis_particles/cell_particles_local_mechanical_metrics.h>
+#include <exaStamp/analysis_particles/cell_particles_local_structural_metrics.h>
 
 #include <exanb/io/vtk_writer.h>
 #include <exanb/io/vtk_writer_binary.h>

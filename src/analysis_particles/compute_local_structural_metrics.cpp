@@ -36,8 +36,8 @@ under the License.
 #include <exaStamp/potential/snaplegacy/snap_legacy_read_lammps.h>
 #include <exaStamp/potential/snaplegacy/snap_legacy_config.h>
 
-#include <exaStamp/mechanical/cell_particles_local_structural_metrics.h>
-#include <exaStamp/mechanical/compute_local_structural_metrics.h>
+#include <exaStamp/analysis_particles/cell_particles_local_structural_metrics.h>
+#include <exaStamp/analysis_particles/compute_local_structural_metrics.h>
 
 #include <exanb/particle_neighbors/chunk_neighbors.h>
 #include <exanb/compute/compute_cell_particle_pairs.h>

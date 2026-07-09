@@ -30,7 +30,7 @@ under the License.
 #include <exanb/compute/field_combiners.h>
 #include <exaStamp/compute/field_combiners.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exaStamp/mechanical/cell_particles_local_mechanical_metrics.h>
+#include <exaStamp/analysis_particles/cell_particles_local_mechanical_metrics.h>
 
 #include <mpi.h>
 #include <regex>

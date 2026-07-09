@@ -17,7 +17,8 @@
 # ExaStamp specific packages
 
 add_subdirectory(debug)
-add_subdirectory(analytics)
+add_subdirectory(analysis_grid)
+add_subdirectory(analysis_particles)
 add_subdirectory(particle_species)
 add_subdirectory(io)
 add_subdirectory(compute)
@@ -28,7 +29,6 @@ add_subdirectory(potential_factory)
 add_subdirectory(potential)
 add_subdirectory(particle_charge)
 add_subdirectory(molecule)
-add_subdirectory(mechanical)
 add_subdirectory(rigidmol)
 add_subdirectory(tutorial)
 add_subdirectory(npt)

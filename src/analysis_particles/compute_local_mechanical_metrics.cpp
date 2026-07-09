@@ -34,8 +34,8 @@ under the License.
 #include <exanb/defbox/deformation_yaml.h>
 #include <exanb/defbox/deformation_math.h>
 
-#include <exaStamp/mechanical/cell_particles_local_mechanical_metrics.h>
-#include <exaStamp/mechanical/compute_local_mechanical_metrics.h>
+#include <exaStamp/analysis_particles/cell_particles_local_mechanical_metrics.h>
+#include <exaStamp/analysis_particles/compute_local_mechanical_metrics.h>
 
 #include <exanb/core/config.h>
 #include <exanb/particle_neighbors/chunk_neighbors.h>

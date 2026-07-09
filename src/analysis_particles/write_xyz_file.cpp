@@ -36,9 +36,9 @@ under the License.
 #include <exanb/defbox/deformation_math.h>
 #include <onika/physics/constants.h>
 
-#include <exaStamp/mechanical/cell_particles_local_metrics.h>
-#include <exaStamp/mechanical/cell_particles_local_mechanical_metrics.h>
-#include <exaStamp/mechanical/cell_particles_local_structural_metrics.h>
+#include <exaStamp/analysis_particles/cell_particles_local_metrics.h>
+#include <exaStamp/analysis_particles/cell_particles_local_mechanical_metrics.h>
+#include <exaStamp/analysis_particles/cell_particles_local_structural_metrics.h>
 
 #include <onika/soatl/packed_field_arrays.h>
 #include <memory>

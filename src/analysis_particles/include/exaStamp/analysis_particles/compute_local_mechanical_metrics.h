@@ -20,8 +20,8 @@ under the License.
 #include <exanb/defbox/deformation.h>
 #include <exanb/defbox/deformation_math.h>
 
-#include <exaStamp/mechanical/cell_particles_local_mechanical_metrics.h>
-#include <exaStamp/mechanical/basic_algebra_for_mechanics.h>
+#include <exaStamp/analysis_particles/cell_particles_local_mechanical_metrics.h>
+#include <exaStamp/analysis_particles/basic_algebra_for_mechanics.h>
 
 #include <cmath>
 #include <algorithm>

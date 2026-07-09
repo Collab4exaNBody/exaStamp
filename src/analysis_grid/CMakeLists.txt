@@ -14,10 +14,10 @@
 # specific language governing permissions and limitations
 # under the License.
 #
-# =================================
-# === micro-stamp Analytics library  ===
-# =================================
+# =======================================
+# === exaStamp Grid Analysis library  ===
+# =======================================
 
-set(exaStampAnalytics_LINK_LIBRARIES exaStampCompute exanbParticleNeighbors exanbMPI exaStampParticleSpecies exanbGridCellParticles)
-onika_add_plugin(exaStampAnalytics ${CMAKE_CURRENT_SOURCE_DIR})
+set(exaStampAnalysisGrid_LINK_LIBRARIES exaStampCompute exanbParticleNeighbors exanbMPI exaStampParticleSpecies exanbGridCellParticles)
+onika_add_plugin(exaStampAnalysisGrid ${CMAKE_CURRENT_SOURCE_DIR})
 
