@@ -18,6 +18,6 @@
 # === exaStamp core library  ===
 # ==============================
 
-set(exaStampNumericalSchemes_LINK_LIBRARIES exanbCore)
+set(exaStampNumericalSchemes_LINK_LIBRARIES exanbCore exaStampParticleSpecies exaStampThermoState)
 onika_add_plugin(exaStampNumericalSchemes ${CMAKE_CURRENT_SOURCE_DIR})
 
