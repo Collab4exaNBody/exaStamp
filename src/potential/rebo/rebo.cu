@@ -92,8 +92,11 @@ namespace exaStamp
         eflag = *trigger_thermo_state;
       }
 
-      // Read Only Rebo parameters
-      const ReboParamsRO params_ro{ *parameters };
+      // Read Only Rebo parameters. Allocated in CUDA managed memory (not on the
+      // host stack) so the pointer stashed in the REBOForceOp below stays valid
+      // when dereferenced from GPU kernel code.
+      onika::memory::CudaMMVector<ReboParamsRO> params_ro_mm( 1, ReboParamsRO{ *parameters } );
+      const ReboParamsRO* params_ro = params_ro_mm.data();
 
       // ------------------------------------------------------------------------------ //
       // First pass: we compute NijC and NijH bond order per atom
@@ -134,7 +137,7 @@ namespace exaStamp
         else           with_locks(ComputePairOptionalLocks<false>{});
       };
 
-      run_rebo( REBOForceOp<decltype(nijc_acc),decltype(nijh_acc),decltype(nconj_acc)> { &params_ro, nijc_acc, nijh_acc, nconj_acc } );
+      run_rebo( REBOForceOp<decltype(nijc_acc),decltype(nijh_acc),decltype(nconj_acc)> { params_ro, nijc_acc, nijh_acc, nconj_acc } );
     }
   };
 
