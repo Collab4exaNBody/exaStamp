@@ -38,6 +38,7 @@ under the License.
 
 #pragma once
 
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <vector>
@@ -71,10 +72,17 @@ struct K2bPotentialParameters
   // Paper value: Delta = 2 eV.
   double delta    = 2.0;
 
-  // Learned ML weight vector w_2b (size = n_rbf).
+  // Upper bound on n_rbf: keeps the parameter struct POD-sized and GPU-safe
+  // (this struct is copied by value into CUDA kernels, so it cannot hold a
+  // std::vector -- its heap pointer would be invalid on device). Kept close
+  // to the paper's default of 40: the whole functor carrying this struct
+  // must fit the framework's fixed GPU parameter-size budget.
+  static constexpr int K2B_MAX_RBF = 64;
+
+  // Learned ML weight vector w_2b (size = n_rbf, n_rbf <= K2B_MAX_RBF).
   // w[k] is the coefficient for the k-th Gaussian basis function (Eq. 19).
   // Must contain exactly n_rbf entries before calling k2b_potential_compute_force.
-  std::vector<double> w = {};
+  double w[K2B_MAX_RBF] = {};
 };
 
 } // namespace exaStamp
@@ -105,10 +113,11 @@ namespace YAML
       if( node["delta"] ) v.delta  = node["delta"].as<double>();
       if( node["w"] )
       {
-        v.w = node["w"].as< std::vector<double> >();
-        // Consistency check: w must have exactly n_rbf entries.
-        if( static_cast<int>(v.w.size()) != v.n_rbf )
+        const auto w = node["w"].as< std::vector<double> >();
+        // Consistency check: w must have exactly n_rbf entries, within the fixed storage cap.
+        if( static_cast<int>(w.size()) != v.n_rbf || v.n_rbf > exaStamp::K2bPotentialParameters::K2B_MAX_RBF )
           return false;
+        std::copy( w.begin(), w.end(), v.w );
       }
       return true;
     }
@@ -146,7 +155,7 @@ ONIKA_HOST_DEVICE_FUNC inline void k2b_potential_compute_force(
     double& de)
 {
   assert( r > 0. );
-  assert( static_cast<int>(params.w.size()) == params.n_rbf );
+  assert( params.n_rbf <= K2bPotentialParameters::K2B_MAX_RBF );
 
   e  = 0.0;
   de = 0.0;
@@ -156,7 +165,7 @@ ONIKA_HOST_DEVICE_FUNC inline void k2b_potential_compute_force(
   const double  r_cut   = params.r_cut;
   const double  sigma   = params.sigma;
   const double  delta   = params.delta;
-  const double* w       = params.w.data();
+  const double* w       = params.w;
 
   // Pre-compute shared constants.
   const double inv_2sig2 = 0.5 / (sigma * sigma);  // 1 / (2 sigma^2)
