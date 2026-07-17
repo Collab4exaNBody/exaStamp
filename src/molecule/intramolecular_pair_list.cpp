@@ -137,7 +137,7 @@ namespace exaStamp
           decode_cell_particle( chemical_pair[0], c, p, ta );
           decode_cell_particle( chemical_pair[1], c, p, tb );
           const int pair_id = unique_pair_id(ta,tb);
-          const auto & potparm = molecule_compute_parameters->m_pair_params[ n_type_pairs * chemicalLinkType + pair_id ];
+          // const auto & potparm = molecule_compute_parameters->m_pair_params[ n_type_pairs * chemicalLinkType + pair_id ];
           int param_idx = -1;
           // Since weight is only applied on the Coulombic part of RF, we still need that parameters set to be considered
           param_idx = n_type_pairs * chemicalLinkType + pair_id ;

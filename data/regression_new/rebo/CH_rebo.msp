@@ -1,7 +1,8 @@
 configuration:
   profiling:
     summary: false
-
+  nogpu: true
+  
 species:
   - C: { z: 12, mass: 12.0107 Da, charge: 0.0 e- }
   - H: { z: 1, mass: 1.00794 Da, charge: 0.0 e- }

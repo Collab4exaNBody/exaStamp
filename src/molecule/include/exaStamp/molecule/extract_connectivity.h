@@ -393,7 +393,7 @@ namespace exaStamp
         for(size_t p=0; p<n_particles; ++p)
         {
           uint64_t p_id = ids[p];
-          const std::array<uint64_t, 4>& neigh = cmols[p];
+          const auto& neigh = cmols[p];
           
           if( cell_is_here )
           {
