@@ -105,6 +105,14 @@ if(EXASTAMP_BUILD_POD)
   find_package(LAPACK REQUIRED)
 endif()
 
+option(USE_RSA "Add RSA Package" OFF)
+if(USE_RSA)
+	find_package(rsa_mpi REQUIRED)
+	message( STATUS "rsa_mpi is used, header location: ${rsa_mpi_INCLUDE_DIRS}")
+	message( STATUS "rsa_mpi is used, rsa_mpi_DIR: ${rsa_mpi_DIR}")
+  list(APPEND XNB_INCLUDE_DIRECTORIES ${rsa_mpi_INCLUDE_DIRS})
+endif()
+
 # ==========================================
 # === build application plugins and libs ===
 # ==========================================
