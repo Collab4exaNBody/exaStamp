@@ -44,7 +44,7 @@ namespace exaStamp
   struct CopyParticleType
   {
     template<class ComputeBufferT, class FieldArraysT>
-    inline void operator()(ComputeBufferT& tab, const Vec3d& dr, double d2,
+    ONIKA_HOST_DEVICE_FUNC inline void operator()(ComputeBufferT& tab, const Vec3d& dr, double d2,
                            FieldArraysT cells, size_t cell_b, size_t p_b, double weight) const noexcept
     {
       assert(ssize_t(tab.count) < ssize_t(tab.MaxNeighbors));
@@ -312,7 +312,7 @@ namespace exaStamp
     NconjFieldT m_nconj_field = {};   // read neighbour's Nconj
 
     template<class ComputeBufferT, class CellParticlesT>
-    inline void operator()(size_t n, ComputeBufferT& buf, double& en,
+    ONIKA_HOST_DEVICE_FUNC inline void operator()(size_t n, ComputeBufferT& buf, double& en,
                            double& fx, double& fy, double& fz,
                            int type, double nC_central, double nH_central, double Nconj_central, CellParticlesT cells) const
     {
@@ -323,7 +323,7 @@ namespace exaStamp
     }
 
     template<class ComputeBufferT, class CellParticlesT>
-    inline void operator()(size_t n, ComputeBufferT& buf, double& en,
+    ONIKA_HOST_DEVICE_FUNC inline void operator()(size_t n, ComputeBufferT& buf, double& en,
                            double& fx, double& fy, double& fz,
                            int type, Mat3d& virial, double nC_central, double nH_central, double Nconj_central, CellParticlesT cells) const
     {
@@ -333,7 +333,7 @@ namespace exaStamp
     }
 
     template<class ComputeBufferT, class CellParticlesT, class GridCellLocksT, class ParticleLockT>
-    inline void operator()(size_t n, ComputeBufferT& buf, double& en,
+    ONIKA_HOST_DEVICE_FUNC inline void operator()(size_t n, ComputeBufferT& buf, double& en,
                            double& fx, double& fy, double& fz,
                            int type, double nC_central, double nH_central, double Nconj_central, CellParticlesT cells,
                            GridCellLocksT locks, ParticleLockT& lock_a) const
@@ -344,7 +344,7 @@ namespace exaStamp
 
     template<class ComputeBufferT, class CellParticlesT, class Mat3dT,
              class GridCellLocksT, class ParticleLockT>
-    inline void operator()(int jnum, ComputeBufferT& buf, double& en,
+    ONIKA_HOST_DEVICE_FUNC inline void operator()(int jnum, ComputeBufferT& buf, double& en,
                            double& fx, double& fy, double& fz,
                            int type, Mat3dT& virial, double nC_central, double nH_central, double Nconj_central, CellParticlesT cells,
                            GridCellLocksT locks, ParticleLockT& lock_a) const
@@ -1179,3 +1179,20 @@ namespace exaStamp
   };
 
 } // namespace exaStamp
+
+// ComputePairTraits specialization must live in the exanb namespace
+// where the primary template is defined.
+namespace exanb
+{
+  template<class NijcFieldT, class NijhFieldT, class NconjFieldT>
+  struct ComputePairTraits< exaStamp::REBOForceOp<NijcFieldT, NijhFieldT, NconjFieldT> >
+  {
+    static inline constexpr bool ComputeBufferCompatible = true;
+    static inline constexpr bool BufferLessCompatible    = false;
+    static inline constexpr bool CudaCompatible          = false;
+    static inline constexpr bool HasParticleContextStart = false;
+    static inline constexpr bool HasParticleContext      = false;
+    static inline constexpr bool HasParticleContextStop  = false;
+    static inline constexpr bool RequiresNbhOptionalData = true;
+  };
+} // namespace exanb
