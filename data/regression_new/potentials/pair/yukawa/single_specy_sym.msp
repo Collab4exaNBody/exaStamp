@@ -1,0 +1,8 @@
+includes:
+  - baseline_single_specy.yaml
+
+yukawa_compute_force_symetric:
+  parameters: { A: 2.43 eV*ang , kappa: 4.1 1/ang }  
+  rcut: 8.0 ang
+
+compute_force: yukawa_compute_force_symetric

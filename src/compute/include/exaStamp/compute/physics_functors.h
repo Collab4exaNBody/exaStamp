@@ -37,7 +37,7 @@ namespace exaStamp
       return this->operator() (vx,vy,vz,m_type);
     }
   };
-
+  
   struct KineticEnergyTensorFunctor
   {
     const ParticleSpecie* __restrict__ m_species = nullptr;
@@ -65,7 +65,7 @@ namespace exaStamp
       return this->operator() (vx,vy,vz,m_type);
     }
   };
-
+  
   struct MassFunctor
   {
     const ParticleSpecie* __restrict__ m_species = nullptr;

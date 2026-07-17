@@ -51,9 +51,9 @@ namespace exaStamp
   };
   
  // === register factories ===  
-  ONIKA_AUTORUN_INIT(version_info)
+  ONIKA_AUTORUN_INIT(print_version_info)
   {
-   OperatorNodeFactory::instance()->register_factory( "version_info", make_simple_operator< ApplicationVersionInfo > );
+   OperatorNodeFactory::instance()->register_factory( "print_version_info", make_simple_operator< ApplicationVersionInfo > );
   }
 
 }

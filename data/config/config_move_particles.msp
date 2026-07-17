@@ -17,7 +17,7 @@ includes:
 # define a test node which outputs a boolean value 'trigger_move_particles'
 # which tells when to move particles across cells and update neighbor lists
 trigger_move_particles:
-  rebind: { threshold: max_displ , result: trigger_move_particles }
+  rebind: { threshold: max_displ , threshold_lab: max_displ_lab , result: trigger_move_particles }
   body:
     - particle_displ_over
 

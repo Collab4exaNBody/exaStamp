@@ -1,0 +1,11 @@
+includes:
+  - baseline_multi_species.yaml
+
+yukawa_multi_force:
+  rcut: 8. ang
+  common_parameters: { A: 0.0 , kappa: 0.0 }
+  parameters:
+    - { type_a: Zn , type_b: Zn , rcut: 6.10 ang , parameters: { A: 2.43 eV*ang , kappa: 4.1 1/ang } }
+    - { type_a: Cu , type_b: Zn , rcut: 5.89 ang , parameters: { A: 2.43 eV*ang , kappa: 4.1 1/ang } }
+
+compute_force: yukawa_multi_force
