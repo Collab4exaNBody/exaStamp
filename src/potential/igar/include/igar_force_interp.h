@@ -149,7 +149,7 @@ namespace exaStamp
 
       const GridCellField &e_field = grid_cell_values.field(e_name);
       const ssize_t subdiv = static_cast<ssize_t>(e_field.m_subdiv);
-      const ssize_t subcell_count = subdiv * subdiv * subdiv;
+      // const ssize_t subcell_count = subdiv * subdiv * subdiv;
 
       const double cell_size = grid.cell_size();
       const double subcell_size = cell_size / subdiv;
