@@ -113,7 +113,7 @@ namespace exaStamp
     ADD_SLOT( double             , enlarge_bounds, INPUT, 0.0);
     ADD_SLOT( std::vector<bool>  , periodicity, INPUT, OPTIONAL, DocString{"if set, overrides domain's periodicity stored in file with this value"});
     ADD_SLOT( bool               , expandable, INPUT, OPTIONAL, DocString{"if set, override domain expandability stored in file"});
-    ADD_SLOT( AABB               , bounds, INPUT, REQUIRED, DocString{"if set, override domain's bounds, filtering out particle outside of overriden bounds"});
+    ADD_SLOT( AABB               , bounds, INPUT, OPTIONAL, DocString{"RSA bounds; if the domain is already defined, only the intersection of 'bounds' with the domain's existing (real-space) bounds is filled, and the domain itself is left untouched. If the domain isn't defined yet, the domain is built from 'bounds'. If 'bounds' is unset, the domain must already be defined and axis-aligned (diagonal xform), and its own bounds are used entirely"});
     ADD_SLOT( RSAParticleType    , type, INPUT, RSAParticleType{}, DocString{"single-species particle type, either an integer id (type: 2) or a species name (type: Ta), resolved via particle_type_map; ignored when 'rsa_species' is set"});
     ADD_SLOT( ParticleTypeMap    , particle_type_map, INPUT, OPTIONAL, DocString{"required only when a type is given as a species name"});
     ADD_SLOT( bool               , pbc_adjust_xform, INPUT, true);
@@ -166,7 +166,44 @@ namespace exaStamp
         return it->second;
       };
 
-      AABB b = *bounds;
+      // real-space bounds of the pre-existing domain (requires an axis-aligned, i.e. diagonal, xform)
+      auto domain_real_bounds = [&]() -> AABB
+      {
+        if( ! is_diagonal(domain->xform()) )
+        {
+          fatal_error() << "init_rsa: the existing domain is not axis-aligned (non-diagonal xform)" << std::endl;
+        }
+        const Vec3d scale{ domain->xform().m11, domain->xform().m22, domain->xform().m33 };
+        AABB db;
+        db.bmin = domain->bounds().bmin;
+        db.bmax = db.bmin + bounds_size(domain->bounds()) * scale;
+        return db;
+      };
+      const bool domain_predefined = bounds_volume(domain->bounds()) > 0.0;
+
+      AABB b;
+      if( bounds.has_value() )
+      {
+        b = *bounds;
+        if( domain_predefined )
+        {
+          // fill only the part of 'bounds' that actually lies within the pre-existing domain
+          b = intersection( b, domain_real_bounds() );
+          if( exanb::is_empty(b) )
+          {
+            fatal_error() << "init_rsa: 'bounds' does not intersect the existing domain's bounds" << std::endl;
+          }
+        }
+      }
+      else
+      {
+        // no explicit bounds: domain must already be defined; use its real-space bounds
+        if( ! domain_predefined )
+        {
+          fatal_error() << "init_rsa: either 'bounds' must be set, or the domain must already be defined" << std::endl;
+        }
+        b = domain_real_bounds();
+      }
       constexpr int DIM = 3;
       constexpr int method = 1;
       constexpr int ghost_layer = 1;
@@ -216,7 +253,7 @@ namespace exaStamp
       }
       auto spheres = rsa_domain.extract_spheres();
 
-      if (rank == 0) {
+      if (rank == 0 && bounds.has_value() && ! domain_predefined) {
         /** FILE_BOUNDS sounds wrong in this context, but it works. */
         compute_domain_bounds(*domain, exanb::ReadBoundsSelectionMode::FILE_BOUNDS, *enlarge_bounds, b, b, *pbc_adjust_xform);
       }
@@ -290,6 +327,20 @@ Generates particles by Random Sequential Addition (RSA) using the rsa_mpi
 library: particles are placed as non-overlapping spheres inside 'bounds',
 then handed off to the grid (particles may migrate across MPI processes
 afterwards, via migrate_cell_particles).
+
+Interaction between 'bounds' and a pre-existing domain (e.g. set up by a
+top-level 'domain:' block or an earlier setup_system step):
+
+  - No pre-existing domain: 'bounds' establishes the domain (as before).
+  - Pre-existing domain + 'bounds' given: only the intersection of 'bounds'
+    with the domain's existing (real-space) bounds gets filled; the domain
+    itself is left untouched (not resized/clobbered to 'bounds').
+  - Pre-existing domain + no 'bounds': the domain's own bounds are used
+    entirely.
+
+Either way, the domain must be axis-aligned (diagonal xform, i.e. no
+shear/triclinic cell) whenever its bounds are consulted; rsa_mpi itself has
+no support for non-orthorhombic domains.
 
 Two mutually exclusive ways to specify what to place:
 
