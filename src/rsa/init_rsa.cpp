@@ -114,15 +114,15 @@ namespace exaStamp
     ADD_SLOT( std::vector<bool>  , periodicity, INPUT, OPTIONAL, DocString{"if set, overrides domain's periodicity stored in file with this value"});
     ADD_SLOT( bool               , expandable, INPUT, OPTIONAL, DocString{"if set, override domain expandability stored in file"});
     ADD_SLOT( AABB               , bounds, INPUT, REQUIRED, DocString{"if set, override domain's bounds, filtering out particle outside of overriden bounds"});
-    ADD_SLOT( RSAParticleType    , type, INPUT, RSAParticleType{}, DocString{"single-species particle type, either an integer id (type: 2) or a species name (type: Ta), resolved via particle_type_map; ignored when 'species' is set"});
+    ADD_SLOT( RSAParticleType    , type, INPUT, RSAParticleType{}, DocString{"single-species particle type, either an integer id (type: 2) or a species name (type: Ta), resolved via particle_type_map; ignored when 'rsa_species' is set"});
     ADD_SLOT( ParticleTypeMap    , particle_type_map, INPUT, OPTIONAL, DocString{"required only when a type is given as a species name"});
     ADD_SLOT( bool               , pbc_adjust_xform, INPUT, true);
-    ADD_SLOT( double             , radius, INPUT, OPTIONAL, DocString{"single-species radius; ignored when 'species' is set"});
-    ADD_SLOT( long                , nb_particles, INPUT, OPTIONAL, DocString{"single-species exact number of particles to place (RSA may place fewer if the domain can't fit that many); if unset (and 'species' isn't set either), packs the domain as densely as possible; ignored when 'species' is set"});
-    ADD_SLOT( std::vector<RSAParticleSpec>, species, INPUT, OPTIONAL, DocString{"multi-species RSA packing: list of [radius, nb_particles, type] entries, e.g. species: [[0.5, 100, Ta], [0.25, 200, Cu]]; overrides radius/type/nb_particles when set"});
+    ADD_SLOT( double             , radius, INPUT, OPTIONAL, DocString{"single-species radius; ignored when 'rsa_species' is set"});
+    ADD_SLOT( long                , nb_particles, INPUT, OPTIONAL, DocString{"single-species exact number of particles to place (RSA may place fewer if the domain can't fit that many); if unset (and 'rsa_species' isn't set either), packs the domain as densely as possible; ignored when 'rsa_species' is set"});
+    ADD_SLOT( std::vector<RSAParticleSpec>, rsa_species, INPUT, OPTIONAL, DocString{"multi-species RSA packing: list of [radius, nb_particles, type] entries, e.g. rsa_species: [[0.5, 100, Ta], [0.25, 200, Cu]]; overrides radius/type/nb_particles when set (named 'rsa_species' rather than 'species' to avoid colliding with the simulation-wide atom species list slot)"});
     ADD_SLOT( long                , seed, INPUT, 0, DocString{"seed for the RSA pseudo-random generator"});
     ADD_SLOT( bool                , verbose, INPUT, false, DocString{"enable rsa_mpi per-round diagnostics (miss rate, shot counts)"});
-    ADD_SLOT( double             , rcut_max, INPUT_OUTPUT, 0.0);
+    //    ADD_SLOT( double             , rcut_max, INPUT_OUTPUT, 0.0);
     
  public:
     
@@ -138,14 +138,22 @@ namespace exaStamp
       MPI_Comm_rank(*mpi, &rank);
       MPI_Comm_size(*mpi, &np);
 
-      if( ! species.has_value() && ! radius.has_value() )
+      if( ! rsa_species.has_value() && ! radius.has_value() )
       {
-        fatal_error() << "init_rsa: either 'radius' or 'species' must be set" << std::endl;
+        fatal_error() << "init_rsa: either 'radius' or 'rsa_species' must be set" << std::endl;
       }
 
       auto resolve_type = [&]( const RSAParticleType& t ) -> int
       {
-        if( t.is_id ) return t.id;
+        if( t.is_id )
+        {
+          // only checkable if a species map was actually declared upstream
+          if( particle_type_map.has_value() && ( t.id < 0 || t.id >= int(particle_type_map->size()) ) )
+          {
+            fatal_error() << "init_rsa: type id "<<t.id<<" is out of range (only "<<particle_type_map->size()<<" species declared)" << std::endl;
+          }
+          return t.id;
+        }
         if( ! particle_type_map.has_value() )
         {
           fatal_error() << "init_rsa: type '"<<t.name<<"' given as a species name but no particle_type_map is available (run a 'species' operator upstream)" << std::endl;
@@ -165,21 +173,21 @@ namespace exaStamp
       std::array<double, DIM> domain_inf = {b.bmin.x, b.bmin.y, b.bmin.z};
       std::array<double, DIM> domain_sup = {b.bmax.x, b.bmax.y, b.bmax.z};
 
-      double r_max = species.has_value() ? 0.0 : *radius;
-      if( species.has_value() )
+      double r_max = rsa_species.has_value() ? 0.0 : *radius;
+      if( rsa_species.has_value() )
       {
-        for( const auto& sp : *species ) r_max = std::max(r_max, sp.radius);
+        for( const auto& sp : *rsa_species ) r_max = std::max(r_max, sp.radius);
       }
       rsa_domain<DIM> rsa_domain(domain_inf, domain_sup, ghost_layer, r_max);
 
-      int ParticleType = species.has_value() ? 0 : resolve_type(*type);
+      int ParticleType = rsa_species.has_value() ? 0 : resolve_type(*type);
 
       size_t rsa_seed = size_t(*seed);
-      if( species.has_value() )
+      if( rsa_species.has_value() )
       {
         // multi-species: each entry places its own exact (upper-bound) number of spheres
         std::vector<std::tuple<double,uint64_t,int>> cast_list;
-        for( const auto& sp : *species )
+        for( const auto& sp : *rsa_species )
         {
           cast_list.push_back( std::make_tuple(sp.radius, uint64_t(sp.nb_particles), resolve_type(sp.type)) );
         }
@@ -233,7 +241,7 @@ namespace exaStamp
         auto pos = spheres[s].center;
         auto id = ns + s;
         // in multi-species mode, each sphere's phase carries its resolved particle type
-        int pt_type = species.has_value() ? int(spheres[s].phase) : ParticleType;
+        int pt_type = rsa_species.has_value() ? int(spheres[s].phase) : ParticleType;
         pt = ParticleTupleIO(pos[0], pos[1], pos[2], id, pt_type);
         particle_data[s] = pt;
       }
@@ -272,7 +280,60 @@ namespace exaStamp
       lout << "=================================" << std::endl;
       
       grid->rebuild_particle_offsets();
-      *rcut_max = std::max(*rcut_max, r_max);
+      //      *rcut_max = std::max(*rcut_max, r_max);
+    }
+
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+Generates particles by Random Sequential Addition (RSA) using the rsa_mpi
+library: particles are placed as non-overlapping spheres inside 'bounds',
+then handed off to the grid (particles may migrate across MPI processes
+afterwards, via migrate_cell_particles).
+
+Two mutually exclusive ways to specify what to place:
+
+  - Single species: 'radius' (+ optional 'type', 'nb_particles').
+    'type' is either an integer type id or a species name (resolved against
+    particle_type_map, populated upstream by a 'species' operator). If
+    'nb_particles' is set, exactly that many spheres are requested (RSA may
+    place fewer if the domain can't fit that many non-overlapping spheres of
+    the given radius). If unset, the domain is packed as densely as RSA
+    allows for that radius.
+
+  - Multiple species: 'rsa_species', a list of [radius, nb_particles, type]
+    entries, one per species; each entry requests its own exact number of
+    particles at its own radius. Overrides 'radius'/'type'/'nb_particles'.
+
+Other parameters: 'seed' for the RSA pseudo-random generator, 'verbose' to
+enable rsa_mpi's per-round diagnostics (miss rate, shot counts).
+
+Example (single species, exact count, data/regression_new/rsa/rsa.msp):
+
+  species:
+    - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+    - Ni: { mass:  58.69 Da, z: 28, charge: 0 e- }
+
+  setup_system:
+    - init_rsa:
+        bounds: [ [ 0 , 0 , 0 ] , [ 20 , 20 , 20 ] ]
+        radius: 0.5
+        nb_particles: 1000
+        type: Ta
+        seed: 531
+        verbose: true
+
+Example (multiple species, data/regression_new/rsa/rsa_multispecies.msp):
+
+  setup_system:
+    - init_rsa:
+        bounds: [ [ 0 , 0 , 0 ] , [ 20 , 20 , 20 ] ]
+        rsa_species:
+          - [ 1, 100, Ta ]
+          - [ 1, 400, Ni ]
+        seed: 32372
+        verbose: true
+)EOF";
     }
   };
 
