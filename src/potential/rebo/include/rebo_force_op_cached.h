@@ -349,6 +349,12 @@ namespace exaStamp
                            int type, Mat3dT& virial, double nC_central, double nH_central, double Nconj_central, CellParticlesT cells,
                            GridCellLocksT locks, ParticleLockT& lock_a) const
     {
+      // std::min/std::max are constexpr host functions, not device-callable
+      // without --expt-relaxed-constexpr; onika::cuda::min/max are the
+      // device-safe drop-in equivalents already used elsewhere (e.g. EAM).
+      using onika::cuda::min;
+      using onika::cuda::max;
+
       static constexpr bool   vflag = std::is_same_v<Mat3dT, Mat3d>;
       static constexpr double TOL   = 1.0e-9;
       static constexpr double thmin = -1.0;
@@ -478,7 +484,7 @@ namespace exaStamp
           // cos_jik: dot((ri-rj),(ri-rk))/(rij*rik); signs cancel with buf convention
           double cosjik = (buf.drx[jj]*buf.drx[kk] + buf.dry[jj]*buf.dry[kk]
                            + buf.drz[jj]*buf.drz[kk]) / (rij*rik);
-          cosjik = std::min(1.0, std::max(-1.0, cosjik));
+          cosjik = min(1.0, max(-1.0, cosjik));
 
           double dgdc, dgdN;
           const double g = rebo_gSpline(cosjik, Nij, itype, p, dgdc, dgdN);
@@ -488,7 +494,7 @@ namespace exaStamp
 
         double dN2_pij[2];
         const double PijS = rebo_PijSpline(NijC, NijH, itype, jtype, p, dN2_pij);
-        const double pij  = 1.0 / std::sqrt(std::max(1.0 + Etmp_pij + PijS, TOL));
+        const double pij  = 1.0 / std::sqrt(max(1.0 + Etmp_pij + PijS, TOL));
         const double tmp_pij = -0.5 * pij*pij*pij;
 
         // pij three-body forces (k-loop, ×0.5 for full-list)
@@ -507,7 +513,7 @@ namespace exaStamp
           const double rikx = -buf.drx[kk], riky = -buf.dry[kk], rikz = -buf.drz[kk];
 
           double cosjik = (delx*rikx + dely*riky + delz*rikz) / (rij*rik);
-          cosjik = std::min(1.0, std::max(-1.0, cosjik));
+          cosjik = min(1.0, max(-1.0, cosjik));
 
           double dgdc, dgdN;
           const double g = rebo_gSpline(cosjik, Nij, itype, p, dgdc, dgdN);
@@ -600,7 +606,7 @@ namespace exaStamp
 
           // cos_ijl: angle at j between bonds j-i and j-l
           double cosijl = (delx*jlx + dely*jly + delz*jlz) / (rij*rjl);
-          cosijl = std::min(1.0, std::max(-1.0, cosijl));
+          cosijl = min(1.0, max(-1.0, cosijl));
 
           double dgdc, dgdN;
           const double g = rebo_gSpline(cosijl, Nji, jtype, p, dgdc, dgdN);
@@ -610,7 +616,7 @@ namespace exaStamp
 
         double dN2_pji[2];
         const double PjiS = rebo_PijSpline(NjiC, NjiH, jtype, itype, p, dN2_pji);
-        const double pji  = 1.0 / std::sqrt(std::max(1.0 + Etmp_pji + PjiS, TOL));
+        const double pji  = 1.0 / std::sqrt(max(1.0 + Etmp_pji + PjiS, TOL));
         const double tmp_pji = -0.5 * pji*pji*pji;
 
         // pji three-body forces (l-loop, ×0.5 for full-list)
@@ -630,7 +636,7 @@ namespace exaStamp
           const double exp_lam = std::exp(lam);
 
           double cosijl = (delx*jlx + dely*jly + delz*jlz) / (rij*rjl);
-          cosijl = std::min(1.0, std::max(-1.0, cosijl));
+          cosijl = min(1.0, max(-1.0, cosijl));
 
           double dgdc, dgdN;
           const double g = rebo_gSpline(cosijl, Nji, jtype, p, dgdc, dgdN);
@@ -852,8 +858,8 @@ namespace exaStamp
             if (r21mag <= TOL) continue;
 
             const double cos321 = -(r21x*r32x + r21y*r32y + r21z*r32z) / (r21mag*rij);
-            const double cos321c = std::min(1.0, std::max(-1.0, cos321));
-            const double sin321  = std::sqrt(std::max(0.0, 1.0 - cos321c*cos321c));
+            const double cos321c = min(1.0, max(-1.0, cos321));
+            const double sin321  = std::sqrt(max(0.0, 1.0 - cos321c*cos321c));
             if (sin321 <= TOL) continue;
 
             double dcut321;
@@ -880,8 +886,8 @@ namespace exaStamp
               if (r34mag <= TOL) continue;
 
               const double cos234 = (r32x*r34x + r32y*r34y + r32z*r34z) / (rij*r34mag);
-              const double cos234c = std::min(1.0, std::max(-1.0, cos234));
-              const double sin234  = std::sqrt(std::max(0.0, 1.0-cos234c*cos234c));
+              const double cos234c = min(1.0, max(-1.0, cos234));
+              const double sin234  = std::sqrt(max(0.0, 1.0-cos234c*cos234c));
               if (sin234 <= TOL) continue;
 
               double dcut234;
@@ -1189,7 +1195,7 @@ namespace exanb
   {
     static inline constexpr bool ComputeBufferCompatible = true;
     static inline constexpr bool BufferLessCompatible    = false;
-    static inline constexpr bool CudaCompatible          = false;
+    static inline constexpr bool CudaCompatible          = true;
     static inline constexpr bool HasParticleContextStart = false;
     static inline constexpr bool HasParticleContext      = false;
     static inline constexpr bool HasParticleContextStop  = false;
