@@ -33,7 +33,7 @@ namespace exaStamp
 {
   using namespace exanb;
 
-  static constexpr size_t REBO_MAX_NEIGHBORS = 512;
+  static constexpr size_t REBO_MAX_NEIGHBORS = 256;
   static constexpr size_t REBO_MAX_REBO_NEIGHBORS = 32;
 
   struct alignas(onika::memory::DEFAULT_ALIGNMENT) ReboComputeBuffer
