@@ -355,7 +355,7 @@ namespace exaStamp
       using onika::cuda::min;
       using onika::cuda::max;
 
-      static constexpr bool   vflag = std::is_same_v<Mat3dT, Mat3d>;
+      // static constexpr bool   vflag = std::is_same_v<Mat3dT, Mat3d>;
       static constexpr double TOL   = 1.0e-9;
       static constexpr double thmin = -1.0;
       static constexpr double thmax = -0.995;
@@ -473,9 +473,9 @@ namespace exaStamp
           if (kk == jj) continue;
           const int    ktype = buf.ext.type[kk];
           const double rik   = rebo_r[kpos];
-          double dS;
+          // double dS;
           const double wik = rebo_w[kpos];
-          dS = rebo_dw[kpos];
+          // dS = rebo_dw[kpos];
           // lambda (nonzero only when i is H)
           const double lam = (itype==1)
             ? 4.0*((p.rho[ktype][1]-rik) - (p.rho[jtype][1]-rij)) : 0.0;

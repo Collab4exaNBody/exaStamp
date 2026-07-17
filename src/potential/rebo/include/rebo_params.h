@@ -301,11 +301,11 @@ namespace exaStamp
       // Temporary knot-value arrays (all zero-initialised)
       // -----------------------------------------------------------------------
       double PCCf[5][5]         = {};
-      double PCCdfdx[5][5]      = {};
-      double PCCdfdy[5][5]      = {};
+      // double PCCdfdx[5][5]      = {};
+      // double PCCdfdy[5][5]      = {};
       double PCHf[5][5]         = {};
-      double PCHdfdx[5][5]      = {};
-      double PCHdfdy[5][5]      = {};
+      // double PCHdfdx[5][5]      = {};
+      // double PCHdfdy[5][5]      = {};
       double piCCf[5][5][11]    = {};
       double piCCdfdx[5][5][11] = {};
       double piCCdfdy[5][5][11] = {};
