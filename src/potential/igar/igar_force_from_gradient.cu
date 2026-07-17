@@ -17,13 +17,13 @@ specific language governing permissions and limitations
 under the License.
 */
 
-#include <onika/scg/operator.h>
-#include <onika/scg/operator_slot.h>
-#include <onika/scg/operator_factory.h>
-#include <onika/log.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/grid_cell_particles/grid_cell_values.h>
+#include <onika/log.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/scg/operator_slot.h>
 
 #include "igar_force_from_gradient.h"
 
@@ -32,15 +32,13 @@ namespace exaStamp
 
   using namespace exanb;
 
-  template<class GridT, class = AssertGridHasFields<GridT,field::_rx,field::_ry,field::_rz,field::_fx,field::_fy,field::_fz> >
-  class IgarForceFromGradient : public OperatorNode
+  template <class GridT, class = AssertGridHasFields<GridT, field::_rx, field::_ry, field::_rz, field::_fx, field::_fy, field::_fz>> class IgarForceFromGradient : public OperatorNode
   {
-    ADD_SLOT( GridT          , grid             , INPUT_OUTPUT , REQUIRED );
-    ADD_SLOT( GridCellValues , grid_cell_values , INPUT        , REQUIRED );
-    ADD_SLOT( double         , energy_factor    , INPUT        , 1.0, DocString{"Prefactor applied to -igar_dEdx, -igar_dEdy and -igar_dEdz before adding them to particle forces."} );
+    ADD_SLOT(GridT, grid, INPUT_OUTPUT, REQUIRED);
+    ADD_SLOT(GridCellValues, grid_cell_values, INPUT, REQUIRED);
+    ADD_SLOT(double, energy_factor, INPUT, 1.0, DocString{"Prefactor applied to -igar_dEdx, -igar_dEdy and -igar_dEdz before adding them to particle forces."});
 
   public:
-
     inline std::string documentation() const override final
     {
       return R"EOF(
@@ -77,19 +75,13 @@ Example (LJ_igar.msp — gradient precomputed once at setup):
 
     inline void execute() override final
     {
-      ParticleCellProjectionTools::get_particle_force_from_gradient_grid(
-          ldbg
-        , *grid
-        , *grid_cell_values
-        , *energy_factor );
+      auto pecfunc = [self = this](auto... args) { return self->parallel_execution_context(args...); };
+      ParticleCellProjectionTools::get_particle_force_from_gradient_grid(ldbg, *grid, pecfunc, *grid_cell_values, *energy_factor);
     }
   };
 
-  template<class GridT> using IgarForceFromGradientTmpl = IgarForceFromGradient<GridT>;
+  template <class GridT> using IgarForceFromGradientTmpl = IgarForceFromGradient<GridT>;
 
-  ONIKA_AUTORUN_INIT(igar_force_from_gradient)
-  {
-    OperatorNodeFactory::instance()->register_factory( "igar_force_from_gradient", make_grid_variant_operator<IgarForceFromGradientTmpl> );
-  }
+  ONIKA_AUTORUN_INIT(igar_force_from_gradient) { OperatorNodeFactory::instance()->register_factory("igar_force_from_gradient", make_grid_variant_operator<IgarForceFromGradientTmpl>); }
 
-}
+} // namespace exaStamp

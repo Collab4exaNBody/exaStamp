@@ -42,14 +42,14 @@ int main (int argc, char *argv[])
   std::cout << "Converting " << inputFile << " to " << filename << " ..." << std::endl;
 
   LegacyHeaderIOStruct entete ;
-  LegacyParticleIOStruct uneParticule;
+  // LegacyParticleIOStruct uneParticule;
   LegacyParticleIOStruct *particlesArray;
    
-  int rank, size, count, i;
+  int rank, size, count; // int i;
   long PaticleID;
   double x,y,z;
   std::string UneLigne;
-  char unType[100],unMot[100];
+  char unType[100]; // char unMot[100];
   char uneTabDeMots[5][100];
   double uneTableDeDouble[20];
 

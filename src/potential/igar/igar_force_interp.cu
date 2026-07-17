@@ -14,17 +14,17 @@ KIND, either express or implied. See the License for the
 specific language governing permissions and limitations
 under the License.
 */
-#include <onika/scg/operator.h>
-#include <onika/scg/operator_slot.h>
-#include <onika/scg/operator_factory.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/grid_cell_particles/grid_cell_values.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/scg/operator_slot.h>
 
-#include <exaStamp/compute/physics_functors.h>
-#include <exanb/core/grid_particle_field_accessor.h>
-#include <exanb/compute/field_combiners.h>
 #include <exaStamp/compute/field_combiners.h>
+#include <exaStamp/compute/physics_functors.h>
+#include <exanb/compute/field_combiners.h>
+#include <exanb/core/grid_particle_field_accessor.h>
 
 #include "igar_force_interp.h"
 
@@ -33,18 +33,13 @@ namespace exaStamp
 
   using namespace exanb;
 
-  template<
-    class GridT,
-    class = AssertGridHasFields< GridT, field::_ep, field::_fx, field::_fy, field::_fz >
-    >
-  class IgarForceInterp : public OperatorNode
+  template <class GridT, class = AssertGridHasFields<GridT, field::_rx, field::_ry, field::_rz, field::_ep, field::_fx, field::_fy, field::_fz>> class IgarForceInterp : public OperatorNode
   {
-    ADD_SLOT( GridT                     , grid                , INPUT_OUTPUT );
-    ADD_SLOT( GridCellValues            , grid_cell_values    , INPUT );
-    ADD_SLOT( double                    , energy_factor       , INPUT        , REQUIRED );
+    ADD_SLOT(GridT, grid, INPUT_OUTPUT);
+    ADD_SLOT(GridCellValues, grid_cell_values, INPUT);
+    ADD_SLOT(double, energy_factor, INPUT, REQUIRED);
 
   public:
-
     inline std::string documentation() const override final
     {
       return R"EOF(
@@ -83,19 +78,14 @@ Example (REBO + IGAR, CH_rebo_read_xyz.msp):
     }
     inline void execute() override final
     {
-      using namespace ParticleCellProjectionTools;
-      if( grid->number_of_cells() == 0 ) return;
-      ldbg << "Igar force from grid_cell_values" << std::endl;
-      get_particle_force_from_grid( ldbg, *grid, *grid_cell_values, *energy_factor );
-    }
+      auto pecfunc = [self = this](auto... args) { return self->parallel_execution_context(args...); };
 
+      ParticleCellProjectionTools::get_particle_force_from_grid(ldbg, *grid, pecfunc, *grid_cell_values, *energy_factor);
+    }
   };
 
-  template<class GridT> using IgarForceInterpTmpl = IgarForceInterp<GridT>;
+  template <class GridT> using IgarForceInterpTmpl = IgarForceInterp<GridT>;
 
-  ONIKA_AUTORUN_INIT(igar_force_interp)
-  {
-    OperatorNodeFactory::instance()->register_factory("igar_force_interp", make_grid_variant_operator<IgarForceInterpTmpl>);
-  }
+  ONIKA_AUTORUN_INIT(igar_force_interp) { OperatorNodeFactory::instance()->register_factory("igar_force_interp", make_grid_variant_operator<IgarForceInterpTmpl>); }
 
-}
+} // namespace exaStamp

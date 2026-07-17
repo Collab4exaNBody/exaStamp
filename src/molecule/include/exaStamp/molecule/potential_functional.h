@@ -110,6 +110,7 @@ namespace exaStamp
              + energy_offset               
              };
     }
+    return { 0. , 0. };
   }
 
   // base definition for an intra molecular potential. might also be used as a null potential
