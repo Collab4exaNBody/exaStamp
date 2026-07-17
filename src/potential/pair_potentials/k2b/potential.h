@@ -38,16 +38,16 @@ under the License.
 
 #pragma once
 
-#include <algorithm>
 #include <cassert>
 #include <cmath>
-#include <vector>
 #include <yaml-cpp/yaml.h>
 
 #include <onika/physics/units.h>
 #include <exaStamp/potential_factory/pair_potential.h>
 
 #include <onika/cuda/cuda.h>
+#include <onika/cuda/ro_shallow_copy.h>
+#include <onika/memory/allocator.h>
 
 namespace exaStamp
 {
@@ -72,20 +72,43 @@ struct K2bPotentialParameters
   // Paper value: Delta = 2 eV.
   double delta    = 2.0;
 
-  // Upper bound on n_rbf: keeps the parameter struct POD-sized and GPU-safe
-  // (this struct is copied by value into CUDA kernels, so it cannot hold a
-  // std::vector -- its heap pointer would be invalid on device). Kept close
-  // to the paper's default of 40: the whole functor carrying this struct
-  // must fit the framework's fixed GPU parameter-size budget.
-  static constexpr int K2B_MAX_RBF = 64;
-
-  // Learned ML weight vector w_2b (size = n_rbf, n_rbf <= K2B_MAX_RBF).
+  // Learned ML weight vector w_2b (size = n_rbf).
   // w[k] is the coefficient for the k-th Gaussian basis function (Eq. 19).
   // Must contain exactly n_rbf entries before calling k2b_potential_compute_force.
-  double w[K2B_MAX_RBF] = {};
+  // Stored in CUDA managed memory so its data() pointer is valid both on host
+  // and on device -- this struct is shallow-copied into GPU kernels via
+  // K2bPotentialParametersRO below.
+  onika::memory::CudaMMVector<double> w;
+};
+
+// Device-safe read-only view of K2bPotentialParameters: plain pointer + scalars,
+// safe to copy by value into a CUDA kernel/functor (unlike the owning struct
+// above, which manages memory and isn't trivially copyable).
+struct K2bPotentialParametersRO
+{
+  const double* __restrict__ w = nullptr;
+  int    n_rbf = 0;
+  double r_min = 0.0;
+  double r_cut = 6.0;
+  double sigma = 0.2;
+  double delta = 2.0;
+
+  K2bPotentialParametersRO() = default;
+  K2bPotentialParametersRO(const K2bPotentialParametersRO&) = default;
+  K2bPotentialParametersRO& operator = (const K2bPotentialParametersRO&) = default;
+
+  inline K2bPotentialParametersRO(const K2bPotentialParameters& p)
+    : w(p.w.data()), n_rbf(p.n_rbf), r_min(p.r_min), r_cut(p.r_cut), sigma(p.sigma), delta(p.delta)
+  {}
 };
 
 } // namespace exaStamp
+
+// specialize ReadOnlyShallowCopyType so K2bPotentialParametersRO is the read
+// only / device-copyable type for K2bPotentialParameters
+namespace onika { namespace cuda {
+  template<> struct ReadOnlyShallowCopyType<exaStamp::K2bPotentialParameters> { using type = exaStamp::K2bPotentialParametersRO; };
+} }
 
 
 // ---------------------------------------------------------------------------
@@ -113,11 +136,10 @@ namespace YAML
       if( node["delta"] ) v.delta  = node["delta"].as<double>();
       if( node["w"] )
       {
-        const auto w = node["w"].as< std::vector<double> >();
-        // Consistency check: w must have exactly n_rbf entries, within the fixed storage cap.
-        if( static_cast<int>(w.size()) != v.n_rbf || v.n_rbf > exaStamp::K2bPotentialParameters::K2B_MAX_RBF )
+        v.w = node["w"].as< onika::memory::CudaMMVector<double> >();
+        // Consistency check: w must have exactly n_rbf entries.
+        if( static_cast<int>(v.w.size()) != v.n_rbf )
           return false;
-        std::copy( w.begin(), w.end(), v.w );
       }
       return true;
     }
@@ -140,7 +162,7 @@ namespace exaStamp
 //                                        * exp( -(r-s_k)^2 / (2*sigma^2) )
 //
 // Parameters:
-//   params      : K2bPotentialParameters  (n_rbf, r_min, r_cut, sigma, delta, w)
+//   params      : K2bPotentialParametersRO  (n_rbf, r_min, r_cut, sigma, delta, w)
 //   pair_params : PairPotentialMinimalParameters  (not used; purely radial)
 //   r           : interatomic distance [Angstrom], must be > 0
 //   e  (out)    : pair energy contribution [eV]
@@ -148,14 +170,13 @@ namespace exaStamp
 //                 The framework derives the force as  F = -de/r * r_vec
 // ---------------------------------------------------------------------------
 ONIKA_HOST_DEVICE_FUNC inline void k2b_potential_compute_force(
-    const K2bPotentialParameters&        params,
+    const K2bPotentialParametersRO&      params,
     const PairPotentialMinimalParameters& /*pair_params*/,
     double r,
     double& e,
     double& de)
 {
   assert( r > 0. );
-  assert( params.n_rbf <= K2bPotentialParameters::K2B_MAX_RBF );
 
   e  = 0.0;
   de = 0.0;
@@ -194,6 +215,18 @@ ONIKA_HOST_DEVICE_FUNC inline void k2b_potential_compute_force(
   // Apply the energy scale Delta (Eq. 19).
   e  *= delta;
   de *= delta;
+}
+
+// Host-only overload: some call sites (e.g. energy-at-cutoff setup, plotting)
+// hold the full owning K2bPotentialParameters rather than the device RO view.
+inline void k2b_potential_compute_force(
+    const K2bPotentialParameters&         params,
+    const PairPotentialMinimalParameters& pair_params,
+    double r,
+    double& e,
+    double& de)
+{
+  k2b_potential_compute_force( K2bPotentialParametersRO(params), pair_params, r, e, de );
 }
 
 } // namespace exaStamp
