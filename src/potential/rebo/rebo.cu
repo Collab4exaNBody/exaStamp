@@ -86,10 +86,10 @@ namespace exaStamp
       assert( chunk_neighbors->number_of_cells() == grid->number_of_cells() );
       if ( grid->number_of_cells() == 0 ) return;
 
-      bool eflag = false;
+      // bool eflag = false;
       if (trigger_thermo_state.has_value()) {
         ldbg << "trigger_thermo_state = " << *trigger_thermo_state << std::endl;
-        eflag = *trigger_thermo_state;
+        // eflag = *trigger_thermo_state;
       }
 
       // Read Only Rebo parameters
@@ -98,7 +98,7 @@ namespace exaStamp
       // ------------------------------------------------------------------------------ //
       // First pass: we compute NijC and NijH bond order per atom
       // ------------------------------------------------------------------------------ //
-      ComputePairOptionalLocks<false> cp_locks {};
+      // ComputePairOptionalLocks<false> cp_locks {};
       exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
       // auto compute_buf_bondorder = make_compute_pair_buffer<ComputeBufferBondOrder>();     
       // Accessor for NijC and NijH

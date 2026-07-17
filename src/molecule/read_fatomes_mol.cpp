@@ -470,11 +470,12 @@ namespace exaStamp
 	      {
 	        ffnameVector->at( ffpair.second ) = ffpair.first;
 	      }
+#       ifndef NDEBUG
 	      for(const auto & ffname : *ffnameVector)
 	      {
 	        assert( ! ffname.empty() );
 	      }
-	
+#       endif
 
         // read file until section "PositionDesAtomes" and fill all variables corresponding to the sections "TypeAtomes" and "Potentiel" read before
         while( atom_pos_unit.empty() )
@@ -683,7 +684,7 @@ namespace exaStamp
           }
           charge = species->at(itypeAtom).m_charge;
 
-          MoleculeTupleIO tp( r.x, r.y, r.z , 0.0, 0.0, 0.0, at_id, itypeAtom, 0, std::array<uint64_t,4>{uint64_t(-1),uint64_t(-1),uint64_t(-1),uint64_t(-1)} , charge );
+          MoleculeTupleIO tp( r.x, r.y, r.z , 0.0, 0.0, 0.0, at_id, itypeAtom, 0, AtomBondConnectivity{uint64_t(-1),uint64_t(-1),uint64_t(-1),uint64_t(-1)} , charge );
           atom_data.push_back( tp );     
         }
         ldbg << "file bbox = " << file_bbox << " , size = " << ( file_bbox.bmax - file_bbox.bmin ) << std::endl;       

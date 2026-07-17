@@ -183,9 +183,9 @@ namespace exaStamp
       }
 #endif
 
-      const IJK dims = grid.dimension();
-      const ssize_t gl = grid.ghost_layers();
-      const IJK dims_no_gl = dims - 2 * gl;
+      // const IJK dims = grid.dimension();
+      // const ssize_t gl = grid.ghost_layers();
+      // const IJK dims_no_gl = dims - 2 * gl;
       const double cell_size = grid.cell_size();
       const double subcell_size = cell_size / subdiv;
       const double inv_subcell_size = 1.0 / subcell_size;

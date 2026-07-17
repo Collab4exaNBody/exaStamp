@@ -601,7 +601,7 @@ namespace exaStamp
       uint64_t molnum = 0;
       unsigned int moltype = 0;
       //unsigned int molplace = 0;
-      std::array<uint64_t,4> cmol = { 0, 0, 0, 0 };
+      AtomBondConnectivity cmol = { 0, 0, 0, 0 };
 
       if( entete->bloc_molecules )
       {
@@ -611,7 +611,7 @@ namespace exaStamp
         mol_id = molnum + ( uint64_t(moltype) << 48 );
 
         //atom connectivity : note, ids are INT in stamp, not UINT.
-        cmol = std::array<uint64_t,4>{static_cast<uint64_t>(molecules[i].Connectivite[0]),
+        cmol = AtomBondConnectivity{static_cast<uint64_t>(molecules[i].Connectivite[0]),
                                       static_cast<uint64_t>(molecules[i].Connectivite[1]),
                                       static_cast<uint64_t>(molecules[i].Connectivite[2]),
                                       static_cast<uint64_t>(molecules[i].Connectivite[3])};
