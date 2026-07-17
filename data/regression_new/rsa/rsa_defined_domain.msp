@@ -1,0 +1,32 @@
+species:
+  - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+  - Ni: { mass:  58.69 Da, z: 28, charge: 0 e- }
+
+domain:
+  cell_size: 10 ang
+  grid_dims: [ 5 , 5 , 5 ]
+  bounds: [ [ 0.0 um , 0.0 um , 0.0 um ] , [ 50 ang , 50 ang , 50 ang ] ]
+  periodic: [ true , true , true ]
+  expandable: false
+  xform: [ [ 1 , 0 , 0 ] , [ 0 , 1 , 0 ] , [ 0 , 0 , 1 ] ]
+
+setup_system:
+  - init_rsa:
+      bounds: [ [ 0 , 0 , 20 ] , [ 200 , 200 , 30 ] ]
+      rsa_species:
+        - [ 1, 600, Ta ]
+        - [ 1, 300, Ni ]
+      seed: 32372
+      verbose: true
+
+write_snapshot:
+  - timestep_file: "test_%09d.xyz"
+  - write_xyz:
+      fields: [ id , type , mass , z ]
+
+global:
+  max_iteration: 2
+  simulation_thermostate_screen_frequency: 1
+  simulation_snapshot_frequency: 1
+  rcut_inc: 1.0 ang
+  dt: 1.0e-3 ps
