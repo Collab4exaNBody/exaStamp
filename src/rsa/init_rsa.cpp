@@ -165,20 +165,20 @@ namespace exaStamp
         return it->second;
       };
 
+      const bool domain_predefined = bounds_volume(domain->bounds()) > 0.0;
+
       // real-space bounds of the pre-existing domain (requires an axis-aligned, i.e. diagonal, xform)
-      auto domain_real_bounds = [&]() -> AABB
+      AABB domain_real_bounds;
+      if( domain_predefined )
       {
         if( ! is_diagonal(domain->xform()) )
         {
           fatal_error() << "init_rsa: the existing domain is not axis-aligned (non-diagonal xform)" << std::endl;
         }
         const Vec3d scale{ domain->xform().m11, domain->xform().m22, domain->xform().m33 };
-        AABB db;
-        db.bmin = domain->bounds().bmin;
-        db.bmax = db.bmin + bounds_size(domain->bounds()) * scale;
-        return db;
-      };
-      const bool domain_predefined = bounds_volume(domain->bounds()) > 0.0;
+        domain_real_bounds.bmin = domain->bounds().bmin;
+        domain_real_bounds.bmax = domain_real_bounds.bmin + bounds_size(domain->bounds()) * scale;
+      }
 
       AABB b;
       if( bounds.has_value() )
@@ -187,7 +187,7 @@ namespace exaStamp
         if( domain_predefined )
         {
           // fill only the part of 'bounds' that actually lies within the pre-existing domain
-          b = intersection( b, domain_real_bounds() );
+          b = intersection( b, domain_real_bounds );
           if( exanb::is_empty(b) )
           {
             fatal_error() << "init_rsa: 'bounds' does not intersect the existing domain's bounds" << std::endl;
@@ -201,7 +201,7 @@ namespace exaStamp
         {
           fatal_error() << "init_rsa: either 'bounds' must be set, or the domain must already be defined" << std::endl;
         }
-        b = domain_real_bounds();
+        b = domain_real_bounds;
       }
       constexpr int DIM = 3;
       constexpr int method = 1;
