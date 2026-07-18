@@ -122,7 +122,6 @@ namespace exaStamp
     ADD_SLOT( std::vector<RSAParticleSpec>, rsa_species, INPUT, OPTIONAL, DocString{"multi-species RSA packing: list of [radius, nb_particles, type] entries, e.g. rsa_species: [[0.5, 100, Ta], [0.25, 200, Cu]]; overrides radius/type/nb_particles when set (named 'rsa_species' rather than 'species' to avoid colliding with the simulation-wide atom species list slot)"});
     ADD_SLOT( long                , seed, INPUT, 0, DocString{"seed for the RSA pseudo-random generator"});
     ADD_SLOT( bool                , verbose, INPUT, false, DocString{"enable rsa_mpi per-round diagnostics (miss rate, shot counts)"});
-    //    ADD_SLOT( double             , rcut_max, INPUT_OUTPUT, 0.0);
     
  public:
     
