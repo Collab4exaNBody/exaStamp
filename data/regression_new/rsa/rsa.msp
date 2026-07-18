@@ -1,0 +1,27 @@
+species:
+  - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+  - Ni: { mass:  58.69 Da, z: 28, charge: 0 e- }
+
+domain:
+  cell_size: 5.0 ang
+
+setup_system:
+  - init_rsa:
+      bounds: [ [ 0 , 0 , 0 ] , [ 20 , 20 , 20 ] ]
+      radius: 0.5
+      nb_particles: 1000
+      type: Ta
+      seed: 531
+      verbose: true
+
+write_snapshot:
+  - timestep_file: "test_%09d.xyz"
+  - write_xyz:
+      fields: [ id , type , mass , z ]
+
+global:
+  max_iteration: 2
+  simulation_thermostate_screen_frequency: 1
+  simulation_snapshot_frequency: 1
+  rcut_inc: 1.0 ang
+  dt: 1.0e-3 ps
