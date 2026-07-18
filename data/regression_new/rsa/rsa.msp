@@ -13,25 +13,6 @@ setup_system:
       type: Ta
       seed: 531
       verbose: true
-  # - init_rsa:
-  #     bounds: [ [ 0 , 0 , 0 ] , [ 20 , 20 , 20 ] ]
-  #     radius: 0.5
-  #     nb_particles: 1000
-  #     type: 1
-  #     seed: 531
-  #     verbose: true
-  # - init_rsa:
-  #     bounds: [ [ 0 , 0 , 0 ] , [ 20 , 20 , 20 ] ]
-  #     rsa_species:
-  #       - [ 0.5 , 1000 , 1 ]
-  #     seed: 531
-  #     verbose: true
-  # - init_rsa:
-  #     bounds: [ [ 0 , 0 , 0 ] , [ 20 , 20 , 20 ] ]
-  #     rsa_species:
-  #       - [ 0.5 , 1000 , Ta ]
-  #     seed: 531
-  #     verbose: true
 
 write_snapshot:
   - timestep_file: "test_%09d.xyz"
