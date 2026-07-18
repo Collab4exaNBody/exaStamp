@@ -316,7 +316,6 @@ namespace exaStamp
       lout << "=================================" << std::endl;
       
       grid->rebuild_particle_offsets();
-      //      *rcut_max = std::max(*rcut_max, r_max);
     }
 
     inline std::string documentation() const override final
