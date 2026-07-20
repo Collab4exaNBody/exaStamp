@@ -35,6 +35,13 @@ namespace exaStamp
 
   static constexpr size_t REBO_MAX_NEIGHBORS = 256;
   static constexpr size_t REBO_MAX_REBO_NEIGHBORS = 32;
+  // Candidates within 2*rcmax of the central atom i. By the triangle
+  // inequality this is a superset of: j's REBO neighbours (j is within
+  // rcmax of i, its neighbours within rcmax of j), and k's REBO neighbours
+  // for the piRC/Tij "mm" correction (k is within rcmax of i). It is NOT
+  // sufficient for the "lm" correction (m within rcmax of l, l within
+  // 2*rcmax of i already), which still needs the full rebo_cutoff buffer.
+  static constexpr size_t REBO_NEAR_MAX_NEIGHBORS = 96;
 
   struct alignas(onika::memory::DEFAULT_ALIGNMENT) ReboComputeBuffer
   {
@@ -595,6 +602,37 @@ namespace exaStamp
       }
 
       // -----------------------------------------------------------------------
+      // Cache a "near" candidate list once per atom i: every buffer entry
+      // within 2*rcmax of i. Several loops below (the j's-REBO-neighbour
+      // scan, the Tij dihedral inner scan, and the piRC/Tij "mm" correction)
+      // each used to independently rescan the whole jnum-sized buffer per j
+      // (or per (j,k)) even though the true candidates are always within
+      // this much smaller, i-centered radius. Profiling showed those scans'
+      // reject branch as the single hottest line in the kernel.
+      // -----------------------------------------------------------------------
+      double rcmax_max = p.rcmax[0][0];
+      rcmax_max = max(rcmax_max, p.rcmax[0][1]);
+      rcmax_max = max(rcmax_max, p.rcmax[1][0]);
+      rcmax_max = max(rcmax_max, p.rcmax[1][1]);
+      const double near_cut_sq = (2.0 * rcmax_max) * (2.0 * rcmax_max);
+
+      int near_idx[REBO_NEAR_MAX_NEIGHBORS];
+      int near_count = 0;
+      for (int aa = 0; aa < jnum; ++aa)
+      {
+        if (buf.d2[aa] < near_cut_sq)
+        {
+          if (near_count >= int(REBO_NEAR_MAX_NEIGHBORS))
+          {
+            assert(false);
+            continue;
+          }
+          near_idx[near_count] = aa;
+          ++near_count;
+        }
+      }
+
+      // -----------------------------------------------------------------------
       // Pass 2 — pair loop over j
       // -----------------------------------------------------------------------
       for (int jpos = 0; jpos < rebo_count; ++jpos)
@@ -810,8 +848,9 @@ namespace exaStamp
         double l_SpNlj[REBO_MAX_REBO_NEIGHBORS], l_dNlj[REBO_MAX_REBO_NEIGHBORS];
         int l_count = 0;
 
-        for (int ll = 0; ll < jnum; ++ll)
+        for (int nn = 0; nn < near_count; ++nn)
         {
+          const int ll = near_idx[nn];
           if (ll == jj)
             continue;
           const int ltype = buf.ext.type[ll];
@@ -1024,8 +1063,11 @@ namespace exaStamp
               atomic_add_contribution(cells[cell_k][field::fz][p_k], pf2a * rikz);
               if (std::fabs(dNki) > TOL)
               {
-                for (int mm = 0; mm < jnum; ++mm)
+                // m is within rcmax of k, which is within rcmax of i, so the
+                // near-list (2*rcmax of i) is guaranteed to contain every m.
+                for (int nn = 0; nn < near_count; ++nn)
                 {
+                  const int mm = near_idx[nn];
                   if (mm == kk)
                     continue;
                   const int mtype = buf.ext.type[mm];
@@ -1171,8 +1213,11 @@ namespace exaStamp
             double dw21;
             const double w21 = rebo_Sp(r21mag, p.rcmin[itype][ktype], p.rcmaxp[itype][ktype], dw21);
 
-            for (int ll = 0; ll < jnum; ++ll)
+            // l is within rcmax of j, which is within rcmax of i, so the
+            // near-list (2*rcmax of i) is guaranteed to contain every l.
+            for (int nn = 0; nn < near_count; ++nn)
             {
+              const int ll = near_idx[nn];
               if (ll == jj || ll == kk)
                 continue;
               const int ltype = buf.ext.type[ll];
@@ -1370,8 +1415,11 @@ namespace exaStamp
 
               if (std::fabs(dNki) > TOL)
               {
-                for (int mm = 0; mm < jnum; ++mm)
+                // m is within rcmax of k, which is within rcmax of i, so the
+                // near-list (2*rcmax of i) is guaranteed to contain every m.
+                for (int nn = 0; nn < near_count; ++nn)
                 {
+                  const int mm = near_idx[nn];
                   if (mm == kk)
                     continue;
                   const int mtype = buf.ext.type[mm];
