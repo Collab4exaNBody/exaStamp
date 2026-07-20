@@ -465,6 +465,97 @@ namespace exaStamp
   };
 
   // ===========================================================================
+  // REBOPairwise_NoBuffer_ForceOp
+  // Same physics as REBOPairwiseForceOp (Brenner repulsive VR only), but
+  // streamed pair-by-pair through compute_cell_particle_pairs2 instead of
+  // going through a ComputePairBuffer2 — mirrors ReboBondOrderOp /
+  // ReboNconjOp (see rebo_bond_order_op.h / rebo_conjugation_op.h). Since
+  // this term needs neither a second look-back over the central atom's
+  // neighbours nor any cached geometry, there is nothing for a buffer to
+  // usefully hold onto: en/fx/fy/fz accumulate directly in the per-particle
+  // context and flush at ContextStop; the neighbour's force is atomically
+  // added inline, right where cell_b/p_b are already at hand.
+  // ===========================================================================
+
+  struct ReboPairwiseNoBufferExtStorage
+  {
+    int itype = 0; // central atom type, cached at ContextStart
+    double en = 0.0, fx = 0.0, fy = 0.0, fz = 0.0;
+  };
+
+  struct alignas(onika::memory::DEFAULT_ALIGNMENT) REBOPairwise_NoBuffer_ForceOp
+  {
+    const ReboParamsRO *m_params = nullptr;
+
+    template <class ComputeBufferT, class CellParticlesT> ONIKA_HOST_DEVICE_FUNC inline void operator()(ComputeBufferT &ctx, CellParticlesT cells, size_t cell_a, size_t p_a, exanb::ComputePairParticleContextStart) const
+    {
+      ctx.ext.itype = cells[cell_a][field::type][p_a];
+      ctx.ext.en = 0.0;
+      ctx.ext.fx = 0.0;
+      ctx.ext.fy = 0.0;
+      ctx.ext.fz = 0.0;
+    }
+
+    template <class ComputeBufferT, class CellParticlesT> ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE void operator()(ComputeBufferT &ctx, CellParticlesT cells, size_t cell_a, size_t p_a, exanb::ComputePairParticleContextStop) const
+    {
+      atomic_add_contribution(cells[cell_a][field::ep][p_a], ctx.ext.en);
+      atomic_add_contribution(cells[cell_a][field::fx][p_a], ctx.ext.fx);
+      atomic_add_contribution(cells[cell_a][field::fy][p_a], ctx.ext.fy);
+      atomic_add_contribution(cells[cell_a][field::fz][p_a], ctx.ext.fz);
+    }
+
+    template <class ComputeBufferT, class CellParticlesT> ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE void operator()(ComputeBufferT &ctx, const Vec3d &dr, double d2, CellParticlesT cells, size_t cell_b, size_t p_b, double /*scale*/) const
+    {
+      static constexpr double TOL = 1.0e-9;
+      static constexpr double conv = EXASTAMP_CONST_QUANTITY(1. * eV);
+
+      const int itype = ctx.ext.itype;
+      const int jtype = cells[cell_b][field::type][p_b];
+      const ReboParamsRO &p = *m_params;
+
+      const double rsq = d2;
+      if (rsq >= p.rcmaxsq[itype][jtype])
+        return;
+      const double rij = std::sqrt(rsq);
+      if (rij <= TOL)
+        return;
+
+      double dwij;
+      const double wij = rebo_Sp(rij, p.rcmin[itype][jtype], p.rcmax[itype][jtype], dwij);
+      if (wij <= TOL)
+        return;
+
+      // dr = r_b - r_i (exaStamp convention, "from central to neighbour");
+      // del = r_i - r_j  (LAMMPS convention)
+      const double delx = -dr.x;
+      const double dely = -dr.y;
+      const double delz = -dr.z;
+
+      const double Qij = p.Q[itype][jtype];
+      const double Aij = p.A[itype][jtype];
+      const double alph = p.alpha[itype][jtype];
+      const double ea = std::exp(-alph * rij);
+      double VR = wij * (1.0 + Qij / rij) * Aij * ea;
+      const double pre = wij * Aij * ea;
+      double dVR = pre * (-alph - Qij / rsq - Qij * alph / rij) + VR / wij * dwij;
+      VR *= conv;
+      dVR *= conv;
+
+      ctx.ext.en += 0.5 * VR;
+
+      // --- Direct pair force (×0.5 for full-list) ---
+      const double fpair = -dVR / rij;
+      ctx.ext.fx += 0.5 * delx * fpair;
+      ctx.ext.fy += 0.5 * dely * fpair;
+      ctx.ext.fz += 0.5 * delz * fpair;
+
+      atomic_add_contribution(cells[cell_b][field::fx][p_b], -0.5 * delx * fpair);
+      atomic_add_contribution(cells[cell_b][field::fy][p_b], -0.5 * dely * fpair);
+      atomic_add_contribution(cells[cell_b][field::fz][p_b], -0.5 * delz * fpair);
+    }
+  };
+
+  // ===========================================================================
   // REBOManyBodyForceOp
   // Attractive term VA scaled by the many-body bond order bij = 0.5*(pij+pji)
   // + piRC + Tij*Etmp_Tij. This is the expensive part: three-body sigma-pi sums
@@ -1570,6 +1661,16 @@ namespace exanb
     static inline constexpr bool HasParticleContext = false;
     static inline constexpr bool HasParticleContextStop = false;
     static inline constexpr bool RequiresNbhOptionalData = true;
+  };
+
+  template <> struct ComputePairTraits<exaStamp::REBOPairwise_NoBuffer_ForceOp>
+  {
+    static inline constexpr bool ComputeBufferCompatible = false;
+    static inline constexpr bool BufferLessCompatible = true;
+    static inline constexpr bool CudaCompatible = true;
+    static inline constexpr bool HasParticleContextStart = true;
+    static inline constexpr bool HasParticleContext = true;
+    static inline constexpr bool HasParticleContextStop = true;
   };
 
   template <class NijcFieldT, class NijhFieldT, class NconjFieldT> struct ComputePairTraits<exaStamp::REBOManyBodyForceOp<NijcFieldT, NijhFieldT, NconjFieldT>>
