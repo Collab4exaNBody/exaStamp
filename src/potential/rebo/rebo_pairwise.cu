@@ -53,7 +53,14 @@ namespace exaStamp
   {
     ADD_SLOT(MPI_Comm, mpi, INPUT, REQUIRED);
     ADD_SLOT(double, rcut_max, INPUT_OUTPUT, 0.0);
-    ADD_SLOT(double, rebo_cutoff, INPUT, REQUIRED);
+    // REBOPairwiseForceOp (VR only) is exactly zero beyond rcmax — no need for
+    // the wider rebo_cutoff (3*rcmax) that ManyBody's lm-subloop requires.
+    // bondorder_cutoff (= rcmax_max, see rebo_init.cu) is the correctly-sized
+    // filter here, same as rebo_bond_order/rebo_conjugation already use. The
+    // underlying neighbor list is still built out to rcut_max regardless —
+    // this only trims how many of those candidates get decoded/transformed/
+    // buffered per particle for this specific pass.
+    ADD_SLOT(double, bondorder_cutoff, INPUT, REQUIRED);
     ADD_SLOT(exanb::GridChunkNeighbors, chunk_neighbors, INPUT, exanb::GridChunkNeighbors{}, DocString{"neighbor list"});
     ADD_SLOT(bool, ghost, INPUT, false);
     ADD_SLOT(bool, conv_coef_units, INPUT, true);
@@ -106,7 +113,7 @@ namespace exaStamp
       const bool use_locks = omp_get_max_threads() > 1 && particle_locks.has_value();
       auto pairwise_op_fields = make_field_tuple_from_field_set(ComputeFields{});
 
-      auto with_locks = [&](auto cp_locks) { compute_cell_particle_pairs(*grid, *rebo_cutoff, *ghost, make_compute_pair_optional_args(nbh_it, cp_weight, cp_xform, cp_locks), compute_buf_rebo, REBOPairwiseForceOp{params_ro}, pairwise_op_fields, parallel_execution_context()); };
+      auto with_locks = [&](auto cp_locks) { compute_cell_particle_pairs(*grid, *bondorder_cutoff, *ghost, make_compute_pair_optional_args(nbh_it, cp_weight, cp_xform, cp_locks), compute_buf_rebo, REBOPairwiseForceOp{params_ro}, pairwise_op_fields, parallel_execution_context()); };
       if (use_locks)
         with_locks(ComputePairOptionalLocks<true>{particle_locks->data()});
       else

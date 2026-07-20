@@ -55,7 +55,14 @@ namespace exaStamp
   {
     ADD_SLOT(MPI_Comm, mpi, INPUT, REQUIRED);
     ADD_SLOT(double, rcut_max, INPUT_OUTPUT, 0.0);
-    ADD_SLOT(double, rebo_cutoff, INPUT, REQUIRED);
+    // REBOPairwise_NoBuffer_ForceOp (VR only) is exactly zero beyond rcmax —
+    // no need for the wider rebo_cutoff (3*rcmax) that ManyBody's lm-subloop
+    // requires. bondorder_cutoff (= rcmax_max, see rebo_init.cu) is the
+    // correctly-sized filter here, same as rebo_bond_order/rebo_conjugation
+    // already use. The underlying neighbor list is still built out to
+    // rcut_max regardless — this only trims how many of those candidates get
+    // decoded/transformed per particle for this specific pass.
+    ADD_SLOT(double, bondorder_cutoff, INPUT, REQUIRED);
     ADD_SLOT(exanb::GridChunkNeighbors, chunk_neighbors, INPUT, exanb::GridChunkNeighbors{}, DocString{"neighbor list"});
     ADD_SLOT(bool, ghost, INPUT, false);
     ADD_SLOT(GridT, grid, INPUT_OUTPUT);
@@ -90,7 +97,7 @@ namespace exaStamp
       static constexpr onika::FlatTuple<> compute_field_set = {};
       static constexpr std::integral_constant<bool, true> force_use_cells_accessor = {};
       static constexpr DefaultPositionFields posfields = {};
-      compute_cell_particle_pairs2(*grid, *rebo_cutoff, *ghost, optional, compute_buf_pairwise, compute_op_pairwise, compute_field_set, posfields, parallel_execution_context(), force_use_cells_accessor);
+      compute_cell_particle_pairs2(*grid, *bondorder_cutoff, *ghost, optional, compute_buf_pairwise, compute_op_pairwise, compute_field_set, posfields, parallel_execution_context(), force_use_cells_accessor);
     }
   };
 
