@@ -566,6 +566,35 @@ namespace exaStamp
       }
 
       // -----------------------------------------------------------------------
+      // Cache (i,k) data that does NOT depend on which j is currently being
+      // visited: k's cell/particle handle, and — for carbon k — its
+      // coordination excluding the i-k bond (Nki) and the Sp cutoff evaluated
+      // there. The piRC and Tij "third order" coordination corrections used
+      // to recompute this once per (j,k) pair (i.e. once per k for every j),
+      // even though it only depends on k. Computed once per k instead.
+      // -----------------------------------------------------------------------
+      size_t rebo_cell_k[REBO_MAX_REBO_NEIGHBORS];
+      size_t rebo_p_k[REBO_MAX_REBO_NEIGHBORS];
+      double rebo_SpNk[REBO_MAX_REBO_NEIGHBORS];
+      double rebo_dNk[REBO_MAX_REBO_NEIGHBORS];
+
+      for (int kpos = 0; kpos < rebo_count; ++kpos)
+      {
+        const int kk = rebo_idx[kpos];
+        buf.nbh.get(kk, rebo_cell_k[kpos], rebo_p_k[kpos]);
+        if (buf.ext.type[kk] == 0)
+        {
+          const double Nk = cells[rebo_cell_k[kpos]][m_nijc_field][rebo_p_k[kpos]] + cells[rebo_cell_k[kpos]][m_nijh_field][rebo_p_k[kpos]] - rebo_w[kpos];
+          rebo_SpNk[kpos] = rebo_Sp(Nk, p.Nmin, p.Nmax, rebo_dNk[kpos]);
+        }
+        else
+        {
+          rebo_SpNk[kpos] = 0.0;
+          rebo_dNk[kpos] = 0.0;
+        }
+      }
+
+      // -----------------------------------------------------------------------
       // Pass 2 — pair loop over j
       // -----------------------------------------------------------------------
       for (int jpos = 0; jpos < rebo_count; ++jpos)
@@ -741,8 +770,7 @@ namespace exaStamp
           atomic_add_contribution(cells[cell_j][field::fx][p_j], fjx);
           atomic_add_contribution(cells[cell_j][field::fy][p_j], fjy);
           atomic_add_contribution(cells[cell_j][field::fz][p_j], fjz);
-          size_t cell_k, p_k;
-          buf.nbh.get(kk, cell_k, p_k);
+          const size_t cell_k = rebo_cell_k[kpos], p_k = rebo_p_k[kpos];
           atomic_add_contribution(cells[cell_k][field::fx][p_k], fkx);
           atomic_add_contribution(cells[cell_k][field::fy][p_k], fky);
           atomic_add_contribution(cells[cell_k][field::fz][p_k], fkz);
@@ -763,7 +791,20 @@ namespace exaStamp
         const double SpNi_J = rebo_Sp(nC_central + nH_central - wij, p.Nmin, p.Nmax, unused_dSpNi);
         const double NconjtmpJ = Nconj_j - (itype == 0 ? wij * SpNi_J : 0.0);
 
-        double Etmp_pji = 0.0, tmp3_pji = 0.0;
+        // -----------------------------------------------------------------------
+        // Build j's REBO-neighbour list once for this j: reused below by the
+        // pji three-body sum (energy + force) and by the piRC / Tij "l-loop"
+        // coordination corrections, instead of each of those four blocks
+        // independently rescanning the whole (up to jnum-entry) buffer.
+        // -----------------------------------------------------------------------
+        int l_idx[REBO_MAX_REBO_NEIGHBORS];
+        size_t l_cell[REBO_MAX_REBO_NEIGHBORS];
+        size_t l_p[REBO_MAX_REBO_NEIGHBORS];
+        double l_jlx[REBO_MAX_REBO_NEIGHBORS], l_jly[REBO_MAX_REBO_NEIGHBORS], l_jlz[REBO_MAX_REBO_NEIGHBORS];
+        double l_rjl[REBO_MAX_REBO_NEIGHBORS];
+        double l_wjl[REBO_MAX_REBO_NEIGHBORS], l_dwjl[REBO_MAX_REBO_NEIGHBORS];
+        double l_SpNlj[REBO_MAX_REBO_NEIGHBORS], l_dNlj[REBO_MAX_REBO_NEIGHBORS];
+        int l_count = 0;
 
         for (int ll = 0; ll < jnum; ++ll)
         {
@@ -776,9 +817,47 @@ namespace exaStamp
           const double rjlsq = jlx * jlx + jly * jly + jlz * jlz;
           if (rjlsq >= p.rcmaxsq[jtype][ltype])
             continue;
+          if (l_count >= int(REBO_MAX_REBO_NEIGHBORS))
+          {
+            assert(false);
+            continue;
+          }
+
           const double rjl = std::sqrt(rjlsq);
           double dwjl;
           const double wjl = rebo_Sp(rjl, p.rcmin[jtype][ltype], p.rcmax[jtype][ltype], dwjl);
+
+          const int lpos = l_count++;
+          l_idx[lpos] = ll;
+          buf.nbh.get(ll, l_cell[lpos], l_p[lpos]);
+          l_jlx[lpos] = jlx;
+          l_jly[lpos] = jly;
+          l_jlz[lpos] = jlz;
+          l_rjl[lpos] = rjl;
+          l_wjl[lpos] = wjl;
+          l_dwjl[lpos] = dwjl;
+
+          if (ltype == 0)
+          {
+            const double Nlj = cells[l_cell[lpos]][m_nijc_field][l_p[lpos]] + cells[l_cell[lpos]][m_nijh_field][l_p[lpos]] - wjl;
+            l_SpNlj[lpos] = rebo_Sp(Nlj, p.Nmin, p.Nmax, l_dNlj[lpos]);
+          }
+          else
+          {
+            l_SpNlj[lpos] = 0.0;
+            l_dNlj[lpos] = 0.0;
+          }
+        }
+
+        double Etmp_pji = 0.0, tmp3_pji = 0.0;
+
+        for (int lpos = 0; lpos < l_count; ++lpos)
+        {
+          const int ll = l_idx[lpos];
+          const int ltype = buf.ext.type[ll];
+          const double jlx = l_jlx[lpos], jly = l_jly[lpos], jlz = l_jlz[lpos];
+          const double rjl = l_rjl[lpos];
+          const double wjl = l_wjl[lpos];
           // lambda_ijl (nonzero when j is H)
           const double lam = (jtype == 1) ? 4.0 * ((p.rho[ltype][1] - rjl) - (p.rho[itype][1] - rij)) : 0.0;
           const double exp_lam = std::exp(lam);
@@ -799,20 +878,14 @@ namespace exaStamp
         const double tmp_pji = -0.5 * pji * pji * pji;
 
         // pji three-body forces (l-loop, ×0.5 for full-list)
-        for (int ll = 0; ll < jnum; ++ll)
+        for (int lpos = 0; lpos < l_count; ++lpos)
         {
-          if (ll == jj)
-            continue;
+          const int ll = l_idx[lpos];
           const int ltype = buf.ext.type[ll];
-          const double jlx = buf.drx[ll] - buf.drx[jj];
-          const double jly = buf.dry[ll] - buf.dry[jj];
-          const double jlz = buf.drz[ll] - buf.drz[jj];
-          const double rjlsq = jlx * jlx + jly * jly + jlz * jlz;
-          if (rjlsq >= p.rcmaxsq[jtype][ltype])
-            continue;
-          const double rjl = std::sqrt(rjlsq);
-          double dwjl;
-          const double wjl = rebo_Sp(rjl, p.rcmin[jtype][ltype], p.rcmax[jtype][ltype], dwjl);
+          const double jlx = l_jlx[lpos], jly = l_jly[lpos], jlz = l_jlz[lpos];
+          const double rjl = l_rjl[lpos];
+          const double wjl = l_wjl[lpos];
+          const double dwjl = l_dwjl[lpos];
           const double lam = (jtype == 1) ? 4.0 * ((p.rho[ltype][1] - rjl) - (p.rho[itype][1] - rij)) : 0.0;
           const double exp_lam = std::exp(lam);
 
@@ -888,8 +961,7 @@ namespace exaStamp
           atomic_add_contribution(cells[cell_j][field::fx][p_j], fjx);
           atomic_add_contribution(cells[cell_j][field::fy][p_j], fjy);
           atomic_add_contribution(cells[cell_j][field::fz][p_j], fjz);
-          size_t cell_l, p_l;
-          buf.nbh.get(ll, cell_l, p_l);
+          const size_t cell_l = l_cell[lpos], p_l = l_p[lpos];
           atomic_add_contribution(cells[cell_l][field::fx][p_l], flx);
           atomic_add_contribution(cells[cell_l][field::fy][p_l], fly);
           atomic_add_contribution(cells[cell_l][field::fz][p_l], flz);
@@ -926,16 +998,14 @@ namespace exaStamp
             _fx -= pf0 * rikx;
             _fy -= pf0 * riky;
             _fz -= pf0 * rikz;
-            size_t cell_k, p_k;
-            buf.nbh.get(kk, cell_k, p_k);
+            const size_t cell_k = rebo_cell_k[kpos], p_k = rebo_p_k[kpos];
             atomic_add_contribution(cells[cell_k][field::fx][p_k], pf0 * rikx);
             atomic_add_contribution(cells[cell_k][field::fy][p_k], pf0 * riky);
             atomic_add_contribution(cells[cell_k][field::fz][p_k], pf0 * rikz);
             if (ktype == 0)
             {
-              const double Nki = cells[cell_k][m_nijc_field][p_k] + cells[cell_k][m_nijh_field][p_k] - wik;
-              double dNki;
-              const double SpNki = rebo_Sp(Nki, p.Nmin, p.Nmax, dNki);
+              const double SpNki = rebo_SpNk[kpos];
+              const double dNki = rebo_dNk[kpos];
               const double pf2a = 0.5 * VA * dN3_pi[2] * 2.0 * NconjtmpI * dwik * SpNki / rik;
               _fx -= pf2a * rikx;
               _fy -= pf2a * riky;
@@ -973,33 +1043,27 @@ namespace exaStamp
             }
           }
           // l-loop: dN3[1] and dN3[2] forces
-          for (int ll = 0; ll < jnum; ++ll)
+          for (int lpos = 0; lpos < l_count; ++lpos)
           {
-            if (ll == jj)
-              continue;
+            const int ll = l_idx[lpos];
             const int ltype = buf.ext.type[ll];
-            const double jlx = buf.drx[ll] - buf.drx[jj], jly = buf.dry[ll] - buf.dry[jj], jlz = buf.drz[ll] - buf.drz[jj];
-            const double rjlsq = jlx * jlx + jly * jly + jlz * jlz;
-            if (rjlsq >= p.rcmaxsq[jtype][ltype])
-              continue;
-            const double rjl = std::sqrt(rjlsq);
-            double dwjl;
-            const double wjl = rebo_Sp(rjl, p.rcmin[jtype][ltype], p.rcmax[jtype][ltype], dwjl);
+            const double jlx = l_jlx[lpos], jly = l_jly[lpos], jlz = l_jlz[lpos];
+            const double rjl = l_rjl[lpos];
+            const double wjl = l_wjl[lpos];
+            const double dwjl = l_dwjl[lpos];
             // jlx = r_l-r_j = -rjl_LAMMPS → fj += +pf*jlx, fl += -pf*jlx
             const double pf1 = 0.5 * VA * dN3_pi[1] * dwjl / rjl;
             atomic_add_contribution(cells[cell_j][field::fx][p_j], pf1 * jlx);
             atomic_add_contribution(cells[cell_j][field::fy][p_j], pf1 * jly);
             atomic_add_contribution(cells[cell_j][field::fz][p_j], pf1 * jlz);
-            size_t cell_l, p_l;
-            buf.nbh.get(ll, cell_l, p_l);
+            const size_t cell_l = l_cell[lpos], p_l = l_p[lpos];
             atomic_add_contribution(cells[cell_l][field::fx][p_l], -pf1 * jlx);
             atomic_add_contribution(cells[cell_l][field::fy][p_l], -pf1 * jly);
             atomic_add_contribution(cells[cell_l][field::fz][p_l], -pf1 * jlz);
             if (ltype == 0)
             {
-              const double Nlj = cells[cell_l][m_nijc_field][p_l] + cells[cell_l][m_nijh_field][p_l] - wjl;
-              double dNlj;
-              const double SpNlj = rebo_Sp(Nlj, p.Nmin, p.Nmax, dNlj);
+              const double SpNlj = l_SpNlj[lpos];
+              const double dNlj = l_dNlj[lpos];
               const double pf2a = 0.5 * VA * dN3_pi[2] * 2.0 * NconjtmpJ * dwjl * SpNlj / rjl;
               atomic_add_contribution(cells[cell_j][field::fx][p_j], pf2a * jlx);
               atomic_add_contribution(cells[cell_j][field::fy][p_j], pf2a * jly);
@@ -1240,8 +1304,7 @@ namespace exaStamp
               atomic_add_contribution(cells[cell_j][field::fx][p_j], hl2 * fj0);
               atomic_add_contribution(cells[cell_j][field::fy][p_j], hl2 * fj1);
               atomic_add_contribution(cells[cell_j][field::fz][p_j], hl2 * fj2);
-              size_t cell_k, p_k;
-              buf.nbh.get(kk, cell_k, p_k);
+              const size_t cell_k = rebo_cell_k[kpos], p_k = rebo_p_k[kpos];
               atomic_add_contribution(cells[cell_k][field::fx][p_k], hl2 * fk0);
               atomic_add_contribution(cells[cell_k][field::fy][p_k], hl2 * fk1);
               atomic_add_contribution(cells[cell_k][field::fz][p_k], hl2 * fk2);
@@ -1274,8 +1337,7 @@ namespace exaStamp
             const double wik = rebo_w[kpos];
             dwik = rebo_dw[kpos];
             const double rikx = -buf.drx[kk], riky = -buf.dry[kk], rikz = -buf.drz[kk];
-            size_t cell_k, p_k;
-            buf.nbh.get(kk, cell_k, p_k);
+            const size_t cell_k = rebo_cell_k[kpos], p_k = rebo_p_k[kpos];
 
             const double pf0 = 0.5 * VA * dN3_tij[0] * dwik * Etmp_Tij / rik;
             _fx -= pf0 * rikx;
@@ -1287,9 +1349,8 @@ namespace exaStamp
 
             if (ktype == 0)
             {
-              const double Nki = cells[cell_k][m_nijc_field][p_k] + cells[cell_k][m_nijh_field][p_k] - wik;
-              double dNki;
-              const double SpNki = rebo_Sp(Nki, p.Nmin, p.Nmax, dNki);
+              const double SpNki = rebo_SpNk[kpos];
+              const double dNki = rebo_dNk[kpos];
               const double pf2a = 0.5 * VA * dN3_tij[2] * Etmp_Tij * 2.0 * NconjtmpI * dwik * SpNki / rik;
               _fx -= pf2a * rikx;
               _fy -= pf2a * riky;
@@ -1329,22 +1390,15 @@ namespace exaStamp
               }
             }
           }
-          for (int ll = 0; ll < jnum; ++ll)
+          for (int lpos = 0; lpos < l_count; ++lpos)
           {
-            if (ll == jj)
-              continue;
+            const int ll = l_idx[lpos];
             const int ltype = buf.ext.type[ll];
-            const double jlx = buf.drx[ll] - buf.drx[jj];
-            const double jly = buf.dry[ll] - buf.dry[jj];
-            const double jlz = buf.drz[ll] - buf.drz[jj];
-            const double rjlsq = jlx * jlx + jly * jly + jlz * jlz;
-            if (rjlsq >= p.rcmaxsq[jtype][ltype])
-              continue;
-            const double rjl = std::sqrt(rjlsq);
-            double dwjl;
-            const double wjl = rebo_Sp(rjl, p.rcmin[jtype][ltype], p.rcmax[jtype][ltype], dwjl);
-            size_t cell_l, p_l;
-            buf.nbh.get(ll, cell_l, p_l);
+            const double jlx = l_jlx[lpos], jly = l_jly[lpos], jlz = l_jlz[lpos];
+            const double rjl = l_rjl[lpos];
+            const double wjl = l_wjl[lpos];
+            const double dwjl = l_dwjl[lpos];
+            const size_t cell_l = l_cell[lpos], p_l = l_p[lpos];
 
             // jlx = r_l-r_j = -rjl_LAMMPS → fj += +pf*jlx, fl += -pf*jlx
             const double pf1 = 0.5 * VA * dN3_tij[1] * dwjl * Etmp_Tij / rjl;
@@ -1357,9 +1411,8 @@ namespace exaStamp
 
             if (ltype == 0)
             {
-              const double Nlj = cells[cell_l][m_nijc_field][p_l] + cells[cell_l][m_nijh_field][p_l] - wjl;
-              double dNlj;
-              const double SpNlj = rebo_Sp(Nlj, p.Nmin, p.Nmax, dNlj);
+              const double SpNlj = l_SpNlj[lpos];
+              const double dNlj = l_dNlj[lpos];
               const double pf2a = 0.5 * VA * dN3_tij[2] * Etmp_Tij * 2.0 * NconjtmpJ * dwjl * SpNlj / rjl;
               atomic_add_contribution(cells[cell_j][field::fx][p_j], pf2a * jlx);
               atomic_add_contribution(cells[cell_j][field::fy][p_j], pf2a * jly);
