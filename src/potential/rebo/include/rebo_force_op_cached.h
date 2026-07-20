@@ -652,6 +652,11 @@ namespace exaStamp
         // ===================================================================
         // pij — i's sigma-pi bond order to j: energy k-loop → compute pij → force k-loop
         // ===================================================================
+        // g/dgdc/exp_lam per k, cached here so the force k-loop below doesn't
+        // repeat the branchy rebo_gSpline eval and exp() call for the same
+        // (j,k) pair (these depend on j via cosjik, so they can't be hoisted
+        // above the j-loop like rebo_SpNk/rebo_dNk).
+        double kj_g[REBO_MAX_REBO_NEIGHBORS], kj_dgdc[REBO_MAX_REBO_NEIGHBORS], kj_exp_lam[REBO_MAX_REBO_NEIGHBORS];
         double Etmp_pij = 0.0, tmp3_pij = 0.0;
 
         for (int kpos = 0; kpos < rebo_count; ++kpos)
@@ -661,19 +666,19 @@ namespace exaStamp
             continue;
           const int ktype = buf.ext.type[kk];
           const double rik = rebo_r[kpos];
-          // double dS;
           const double wik = rebo_w[kpos];
-          // dS = rebo_dw[kpos];
           // lambda (nonzero only when i is H)
           const double lam = (itype == 1) ? 4.0 * ((p.rho[ktype][1] - rik) - (p.rho[jtype][1] - rij)) : 0.0;
           const double exp_lam = std::exp(lam);
+          kj_exp_lam[kpos] = exp_lam;
 
           // cos_jik: dot((ri-rj),(ri-rk))/(rij*rik); signs cancel with buf convention
           double cosjik = (buf.drx[jj] * buf.drx[kk] + buf.dry[jj] * buf.dry[kk] + buf.drz[jj] * buf.drz[kk]) / (rij * rik);
           cosjik = min(1.0, max(-1.0, cosjik));
 
-          double dgdc, dgdN;
-          const double g = rebo_gSpline(cosjik, Nij, itype, p, dgdc, dgdN);
+          double dgdN;
+          const double g = rebo_gSpline(cosjik, Nij, itype, p, kj_dgdc[kpos], dgdN);
+          kj_g[kpos] = g;
           Etmp_pij += wik * g * exp_lam;
           tmp3_pij += wik * dgdN * exp_lam;
         }
@@ -694,16 +699,15 @@ namespace exaStamp
           double dwik;
           const double wik = rebo_w[kpos];
           dwik = rebo_dw[kpos];
-          const double lam = (itype == 1) ? 4.0 * ((p.rho[ktype][1] - rik) - (p.rho[jtype][1] - rij)) : 0.0;
-          const double exp_lam = std::exp(lam);
+          const double exp_lam = kj_exp_lam[kpos];
 
           const double rikx = -buf.drx[kk], riky = -buf.dry[kk], rikz = -buf.drz[kk];
 
           double cosjik = (delx * rikx + dely * riky + delz * rikz) / (rij * rik);
           cosjik = min(1.0, max(-1.0, cosjik));
 
-          double dgdc, dgdN;
-          const double g = rebo_gSpline(cosjik, Nij, itype, p, dgdc, dgdN);
+          const double g = kj_g[kpos];
+          const double dgdc = kj_dgdc[kpos];
 
           const double inv_rij = 1.0 / rij, inv_rik = 1.0 / rik;
           const double inv_rij2 = inv_rij * inv_rij, inv_rik2 = inv_rik * inv_rik;
@@ -849,6 +853,10 @@ namespace exaStamp
           }
         }
 
+        // g/dgdc/exp_lam per l, cached here so the force l-loop below doesn't
+        // repeat the branchy rebo_gSpline eval and exp() call for the same
+        // (j,l) pair.
+        double lj_g[REBO_MAX_REBO_NEIGHBORS], lj_dgdc[REBO_MAX_REBO_NEIGHBORS], lj_exp_lam[REBO_MAX_REBO_NEIGHBORS];
         double Etmp_pji = 0.0, tmp3_pji = 0.0;
 
         for (int lpos = 0; lpos < l_count; ++lpos)
@@ -861,13 +869,15 @@ namespace exaStamp
           // lambda_ijl (nonzero when j is H)
           const double lam = (jtype == 1) ? 4.0 * ((p.rho[ltype][1] - rjl) - (p.rho[itype][1] - rij)) : 0.0;
           const double exp_lam = std::exp(lam);
+          lj_exp_lam[lpos] = exp_lam;
 
           // cos_ijl: angle at j between bonds j-i and j-l
           double cosijl = (delx * jlx + dely * jly + delz * jlz) / (rij * rjl);
           cosijl = min(1.0, max(-1.0, cosijl));
 
-          double dgdc, dgdN;
-          const double g = rebo_gSpline(cosijl, Nji, jtype, p, dgdc, dgdN);
+          double dgdN;
+          const double g = rebo_gSpline(cosijl, Nji, jtype, p, lj_dgdc[lpos], dgdN);
+          lj_g[lpos] = g;
           Etmp_pji += wjl * g * exp_lam;
           tmp3_pji += wjl * dgdN * exp_lam;
         }
@@ -886,14 +896,13 @@ namespace exaStamp
           const double rjl = l_rjl[lpos];
           const double wjl = l_wjl[lpos];
           const double dwjl = l_dwjl[lpos];
-          const double lam = (jtype == 1) ? 4.0 * ((p.rho[ltype][1] - rjl) - (p.rho[itype][1] - rij)) : 0.0;
-          const double exp_lam = std::exp(lam);
+          const double exp_lam = lj_exp_lam[lpos];
 
           double cosijl = (delx * jlx + dely * jly + delz * jlz) / (rij * rjl);
           cosijl = min(1.0, max(-1.0, cosijl));
 
-          double dgdc, dgdN;
-          const double g = rebo_gSpline(cosijl, Nji, jtype, p, dgdc, dgdN);
+          const double g = lj_g[lpos];
+          const double dgdc = lj_dgdc[lpos];
 
           const double inv_rij = 1.0 / rij, inv_rjl = 1.0 / rjl;
           const double inv_rij2 = inv_rij * inv_rij, inv_rjl2 = inv_rjl * inv_rjl;
