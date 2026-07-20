@@ -801,8 +801,10 @@ namespace exaStamp
           const double exp_lam = std::exp(lam);
           kj_exp_lam[kpos] = exp_lam;
 
-          // cos_jik: dot((ri-rj),(ri-rk))/(rij*rik); signs cancel with buf convention
-          double cosjik = (buf.drx[jj] * buf.drx[kk] + buf.dry[jj] * buf.dry[kk] + buf.drz[jj] * buf.drz[kk]) / (rij * rik);
+          // cos_jik: dot((ri-rj),(ri-rk))/(rij*rik); signs cancel with buf convention.
+          // buf.drx[jj] == -delx (delx/dely/delz already cached above), avoids
+          // re-reading buf.drx/dry/drz[jj] from local memory here.
+          double cosjik = -(delx * buf.drx[kk] + dely * buf.dry[kk] + delz * buf.drz[kk]) / (rij * rik);
           cosjik = min(1.0, max(-1.0, cosjik));
 
           double dgdN;
@@ -945,9 +947,11 @@ namespace exaStamp
           if (ll == jj)
             continue;
           const int ltype = buf.ext.type[ll];
-          const double jlx = buf.drx[ll] - buf.drx[jj];
-          const double jly = buf.dry[ll] - buf.dry[jj];
-          const double jlz = buf.drz[ll] - buf.drz[jj];
+          // buf.drx[jj] == -delx; reuse the already-cached delx/dely/delz
+          // instead of re-reading buf.drx/dry/drz[jj] from local memory.
+          const double jlx = buf.drx[ll] + delx;
+          const double jly = buf.dry[ll] + dely;
+          const double jlz = buf.drz[ll] + delz;
           const double rjlsq = jlx * jlx + jly * jly + jlz * jlz;
           if (rjlsq >= p.rcmaxsq[jtype][ltype])
             continue;
@@ -1162,7 +1166,9 @@ namespace exaStamp
                   if (mm == kk)
                     continue;
                   const int mtype = buf.ext.type[mm];
-                  const double kmx = buf.drx[mm] - buf.drx[kk], kmy = buf.dry[mm] - buf.dry[kk], kmz = buf.drz[mm] - buf.drz[kk];
+                  // buf.drx[kk] == -rikx (already cached above), avoids
+                  // re-reading buf.drx/dry/drz[kk] from local memory here.
+                  const double kmx = buf.drx[mm] + rikx, kmy = buf.dry[mm] + riky, kmz = buf.drz[mm] + rikz;
                   const double rkmsq = kmx * kmx + kmy * kmy + kmz * kmz;
                   if (rkmsq >= p.rcmaxsq[ktype][mtype])
                     continue;
@@ -1215,13 +1221,16 @@ namespace exaStamp
               atomic_add_contribution(cells[cell_l][field::fz][p_l], -pf2a * jlz);
               if (std::fabs(dNlj) > TOL)
               {
+                // ll is fixed for the whole mm-loop below; cache buf.drx/dry/drz[ll]
+                // once instead of re-reading it from local memory on every mm.
+                const double llx = buf.drx[ll], lly = buf.dry[ll], llz = buf.drz[ll];
                 // lmx = r_m-r_l = -rlm_LAMMPS → fl += +pf*lmx, fm += -pf*lmx
                 for (int mm = 0; mm < jnum; ++mm)
                 {
                   if (mm == ll || mm == jj)
                     continue;
                   const int mtype = buf.ext.type[mm];
-                  const double lmx = buf.drx[mm] - buf.drx[ll], lmy = buf.dry[mm] - buf.dry[ll], lmz = buf.drz[mm] - buf.drz[ll];
+                  const double lmx = buf.drx[mm] - llx, lmy = buf.dry[mm] - lly, lmz = buf.drz[mm] - llz;
                   const double rlmsq = lmx * lmx + lmy * lmy + lmz * lmz;
                   if (rlmsq >= p.rcmaxsq[ltype][mtype])
                     continue;
@@ -1312,10 +1321,12 @@ namespace exaStamp
               if (ll == jj || ll == kk)
                 continue;
               const int ltype = buf.ext.type[ll];
-              // r34 = rj - rl  (LAMMPS: atom3 - atom4)
-              const double r34x = buf.drx[jj] - buf.drx[ll];
-              const double r34y = buf.dry[jj] - buf.dry[ll];
-              const double r34z = buf.drz[jj] - buf.drz[ll];
+              // r34 = rj - rl  (LAMMPS: atom3 - atom4). r32x == buf.drx[jj]
+              // (already cached above), avoids re-reading buf.drx/dry/drz[jj]
+              // from local memory here.
+              const double r34x = r32x - buf.drx[ll];
+              const double r34y = r32y - buf.dry[ll];
+              const double r34z = r32z - buf.drz[ll];
               const double r34sq = r34x * r34x + r34y * r34y + r34z * r34z;
               if (r34sq >= p.rcmaxsq[jtype][ltype])
                 continue;
@@ -1514,9 +1525,11 @@ namespace exaStamp
                   if (mm == kk)
                     continue;
                   const int mtype = buf.ext.type[mm];
-                  const double kmx = buf.drx[mm] - buf.drx[kk];
-                  const double kmy = buf.dry[mm] - buf.dry[kk];
-                  const double kmz = buf.drz[mm] - buf.drz[kk];
+                  // buf.drx[kk] == -rikx (already cached above), avoids
+                  // re-reading buf.drx/dry/drz[kk] from local memory here.
+                  const double kmx = buf.drx[mm] + rikx;
+                  const double kmy = buf.dry[mm] + riky;
+                  const double kmz = buf.drz[mm] + rikz;
                   const double rkmsq = kmx * kmx + kmy * kmy + kmz * kmz;
                   if (rkmsq >= p.rcmaxsq[ktype][mtype])
                     continue;
@@ -1571,15 +1584,18 @@ namespace exaStamp
 
               if (std::fabs(dNlj) > TOL)
               {
+                // ll is fixed for the whole mm-loop below; cache buf.drx/dry/drz[ll]
+                // once instead of re-reading it from local memory on every mm.
+                const double llx = buf.drx[ll], lly = buf.dry[ll], llz = buf.drz[ll];
                 // lmx = r_m-r_l = -rlm_LAMMPS → fl += +pf*lmx, fm += -pf*lmx
                 for (int mm = 0; mm < jnum; ++mm)
                 {
                   if (mm == ll || mm == jj)
                     continue;
                   const int mtype = buf.ext.type[mm];
-                  const double lmx = buf.drx[mm] - buf.drx[ll];
-                  const double lmy = buf.dry[mm] - buf.dry[ll];
-                  const double lmz = buf.drz[mm] - buf.drz[ll];
+                  const double lmx = buf.drx[mm] - llx;
+                  const double lmy = buf.dry[mm] - lly;
+                  const double lmz = buf.drz[mm] - llz;
                   const double rlmsq = lmx * lmx + lmy * lmy + lmz * lmz;
                   if (rlmsq >= p.rcmaxsq[ltype][mtype])
                     continue;
