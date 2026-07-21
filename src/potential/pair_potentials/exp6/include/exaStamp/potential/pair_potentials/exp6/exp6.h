@@ -71,8 +71,17 @@ namespace exaStamp
   {
     assert(r>0);
     double one_rB = 1/(r*p_exp6.B);
-    double Cr6 = p_exp6.C / pow(r,6);
-    double Dtwelve_rB12 = p_exp6.D * pow(12*one_rB,12);
+    // pow(x,6)/pow(x,12) with an integer exponent still lowers to a full
+    // exp(y*log(x)) sequence on the SFU on CUDA - replaced with exact
+    // repeated squaring, same as lj_compute_energy.
+    double r2 = r * r;
+    double r6 = r2 * r2 * r2;
+    double Cr6 = p_exp6.C / r6;
+    double twelve_rB = 12 * one_rB;
+    double twelve_rB2 = twelve_rB * twelve_rB;
+    double twelve_rB4 = twelve_rB2 * twelve_rB2;
+    double twelve_rB12 = twelve_rB4 * twelve_rB4 * twelve_rB4;
+    double Dtwelve_rB12 = p_exp6.D * twelve_rB12;
     double AexpmBr = p_exp6.A * exp(-p_exp6.B * r);
 
     e  =   AexpmBr       - Cr6   + Dtwelve_rB12;
