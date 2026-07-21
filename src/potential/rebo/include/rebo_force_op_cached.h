@@ -109,34 +109,43 @@ namespace exaStamp
     return cutoff;
   };
 
-  ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE static double rebo_Sp5th(double x, const double *c, double &df)
+  // fp_t is the working precision of the polynomial evaluation itself
+  // (monomial powers + accumulation), independent of the double x/coeffs
+  // passed in — narrowing happens at the fp_t(...) casts below. Default
+  // double reproduces the original function exactly, so every existing
+  // (unqualified) call site is untouched; mixed-precision variants opt in
+  // explicitly via e.g. rebo_Sp5th<float>(...). See "Mixed precision"
+  // section of README.md.
+  template <class fp_t = double>
+  ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE static fp_t rebo_Sp5th(fp_t x, const double *c, fp_t &df)
   {
-    double f = c[5] * x;
-    double d = 5.0 * c[5] * x;
-    f += c[4];
-    d += 4.0 * c[4];
+    fp_t f = fp_t(c[5]) * x;
+    fp_t d = fp_t(5.0) * fp_t(c[5]) * x;
+    f += fp_t(c[4]);
+    d += fp_t(4.0) * fp_t(c[4]);
     f *= x;
     d *= x;
-    f += c[3];
-    d += 3.0 * c[3];
+    f += fp_t(c[3]);
+    d += fp_t(3.0) * fp_t(c[3]);
     f *= x;
     d *= x;
-    f += c[2];
-    d += 2.0 * c[2];
+    f += fp_t(c[2]);
+    d += fp_t(2.0) * fp_t(c[2]);
     f *= x;
     d *= x;
-    f += c[1];
-    d += c[1];
+    f += fp_t(c[1]);
+    d += fp_t(c[1]);
     f *= x;
-    f += c[0];
+    f += fp_t(c[0]);
     df = d;
     return f;
   }
 
   // 2D bicubic: f(x,y) = sum_{i,j=0}^{3} c[i*4+j] * x^i * y^j
-  ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE static double rebo_Spbicubic(double x, double y, const double *coeffs, double df[2])
+  template <class fp_t = double>
+  ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE static fp_t rebo_Spbicubic(fp_t x, fp_t y, const double *coeffs, fp_t df[2])
   {
-    double f, xn, yn, xn1, yn1, c;
+    fp_t f, xn, yn, xn1, yn1, c;
     int i, j;
 
     f = 0.0;
@@ -149,13 +158,13 @@ namespace exaStamp
       yn = 1.0;
       for (j = 0; j < 4; j++)
       {
-        c = coeffs[i * 4 + j];
+        c = fp_t(coeffs[i * 4 + j]);
 
         f += c * xn * yn;
         if (i > 0)
-          df[0] += c * ((double)i) * xn1 * yn;
+          df[0] += c * fp_t(i) * xn1 * yn;
         if (j > 0)
-          df[1] += c * ((double)j) * xn * yn1;
+          df[1] += c * fp_t(j) * xn * yn1;
 
         yn1 = yn;
         yn *= y;
@@ -168,9 +177,10 @@ namespace exaStamp
   }
 
   // 3D tricubic: f(x,y,z) = sum_{i,j,k=0}^{3} c[16i+4j+k] * x^i * y^j * z^k
-  ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE static double rebo_Sptricubic(double x, double y, double z, const double *coeffs, double df[3])
+  template <class fp_t = double>
+  ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE static fp_t rebo_Sptricubic(fp_t x, fp_t y, fp_t z, const double *coeffs, fp_t df[3])
   {
-    double f, ir, jr, kr, xn, yn, zn, xn1, yn1, zn1, c;
+    fp_t f, ir, jr, kr, xn, yn, zn, xn1, yn1, zn1, c;
     int i, j, k;
 
     f = 0.0;
@@ -181,16 +191,16 @@ namespace exaStamp
     xn = 1.0;
     for (i = 0; i < 4; i++)
     {
-      ir = (double)i;
+      ir = fp_t(i);
       yn = 1.0;
       for (j = 0; j < 4; j++)
       {
-        jr = (double)j;
+        jr = fp_t(j);
         zn = 1.0;
         for (k = 0; k < 4; k++)
         {
-          kr = (double)k;
-          c = coeffs[16 * i + 4 * j + k];
+          kr = fp_t(k);
+          c = fp_t(coeffs[16 * i + 4 * j + k]);
           f += c * xn * yn * zn;
           if (i > 0)
             df[0] += c * ir * xn1 * yn * zn;
@@ -211,6 +221,12 @@ namespace exaStamp
     return f;
   }
 
+  // fp_t: working precision of the underlying rebo_Sp5th evaluation only.
+  // Domain-clamp/table-index logic above stays double regardless of fp_t —
+  // only the polynomial evaluation itself is affected. Return type and
+  // dgdc/dgdN stay double: fp_t is an internal precision, not a caller-
+  // visible one.
+  template <class fp_t = double>
   ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE static double rebo_gSpline(double costh, double N, int typei, const ReboParamsRO &p, double &dgdc, double &dgdN)
   {
     dgdc = dgdN = 0.0;
@@ -227,26 +243,30 @@ namespace exaStamp
           iv = i;
           break;
         }
-      double dg1, dg2;
-      const double g1 = rebo_Sp5th(costh, p.gC1 + iv * 6, dg1);
-      const double g2 = rebo_Sp5th(costh, p.gC2 + iv * 6, dg2);
+      fp_t dg1, dg2;
+      const fp_t g1 = rebo_Sp5th<fp_t>(fp_t(costh), p.gC1 + iv * 6, dg1);
+      const fp_t g2 = rebo_Sp5th<fp_t>(fp_t(costh), p.gC2 + iv * 6, dg2);
       if (N >= p.NCmax)
       {
-        dgdc = dg2;
-        return g2;
+        dgdc = double(dg2);
+        return double(g2);
       }
       else if (N <= p.NCmin)
       {
-        dgdc = dg1;
-        return g1;
+        dgdc = double(dg1);
+        return double(g1);
       }
       else
       {
         double dcut;
         const double cut = rebo_Sp(N, p.NCmin, p.NCmax, dcut);
-        dgdc = dg2 + cut * (dg1 - dg2);
-        dgdN = dcut * (g1 - g2);
-        return g2 + cut * (g1 - g2);
+        // g1/dg1 and g2/dg2 (adjacent gC1/gC2 branches) are close in value
+        // near the blend boundary — widen to double before subtracting so
+        // the cancellation happens at double precision, not fp_t.
+        const double g1d = double(g1), g2d = double(g2), dg1d = double(dg1), dg2d = double(dg2);
+        dgdc = dg2d + cut * (dg1d - dg2d);
+        dgdN = dcut * (g1d - g2d);
+        return g2d + cut * (g1d - g2d);
       }
     }
     else
@@ -262,13 +282,22 @@ namespace exaStamp
           iv = i;
           break;
         }
-      return rebo_Sp5th(costh, p.gH + iv * 6, dgdc);
+      fp_t dgdc_fp;
+      const fp_t g = rebo_Sp5th<fp_t>(fp_t(costh), p.gH + iv * 6, dgdc_fp);
+      dgdc = double(dgdc_fp);
+      return double(g);
     }
   }
 
   // P_ij bicubic correction (zero for H central atom)
   // dom layout (flat): [lo_nC, hi_nC, lo_nH, hi_nH]
   // coeff layout: [nC_patch][nH_patch][16], flat = ((x*ny)+y)*16
+  // Always double: rebo_Spbicubic evaluates monomials of the raw
+  // (un-normalized) NijC/NijH, up to N^3 with N up to ~4 — the fit relies on
+  // cancellation between large intermediate terms to produce a small final
+  // correction, and float32 breaks that cancellation (verified offline
+  // against the real piCC table: up to ~0.016 absolute error from a single
+  // patch). Not worth threading SplineFp through here.
   ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE static double rebo_PijSpline(double NijC, double NijH, int typei, int typej, const ReboParamsRO &p, double dN2[2])
   {
     dN2[0] = dN2[1] = 0.0;
@@ -291,12 +320,14 @@ namespace exaStamp
     if (NijH == dom[3])
       --y;
     const int ny = (int)dom[3];
-    return rebo_Spbicubic(NijC, NijH, tbl + (x * ny + y) * 16, dN2);
+    return rebo_Spbicubic<double>(NijC, NijH, tbl + (x * ny + y) * 16, dN2);
   }
 
   // piRC tricubic correction
   // dom layout (flat): [lo0,hi0, lo1,hi1, lo2,hi2]
   // coeff layout: [x][y][z][64], flat = ((x*ny+y)*nz+z)*64
+  // Always double, same reason as rebo_PijSpline above: raw-coordinate
+  // tricubic monomials up to N^3 (N up to ~9 for Nijconj) cancel hard.
   ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE static double rebo_piRCSpline(double Nij, double Nji, double Nijconj, int typei, int typej, const ReboParamsRO &p, double dN3[3])
   {
     dN3[0] = dN3[1] = dN3[2] = 0.0;
@@ -337,7 +368,7 @@ namespace exaStamp
     if (Nijconj == dom[5])
       --z;
     const int ny = (int)dom[3], nz = (int)dom[5];
-    return rebo_Sptricubic(Nij, Nji, Nijconj, tbl + ((x * ny + y) * nz + z) * 64, dN3);
+    return rebo_Sptricubic<double>(Nij, Nji, Nijconj, tbl + ((x * ny + y) * nz + z) * 64, dN3);
   }
 
   ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE static double rebo_TijSpline(double Nij, double Nji, double Nijconj, const ReboParamsRO &p, double dN3[3])
@@ -364,7 +395,7 @@ namespace exaStamp
     if (Nijconj == dom[5])
       --z;
     const int ny = (int)dom[3], nz = (int)dom[5];
-    return rebo_Sptricubic(Nij, Nji, Nijconj, p.Tijc + ((x * ny + y) * nz + z) * 64, dN3);
+    return rebo_Sptricubic<double>(Nij, Nji, Nijconj, p.Tijc + ((x * ny + y) * nz + z) * 64, dN3);
   }
 
   // ===========================================================================
@@ -576,7 +607,18 @@ namespace exaStamp
   // r_{i,l} < r_{i,j} + r_{j,l} < 4 Å < rcut_max.
   // ===========================================================================
 
-  template <class NijcFieldT, class NijhFieldT, class NconjFieldT> struct alignas(onika::memory::DEFAULT_ALIGNMENT) REBOManyBodyForceOp
+  // SplineFp: precision used by rebo_gSpline's rebo_Sp5th evaluation only
+  // (bond-angle spline, domain bounded to costh in [-1,1]). rebo_PijSpline/
+  // rebo_piRCSpline/rebo_TijSpline are NOT parameterized on this — their
+  // underlying rebo_Spbicubic/rebo_Sptricubic evaluate monomials of the raw,
+  // un-normalized N values (up to N^3, N up to ~9) and rely on double-
+  // precision cancellation to land on a small correction; float32 breaks
+  // that (verified offline: up to ~0.016 abs error from a single real piCC
+  // patch). See README, "Mixed precision". Default double makes this
+  // identical to the original kernel; rebo_manybody_mixedprec.cu
+  // instantiates SplineFp=float as a separate, independently profilable
+  // type/kernel — same file, no source duplication.
+  template <class NijcFieldT, class NijhFieldT, class NconjFieldT, class SplineFp = double> struct alignas(onika::memory::DEFAULT_ALIGNMENT) REBOManyBodyForceOp
   {
     const ReboParamsRO *m_params = nullptr;
     NijcFieldT m_nijc_field = {};   // read neighbour's nC
@@ -808,7 +850,7 @@ namespace exaStamp
           cosjik = min(1.0, max(-1.0, cosjik));
 
           double dgdN;
-          const double g = rebo_gSpline(cosjik, Nij, itype, p, kj_dgdc[kpos], dgdN);
+          const double g = rebo_gSpline<SplineFp>(cosjik, Nij, itype, p, kj_dgdc[kpos], dgdN);
           kj_g[kpos] = g;
           Etmp_pij += wik * g * exp_lam;
           tmp3_pij += wik * dgdN * exp_lam;
@@ -1010,7 +1052,7 @@ namespace exaStamp
           cosijl = min(1.0, max(-1.0, cosijl));
 
           double dgdN;
-          const double g = rebo_gSpline(cosijl, Nji, jtype, p, lj_dgdc[lpos], dgdN);
+          const double g = rebo_gSpline<SplineFp>(cosijl, Nji, jtype, p, lj_dgdc[lpos], dgdN);
           lj_g[lpos] = g;
           Etmp_pji += wjl * g * exp_lam;
           tmp3_pji += wjl * dgdN * exp_lam;
@@ -1689,7 +1731,7 @@ namespace exanb
     static inline constexpr bool HasParticleContextStop = true;
   };
 
-  template <class NijcFieldT, class NijhFieldT, class NconjFieldT> struct ComputePairTraits<exaStamp::REBOManyBodyForceOp<NijcFieldT, NijhFieldT, NconjFieldT>>
+  template <class NijcFieldT, class NijhFieldT, class NconjFieldT, class SplineFp> struct ComputePairTraits<exaStamp::REBOManyBodyForceOp<NijcFieldT, NijhFieldT, NconjFieldT, SplineFp>>
   {
     static inline constexpr bool ComputeBufferCompatible = true;
     static inline constexpr bool BufferLessCompatible = false;
