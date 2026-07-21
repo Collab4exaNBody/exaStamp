@@ -22,7 +22,8 @@ compute_force:
   - ghost_update_opt: { opt_fields: [ "NijC", "NijH" ] }
   - rebo_conjugation
   - ghost_update_opt: { opt_fields: [ "Nconj" ] }
-  - rebo_force
+  - rebo_pairwise
+  - rebo_manybody
   - igar_force_interp: { energy_factor: 50000.0 }
 
 # Update forces of non-ghost particles from their ghosts
