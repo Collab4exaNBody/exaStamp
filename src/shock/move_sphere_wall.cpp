@@ -39,7 +39,7 @@ namespace exaStamp
     ADD_SLOT(double, init_cutoff, INPUT, REQUIRED);
     ADD_SLOT(double, init_epsilon, INPUT, REQUIRED);
     ADD_SLOT(double, init_time, INPUT, REQUIRED);
-    ADD_SLOT(double, init_velocity, INPUT, REQUIRED);
+    ADD_SLOT(double, init_velocity, INPUT, 0.0);
     ADD_SLOT(double, final_time, INPUT, OPTIONAL);
     ADD_SLOT(double, final_velocity, INPUT, OPTIONAL);
     ADD_SLOT(long, init_exponent, INPUT, 12);
@@ -74,7 +74,8 @@ spherical wall for a given instant, to be fed into the `sphere_wall` operator.
 Before init_time, radius stays at init_radius and center stays at init_center. From
 init_time onward, radius advances at constant init_velocity: radius = init_radius +
 (physical_time - init_time) * init_velocity. A negative init_velocity shrinks the sphere
-(e.g. a converging spherical implosion).
+(e.g. a converging spherical implosion). init_velocity defaults to 0 (no radius change),
+so this operator can be used for translation only.
 
 Optionally, center can translate along `direction` (a unit vector) at
 init_translation_velocity, using the same init_time/final_time window as radius:

@@ -40,7 +40,7 @@ namespace exaStamp
     ADD_SLOT(double, init_cutoff, INPUT, REQUIRED);
     ADD_SLOT(double, init_epsilon, INPUT, REQUIRED);
     ADD_SLOT(double, init_time, INPUT, REQUIRED);
-    ADD_SLOT(double, init_velocity, INPUT, REQUIRED);
+    ADD_SLOT(double, init_velocity, INPUT, 0.0);
     ADD_SLOT(double, final_time, INPUT, OPTIONAL);
     ADD_SLOT(double, final_velocity, INPUT, OPTIONAL);
     ADD_SLOT(long, init_exponent, INPUT, 12);
@@ -78,7 +78,8 @@ cylindrical wall for a given instant, to be fed into the `cylinder_wall` operato
 Before init_time, radius stays at init_radius and origin stays at init_origin. From
 init_time onward, radius advances at constant init_velocity: radius = init_radius +
 (physical_time - init_time) * init_velocity. A negative init_velocity shrinks the
-cylinder (e.g. a converging cylindrical implosion).
+cylinder (e.g. a converging cylindrical implosion). init_velocity defaults to 0 (no
+radius change), so this operator can be used for translation only.
 
 Optionally, origin can translate along `direction` (a unit vector, independent of `axis`)
 at init_translation_velocity, using the same init_time/final_time window as radius:
