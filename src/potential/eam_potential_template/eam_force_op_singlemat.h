@@ -22,6 +22,7 @@ under the License.
 #include <exanb/compute/compute_cell_particle_pairs.h>
 #include <exanb/compute/compute_pair_traits.h>
 #include <exanb/core/grid_fields.h>
+#include <onika/cuda/ro_shallow_copy.h>
 
 #include "potential.h"
 

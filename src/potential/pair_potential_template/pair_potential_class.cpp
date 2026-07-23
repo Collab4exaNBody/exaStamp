@@ -19,6 +19,7 @@ under the License.
 
 #include <exaStamp/potential_factory/pair_potential_factory.h>
 #include <exaStamp/potential_factory/pair_potential.h>
+#include <onika/memory/mm_vector_yaml.h>
 
 #undef USTAMP_POTENTIAL_WITH_VIRIAL
 #include "pair_potential_force_op.h"
