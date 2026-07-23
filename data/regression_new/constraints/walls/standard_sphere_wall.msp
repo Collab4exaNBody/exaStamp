@@ -1,11 +1,11 @@
 includes:
-  - baseline.yaml
+  - baseline_sphere.yaml
   - snapshot.yaml
 
 confinement_wall:
   - sphere_wall:
-      center: [ 99.0 ang, 26.4 ang, 26.4 ang ] # domain center
-      radius: 60.0 ang
+      center: [ 50.0 ang, 50.0 ang, 50.0 ang ] # domain center
+      radius: 45.0 ang
       cutoff: 2.2 ang
       epsilon: 1.0e-19 J
 
