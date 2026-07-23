@@ -1,0 +1,19 @@
+includes:
+  - baseline.yaml
+  - snapshot.yaml
+
+left_wall:
+  - move_wall:
+      csv_filename: "constant_velocity_remove.csv"
+      csv_separator: " "
+      init_normal: [ 1.0, 0.0, 0.0 ]
+      init_offset: 15.0 ang
+      init_cutoff: 2.2 ang
+      init_epsilon: 1.0e-19 J
+      init_time: 0.5 ps
+      init_velocity: 1000 m/s
+      final_time: 5.0 ps
+  - wall
+
++compute_force:
+  - left_wall
