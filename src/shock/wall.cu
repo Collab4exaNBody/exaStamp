@@ -110,6 +110,44 @@ namespace exaStamp
     static constexpr FieldSet<field::_rx, field::_ry, field::_rz, field::_fx, field::_fy, field::_fz, field::_ep> compute_field_set{};
 
   public:
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+Applies a repulsive potential wall to every particle: a planar barrier defined by
+`normal` (unit vector) and `offset` (signed distance from the origin along normal),
+repelling particles within `cutoff` of the plane along a power-law of exponent
+`exponent`, scaled by `epsilon`.
+
+For a particle at signed distance d = dot(r, normal) + offset (|d| <= cutoff):
+ep += epsilon * (1 - cutoff/d)^exponent
+f  = -epsilon * exponent * (cutoff/d^2) * (1 - cutoff/d)^(exponent - 1) * normal
+
+Typically fed by `move_wall`, which computes normal/offset/cutoff/epsilon/exponent
+for the current instant so the wall can move over time.
+
+YAML example, moving wall (via move_wall):
+
+myoperator:
+  - move_wall:
+      init_cutoff: 5.0 ang
+      init_epsilon: 1.0e-19 J
+      init_time: 10.0 ps
+      final_time: 50.0 ps
+      init_velocity: 0.01 ang/ps
+  - wall
+
+YAML example, fixed wall (normal/offset/cutoff/epsilon/exponent set directly, no move_wall):
+
+myoperator:
+  - wall:
+      normal: [1.0, 0.0, 0.0]
+      offset: 0.0
+      cutoff: 5.0 ang
+      epsilon: 1.0e-19 J
+      exponent: 12
+)EOF";
+    }
+
     inline void execute() override final
     {
       if (!domain->xform_is_identity())
