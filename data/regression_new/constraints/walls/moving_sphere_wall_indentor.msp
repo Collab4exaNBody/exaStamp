@@ -1,5 +1,5 @@
 includes:
-  - baseline_sphere_bulk.yaml
+  - baseline_indentation.yaml
   - snapshot.yaml
 
 confinement_wall:
@@ -13,7 +13,6 @@ confinement_wall:
       init_time: 0.5 ps
       direction: [ 0.0, 0.0, 1.0 ]
       init_translation_velocity: -200 m/s
-      init_velocity: 0. m/s
   - sphere_wall
 
 +compute_force:
