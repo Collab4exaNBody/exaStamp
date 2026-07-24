@@ -40,10 +40,11 @@ namespace exaStamp
   using namespace onika;
 
   template <class XFormT>
-  struct WallComputeFunc
+  struct CylinderWallComputeFunc
   {
-    const Vec3d N;
-    const double D;
+    const Vec3d origin;
+    const Vec3d axis; // unit vector
+    const double radius;
     const double R;
     const long exposant = 12;
     const double epsilon = onika::physics::make_quantity(1.0e-19, "J").convert();
@@ -54,11 +55,17 @@ namespace exaStamp
       Vec3d r{rx, ry, rz};
       r = xform.transformCoord(r);
 
-      double d_sign = dot(r, N) + D;
+      Vec3d ra = r - origin;
+      Vec3d r_perp = ra - dot(ra, axis) * axis;
+      const double dist = norm(r_perp);
+
+      double d_sign = dist - radius;
       double d = abs(d_sign);
 
-      if (d <= R)
+      if (d <= R && dist > 0.)
       {
+        const Vec3d N = r_perp / dist;
+
         const double ratio = 1.0 - R / d;
         const double ratio_puis_exposant = pow(ratio, exposant);
 
@@ -83,7 +90,7 @@ namespace exaStamp
 namespace exanb
 {
   template <class XFormT>
-  struct ComputeCellParticlesTraits<exaStamp::WallComputeFunc<XFormT>>
+  struct ComputeCellParticlesTraits<exaStamp::CylinderWallComputeFunc<XFormT>>
   {
     static inline constexpr bool RequiresBlockSynchronousCall = false;
     static inline constexpr bool CudaCompatible = true;
@@ -95,13 +102,14 @@ namespace exaStamp
   using namespace exanb;
 
   template <typename GridT, class = AssertGridHasFields<GridT, field::_fx, field::_fy, field::_fz, field::_ep>>
-  class Wall : public OperatorNode
+  class CylinderWall : public OperatorNode
   {
     static inline constexpr double default_epsilon = ONIKA_CONST_QUANTITY(1.0e-19 * J).convert(exaStamp::UNIT_SYSTEM);
 
     ADD_SLOT(GridT, grid, INPUT_OUTPUT);
-    ADD_SLOT(Vec3d, normal, INPUT, Vec3d{1.0, 0.0, 0.0});
-    ADD_SLOT(double, offset, INPUT, 0.0);
+    ADD_SLOT(Vec3d, origin, INPUT, Vec3d{0.0, 0.0, 0.0});
+    ADD_SLOT(Vec3d, axis, INPUT, Vec3d{0.0, 0.0, 1.0});
+    ADD_SLOT(double, radius, INPUT, REQUIRED);
     ADD_SLOT(double, cutoff, INPUT, REQUIRED);
     ADD_SLOT(Domain, domain, INPUT, REQUIRED);
     ADD_SLOT(long, exponent, INPUT, 12);
@@ -113,35 +121,27 @@ namespace exaStamp
     inline std::string documentation() const override final
     {
       return R"EOF(
-Applies a repulsive potential wall to every particle: a planar barrier defined by
-`normal` (unit vector) and `offset` (signed distance from the origin along normal),
-repelling particles within `cutoff` of the plane along a power-law of exponent
-`exponent`, scaled by `epsilon`.
+Applies a repulsive potential wall to every particle: a cylindrical barrier defined by
+`origin` (a point on the axis), `axis` (unit vector, cylinder direction) and `radius`,
+repelling particles within `cutoff` of the cylinder's surface along a power-law of
+exponent `exponent`, scaled by `epsilon`. `axis` must be a unit vector.
 
-For a particle at signed distance d = dot(r, normal) + offset (|d| <= cutoff):
+For a particle at radial vector r_perp = (r - origin) projected perpendicular to axis,
+signed distance d = |r_perp| - radius (|d| <= cutoff), pushed along N = r_perp / |r_perp|:
 ep += epsilon * (1 - cutoff/d)^exponent
-f  = -epsilon * exponent * (cutoff/d^2) * (1 - cutoff/d)^(exponent - 1) * normal
+f  = -epsilon * exponent * (cutoff/d^2) * (1 - cutoff/d)^(exponent - 1) * N
 
-Typically fed by `move_wall`, which computes normal/offset/cutoff/epsilon/exponent
-for the current instant so the wall can move over time.
+Particles just inside the cylinder are pushed further inward, particles just outside
+are pushed further outward (a thin cylindrical shell/membrane barrier), same convention
+as the planar `wall` operator. The cylinder is infinite along axis (unbounded ends).
 
-YAML example, moving wall (via move_wall):
-
-myoperator:
-  - move_wall:
-      init_cutoff: 5.0 ang
-      init_epsilon: 1.0e-19 J
-      init_time: 10.0 ps
-      final_time: 50.0 ps
-      init_velocity: 0.01 ang/ps
-  - wall
-
-YAML example, fixed wall (normal/offset/cutoff/epsilon/exponent set directly, no move_wall):
+YAML example:
 
 myoperator:
-  - wall:
-      normal: [1.0, 0.0, 0.0]
-      offset: 0.0
+  - cylinder_wall:
+      origin: [0.0, 0.0, 0.0]
+      axis: [0.0, 0.0, 1.0]
+      radius: 20.0 ang
       cutoff: 5.0 ang
       epsilon: 1.0e-19 J
       exponent: 12
@@ -152,24 +152,24 @@ myoperator:
     {
       if (!domain->xform_is_identity())
       {
-        WallComputeFunc<LinearXForm> func{*normal, -(*offset), *cutoff, *exponent, *epsilon, LinearXForm{domain->xform()}};
+        CylinderWallComputeFunc<LinearXForm> func{*origin, *axis, *radius, *cutoff, *exponent, *epsilon, LinearXForm{domain->xform()}};
         compute_cell_particles(*grid, false, func, compute_field_set, parallel_execution_context());
       }
       else
       {
-        WallComputeFunc<NullXForm> func{*normal, -(*offset), *cutoff, *exponent, *epsilon, NullXForm{}};
+        CylinderWallComputeFunc<NullXForm> func{*origin, *axis, *radius, *cutoff, *exponent, *epsilon, NullXForm{}};
         compute_cell_particles(*grid, false, func, compute_field_set, parallel_execution_context());
       }
     }
   };
 
   template <class GridT>
-  using WallTmpl = Wall<GridT>;
+  using CylinderWallTmpl = CylinderWall<GridT>;
 
   // === register factories ===
-  ONIKA_AUTORUN_INIT(wall)
+  ONIKA_AUTORUN_INIT(cylinder_wall)
   {
-    OperatorNodeFactory::instance()->register_factory("wall", make_grid_variant_operator<WallTmpl>);
+    OperatorNodeFactory::instance()->register_factory("cylinder_wall", make_grid_variant_operator<CylinderWallTmpl>);
   }
 
 }

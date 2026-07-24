@@ -1,0 +1,20 @@
+includes:
+  - baseline_indentation.yaml
+  - snapshot.yaml
+
+confinement_wall:
+  - move_cylinder_wall:
+      csv_filename: "moving_cylinder_wall.csv"
+      csv_separator: " "
+      init_origin: [ 0.0 ang, 66.0 ang, 135.0 ang ] # any point on the axis
+      init_axis: [ 1.0, 0.0, 0.0 ]
+      init_radius: 50.0 ang
+      init_cutoff: 2.2 ang
+      init_epsilon: 1.0e-19 J
+      init_time: 0.5 ps
+      direction: [ 0.0, 0.0, 1.0 ] # translation perpendicular to axis
+      init_translation_velocity: -200 m/s
+  - cylinder_wall
+
++compute_force:
+  - confinement_wall

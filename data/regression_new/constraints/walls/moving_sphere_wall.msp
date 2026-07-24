@@ -1,0 +1,18 @@
+includes:
+  - baseline_sphere.yaml
+  - snapshot.yaml
+
+confinement_wall:
+  - move_sphere_wall:
+      csv_filename: "moving_sphere_wall.csv"
+      csv_separator: " "
+      init_center: [ 50.0 ang, 50. ang, 50. ang ] # domain center
+      init_radius: 45.0 ang
+      init_cutoff: 2.2 ang
+      init_epsilon: 1.0e-19 J
+      init_time: 0.5 ps
+      init_velocity: -1000 m/s # converging (shrinking) sphere
+  - sphere_wall
+
++compute_force:
+  - confinement_wall

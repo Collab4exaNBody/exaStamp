@@ -40,10 +40,10 @@ namespace exaStamp
   using namespace onika;
 
   template <class XFormT>
-  struct WallComputeFunc
+  struct SphereWallComputeFunc
   {
-    const Vec3d N;
-    const double D;
+    const Vec3d center;
+    const double radius;
     const double R;
     const long exposant = 12;
     const double epsilon = onika::physics::make_quantity(1.0e-19, "J").convert();
@@ -54,11 +54,16 @@ namespace exaStamp
       Vec3d r{rx, ry, rz};
       r = xform.transformCoord(r);
 
-      double d_sign = dot(r, N) + D;
+      Vec3d rc = r - center;
+      const double dist = norm(rc);
+
+      double d_sign = dist - radius;
       double d = abs(d_sign);
 
-      if (d <= R)
+      if (d <= R && dist > 0.)
       {
+        const Vec3d N = rc / dist;
+
         const double ratio = 1.0 - R / d;
         const double ratio_puis_exposant = pow(ratio, exposant);
 
@@ -83,7 +88,7 @@ namespace exaStamp
 namespace exanb
 {
   template <class XFormT>
-  struct ComputeCellParticlesTraits<exaStamp::WallComputeFunc<XFormT>>
+  struct ComputeCellParticlesTraits<exaStamp::SphereWallComputeFunc<XFormT>>
   {
     static inline constexpr bool RequiresBlockSynchronousCall = false;
     static inline constexpr bool CudaCompatible = true;
@@ -95,13 +100,13 @@ namespace exaStamp
   using namespace exanb;
 
   template <typename GridT, class = AssertGridHasFields<GridT, field::_fx, field::_fy, field::_fz, field::_ep>>
-  class Wall : public OperatorNode
+  class SphereWall : public OperatorNode
   {
     static inline constexpr double default_epsilon = ONIKA_CONST_QUANTITY(1.0e-19 * J).convert(exaStamp::UNIT_SYSTEM);
 
     ADD_SLOT(GridT, grid, INPUT_OUTPUT);
-    ADD_SLOT(Vec3d, normal, INPUT, Vec3d{1.0, 0.0, 0.0});
-    ADD_SLOT(double, offset, INPUT, 0.0);
+    ADD_SLOT(Vec3d, center, INPUT, Vec3d{0.0, 0.0, 0.0});
+    ADD_SLOT(double, radius, INPUT, REQUIRED);
     ADD_SLOT(double, cutoff, INPUT, REQUIRED);
     ADD_SLOT(Domain, domain, INPUT, REQUIRED);
     ADD_SLOT(long, exponent, INPUT, 12);
@@ -113,35 +118,25 @@ namespace exaStamp
     inline std::string documentation() const override final
     {
       return R"EOF(
-Applies a repulsive potential wall to every particle: a planar barrier defined by
-`normal` (unit vector) and `offset` (signed distance from the origin along normal),
-repelling particles within `cutoff` of the plane along a power-law of exponent
-`exponent`, scaled by `epsilon`.
+Applies a repulsive potential wall to every particle: a spherical barrier defined by
+`center` and `radius`, repelling particles within `cutoff` of the sphere's surface
+along a power-law of exponent `exponent`, scaled by `epsilon`.
 
-For a particle at signed distance d = dot(r, normal) + offset (|d| <= cutoff):
+For a particle at signed distance d = |r - center| - radius (|d| <= cutoff), pushed
+along the radial direction N = (r - center) / |r - center|:
 ep += epsilon * (1 - cutoff/d)^exponent
-f  = -epsilon * exponent * (cutoff/d^2) * (1 - cutoff/d)^(exponent - 1) * normal
+f  = -epsilon * exponent * (cutoff/d^2) * (1 - cutoff/d)^(exponent - 1) * N
 
-Typically fed by `move_wall`, which computes normal/offset/cutoff/epsilon/exponent
-for the current instant so the wall can move over time.
+Particles just inside the sphere are pushed further inward, particles just outside
+are pushed further outward (a thin spherical shell/membrane barrier), same convention
+as the planar `wall` operator.
 
-YAML example, moving wall (via move_wall):
-
-myoperator:
-  - move_wall:
-      init_cutoff: 5.0 ang
-      init_epsilon: 1.0e-19 J
-      init_time: 10.0 ps
-      final_time: 50.0 ps
-      init_velocity: 0.01 ang/ps
-  - wall
-
-YAML example, fixed wall (normal/offset/cutoff/epsilon/exponent set directly, no move_wall):
+YAML example:
 
 myoperator:
-  - wall:
-      normal: [1.0, 0.0, 0.0]
-      offset: 0.0
+  - sphere_wall:
+      center: [0.0, 0.0, 0.0]
+      radius: 20.0 ang
       cutoff: 5.0 ang
       epsilon: 1.0e-19 J
       exponent: 12
@@ -152,24 +147,24 @@ myoperator:
     {
       if (!domain->xform_is_identity())
       {
-        WallComputeFunc<LinearXForm> func{*normal, -(*offset), *cutoff, *exponent, *epsilon, LinearXForm{domain->xform()}};
+        SphereWallComputeFunc<LinearXForm> func{*center, *radius, *cutoff, *exponent, *epsilon, LinearXForm{domain->xform()}};
         compute_cell_particles(*grid, false, func, compute_field_set, parallel_execution_context());
       }
       else
       {
-        WallComputeFunc<NullXForm> func{*normal, -(*offset), *cutoff, *exponent, *epsilon, NullXForm{}};
+        SphereWallComputeFunc<NullXForm> func{*center, *radius, *cutoff, *exponent, *epsilon, NullXForm{}};
         compute_cell_particles(*grid, false, func, compute_field_set, parallel_execution_context());
       }
     }
   };
 
   template <class GridT>
-  using WallTmpl = Wall<GridT>;
+  using SphereWallTmpl = SphereWall<GridT>;
 
   // === register factories ===
-  ONIKA_AUTORUN_INIT(wall)
+  ONIKA_AUTORUN_INIT(sphere_wall)
   {
-    OperatorNodeFactory::instance()->register_factory("wall", make_grid_variant_operator<WallTmpl>);
+    OperatorNodeFactory::instance()->register_factory("sphere_wall", make_grid_variant_operator<SphereWallTmpl>);
   }
 
 }

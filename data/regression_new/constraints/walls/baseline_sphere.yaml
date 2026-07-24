@@ -3,22 +3,24 @@ species:
 
 eam_alloy_force:
   rcut: 5.30 ang
-  eam_rho: true
-  eam_rho2emb: true
   parameters:
-    file: "Ta1_Ravelo_2013.eam.alloy"
+    file: "../../../potentials/Ta1_Ravelo_2013.eam.alloy"
 
 compute_force:
   - eam_alloy_force
 
 setup_system:
   - particle_regions:
-      - BOX:
-          bounds: [ [ 20 ang, 0 ang, 0 ang ], [ 180 ang, 100 ang, 100 ang ] ]
+      - SPHERE:
+          quadric:
+            shape: sphere
+            transform:
+              - scale: [ 40 ang, 40 ang, 40 ang ]
+              - translate: [ 50 ang, 50 ang, 50 ang ]
   - domain:
-      cell_size: 13.2 ang
-      grid_dims: [ 15, 4, 4 ]
-      bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 198. ang, 52.8 ang, 52.8 ang ] ]
+      cell_size: 10 ang
+      grid_dims: [ 10, 10, 10 ]
+      bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 100. ang, 100. ang, 100. ang ] ]
       xform: [ [ 1, 0, 0 ], [ 0, 1, 0 ], [ 0, 0, 1 ] ]
       periodic: [ false, true, true ]
       expandable: true
@@ -27,19 +29,19 @@ setup_system:
       structure: BCC
       types: [ Ta, Ta ]
       size: [ 3.3 ang, 3.3 ang, 3.3 ang ]
-      region: BOX
+      region: SPHERE
   - init_temperature_new:
-      T: 700. K
+      T: 2000. K
       override_velocities: true
       add_velocities: false
       scale_velocities: false
       zero_linear_momentum: true
       distribution: "gaussian"
-  
+
 global:
-  max_iteration: 5000
-  simulation_thermostate_screen_frequency: 100
+  max_iteration: 2000
+  simulation_thermostate_screen_frequency: 50
   simulation_thermostate_file_frequency: -1
-  simulation_snapshot_frequency: 100
+  simulation_snapshot_frequency: 10
   rcut_inc: 1.0 ang
   dt: 2.0e-3 ps
