@@ -217,7 +217,7 @@ namespace exaStamp
           const int itypeAtom = type_name_to_index(typeAtom);
 
           const Vec3d v = { 0., 0., 0. }; // not read from file by now
-          MoleculeTupleIO tp( r.x, r.y, r.z , v.x, v.y, v.z, at_id, itypeAtom, 0, std::array<uint64_t,4>{uint64_t(c0),uint64_t(c1),uint64_t(c2),uint64_t(c3)} , charge );
+          MoleculeTupleIO tp( r.x, r.y, r.z , v.x, v.y, v.z, at_id, itypeAtom, 0, AtomBondConnectivity{uint64_t(c0),uint64_t(c1),uint64_t(c2),uint64_t(c3)} , charge );
           atom_data.push_back( tp );     
         }
         file.close();

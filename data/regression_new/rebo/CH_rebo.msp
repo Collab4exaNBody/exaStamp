@@ -1,6 +1,9 @@
 configuration:
   profiling:
-    summary: false
+    summary: true
+#  nogpu: true
+  onika:
+    gpu_block_dims: [ 8 , 8 , 4 ]
 
 species:
   - C: { z: 12, mass: 12.0107 Da, charge: 0.0 e- }
@@ -16,12 +19,23 @@ init_parameters:
 compute_force_prolog:
   - zero_force_energy: { ghost: true }
 
-compute_force:
+compute_force_double:
   - rebo_bond_order
   - ghost_update_opt: { opt_fields: [ "NijC", "NijH" ] }
   - rebo_conjugation
   - ghost_update_opt: { opt_fields: [ "Nconj" ] }
-  - rebo_force
+  - rebo_pairwise_nobuffer
+  - rebo_manybody
+
+compute_force_float:
+  - rebo_bond_order
+  - ghost_update_opt: { opt_fields: [ "NijC", "NijH" ] }
+  - rebo_conjugation
+  - ghost_update_opt: { opt_fields: [ "Nconj" ] }
+  - rebo_pairwise_nobuffer
+  - rebo_manybody_mixedprec   # adopted default: rebo_gSpline's Sp5th eval in float, rest of ManyBody double (see README "Mixed precision") — 17.8% faster ManyBody, physics validated vs compute_force_A to ~1e-6 relative over 50 steps
+
+compute_force: compute_force_double
 
 # Update forces of non-ghost particles from their ghosts before pushing total force to acceleration
 compute_force_epilog:
@@ -31,13 +45,13 @@ compute_force_epilog:
 
 setup_system:
   - domain:
-      cell_size: 3.0 ang
+      cell_size: 10.0 ang
       periodic: [ true, true, true ]
       expandable: false
   - read_xyz_file_with_xform:
       filename: CH216.xyz
       pbc_adjust_xform: true
-  - replicate_domain: [ 2, 2, 2 ]
+  - replicate_domain: [ 8, 8, 4 ]
 
 +first_iteration:
   - grid_stats
@@ -53,10 +67,10 @@ write_snapshot: nop
 numerical_scheme: verlet_nve
 
 global:
-  max_iteration: 100
-  simulation_thermostate_screen_frequency: 50
+  max_iteration: 1
+  simulation_thermostate_screen_frequency: 1
   simulation_thermostate_file_frequency: 1
   simulation_snapshot_frequency: -1
   rcut_inc: 0.5 ang
   dt: 0.000125 ps
-  thermostate_file: "thermo_exastamp_rebo.txt"
+  thermostate_file: "thermo_exastamp_rebo_C.txt"

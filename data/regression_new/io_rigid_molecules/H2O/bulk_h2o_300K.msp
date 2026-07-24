@@ -1,5 +1,5 @@
 includes:
-  - config_rigidmol.msp
+  - config_rigid_molecule.msp
   - h2o_molecule.inc
 
 compute_force_rf:

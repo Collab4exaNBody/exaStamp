@@ -42,8 +42,9 @@ namespace exaStamp
     // A => p.A , R => p.Rho , C => p.C
     // https://www.wolframalpha.com/input/?i=derivative+of+A*exp%28-x%2FR%29-%28C%2Fx%5E6%29
     assert( x > 0. );
-    double x6 = pow(x,6);
-    double x7 = pow(x,7);
+    const double x2 = x*x;
+    const double x6 = x2*x2*x2;
+    const double x7 = x6*x;
     e = p.A * exp( -x / p.Rho ) - ( p.C / x6 );
     de = ( 6 * p.C / x7 ) - ( p.A * std::exp( -x / p.Rho ) / p.Rho );
   }
