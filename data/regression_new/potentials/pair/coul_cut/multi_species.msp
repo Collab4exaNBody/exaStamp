@@ -1,0 +1,11 @@
+includes:
+  - baseline_multi_species.yaml
+
+coul_cut_multi_force:
+  rcut: 8. ang
+  common_parameters: { dielectric: 1.0, shift: true }
+  parameters:
+    - { type_a: Zn , type_b: Zn , rcut: 6.10 ang , parameters: { dielectric: 1.0, shift: true } }
+    - { type_a: Cu , type_b: Zn , rcut: 5.89 ang , parameters: { dielectric: 0.5, shift: true } }
+
+compute_force: coul_cut_multi_force

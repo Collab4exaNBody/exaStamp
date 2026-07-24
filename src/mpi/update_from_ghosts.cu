@@ -26,17 +26,26 @@ namespace exaStamp
   using namespace exanb;
     
   // === register factory ===
-  template<typename GridT> using UpdateForceEnergyFromGhosts = UpdateFromGhosts< GridT , FieldSet<field::_fx,field::_fy,field::_fz, field::_ep>, UpdateValueAdd >;
-  template<typename GridT> using UpdateFlatForceEnergyFromGhosts = UpdateFromGhosts< GridT , FieldSet<field::_flat_fx,field::_flat_fy,field::_flat_fz, field::_flat_ep>, UpdateValueAdd >;
-  template<typename GridT> using UpdateVirialForceEnergyFromGhosts = UpdateFromGhosts< GridT , FieldSet<field::_fx,field::_fy,field::_fz, field::_ep, field::_virial>, UpdateValueAdd >;
-  template<typename GridT> using UpdateFromGhostsTestId = UpdateFromGhosts< GridT , FieldSet<field::_id>, UpdateValueAssertEqual >;
+  template<typename GridT> using UpdateForceEnergyFromGhosts = UpdateFromGhosts< GridT , FieldSet<field::_fx,field::_fy,field::_fz, field::_ep>, UpdateValueAdd , true >;
+  template<typename GridT> using UpdateFlatForceEnergyFromGhosts = UpdateFromGhosts< GridT , FieldSet<field::_flat_fx,field::_flat_fy,field::_flat_fz, field::_flat_ep>, UpdateValueAdd , true >;
+  template<typename GridT> using UpdateVirialForceEnergyFromGhosts = UpdateFromGhosts< GridT , FieldSet<field::_fx,field::_fy,field::_fz, field::_ep, field::_virial>, UpdateValueAdd , true >;
+  template<typename GridT> using UpdateFromGhostsTestId = UpdateFromGhosts< GridT , FieldSet<field::_id>, UpdateValueAssertEqual , true >;
 
+  template<typename GridT> using UpdateForceEnergyFromGhostsNoGCV = UpdateFromGhosts< GridT , FieldSet<field::_fx,field::_fy,field::_fz, field::_ep>, UpdateValueAdd , false >;  
+  template<typename GridT> using UpdateFlatForceEnergyFromGhostsNoGCV = UpdateFromGhosts< GridT , FieldSet<field::_flat_fx,field::_flat_fy,field::_flat_fz, field::_flat_ep>, UpdateValueAdd , false >;
+  template<typename GridT> using UpdateVirialForceEnergyFromGhostsNoGCV = UpdateFromGhosts< GridT , FieldSet<field::_fx,field::_fy,field::_fz, field::_ep, field::_virial>, UpdateValueAdd , false >;
+  template<typename GridT> using UpdateFromGhostsTestIdNoGCV = UpdateFromGhosts< GridT , FieldSet<field::_id>, UpdateValueAssertEqual , false >;
+  
   ONIKA_AUTORUN_INIT(update_from_ghosts)
   {
     OperatorNodeFactory::instance()->register_factory( "update_force_energy_from_ghost", make_grid_variant_operator<UpdateForceEnergyFromGhosts> );
     OperatorNodeFactory::instance()->register_factory( "flat_force_energy_from_ghost", make_grid_variant_operator<UpdateFlatForceEnergyFromGhosts> );
     OperatorNodeFactory::instance()->register_factory( "update_virial_force_energy_from_ghost", make_grid_variant_operator<UpdateVirialForceEnergyFromGhosts> );
     OperatorNodeFactory::instance()->register_factory( "update_from_ghost_check_id", make_grid_variant_operator<UpdateFromGhostsTestId> );
+    OperatorNodeFactory::instance()->register_factory( "update_force_energy_from_ghost_no_gcv", make_grid_variant_operator<UpdateForceEnergyFromGhostsNoGCV> );    
+    OperatorNodeFactory::instance()->register_factory( "flat_force_energy_from_ghost_no_gcv", make_grid_variant_operator<UpdateFlatForceEnergyFromGhostsNoGCV> );
+    OperatorNodeFactory::instance()->register_factory( "update_virial_force_energy_from_ghost_no_gcv", make_grid_variant_operator<UpdateVirialForceEnergyFromGhostsNoGCV> );
+    OperatorNodeFactory::instance()->register_factory( "update_from_ghost_check_id_no_gcv", make_grid_variant_operator<UpdateFromGhostsTestIdNoGCV> );    
   }
 
 }

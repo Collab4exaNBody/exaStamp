@@ -63,7 +63,7 @@ namespace exaStamp
     ADD_SLOT( long           , max_iteration , INPUT , REQUIRED );    
     ADD_SLOT( long           , start_iteration , INPUT , 0 );    
     ADD_SLOT( ParticleRegions   , particle_regions , INPUT , OPTIONAL );
-    ADD_SLOT( ParticleRegionCSG , region           , INPUT , OPTIONAL );
+    ADD_SLOT( ParticleRegionCSG , thermostat_region           , INPUT , OPTIONAL );
     ADD_SLOT( double         , gamma   , INPUT , 0.1 );
     ADD_SLOT( size_t         , seed    , INPUT , OPTIONAL );
     ADD_SLOT( double         , T       , INPUT , OPTIONAL );
@@ -178,15 +178,15 @@ namespace exaStamp
       const auto dom_start = grid.offset();
 
       ParticleRegionCSGShallowCopy prcsg;
-      if( region.has_value() && !particle_regions.has_value() )
+      if( thermostat_region.has_value() && !particle_regions.has_value() )
       {
-        fatal_error() << "region is defined, but particle_regions has no value" << std::endl;
+        fatal_error() << "thermostat_region is defined, but particle_regions has no value" << std::endl;
       }        
-      if( region.has_value() && region->m_nb_operands==0 )
+      if( thermostat_region.has_value() && thermostat_region->m_nb_operands==0 )
       {
-        region->build_from_expression_string( particle_regions->data() , particle_regions->size() );
+        thermostat_region->build_from_expression_string( particle_regions->data() , particle_regions->size() );
       }
-      if( region.has_value() ) prcsg = *region;
+      if( thermostat_region.has_value() ) prcsg = *thermostat_region;
       
       const int nthreads = *deterministic_noise ? 1 : omp_get_max_threads();
 #     pragma omp parallel num_threads(nthreads)

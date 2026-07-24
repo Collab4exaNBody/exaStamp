@@ -1,0 +1,5 @@
+includes:
+  - baseline.yaml
+
++setup_system:
+  - print_domain
