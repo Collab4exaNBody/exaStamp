@@ -32,7 +32,7 @@ namespace exaStamp
 {
   using namespace exanb;
 
-  class MoveWall : public OperatorNode
+  class MovePlaneWall : public OperatorNode
   {
 
     ADD_SLOT(Vec3d, init_normal, INPUT, Vec3d{1.0, 0.0, 0.0});
@@ -325,9 +325,9 @@ myoperator:
   };
 
   // === register factories ===
-  ONIKA_AUTORUN_INIT(move_wall)
+  ONIKA_AUTORUN_INIT(move_plane_wall)
   {
-    OperatorNodeFactory::instance()->register_factory("move_wall", make_simple_operator<MoveWall>);
+    OperatorNodeFactory::instance()->register_factory("move_plane_wall", make_simple_operator<MovePlaneWall>);
   }
 
 }

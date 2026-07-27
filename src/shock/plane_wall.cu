@@ -40,7 +40,7 @@ namespace exaStamp
   using namespace onika;
 
   template <class XFormT>
-  struct WallComputeFunc
+  struct PlaneWallComputeFunc
   {
     const Vec3d N;
     const double D;
@@ -83,7 +83,7 @@ namespace exaStamp
 namespace exanb
 {
   template <class XFormT>
-  struct ComputeCellParticlesTraits<exaStamp::WallComputeFunc<XFormT>>
+  struct ComputeCellParticlesTraits<exaStamp::PlaneWallComputeFunc<XFormT>>
   {
     static inline constexpr bool RequiresBlockSynchronousCall = false;
     static inline constexpr bool CudaCompatible = true;
@@ -95,7 +95,7 @@ namespace exaStamp
   using namespace exanb;
 
   template <typename GridT, class = AssertGridHasFields<GridT, field::_fx, field::_fy, field::_fz, field::_ep>>
-  class Wall : public OperatorNode
+  class PlaneWall : public OperatorNode
   {
     static inline constexpr double default_epsilon = ONIKA_CONST_QUANTITY(1.0e-19 * J).convert(exaStamp::UNIT_SYSTEM);
 
@@ -152,24 +152,24 @@ myoperator:
     {
       if (!domain->xform_is_identity())
       {
-        WallComputeFunc<LinearXForm> func{*normal, -(*offset), *cutoff, *exponent, *epsilon, LinearXForm{domain->xform()}};
+        PlaneWallComputeFunc<LinearXForm> func{*normal, -(*offset), *cutoff, *exponent, *epsilon, LinearXForm{domain->xform()}};
         compute_cell_particles(*grid, false, func, compute_field_set, parallel_execution_context());
       }
       else
       {
-        WallComputeFunc<NullXForm> func{*normal, -(*offset), *cutoff, *exponent, *epsilon, NullXForm{}};
+        PlaneWallComputeFunc<NullXForm> func{*normal, -(*offset), *cutoff, *exponent, *epsilon, NullXForm{}};
         compute_cell_particles(*grid, false, func, compute_field_set, parallel_execution_context());
       }
     }
   };
 
   template <class GridT>
-  using WallTmpl = Wall<GridT>;
+  using PlaneWallTmpl = PlaneWall<GridT>;
 
   // === register factories ===
-  ONIKA_AUTORUN_INIT(wall)
+  ONIKA_AUTORUN_INIT(plane_wall)
   {
-    OperatorNodeFactory::instance()->register_factory("wall", make_grid_variant_operator<WallTmpl>);
+    OperatorNodeFactory::instance()->register_factory("plane_wall", make_grid_variant_operator<PlaneWallTmpl>);
   }
 
 }
