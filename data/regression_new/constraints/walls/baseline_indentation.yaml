@@ -6,7 +6,7 @@ eam_alloy_force:
   eam_rho: true
   eam_rho2emb: true
   parameters:
-    file: "../../../potentials/Ta1_Ravelo_2013.eam.alloy"
+    file: "Ta1_Ravelo_2013.eam.alloy"
 
 compute_force:
   - eam_alloy_force
@@ -40,9 +40,9 @@ setup_system:
       distribution: "gaussian"
     
 global:
-  max_iteration: 2000
+  max_iteration: 100
   simulation_thermostate_screen_frequency: 50
   simulation_thermostate_file_frequency: -1
-  simulation_snapshot_frequency: 50
+  simulation_snapshot_frequency: -1
   rcut_inc: 1.0 ang
   dt: 2.0e-3 ps

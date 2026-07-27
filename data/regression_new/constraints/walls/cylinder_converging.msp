@@ -1,10 +1,10 @@
 includes:
-  - baseline_sphere.yaml
+  - baseline_cylinder.yaml
   - snapshot.yaml
 
 confinement_wall:
   - move_cylinder_wall:
-      csv_filename: "moving_cylinder_wall.csv"
+      csv_filename: "cylinder_converging.csv"
       csv_separator: " "
       init_origin: [ 50.0 ang, 50.0 ang, 50.0 ang ] # any point on the axis
       init_axis: [ 1.0, 0.0, 0.0 ]

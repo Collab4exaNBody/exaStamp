@@ -4,7 +4,7 @@ includes:
 
 confinement_wall:
   - move_cylinder_wall:
-      csv_filename: "moving_cylinder_wall.csv"
+      csv_filename: "cylinder_indentation.csv"
       csv_separator: " "
       init_origin: [ 0.0 ang, 66.0 ang, 135.0 ang ] # any point on the axis
       init_axis: [ 1.0, 0.0, 0.0 ]

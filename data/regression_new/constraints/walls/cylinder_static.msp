@@ -1,12 +1,12 @@
 includes:
-  - baseline.yaml
+  - baseline_cylinder.yaml
   - snapshot.yaml
 
 confinement_wall:
   - cylinder_wall:
-      origin: [ 0.0 ang, 26.4 ang, 26.4 ang ] # any point on the axis
+      origin: [ 50.0 ang, 50.0 ang, 50.0 ang ] # any point on the axis
       axis: [ 1.0, 0.0, 0.0 ]
-      radius: 20.0 ang
+      radius: 45.0 ang
       cutoff: 2.2 ang
       epsilon: 1.0e-19 J
 

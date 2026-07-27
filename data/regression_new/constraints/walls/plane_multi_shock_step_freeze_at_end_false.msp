@@ -1,10 +1,10 @@
 includes:
-  - baseline.yaml
+  - baseline_plane.yaml
   - snapshot.yaml
 
 left_wall:
-  - move_wall:
-      csv_filename: "multi_shock_step_freeze_at_end_false.csv"
+  - move_plane_wall:
+      csv_filename: "plane_multi_shock_step_freeze_at_end_false.csv"
       csv_separator: " "
       init_normal: [ 1.0, 0.0, 0.0 ]
       init_offset: 15.0 ang
@@ -14,7 +14,7 @@ left_wall:
       velocities: [ 1000 m/s, 3000 m/s ]
       velocity_profile: step
       freeze_at_end: false
-  - wall
+  - plane_wall
 
 +compute_force:
   - left_wall

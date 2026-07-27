@@ -1,20 +1,19 @@
 includes:
-  - baseline.yaml
+  - baseline_plane.yaml
   - snapshot.yaml
 
 left_wall:
-  - move_wall:
-      csv_filename: "decreasing_velocity.csv"
+  - move_plane_wall:
+      csv_filename: "plane_constant_velocity_remove.csv"
       csv_separator: " "
       init_normal: [ 1.0, 0.0, 0.0 ]
       init_offset: 15.0 ang
       init_cutoff: 2.2 ang
       init_epsilon: 1.0e-19 J
       init_time: 0.5 ps
-      init_velocity: 3000 m/s
+      init_velocity: 1000 m/s
       final_time: 5.0 ps
-      final_velocity: 100 m/s
-  - wall
+  - plane_wall
 
 +compute_force:
   - left_wall

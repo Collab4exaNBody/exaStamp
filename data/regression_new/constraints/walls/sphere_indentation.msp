@@ -4,7 +4,7 @@ includes:
 
 confinement_wall:
   - move_sphere_wall:
-      csv_filename: "moving_sphere_wall.csv"
+      csv_filename: "sphere_indentation.csv"
       csv_separator: " "
       init_center: [ 66.0 ang, 66. ang, 135. ang ] # domain center
       init_radius: 50.0 ang
@@ -16,6 +16,6 @@ confinement_wall:
   - sphere_wall
 
 +compute_force:
-  - set_velocity: { value: [ 0. ang/ps , 0. ang/ps , 0. ang/ps ] , region: BOTTOM }  
-  - set_force: { value: [ 0. eV/ang , 0. eV/ang , 0. eV/ang ] , region: BOTTOM }  
+  - set_velocity: { value: [ 0. ang/ps , 0. ang/ps , 0. ang/ps ] , region: BOTTOM }
+  - set_force: { value: [ 0. eV/ang , 0. eV/ang , 0. eV/ang ] , region: BOTTOM }
   - confinement_wall

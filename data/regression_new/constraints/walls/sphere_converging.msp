@@ -4,7 +4,7 @@ includes:
 
 confinement_wall:
   - move_sphere_wall:
-      csv_filename: "moving_sphere_wall.csv"
+      csv_filename: "sphere_converging.csv"
       csv_separator: " "
       init_center: [ 50.0 ang, 50. ang, 50. ang ] # domain center
       init_radius: 45.0 ang
