@@ -4,15 +4,16 @@ includes:
 
 left_wall:
   - move_wall:
-      csv_filename: "multi_shock.csv"
+      csv_filename: "multi_shock_linear_freeze_at_end_false.csv"
       csv_separator: " "
       init_normal: [ 1.0, 0.0, 0.0 ]
       init_offset: 15.0 ang
       init_cutoff: 2.2 ang
       init_epsilon: 1.0e-19 J
-      times: [ 0.5 ps, 2.0 ps, 3.5 ps, 5.0 ps ]
-      velocities: [ 1000 m/s, 3000 m/s, 5000 m/s, 0 m/s ]
-      velocity_profile: step
+      times: [ 1.0 ps, 2.0 ps ]
+      velocities: [ 1000 m/s, 3000 m/s ]
+      velocity_profile: linear
+      freeze_at_end: false
   - wall
 
 +compute_force:

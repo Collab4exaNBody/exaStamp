@@ -37,9 +37,9 @@ setup_system:
       distribution: "gaussian"
   
 global:
-  max_iteration: 5000
+  max_iteration: 100
   simulation_thermostate_screen_frequency: 100
   simulation_thermostate_file_frequency: -1
-  simulation_snapshot_frequency: 100
+  simulation_snapshot_frequency: -1
   rcut_inc: 1.0 ang
   dt: 2.0e-3 ps
