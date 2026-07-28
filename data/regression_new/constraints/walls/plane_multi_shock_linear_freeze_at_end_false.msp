@@ -1,0 +1,20 @@
+includes:
+  - baseline_plane.yaml
+  - snapshot.yaml
+
+left_wall:
+  - move_plane_wall:
+      csv_filename: "plane_multi_shock_linear_freeze_at_end_false.csv"
+      csv_separator: " "
+      init_normal: [ 1.0, 0.0, 0.0 ]
+      init_offset: 15.0 ang
+      init_cutoff: 2.2 ang
+      init_epsilon: 1.0e-19 J
+      times: [ 1.0 ps, 2.0 ps ]
+      velocities: [ 1000 m/s, 3000 m/s ]
+      velocity_profile: linear
+      freeze_at_end: false
+  - plane_wall
+
++compute_force:
+  - left_wall
