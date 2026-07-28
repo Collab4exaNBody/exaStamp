@@ -42,8 +42,9 @@ namespace exaStamp
   {
     assert( r > 0. );
     double ratio = p.sigma / r;
-    double ratio6 = pow(ratio,6);    // attractive
-    double ratio12 = pow(ratio,12);  // repulsive
+    double ratio2 = ratio * ratio;
+    double ratio6 = ratio2 * ratio2 * ratio2;  // attractive
+    double ratio12 = ratio6 * ratio6;          // repulsive
     e = 4. * p.epsilon * (ratio12-ratio6) ;
     de = ( -24. * p.epsilon * (2.*ratio12-ratio6) ) / r;
   }

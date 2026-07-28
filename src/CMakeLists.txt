@@ -37,3 +37,6 @@ add_subdirectory(numerical_schemes)
 add_subdirectory(thermo_state)
 add_subdirectory(shock)
 
+if(USE_RSA)
+	add_subdirectory(rsa)
+endif()
