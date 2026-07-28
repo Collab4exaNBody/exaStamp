@@ -20,22 +20,6 @@
 # cg_trajectory_loop - see the note on self-referencing loop conditions below.
 
 ######################################################################################################
-############################### A note on self-referencing loop conditions ###########################
-
-# Lesson learned while debugging cg_trajectory_loop: the loop/condition batch compiler only
-# auto-wires a loop's own body-computed value back into its own "condition:" slot when the last
-# producer of that name is an in-place (INPUT_OUTPUT) pipe, like sim_continue's "result" slot -
-# a plain OUTPUT producer (e.g. boolean_and) can never do this, its result lands in a disconnected
-# proxy and the condition just keeps reading whatever seeded it once (see fire_loop_continue's
-# global default below). fire_trajectory_loop's own condition is therefore computed by a
-# boolean_and (fire_combine_continue_2) FOLLOWED by an in-place boolean_set
-# (fire_update_loop_continue) that actually feeds it back - exactly the working cg_loop_continue
-# pattern. Unlike CG there is no nested loop here (FIRE has no line search), so there is no
-# per-outer-iteration "reset" operator needed either - fire_trajectory_loop is only ever entered
-# once from the top-level 'simulation:' body, and its own do-while runs its body at least once
-# regardless of the condition's incoming value.
-
-######################################################################################################
 ############################################ Tunables #################################################
 
 # Defaults mirror FIRE 2.0's published/LAMMPS defaults (Guenole et al. 2020, Table 1): tmax=10,
