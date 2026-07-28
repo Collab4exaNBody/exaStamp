@@ -25,7 +25,7 @@ under the License.
 #include <exaStamp/npt/npt.h>
 #include <exanb/core/domain.h>
 #include <onika/physics/constants.h>
-#include <exaStamp/compute/thermodynamic_state.h>
+#include <exaStamp/thermo_state/thermodynamic_state.h>
 
 #include <iostream>
 #include <iomanip>

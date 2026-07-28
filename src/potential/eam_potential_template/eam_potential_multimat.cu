@@ -98,8 +98,8 @@ namespace exaStamp
     ADD_SLOT( bool                  , trigger_thermo_state, INPUT , OPTIONAL );
     ADD_SLOT( bool                  , compute_virial   , INPUT , false );
 
-    ADD_SLOT( bool                  , eam_rho      , INPUT , false );
-    ADD_SLOT( bool                  , eam_rho2emb  , INPUT , false );
+    ADD_SLOT( bool                  , eam_rho      , INPUT , true );
+    ADD_SLOT( bool                  , eam_rho2emb  , INPUT , true );
     ADD_SLOT( bool                  , eam_ghost    , INPUT , true );
     ADD_SLOT( bool                  , eam_force    , INPUT , true );
     ADD_SLOT( bool                  , eam_symmetry , INPUT , false );

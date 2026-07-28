@@ -106,7 +106,7 @@ int main(int argc, char** argv)
     std::cout << "Energie rotationnelle  = " << header.rotationalEnergy << std::endl;
     std::cout << " --------------------------------------------"<<std::endl;
     
-    double *tmp_x, *tmp_y, *tmp_z, *tmp_dx, *tmp_dy, *tmp_dz;
+    double *tmp_x, *tmp_y, *tmp_z; // double *tmp_dx, *tmp_dy, *tmp_dz;
     uint64_t *tmp_id;
 
     scale = 1E9;
@@ -117,9 +117,9 @@ int main(int argc, char** argv)
     tmp_x = new double[N];
     tmp_y = new double[N];
     tmp_z = new double[N];
-    tmp_dx = new double[N];
-    tmp_dy = new double[N];
-    tmp_dz = new double[N];
+    // tmp_dx = new double[N];
+    // tmp_dy = new double[N];
+    // tmp_dz = new double[N];
     tmp_id = new uint64_t[N];
 
     int n = header.particlesTotalNumber;

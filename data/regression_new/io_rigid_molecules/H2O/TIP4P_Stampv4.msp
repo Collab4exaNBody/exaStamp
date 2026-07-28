@@ -1,5 +1,5 @@
 includes:
-  - config_rigidmol.msp
+  - config_rigid_molecule.msp
 
 configuration:
   logging:

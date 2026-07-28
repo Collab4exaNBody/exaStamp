@@ -17,7 +17,7 @@ under the License.
 
 #include <onika/math/basic_types_stream.h>
 #include <onika/math/basic_types_yaml.h>
-#include <exaStamp/compute/thermodynamic_state.h>
+#include <exaStamp/thermo_state/thermodynamic_state.h>
 #include <exanb/core/domain.h>
 #include <exanb/core/grid.h>
 #include <onika/log.h>

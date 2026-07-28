@@ -17,7 +17,7 @@ under the License.
 
 #pragma once
 
-#include <array>
+#include <onika/oarray.h>
 #include <cstdint>
 #include <iostream>
 #include <limits>
@@ -26,6 +26,6 @@ namespace exaStamp
 {  
 
   // an atom can have up to 4 chemical bonds
-  using AtomBondConnectivity = std::array<uint64_t,4>;
+  using AtomBondConnectivity = onika::oarray_t<uint64_t,4>;
 }
 

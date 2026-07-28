@@ -1,7 +1,7 @@
 # enable-if-XSTAMP_BUILD_PAIR_zero enable-if-XSTAMP_BUILD_PAIR_lennard_jones
 includes:
   - config_species_rigidmol.cfg
-  - config_rigidmol.msp
+  - config_rigid_molecule.msp
 
 # define potential we'll reuse later
 compute_force_rf:

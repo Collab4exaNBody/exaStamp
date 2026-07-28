@@ -321,7 +321,7 @@ namespace exaStamp
       // To access the info easily, we construct locally the reverse map, ffnameToFFtypeId
       std::map< std::string , int64_t > ffnameToFFtypeId;
       if (ffnameVector.has_value()) {
-        for (int iFF = 0; iFF < ffnameVector->size(); iFF++) {
+        for (size_t iFF = 0; iFF < ffnameVector->size(); iFF++) {
           ffnameToFFtypeId[ ffnameVector->at(iFF) ] = iFF;
         }
       }
