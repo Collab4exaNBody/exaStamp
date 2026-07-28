@@ -1,0 +1,38 @@
+write_snapshot:
+  - message: { mesg: "Writing snapshot" }
+  - timestep_file: "xyz/test_%09d.xyz"
+  - write_xyz_file:
+      fields: [ id , type ]
+
+species:
+  - Cu: { mass: 63.546 Da , z: 29 , charge: 0.0 e- }
+
+setup_system:
+  - domain:
+      cell_size: 8.0 ang
+      periodic: [ true , true , true ]
+      expandable: false
+  - read_extended_xyz_file:
+      filename: "Cu_edge_dipole.xyz"
+      bounds_mode: FILE
+      
+eam_alloy_force:
+  rcut: 5.506786 ang
+  eam_rho: true
+  eam_rho2emb: true
+  parameters:
+    file: "Cu.eam.alloy"
+      
+compute_force:
+  - eam_alloy_force
+
+global:
+  dt: 1e-3 ps
+  rcut_inc: 2.0 ang
+  simulation_restart_frequency: -1
+  simulation_snapshot_frequency: -1
+  simulation_analysis_frequency: -1
+  simulation_thermostate_file_frequency: 1
+  simulation_thermostate_screen_frequency: 10
+  max_iteration: 2000
+  
