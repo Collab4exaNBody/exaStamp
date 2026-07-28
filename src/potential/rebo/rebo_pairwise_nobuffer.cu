@@ -1,0 +1,108 @@
+/*
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements. See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership. The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License. You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied. See the License for the
+specific language governing permissions and limitations
+under the License.
+*/
+
+#include <exaStamp/particle_species/particle_specie.h>
+#include <exanb/compute/compute_cell_particle_pairs.h>
+#include <exanb/core/domain.h>
+#include <exanb/core/grid.h>
+#include <onika/math/basic_types.h>
+#include <onika/math/basic_types_operators.h>
+
+#include <exanb/core/make_grid_variant_operator.h>
+#include <onika/cpp_utils.h>
+#include <onika/file_utils.h>
+#include <onika/log.h>
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/scg/operator_slot.h>
+
+#include <exanb/core/particle_type_id.h>
+#include <exanb/particle_neighbors/chunk_neighbors.h>
+
+#include <memory>
+#include <mpi.h>
+#include <vector>
+
+#include "rebo_force_op_cached.h"
+#include "rebo_params.h"
+
+namespace exaStamp
+{
+  using namespace exanb;
+  using onika::memory::DEFAULT_ALIGNMENT;
+
+  // Bufferless / streamed variant of the pairwise (VR) pass: same physics
+  // as REBOPairwiseForceOp (rebo_pairwise.cu), but driven through
+  // compute_cell_particle_pairs2 the way ReboBondOrderOp / ReboNconjOp are
+  // (rebo_bond_order.cu / rebo_conjugation.cu), instead of building a
+  // ComputePairBuffer2. Kept side-by-side with rebo_pairwise so the two
+  // dispatch styles can be A/B profiled against each other.
+  template <class GridT, class = AssertGridHasFields<GridT, field::_ep, field::_fx, field::_fy, field::_fz>> class ReboPairwiseNoBufferForce : public OperatorNode
+  {
+    ADD_SLOT(MPI_Comm, mpi, INPUT, REQUIRED);
+    ADD_SLOT(double, rcut_max, INPUT_OUTPUT, 0.0);
+    // REBOPairwise_NoBuffer_ForceOp (VR only) is exactly zero beyond rcmax —
+    // no need for the wider rebo_cutoff (3*rcmax) that ManyBody's lm-subloop
+    // requires. bondorder_cutoff (= rcmax_max, see rebo_init.cu) is the
+    // correctly-sized filter here, same as rebo_bond_order/rebo_conjugation
+    // already use. The underlying neighbor list is still built out to
+    // rcut_max regardless — this only trims how many of those candidates get
+    // decoded/transformed per particle for this specific pass.
+    ADD_SLOT(double, bondorder_cutoff, INPUT, REQUIRED);
+    ADD_SLOT(exanb::GridChunkNeighbors, chunk_neighbors, INPUT, exanb::GridChunkNeighbors{}, DocString{"neighbor list"});
+    ADD_SLOT(bool, ghost, INPUT, false);
+    ADD_SLOT(GridT, grid, INPUT_OUTPUT);
+    ADD_SLOT(Domain, domain, INPUT, REQUIRED);
+    ADD_SLOT(GridParticleLocks, particle_locks, INPUT, OPTIONAL, DocString{"particle spin locks"});
+    ADD_SLOT(long, timestep, INPUT, REQUIRED, DocString{"Iteration number"});
+    ADD_SLOT(ParticleSpecies, species, INPUT, REQUIRED);
+    ADD_SLOT(ReboParams, parameters, INPUT, REQUIRED);
+
+    using ComputeBufferReboPairwiseNoBuffer = ComputePairBuffer2<false, false, ReboPairwiseNoBufferExtStorage>;
+
+  public:
+    inline void execute() override final
+    {
+      assert(chunk_neighbors->number_of_cells() == grid->number_of_cells());
+      if (grid->number_of_cells() == 0)
+        return;
+
+      // Read Only Rebo parameters. Allocated in CUDA managed memory (not on the
+      // host stack) so the pointer stashed in the force op below stays valid
+      // when dereferenced from GPU kernel code.
+      onika::memory::CudaMMVector<ReboParamsRO> params_ro_mm(1, ReboParamsRO{*parameters});
+      const ReboParamsRO *params_ro = params_ro_mm.data();
+
+      ComputePairOptionalLocks<false> cp_locks{};
+      exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{*chunk_neighbors};
+      auto compute_buf_pairwise = make_compute_pair_buffer<ComputeBufferReboPairwiseNoBuffer>();
+
+      REBOPairwise_NoBuffer_ForceOp compute_op_pairwise = {params_ro};
+      LinearXForm cp_xform{domain->xform()};
+      auto optional = make_compute_pair_optional_args(nbh_it, ComputePairNullWeightIterator{}, cp_xform, cp_locks);
+      static constexpr onika::FlatTuple<> compute_field_set = {};
+      static constexpr std::integral_constant<bool, true> force_use_cells_accessor = {};
+      static constexpr DefaultPositionFields posfields = {};
+      compute_cell_particle_pairs2(*grid, *bondorder_cutoff, *ghost, optional, compute_buf_pairwise, compute_op_pairwise, compute_field_set, posfields, parallel_execution_context(), force_use_cells_accessor);
+    }
+  };
+
+  template <class GridT> using ReboPairwiseNoBufferForceTmpl = ReboPairwiseNoBufferForce<GridT>;
+
+  ONIKA_AUTORUN_INIT(rebo_pairwise_nobuffer) { OperatorNodeFactory::instance()->register_factory("rebo_pairwise_nobuffer", make_grid_variant_operator<ReboPairwiseNoBufferForceTmpl>); }
+
+} // namespace exaStamp

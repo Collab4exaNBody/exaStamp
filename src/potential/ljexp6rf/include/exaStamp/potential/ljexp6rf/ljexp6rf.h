@@ -25,7 +25,6 @@ under the License.
 #include <exaStamp/potential/pair_potentials/exp6/exp6.h>
 #include <exaStamp/potential/pair_potentials/lennard_jones/lennard_jones.h>
 #include <exaStamp/potential/reaction_field/reaction_field.h>
-#include <exaStamp/compute/force_energy.h>
 
 #include <onika/cuda/cuda.h>
 
@@ -33,6 +32,12 @@ namespace exaStamp
 {
   using namespace exanb;
 
+  struct ForceEnergy
+  {
+    double m_force = 0.0;
+    double m_energy = 0.0;
+  };
+  
   // assembled Lennard-Jones & Reaction Field parameters
   struct LJExp6RFParms
   {

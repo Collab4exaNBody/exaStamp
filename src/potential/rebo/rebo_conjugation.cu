@@ -72,8 +72,11 @@ namespace exaStamp
       assert( chunk_neighbors->number_of_cells() == grid->number_of_cells() );
       if ( grid->number_of_cells() == 0 ) return;
 
-      // Read Only Rebo parameters
-      const ReboParamsRO params_ro{ *parameters };
+      // Read Only Rebo parameters. Allocated in CUDA managed memory (not on the
+      // host stack) so the pointer stashed in compute_op_nconj below stays
+      // valid when dereferenced from GPU kernel code.
+      onika::memory::CudaMMVector<ReboParamsRO> params_ro_mm( 1, ReboParamsRO{ *parameters } );
+      const ReboParamsRO* params_ro = params_ro_mm.data();
       // ------------------------------------------------------------------------------ //
       // First pass: we compute NijC and NijH bond order per atom
       // ------------------------------------------------------------------------------ //
@@ -87,7 +90,7 @@ namespace exaStamp
       auto nconj_acc = grid->field_accessor( field::mk_generic_real( "Nconj") );
 
       // Conjugation operation declaration
-      ReboNconjOp<decltype(nijc_acc),decltype(nijh_acc),decltype(nconj_acc)> compute_op_nconj = { &params_ro , nijc_acc, nijh_acc, nconj_acc };
+      ReboNconjOp<decltype(nijc_acc),decltype(nijh_acc),decltype(nconj_acc)> compute_op_nconj = { params_ro , nijc_acc, nijh_acc, nconj_acc };
       LinearXForm cp_xform { domain->xform() };
       auto optional = make_compute_pair_optional_args( nbh_it, ComputePairNullWeightIterator{} , cp_xform, cp_locks );
       static constexpr onika::FlatTuple<> compute_field_set = {};

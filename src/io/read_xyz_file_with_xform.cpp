@@ -457,12 +457,10 @@ namespace exaStamp
   };
 
   // === register factories ===
-  __attribute__((constructor)) static void register_factories()
+  ONIKA_AUTORUN_INIT(read_xyz_file_with_xform)
   {
-    OperatorNodeFactory::instance()->register_factory(
-      "read_xyz_file_with_xform",
-      make_grid_variant_operator< ReadXYZwXFormNode >
-    );
+    OperatorNodeFactory::instance()->register_factory("read_xyz_file_with_xform", make_grid_variant_operator< ReadXYZwXFormNode >);
+    OperatorNodeFactory::instance()->register_factory("read_extended_xyz_file"  , make_grid_variant_operator< ReadXYZwXFormNode >);
   }
 
 } // namespace exaStamp

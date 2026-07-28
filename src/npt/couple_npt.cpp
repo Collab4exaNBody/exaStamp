@@ -29,7 +29,7 @@ under the License.
 #include <onika/physics/constants.h>
 #include <exaStamp/unit_system.h>
 
-#include <exaStamp/compute/thermodynamic_state.h>
+#include <exaStamp/thermo_state/thermodynamic_state.h>
 
 #include <iostream>
 #include <string>

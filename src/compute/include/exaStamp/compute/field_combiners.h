@@ -26,6 +26,9 @@ under the License.
 ONIKA_DECLARE_FIELD_COMBINER( exaStamp, VelocityNorm2Combiner , vnorm2 , exanb::Vec3Norm2Functor , exanb::field::_vx , exanb::field::_vy , exanb::field::_vz )
 ONIKA_DECLARE_FIELD_COMBINER( exaStamp, VelocityNormCombiner  , vnorm  , exanb::Vec3NormFunctor  , exanb::field::_vx , exanb::field::_vy , exanb::field::_vz )
 
+ONIKA_DECLARE_FIELD_COMBINER( exaStamp, ForceNorm2Combiner , fnorm2 , exanb::Vec3Norm2Functor , exanb::field::_fx , exanb::field::_fy , exanb::field::_fz )
+ONIKA_DECLARE_FIELD_COMBINER( exaStamp, ForceNormCombiner  , fnorm  , exanb::Vec3NormFunctor  , exanb::field::_fx , exanb::field::_fy , exanb::field::_fz )
+
 ONIKA_DECLARE_FIELD_COMBINER( exaStamp, MonomatKineticEnergyCombiner  , mv2 , exaStamp::KineticEnergyFunctor , exanb::field::_vx , exanb::field::_vy , exanb::field::_vz )
 ONIKA_DECLARE_FIELD_COMBINER( exaStamp, MultimatKineticEnergyCombiner , mv2 , exaStamp::KineticEnergyFunctor , exanb::field::_vx , exanb::field::_vy , exanb::field::_vz , exanb::field::_type )
 
