@@ -44,10 +44,22 @@ namespace exaStamp
   template<class T> struct IsFieldCombiner : std::false_type {};
   template<class FuncT, class... fids> struct IsFieldCombiner< onika::soatl::FieldCombiner<FuncT,fids...> > : std::true_type {};
 
+  // combiners whose functor needs the species table at runtime (mass-weighted quantities) can't
+  // just be default-constructed like VelocityNormCombiner/ForceNormCombiner can.
+  template<class T> struct NeedsSpeciesData : std::false_type {};
+  template<> struct NeedsSpeciesData<MonomatKineticEnergyCombiner>  : std::true_type {};
+  template<> struct NeedsSpeciesData<MultimatKineticEnergyCombiner> : std::true_type {};
+  template<> struct NeedsSpeciesData<MonomatMassCombiner>           : std::true_type {};
+  template<> struct NeedsSpeciesData<MultimatMassCombiner>          : std::true_type {};
+
   template<class HistFieldOrCombiner>
-  static inline auto make_hist_field_selector()
+  static inline auto make_hist_field_selector( const ParticleSpecies& species )
   {
-    if constexpr ( IsFieldCombiner<HistFieldOrCombiner>::value )
+    if constexpr ( NeedsSpeciesData<HistFieldOrCombiner>::value )
+    {
+      return HistFieldOrCombiner{ { species.data() , 0 } };
+    }
+    else if constexpr ( IsFieldCombiner<HistFieldOrCombiner>::value )
     {
       return HistFieldOrCombiner{};
     }
@@ -62,34 +74,42 @@ namespace exaStamp
   template<class GridT>
   struct HistogramGenericOperator : public OperatorNode
   {
-    ADD_SLOT( MPI_Comm    , mpi       , INPUT , REQUIRED );
-    ADD_SLOT( GridT       , grid      , INPUT , REQUIRED );
-    ADD_SLOT( std::string , field     , INPUT , REQUIRED , DocString{"quantity to histogram: ep, charge, vx, vy, vz, fx, fy, fz, rx, ry, rz, vnorm (|v|), fnorm (|f|)"} );
-    ADD_SLOT( long        , samples   , INPUT , 1000 );
-    ADD_SLOT( bool        , ghost     , INPUT , false );
-    ADD_SLOT( double      , hist_min  , INPUT , OPTIONAL , DocString{"if set together with hist_max, clamps the histogram interval instead of computing it from the data"} );
-    ADD_SLOT( double      , hist_max  , INPUT , OPTIONAL , DocString{"if set together with hist_min, clamps the histogram interval instead of computing it from the data"} );
-    ADD_SLOT( Histogram<> , histogram , OUTPUT );
+    // mass-weighted combiners need field::_type to distinguish species when the grid carries
+    // one (multi-species run) and fall back to a single-species functor otherwise.
+    static constexpr bool has_field_type = GridHasField<GridT,field::_type>::value;
+    using KineticEnergyCombinerT = std::conditional_t< has_field_type , MultimatKineticEnergyCombiner , MonomatKineticEnergyCombiner >;
+    using MassCombinerT          = std::conditional_t< has_field_type , MultimatMassCombiner           , MonomatMassCombiner >;
+
+    ADD_SLOT( MPI_Comm       , mpi       , INPUT , REQUIRED );
+    ADD_SLOT( GridT          , grid      , INPUT , REQUIRED );
+    ADD_SLOT( ParticleSpecies, species   , INPUT , REQUIRED );
+    ADD_SLOT( std::string    , field     , INPUT , REQUIRED , DocString{"quantity to histogram: ep, charge, vx, vy, vz, fx, fy, fz, rx, ry, rz, vnorm (|v|), fnorm (|f|), vnorm2, fnorm2, mv2 (kinetic energy), mass"} );
+    ADD_SLOT( long           , samples   , INPUT , 1000 );
+    ADD_SLOT( bool           , ghost     , INPUT , false );
+    ADD_SLOT( double         , hist_min  , INPUT , OPTIONAL , DocString{"if set together with hist_max, clamps the histogram interval instead of computing it from the data"} );
+    ADD_SLOT( double         , hist_max  , INPUT , OPTIONAL , DocString{"if set together with hist_min, clamps the histogram interval instead of computing it from the data"} );
+    ADD_SLOT( Histogram<>    , histogram , OUTPUT );
 
     inline void execute () override final
     {
       const std::string& f = *field;
-           if( f == "ep"      ) { run_histogram<field::_ep>(); }
-      else if( f == "charge"  ) { run_histogram<field::_charge>(); }
-      else if( f == "vx"      ) { run_histogram<field::_vx>(); }
-      else if( f == "vy"      ) { run_histogram<field::_vy>(); }
-      else if( f == "vz"      ) { run_histogram<field::_vz>(); }
-      else if( f == "fx"      ) { run_histogram<field::_fx>(); }
-      else if( f == "fy"      ) { run_histogram<field::_fy>(); }
-      else if( f == "fz"      ) { run_histogram<field::_fz>(); }
-      else if( f == "rx"      ) { run_histogram<field::_rx>(); }
-      else if( f == "ry"      ) { run_histogram<field::_ry>(); }
-      else if( f == "rz"      ) { run_histogram<field::_rz>(); }
-      else if( f == "vnorm"   ) { run_histogram<VelocityNormCombiner>(); }
-      else if( f == "fnorm"   ) { run_histogram<ForceNormCombiner>(); }
-      else if( f == "vnorm2"  ) { run_histogram<VelocityNorm2Combiner>(); }
-      else if( f == "fnorm2"  ) { run_histogram<ForceNorm2Combiner>(); }
-      else if( f == "mv2"     ) { run_histogram<ForceNorm2Combiner>(); }
+           if( f == "ep"       ) { run_histogram<field::_ep>(); }
+      else if( f == "charge"   ) { run_histogram<field::_charge>(); }
+      else if( f == "vx"       ) { run_histogram<field::_vx>(); }
+      else if( f == "vy"       ) { run_histogram<field::_vy>(); }
+      else if( f == "vz"       ) { run_histogram<field::_vz>(); }
+      else if( f == "fx"       ) { run_histogram<field::_fx>(); }
+      else if( f == "fy"       ) { run_histogram<field::_fy>(); }
+      else if( f == "fz"       ) { run_histogram<field::_fz>(); }
+      else if( f == "rx"       ) { run_histogram<field::_rx>(); }
+      else if( f == "ry"       ) { run_histogram<field::_ry>(); }
+      else if( f == "rz"       ) { run_histogram<field::_rz>(); }
+      else if( f == "vnorm"    ) { run_histogram<VelocityNormCombiner>(); }
+      else if( f == "fnorm"    ) { run_histogram<ForceNormCombiner>(); }
+      else if( f == "vnorm2"   ) { run_histogram<VelocityNorm2Combiner>(); }
+      else if( f == "fnorm2"   ) { run_histogram<ForceNorm2Combiner>(); }
+      else if( f == "mv2"      ) { run_histogram<KineticEnergyCombinerT>(); }
+      else if( f == "mass"     ) { run_histogram<MassCombinerT>(); }
       else
       {
         lerr << "histogram_generic: unknown field '"<<f<<"'" << std::endl;
@@ -108,7 +128,10 @@ Usage example:
   - print_histogram: { message: "energy" }
   - write_histogram: { filename: "energy_histogram.csv" }
 
-Supported field values: ep, charge, vx, vy, vz, fx, fy, fz, rx, ry, rz, vnorm (|v|), fnorm (|f|).
+Supported field values: ep, charge, vx, vy, vz, fx, fy, fz, rx, ry, rz,
+vnorm (|v|), fnorm (|f|), vnorm2 (|v|^2), fnorm2 (|f|^2), mv2 (kinetic energy), mass.
+mv2/mass automatically use the multi- or mono-species functor depending on whether
+this grid variant carries a per-particle "type" field.
 hist_min/hist_max optionally clamp the interval instead of computing it from the data.
 )EOF";
     }
@@ -125,9 +148,9 @@ hist_min/hist_max optionally clamp the interval instead of computing it from the
       }
       else
       {
-        using FieldSelector = decltype( make_hist_field_selector<HistFieldOrCombiner>() );
+        using FieldSelector = decltype( make_hist_field_selector<HistFieldOrCombiner>(*species) );
         using ValueType = typename FieldSelector::value_type;
-        const FieldSelector hist_field = make_hist_field_selector<HistFieldOrCombiner>();
+        const FieldSelector hist_field = make_hist_field_selector<HistFieldOrCombiner>(*species);
 
         MPI_Comm comm = *mpi;
         int nprocs = 1;
