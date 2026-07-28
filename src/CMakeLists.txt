@@ -17,7 +17,6 @@
 # ExaStamp specific packages
 
 add_subdirectory(debug)
-add_subdirectory(analytics)
 add_subdirectory(analysis_grid)
 add_subdirectory(analysis_particle)
 add_subdirectory(particle_species)
