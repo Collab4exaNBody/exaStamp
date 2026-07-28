@@ -1,0 +1,18 @@
+includes:
+  - baseline.yaml
+  - config_conjugate_gradient.msp
+
+# config_conjugate_gradient.msp overrides the whole 'simulation:' scenario (cg_trajectory_loop
+# instead of md_trajectory_loop), so there is no 'numerical_scheme:' to select here.
+
+# fx,fy,fz end up holding force/mass here (config_update_symmetric_forces.msp keeps
+# force_to_accel in compute_force_epilog, see the note in config_conjugate_gradient.msp).
+# cg_tolerance itself is in eV/ang - cg_check_force_converged compares against an eV-converted
+# copy of force_max, not the raw internal-units value the rest of the algorithm uses.
+#
+# Keep the trial step comfortably below rcut_inc's skin margin (2.0 ang, so max_displ ~ 1.0 ang)
+# since only a cheap ghost update runs between backtracking trials - see cg_trajectory_loop.
+global:
+  cg_tolerance: 1.0e-5
+  alpha: 0.02 ang
+  alpha_max: 0.2 ang

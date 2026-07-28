@@ -1,0 +1,283 @@
+######################################################################################################
+################# Conjugate-gradient energy minimization (Fletcher-Reeves + Armijo line search) ######
+######################################################################################################
+#
+# This defines a whole alternative simulation scenario (see 'simulation:' override at the bottom):
+# instead of the usual time-integrated md_trajectory_loop, the top level loop here iterates a CG
+# minimization step until the force falls below a tolerance (or the iteration/wall-clock limits from
+# sim_continue kick in). There is no time integration: 'timestep' is still counted (so restart/
+# snapshot/screen triggers and sim_continue's max_iteration/stop-file/signal handling keep working
+# unchanged) but dt stays at 0 and physical_time never advances.
+#
+# vx,vy,vz (normally velocity) are repurposed to hold the CG search direction h, since a static
+# minimization has no use for real velocities. Consequence: do NOT resume a time-integrated scheme
+# (verlet_nve, ...) directly from a restart file written during/after a CG run without first
+# re-initializing velocities (see init_temperature/scale_temperature in config_globals.msp) -
+# otherwise the CG direction vector would be read back in as spurious atomic velocities.
+#
+# Every non-trivial piece below is its own operator connected purely through named input/output
+# slots (cg_force_stats, cg_beta, cg_direction, cg_trial_step, ...); the actual iterate-until-
+# converged control flow is expressed declaratively with the same loop/condition batch mechanism
+# used by md_trajectory_loop in main-config.msp, plus the generic greater_than/boolean_and/
+# boolean_set building blocks already used elsewhere in this codebase (cg_value_scale is the
+# one new small generic-shaped operator this file adds, see numerical_schemes/cg_value_scale.cpp).
+
+######################################################################################################
+############################### A note on force units #################################################
+
+# compute_force_epilog is left untouched here (still whatever the including config already set it
+# to - typically force_to_accel, or update_force_energy_from_ghost + force_to_accel when
+# config_update_symmetric_forces.msp is used): overriding it unconditionally would silently drop
+# potential-specific steps like the ghost-force fold-back that some potentials rely on.
+# Consequence: fx,fy,fz (aliased to ax,ay,az) hold force divided by mass, not raw force. For a
+# single-species system this is just a global constant rescale (beta and the search direction are
+# unaffected - the mass cancels in the Fletcher-Reeves ratio), it only shifts what units
+# cg_tolerance and the Armijo bound are expressed in. For a multi-species system it also mildly
+# biases the search direction towards lighter atoms; harmless for convergence (force_max still
+# drives the stopping test on whatever is in fx,fy,fz) but worth knowing about if you want a strict
+# per-species-mass-independent minimizer.
+
+######################################################################################################
+############################################ Tunables #################################################
+
+# These become named OUTPUT slots via the 'global' operator's own YAML handling (see
+# global.cpp/make_global_operator) - a bare top-level 'key: value' entry elsewhere in an .msp
+# file is not a generic slot-default mechanism, it only works nested under 'global:' like this
+# (merged key-by-key with whatever config_globals.msp/baseline.yaml already declared there).
+global:
+  cg_tolerance: 1.0e-4          # convergence threshold on max atomic force magnitude
+  alpha: 0.01 ang                # current line-search step (max single-atom displacement); adapts
+  alpha_min: 1.0e-7 ang          # give up the line search (and the whole CG run) below this step size
+  alpha_max: 1.0 ang             # cap on step growth after repeated accepted steps
+  alpha_shrink_factor: 0.5       # step *= this on a rejected trial
+  alpha_grow_factor: 1.2         # step *= this on an accepted trial
+  c1: 1.0e-4                     # Armijo sufficient-decrease constant
+  cg_restart_period: 20           # force a steepest-descent restart (beta=0) every N iterations -
+                                  # plain Fletcher-Reeves directions degrade without this, plateauing
+  cg_dt: 0.0 ps                  # fed to next_time_step so physical_time never advances
+  cg_loop_continue: true         # needed for the cg_trajectory_loop to start (mirrors md_loop_continue)
+  cg_continue_search: true       # needed for the cg_line_search_loop to start (same reason)
+  cg_sim_continue_ok: true       # sim_continue only ever writes false explicitly, never true -
+                                  # this seeds it so the very first check doesn't default to false
+
+cg_loop_prolog: nop
+cg_loop_epilog: nop
+
+######################################################################################################
+################################## Per-iteration progress print #######################################
+
+# Replaces what gets printed by the default thermostate screen trigger (kinetic energy/temperature
+# are meaningless here since vx,vy,vz hold the CG direction, not velocity), while keeping the exact
+# same trigger/frequency machinery (trigger_thermostate_screen) from config_thermostate.msp.
+thermostate_screen_if_triggered:
+  condition: trigger_thermostate_screen
+  body:
+    - cg_progress_screen
+
+cg_progress_screen:
+  - cg_print_iter:
+      rebind: { value: timestep }
+      body: [ print_int: { prefix: "CG iteration " , suffix: "  " } ]
+  # ref_energy (used by cg_armijo_bound) and force_max as fed into cg_direction/cg_beta/
+  # cg_trial_step stay in internal units - only cg_check_force_converged (the convergence test,
+  # a standalone decision that doesn't feed any other internal-unit-consistent formula) and this
+  # progress screen convert a copy to eV/eV-per-atom, exactly like print_thermodynamic_state does
+  # (see thermo_energy_display.cpp).
+  - cg_force_max_ev:
+      rebind: { value: force_max , value_ev: force_max_ev }
+      body: [ internal_to_ev ]
+  - cg_print_force:
+      rebind: { value: force_max_ev }
+      body: [ print_real: { prefix: "Fmax(eV/ang)=" , suffix: "  " } ]
+  - cg_energy_ev:
+      rebind: { value_ev: ref_energy_ev }
+      body: [ thermo_potential_energy_ev_per_atom ]
+  - cg_print_energy:
+      rebind: { value: ref_energy_ev }
+      body: [ print_real: { prefix: "Epot(eV/atom)=" } ]
+  - message: { mesg: "" }
+
+######################################################################################################
+################################## Backtracking line search ###########################################
+
+# One trial: move along h by the current step, refresh ghost positions (cheap - full neighbor
+# rebuild only happens once per outer iteration, after acceptance, see cg_trajectory_loop below),
+# recompute forces/energy, and accept/reject against the Armijo bound.
+cg_line_search_loop:
+  loop: true
+  name: cg_ls_loop
+  condition: cg_continue_search
+  body:
+    - cg_trial_step
+    - ghost_update_r
+    - compute_all_forces_energy
+    - simulation_thermodynamic_state
+    - cg_snapshot_trial_energy:
+        rebind: { value: trial_energy }
+        body: [ thermo_potential_energy ]
+    - cg_armijo_bound
+    - cg_check_armijo:
+        rebind: { value: trial_energy , threshold: bound , result: reject_step }
+        body: [ greater_than ]
+    # Temporary per-trial debug print, so it's visible whether the line search is grinding
+    # through many backtracks or genuinely stuck. Remove once things behave as expected.
+    - cg_ls_debug_print_alpha:
+        rebind: { value: alpha }
+        body: [ print_real: { prefix: "  [line search] alpha=" , suffix: " " } ]
+    - cg_ls_debug_print_reject:
+        rebind: { value: reject_step }
+        body: [ print_bool: { prefix: "reject=" } ]
+    - message: { mesg: "" }
+    - cg_restore_if_rejected:
+        condition: reject_step
+        body: [ restore_r_lt ]
+    - cg_check_alpha_floor:
+        rebind: { value: alpha , threshold: alpha_min , result: line_search_ok }
+        body: [ greater_than ]
+    - cg_shrink_if_rejected:
+        condition: reject_step
+        body:
+          - cg_alpha_shrink:
+              rebind: { value: alpha , factor: alpha_shrink_factor }
+              body: [ cg_value_scale ]
+    - cg_grow_if_accepted:
+        condition: not reject_step
+        body:
+          - cg_alpha_grow:
+              rebind: { value: alpha , factor: alpha_grow_factor , max: alpha_max }
+              body: [ cg_value_scale ]
+    # boolean_and's result is a plain OUTPUT slot, not INPUT_OUTPUT like sim_continue's -
+    # the batch/loop compiler only auto-wires a loop's own body-computed value back into its
+    # own "condition:" slot when the last producer is an in-place (INPUT_OUTPUT) pipe (this is
+    # exactly how cg_loop_continue/md_loop_continue self-reference via sim_continue below).
+    # A bare boolean_and here would leave cg_continue_search's only producer as whatever
+    # external sibling seeds it once (see cg_continue_search's global default) - never updated
+    # again, so the search would never stop. Route the computed value through boolean_set's
+    # in-place "value" slot instead.
+    - cg_compute_continue_search:
+        rebind: { in1: reject_step , in2: line_search_ok , result: continue_search_computed }
+        body: [ boolean_and ]
+    - cg_update_continue_search:
+        rebind: { value: cg_continue_search , set: continue_search_computed }
+        body: [ boolean_set ]
+
+######################################################################################################
+################################## Outer CG iteration loop #############################################
+
+cg_trajectory_loop:
+  loop: true
+  name: cg_loop
+  condition: cg_loop_continue
+  body:
+    - cg_loop_prolog
+    - begin_iteration
+    - simulation_thermodynamic_state
+    - cg_force_stats
+    # force_max is in internal units (force/mass - see the note on force units above). Comparing
+    # it directly against cg_tolerance meant cg_tolerance=1.0e-5 was actually an effective
+    # ~1e-9 eV/ang threshold (same conversion factor as fire_tolerance's fix in config_fire.msp,
+    # ~9650x for this Cu/EAM system) - unreachable in practice, since the line search always gave
+    # up on alpha_min exhaustion first, around Fmax~1e-5 to 1e-4 eV/ang. Compare the eV-converted
+    # copy instead so cg_tolerance means what it looks like it means. Never feed this converted
+    # copy into cg_armijo_bound's own internal comparison - display/threshold uses only.
+    - cg_force_max_ev_check:
+        rebind: { value: force_max , value_ev: force_max_ev }
+        body: [ internal_to_ev ]
+    - cg_check_force_converged:
+        rebind: { value: force_max_ev , threshold: cg_tolerance , result: force_not_converged }
+        body: [ greater_than ]
+    # "rebind:" only takes effect through the batch-construction code path, which only runs when
+    # the referenced name is NOT itself a registered C++ factory. cg_beta IS a registered factory,
+    # so this bare form silently dropped the rebind (yaml_initialize never reads "rebind" - it
+    # only applies literal value overrides matching existing slot names). Wrapping with a
+    # distinctly-named batch + explicit body: is what actually makes it apply.
+    - cg_beta_step:
+        rebind: { restart_period: cg_restart_period }
+        body: [ cg_beta ]
+    - cg_direction
+    - cg_snapshot_ref_energy:
+        rebind: { value: ref_energy }
+        body: [ thermo_potential_energy ]
+    - backup_r_lt
+    # Needed every outer iteration: cg_line_search_loop's own run() gate reads cg_continue_search
+    # BEFORE its body executes at all, and the PREVIOUS outer iteration's line search left it
+    # false (that's what stopped it). Without resetting to true here, run() would skip the whole
+    # search from iteration 2 onward. This is safe now that cg_update_continue_search (inside
+    # cg_line_search_loop) is also an in-place boolean_set - both wire into the same shared
+    # resource instead of one shadowing the other (see notes in cg_line_search_loop above).
+    - cg_reset_continue_search:
+        rebind: { value: cg_continue_search }
+        body: [ boolean_set: { set: true } ]
+    - cg_line_search_loop
+    - check_and_update_particles
+    - end_iteration
+    - cg_loop_epilog
+    - cg_next_iteration:
+        rebind: { dt: cg_dt }
+        body: [ next_time_step ]
+    - cg_sim_continue:
+        rebind: { end_at: max_iteration , result: cg_sim_continue_ok }
+        body: [ sim_continue ]
+    - cg_combine_continue_1:
+        rebind: { in1: cg_sim_continue_ok , in2: force_not_converged , result: cg_partial_continue }
+        body: [ boolean_and ]
+    - cg_combine_continue_2:
+        rebind: { in1: cg_partial_continue , in2: line_search_ok , result: loop_continue_computed }
+        body: [ boolean_and ]
+    # Same in-place-pipe requirement as cg_continue_search above - boolean_and's plain OUTPUT
+    # can't self-feed cg_trajectory_loop's own condition.
+    - cg_update_loop_continue:
+        rebind: { value: cg_loop_continue , set: loop_continue_computed }
+        body: [ boolean_set ]
+
+######################################################################################################
+################################## CG-flavored simulation scenario #####################################
+
+# Same as first_iteration in main-config.msp, minus nose_hoover_additional_step (irrelevant here).
+cg_first_iteration:
+  - init_particles
+  - compute_all_forces_energy
+  - default_thermostate_compute
+  - cg_force_stats
+  - cg_snapshot_ref_energy:
+      rebind: { value: ref_energy }
+      body: [ thermo_potential_energy ]
+  - cg_progress_screen
+  - default_thermostate_file
+  - cg_next_iteration:
+      rebind: { dt: cg_dt }
+      body: [ next_time_step ]
+
+# Identical to the default 'simulation:' in main-config.msp, except first_iteration/
+# md_trajectory_loop are swapped for their CG counterparts - everything else (setup, species,
+# domain, load balancing, ...) is reused unchanged.
+simulation:
+  name: exaStamp_cg_minimization
+  body:
+    - print_logo_banner
+    - hw_device_init
+    - make_empty_grid
+    - grid_flavor
+    - global
+    - init_parameters
+    - generate_default_species
+    - particle_regions
+    - preinit_rcut_max
+    - domain
+    - init_prolog
+    - setup_system
+    - species: { verbose: false , fail_if_empty: true }
+    - grid_post_processing
+    - reduce_species_after_read
+    - init_rcut_max
+    - print_domain
+    - performance_adviser: { verbose: true }
+    - init_epilog
+    - species: { verbose: true , fail_if_empty: true }
+    - cg_first_iteration
+    - cg_trajectory_loop
+    - simulation_epilog
+    - hw_device_finalize
+
+######################################################################################################
+######################################################################################################
