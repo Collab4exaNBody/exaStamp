@@ -11,23 +11,27 @@ compute_force:
 
 setup_system:
   - particle_regions:
-      - BOX:
-          bounds: [ [ 20 ang, 0 ang, 0 ang ], [ 80 ang, 33 ang, 33 ang ] ]
+      - SPHERE:
+          quadric:
+            shape: sphere
+            transform:
+              - scale: [ 40 ang, 40 ang, 40 ang ]
+              - translate: [ 50 ang, 50 ang, 50 ang ]
   - domain:
-      cell_size: 6.6 ang
-      grid_dims: [ 15, 5, 5 ]
-      bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 99. ang, 33. ang, 33. ang ] ]
+      cell_size: 10 ang
+      grid_dims: [ 10, 10, 10 ]
+      bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 100. ang, 100. ang, 100. ang ] ]
       xform: [ [ 1, 0, 0 ], [ 0, 1, 0 ], [ 0, 0, 1 ] ]
       periodic: [ false, true, true ]
-      expandable: false
+      expandable: true
   - init_rcb_grid
   - lattice:
       structure: BCC
       types: [ Ta, Ta ]
-      size: [ 2.6 ang, 3.3 ang, 3.3 ang ]
-      region: BOX
+      size: [ 3.3 ang, 3.3 ang, 3.3 ang ]
+      region: SPHERE
   - init_temperature_new:
-      T: 700. K
+      T: 2000. K
       override_velocities: true
       add_velocities: false
       scale_velocities: false
@@ -35,7 +39,7 @@ setup_system:
       distribution: "gaussian"
 
 global:
-  max_iteration: 200
+  max_iteration: 100
   simulation_thermostate_screen_frequency: 50
   simulation_thermostate_file_frequency: -1
   simulation_snapshot_frequency: -1
