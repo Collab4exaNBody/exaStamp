@@ -1,0 +1,260 @@
+######################################################################################################
+################# FIRE 2.0 energy minimization (Bitzek et al. 2006 / Guenole et al. 2020) ###########
+######################################################################################################
+#
+# This defines a whole alternative simulation scenario (see 'simulation:' override at the bottom):
+# instead of the time-integrated md_trajectory_loop or the conjugate-gradient cg_trajectory_loop
+# (see config_conjugate_gradient.msp), fire_trajectory_loop performs genuine MD-with-inertia
+# pseudo-dynamics (Velocity-Verlet + an adaptive velocity/force mixing bias) until the force falls
+# below a tolerance. Unlike CG, vx,vy,vz here hold real velocity - FIRE's whole idea is to use
+# ordinary Newtonian dynamics with a steering term, so no field repurposing is needed. dt itself
+# (fire_dt) is adaptive and IS fed to next_time_step, so physical_time advances meaningfully here
+# (unlike CG's fixed cg_dt=0), consistent with FIRE being genuine (if fictitious) MD.
+#
+# Every non-trivial piece below is its own operator connected through named input/output slots
+# (fire_power, fire_adapt, fire_norms, fire_velocity_mix, fire_zero_velocity - all in
+# src/numerical_schemes/fire_*.cpp), reusing exaNBody's own push_f_v/push_v_r Verlet operators
+# (rebound to fire_dt instead of the simulation's fixed global dt) and cg_force_stats (a fully
+# generic force reduction despite its name) for the end-of-step force_max. The outer loop's
+# control flow uses the same loop/condition batch mechanism as md_trajectory_loop/
+# cg_trajectory_loop - see the note on self-referencing loop conditions below.
+
+######################################################################################################
+############################### A note on self-referencing loop conditions ###########################
+
+# Lesson learned while debugging cg_trajectory_loop: the loop/condition batch compiler only
+# auto-wires a loop's own body-computed value back into its own "condition:" slot when the last
+# producer of that name is an in-place (INPUT_OUTPUT) pipe, like sim_continue's "result" slot -
+# a plain OUTPUT producer (e.g. boolean_and) can never do this, its result lands in a disconnected
+# proxy and the condition just keeps reading whatever seeded it once (see fire_loop_continue's
+# global default below). fire_trajectory_loop's own condition is therefore computed by a
+# boolean_and (fire_combine_continue_2) FOLLOWED by an in-place boolean_set
+# (fire_update_loop_continue) that actually feeds it back - exactly the working cg_loop_continue
+# pattern. Unlike CG there is no nested loop here (FIRE has no line search), so there is no
+# per-outer-iteration "reset" operator needed either - fire_trajectory_loop is only ever entered
+# once from the top-level 'simulation:' body, and its own do-while runs its body at least once
+# regardless of the condition's incoming value.
+
+######################################################################################################
+############################################ Tunables #################################################
+
+# Defaults mirror FIRE 2.0's published/LAMMPS defaults (Guenole et al. 2020, Table 1): tmax=10,
+# tmin=0.02, delaystep=20, dtgrow=1.1, dtshrink=0.5, alpha0=0.25, alphashrink=0.99, vdfmax=2000.
+global:
+  fire_tolerance: 1.0e-4          # convergence threshold on max atomic force magnitude
+  fire_dt_start: 1.0e-3 ps        # reference timestep dt_max/dt_min are scaled from (paper recommends
+                                  # the same value as an MD run at low temperature would use)
+  fire_dt: 1.0e-3 ps              # current adaptive timestep; seeded to fire_dt_start
+  fire_dt_max_factor: 10.0        # tmax: dt_max = fire_dt_start * this
+  fire_dt_min_factor: 0.02        # tmin: dt_min = fire_dt_start * this
+  fire_delaystep: 20              # N_delay: consecutive downhill steps needed before dt grows again;
+                                  # also gates the startup grace period before the first shrink
+  fire_dt_grow: 1.1               # dt *= this after delaystep consecutive downhill steps
+  fire_dt_shrink: 0.5             # dt *= this on an uphill/stationary step
+  fire_alpha_start: 0.25          # alpha0: mixing coefficient right after a reset
+  fire_alpha: 0.25                # current adaptive mixing coefficient; seeded to fire_alpha_start
+  fire_alpha_shrink: 0.99         # alpha *= this after delaystep consecutive downhill steps
+  fire_pneg_max: 2000             # vdfmax: give up after this many consecutive uphill steps
+  fire_initial_delay: true        # skip the very first dt-shrinks during the startup grace period
+  fire_loop_continue: true        # needed for fire_trajectory_loop to start (mirrors md_loop_continue)
+  fire_sim_continue_ok: true      # sim_continue only ever writes false explicitly, never true -
+                                  # this seeds it so the very first check doesn't default to false
+
+fire_loop_prolog: nop
+fire_loop_epilog: nop
+
+######################################################################################################
+################################## Per-iteration progress print #######################################
+
+# Reuses the exact same trigger/frequency machinery (trigger_thermostate_screen) as
+# config_thermostate.msp; redefining "thermostate_screen_if_triggered" here means end_iteration's
+# own generic call to it (see main-config.msp) picks up fire_progress_screen automatically - no
+# need to invoke it again inside fire_trajectory_loop's own body.
+thermostate_screen_if_triggered:
+  condition: trigger_thermostate_screen
+  body:
+    - fire_progress_screen
+
+fire_progress_screen:
+  - fire_print_iter:
+      rebind: { value: timestep }
+      body: [ print_int: { prefix: "FIRE iteration " , suffix: "  " } ]
+  - fire_force_max_ev:
+      rebind: { value: force_max , value_ev: force_max_ev }
+      body: [ internal_to_ev ]
+  - fire_print_force:
+      rebind: { value: force_max_ev }
+      body: [ print_real: { prefix: "Fmax(eV/ang)=" , suffix: "  " } ]
+  - fire_energy_ev:
+      rebind: { value_ev: ref_energy_ev }
+      body: [ thermo_potential_energy_ev_per_atom ]
+  - fire_print_energy:
+      rebind: { value: ref_energy_ev }
+      body: [ print_real: { prefix: "Epot(eV/atom)=" , suffix: "  " } ]
+  - fire_print_dt:
+      rebind: { value: fire_dt }
+      body: [ print_real: { prefix: "dt(ps)=" , suffix: "  " } ]
+  - fire_print_alpha:
+      rebind: { value: fire_alpha }
+      body: [ print_real: { prefix: "alpha=" } ]
+  - message: { mesg: "" }
+
+######################################################################################################
+################################## FIRE 2.0 trajectory loop #############################################
+
+# One outer iteration = one FIRE step: compute the power P=F.v from the state left over at the
+# end of the previous iteration (or the initial v=0), adapt dt/alpha and correct if the previous
+# step went uphill, then perform one Velocity-Verlet step with the mixing folded in between the
+# first half-kick and the drift (Guenole et al. 2020, Algorithm 6 - mixing uses the PRE-step force
+# and the post-half-kick velocity, not the post-step ones).
+fire_trajectory_loop:
+  loop: true
+  name: fire_loop
+  condition: fire_loop_continue
+  body:
+    - fire_loop_prolog
+    - begin_iteration
+    - simulation_thermodynamic_state
+    - fire_power
+    # NOTE: "rebind:" is only ever applied by the batch-construction code path, which only
+    # triggers when the referenced name is NOT itself a registered C++ factory (an "implicit
+    # batch" fallback). fire_adapt IS a registered factory, so a bare "fire_adapt: {rebind:...}"
+    # (no body:) would silently drop the rebind entirely - yaml_initialize only applies literal
+    # value overrides matching EXISTING slot names, it never reads "rebind" at all. Wrapping it
+    # in a distinctly-named batch with an explicit body: is what actually makes rebind apply
+    # (same reason every OTHER rebind in this file, and in config_conjugate_gradient.msp, uses a
+    # wrapper name different from the thing it wraps).
+    - fire_adapt_step:
+        rebind:
+          dt_start: fire_dt_start
+          dt_max_factor: fire_dt_max_factor
+          dt_min_factor: fire_dt_min_factor
+          delaystep: fire_delaystep
+          dt_grow: fire_dt_grow
+          dt_shrink: fire_dt_shrink
+          alpha_start: fire_alpha_start
+          alpha_shrink: fire_alpha_shrink
+          pneg_max: fire_pneg_max
+          initial_delay: fire_initial_delay
+          dt: fire_dt
+          alpha: fire_alpha
+          n_ppos: fire_n_ppos
+          n_pneg: fire_n_pneg
+          iter: fire_iter
+          uphill: fire_uphill
+          fire_not_stalled: fire_not_stalled
+        body: [ fire_adapt ]
+    # Correct uphill motion from the PREVIOUS step (Algorithm 2 lines 28-29): move back by half
+    # the (possibly just-shrunk) new dt using the still-nonzero velocity, THEN zero it - order
+    # matters, the correction needs v before it's cleared.
+    - fire_uphill_correct:
+        condition: fire_uphill
+        body:
+          - fire_halfstep_back:
+              rebind: { dt: fire_dt }
+              body: [ push_v_r: { dt_scale: -0.5 , xform_mode: INV_XFORM } ]
+          - fire_zero_velocity
+    - fire_kick1:
+        rebind: { dt: fire_dt }
+        body: [ push_f_v: { dt_scale: 0.5 } ]
+    - fire_norms
+    - fire_velocity_mix_step:
+        rebind: { alpha: fire_alpha }
+        body: [ fire_velocity_mix ]
+    - fire_drift:
+        rebind: { dt: fire_dt }
+        body: [ push_v_r: { dt_scale: 1.0 , xform_mode: INV_XFORM } ]
+    - check_and_update_particles
+    - compute_all_forces_energy
+    - fire_kick2:
+        rebind: { dt: fire_dt }
+        body: [ push_f_v: { dt_scale: 0.5 } ]
+    - cg_force_stats
+    # force_max is in internal units (fx,fy,fz hold force/mass here, same as CG - see the note on
+    # force units at the top of config_conjugate_gradient.msp). Unlike CG's cg_tolerance (left in
+    # raw units, undocumented pitfall waiting to bite - it just never mattered because CG always
+    # stopped on alpha_min first), compare the eV-converted copy here so fire_tolerance means what
+    # it looks like it means (eV/ang), not ~9700x smaller. Never feed this converted copy into an
+    # actual internal computation (e.g. the mixing ratio) - display/threshold comparisons only.
+    - fire_force_max_ev_check:
+        rebind: { value: force_max , value_ev: force_max_ev }
+        body: [ internal_to_ev ]
+    - fire_check_force_converged:
+        rebind: { value: force_max_ev , threshold: fire_tolerance , result: force_not_converged }
+        body: [ greater_than ]
+    - fire_snapshot_ref_energy:
+        rebind: { value: ref_energy }
+        body: [ thermo_potential_energy ]
+    - end_iteration
+    - fire_loop_epilog
+    - fire_next_iteration:
+        rebind: { dt: fire_dt }
+        body: [ next_time_step ]
+    - fire_sim_continue:
+        rebind: { end_at: max_iteration , result: fire_sim_continue_ok }
+        body: [ sim_continue ]
+    - fire_combine_continue_1:
+        rebind: { in1: fire_sim_continue_ok , in2: force_not_converged , result: fire_partial_continue }
+        body: [ boolean_and ]
+    - fire_combine_continue_2:
+        rebind: { in1: fire_partial_continue , in2: fire_not_stalled , result: fire_loop_continue_computed }
+        body: [ boolean_and ]
+    # boolean_and's result is a plain OUTPUT slot, not INPUT_OUTPUT like sim_continue's - route
+    # through boolean_set's in-place "value" slot so it actually self-feeds the condition above.
+    - fire_update_loop_continue:
+        rebind: { value: fire_loop_continue , set: fire_loop_continue_computed }
+        body: [ boolean_set ]
+
+######################################################################################################
+################################## FIRE-flavored simulation scenario #####################################
+
+# Same as cg_first_iteration, minus nose_hoover_additional_step: sets v(t)=0 (Algorithm line 2)
+# before the first progress print.
+fire_first_iteration:
+  - init_particles
+  - compute_all_forces_energy
+  - default_thermostate_compute
+  - fire_zero_velocity
+  - cg_force_stats
+  - fire_snapshot_ref_energy:
+      rebind: { value: ref_energy }
+      body: [ thermo_potential_energy ]
+  - fire_progress_screen
+  - default_thermostate_file
+  - fire_next_iteration:
+      rebind: { dt: fire_dt }
+      body: [ next_time_step ]
+
+# Identical to the default 'simulation:' in main-config.msp, except first_iteration/
+# md_trajectory_loop are swapped for their FIRE counterparts - everything else (setup, species,
+# domain, load balancing, ...) is reused unchanged.
+simulation:
+  name: exaStamp_fire_minimization
+  body:
+    - print_logo_banner
+    - hw_device_init
+    - make_empty_grid
+    - grid_flavor
+    - global
+    - init_parameters
+    - generate_default_species
+    - particle_regions
+    - preinit_rcut_max
+    - domain
+    - init_prolog
+    - setup_system
+    - species: { verbose: false , fail_if_empty: true }
+    - grid_post_processing
+    - reduce_species_after_read
+    - init_rcut_max
+    - print_domain
+    - performance_adviser: { verbose: true }
+    - init_epilog
+    - species: { verbose: true , fail_if_empty: true }
+    - fire_first_iteration
+    - fire_trajectory_loop
+    - simulation_epilog
+    - hw_device_finalize
+
+######################################################################################################
+######################################################################################################
