@@ -36,18 +36,24 @@ namespace exaStamp
   using namespace exanb;
 
   // Running per-particle accumulators : reference position of the central particle,
-  // and the two tensors whose ratio (BF . AF^-1) is the deformation gradient tensor.
+  // the two tensors whose ratio (BF . AF^-1) is the deformation gradient tensor, and
+  // the (unweighted) sum/count of "slipped" neighbors for the slip vector (Zimmerman
+  // et al., Phys. Rev. Lett. 87, 165507 (2001), Eq. 1).
   struct alignas(onika::memory::DEFAULT_ALIGNMENT) DeformationGradientExtStorage
   {
     Vec3d m_pos0 = {};
     Mat3d m_tensorAF = {};
     Mat3d m_tensorBF = {};
+    Vec3d m_slip_sum = {};
+    long m_slip_count = 0;
 
     ONIKA_HOST_DEVICE_FUNC
     inline void reset()
     {
       m_tensorAF = Mat3d{};
       m_tensorBF = Mat3d{};
+      m_slip_sum = Vec3d{};
+      m_slip_count = 0;
     }
   };
 
@@ -65,7 +71,7 @@ namespace exaStamp
   // exanb's average_neighbors_scalar, but accumulating outer-product tensors instead
   // of a scalar sum, and with the neighbor weight evaluated on the reference distance
   // so the smoothing radius is unaffected by the current deformation).
-  template<class GridT, class DefGradFieldT>
+  template<class GridT, class DefGradFieldT, class SlipFieldT>
   struct alignas(onika::memory::DEFAULT_ALIGNMENT) DeformationGradientFunctor
   {
     using CellsT = decltype( GridT{}.cells() );
@@ -80,6 +86,7 @@ namespace exaStamp
     const Mat3d m_hht {}; // m_xform    * lattice, current configuration box
     const CellsT m_cells_t0 = nullptr;
     DefGradFieldT m_defgrad_field = {};
+    SlipFieldT m_slip_field = {};
 
     template<class ComputeBufferT, class LocalCellsT>
     ONIKA_HOST_DEVICE_FUNC inline void operator () (ComputeBufferT& ctx, LocalCellsT, size_t cell_a, size_t p_a, exanb::ComputePairParticleContextStart) const
@@ -95,6 +102,11 @@ namespace exaStamp
       Mat3d F = AikBkj( ctx.ext.m_tensorBF, inverse(ctx.ext.m_tensorAF) );
       if( mat3d_has_nan(F) ) { F = make_identity_matrix(); }
       cells[cell_a][m_defgrad_field][p_a] = F;
+
+      // slip vector (Zimmerman et al. PRL 87, 165507 (2001), Eq. 1) :
+      // s = -(1/n_slipped) * sum over slipped neighbors of (x_cur - x_ref)
+      const Vec3d slip = ( ctx.ext.m_slip_count > 0 ) ? ( ctx.ext.m_slip_sum * ( -1.0 / double(ctx.ext.m_slip_count) ) ) : Vec3d{};
+      cells[cell_a][m_slip_field][p_a] = slip;
     }
 
     template<class ComputeBufferT, class LocalCellsT>
@@ -133,6 +145,16 @@ namespace exaStamp
         // AikBkj(tensorBF,inverse(tensorAF)), same as the original per-atom implementation)
         ctx.ext.m_tensorAF += tensor(deltaPosInit,deltaPosInit) * w * 1.0e20;
         ctx.ext.m_tensorBF += tensor(deltaPosCour,deltaPosInit) * w * 1.0e20;
+
+        // slip vector accumulation is unweighted (no w factor), only counting
+        // neighbors whose relative position changed by more than 1/10 of rcut
+        // (filters out thermal-noise-level "slip")
+        const Vec3d delta_cour_init = deltaPosCour - deltaPosInit;
+        if( norm2(delta_cour_init) >= ( m_rcut_sq / 100.0 ) )
+        {
+          ctx.ext.m_slip_sum += delta_cour_init;
+          ++ ctx.ext.m_slip_count;
+        }
       }
     }
   };
@@ -149,6 +171,7 @@ namespace exaStamp
     ADD_SLOT( double                    , rcut            , INPUT        , REQUIRED , DocString{"Cutoff distance, in the reference configuration, for the neighbors contributing to the local deformation gradient"} );
     ADD_SLOT( DoubleVector               , weight_function , INPUT        , DoubleVector{ {1.0} } , DocString{"List of [a0,...,an] coefficients for the polynomial distance weighting function : a0*x^0 + a1*x^1 + ... +an*x^n, applied to the reference-frame neighbor distance"} );
     ADD_SLOT( std::string               , defgrad_field   , INPUT        , std::string("defgrad") , DocString{"Name of the resulting per-particle deformation gradient tensor field"} );
+    ADD_SLOT( std::string               , slip_field      , INPUT        , std::string("slip") , DocString{"Name of the resulting per-particle slip vector field (Zimmerman et al. PRL 87, 165507 (2001))"} );
     ADD_SLOT( exanb::GridChunkNeighbors , chunk_neighbors , INPUT        , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
     ADD_SLOT( double                    , rcut_max        , INPUT_OUTPUT , 0.0 , DocString{"Updated max rcut"} );
 
@@ -173,14 +196,15 @@ namespace exaStamp
       const Mat3d hht = xform * lattice;
 
       auto defgrad_acc = grid->field_accessor( field::mk_generic_mat3( *defgrad_field ) );
+      auto slip_acc = grid->field_accessor( field::mk_generic_vec3( *slip_field ) );
 
       using ComputeBuffer = ComputePairBuffer2<false,false,DeformationGradientExtStorage>;
       ComputePairOptionalLocks<false> cp_locks {};
       exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
       auto compute_buf = make_compute_pair_buffer<ComputeBuffer>();
 
-      DeformationGradientFunctor<GridT,decltype(defgrad_acc)> compute_op =
-        { (*rcut)*(*rcut) , poly_coefs[0] , poly_coefs[1] , poly_coefs[2] , poly_coefs[3] , xform_t0 , hh0 , hht , grid_t0->cells() , defgrad_acc };
+      DeformationGradientFunctor<GridT,decltype(defgrad_acc),decltype(slip_acc)> compute_op =
+        { (*rcut)*(*rcut) , poly_coefs[0] , poly_coefs[1] , poly_coefs[2] , poly_coefs[3] , xform_t0 , hh0 , hht , grid_t0->cells() , defgrad_acc , slip_acc };
 
       LinearXForm cp_xform { xform };
       auto optional = make_compute_pair_optional_args( nbh_it, ComputePairNullWeightIterator{} , cp_xform, cp_locks );
@@ -203,6 +227,13 @@ is a polynomial of the reference-frame distance, same convention as average_neig
 The reference xform is read from backup_r_lt->m_xform, so no separate xform backup
 (e.g. backup_xform) is needed as long as grid_t0 was itself restored from that same backup.
 
+Also computes the slip vector s (Zimmerman, Kelchner, Klein, Hamilton, Foiles,
+Phys. Rev. Lett. 87, 165507 (2001), Eq. 1): s = -(1/n_slipped) * sum over slipped
+neighbors of (x_current - x_reference), unweighted, only counting neighbors whose
+relative position changed by at least 1/10 of rcut between the two configurations.
+Reuses the exact same reference/current neighbor matching already computed for F,
+at near-zero extra cost.
+
 Usage example:
 
 compute_deformation_gradient_tensor:
@@ -211,6 +242,7 @@ compute_deformation_gradient_tensor:
   rcut: 8.0 ang
   weight_function: [ 1.0 , 0.0 , -0.01 ] # => 1 + 0.0 r - 0.01 r^2, r being the reference-frame neighbor distance
   defgrad_field: defgrad
+  slip_field: slip
 
 )EOF";
     }
@@ -227,8 +259,8 @@ compute_deformation_gradient_tensor:
 namespace exanb
 {
   // specialize functor traits to allow Cuda execution space
-  template<class GridT, class DefGradFieldT>
-  struct ComputePairTraits< exaStamp::DeformationGradientFunctor<GridT,DefGradFieldT> >
+  template<class GridT, class DefGradFieldT, class SlipFieldT>
+  struct ComputePairTraits< exaStamp::DeformationGradientFunctor<GridT,DefGradFieldT,SlipFieldT> >
   {
     static inline constexpr bool ComputeBufferCompatible = false;
     static inline constexpr bool BufferLessCompatible    = true;

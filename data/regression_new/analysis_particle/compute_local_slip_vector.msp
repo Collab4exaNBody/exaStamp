@@ -9,14 +9,6 @@ eam_alloy_force:
 compute_force: eam_alloy_force
 
 setup_system:
-  - particle_regions:
-      - CYL:
-          quadric:
-            shape: cylx
-            transform:
-              - scale: [ 15 ang, 20 ang, 10 ang ]
-              - xrot: pi/4
-              - translate: [ 33 ang, 33 ang, 33 ang ]
   - domain:
       cell_size: 6.6 ang
       grid_dims: [ 10, 10, 10 ]
@@ -29,32 +21,37 @@ setup_system:
       structure: BCC
       types: [ Ta, Ta ]
       size: [ 3.3 ang, 3.3 ang, 3.3 ang ]
-  - gaussian_noise_v:
-      sigma: 100. m/s
-  - shift_v:
-      value: [ 0, 800. m/s, 400. m/s ]
-      region: CYL
-
+  - gaussian_noise_v: { sigma: 200. m/s }
 global:
-  max_iteration: 20
+  max_iteration: 100
   simulation_thermostate_screen_frequency: 10
   simulation_thermostate_file_frequency: -1
-  simulation_snapshot_frequency: 20
+  simulation_snapshot_frequency: 10
   rcut_inc: 1.0 ang
   dt: 5.0e-3 ps
   rcut_max: &defgrad_rcut 6.0 ang
   deterministic_noise: true 
 
+init_epilog:
+  - backup_r_lt
+
 write_snapshot:
-  - ghost_update_r_v
-  - compute_velocity_gradient_tensor:
-      rcut: *defgrad_rcut
-      weight_function: [ 1.0 , 0.0 , 0.0 ]
-      velgrad_field: L
-  - compute_vorticity:
-      velgrad_field: L
-      vort_field: phi
+  - copy_grid
+  - restore_ghost_r0:
+      rebind: { grid: grid_copy }
+      body:
+        - backup_r_lt_move_data
+        - restore_r_lt
+        - ghost_update_r
+  - compute_F:
+      rebind: { grid_t0: grid_copy }
+      body:
+        - compute_deformation_gradient_tensor:
+            rcut: *defgrad_rcut
+            weight_function: [ 1.0 , 0.0 , 0.0 ]
+            defgrad_field: defgrad
+            slip_field: slip
   - timestep_file: "xyz/current_config_%09d.xyz"
-  - write_xyz: { fields: [ id, type, L, phi, velocity ] }
+  - write_xyz: { fields: [ id, type, defgrad, slip ] }
 
   
