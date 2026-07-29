@@ -205,6 +205,30 @@ namespace exaStamp
                   );
     }
   };
+
+  // second step of the dislocation-detection chain (see compute_microrotation_gradient
+  // for the first): project the microrotation spatial gradient onto the local slip
+  // tripod (l,m,n from compute_slip_tripod) to get the edge/screw dislocation
+  // indicators. Same construction as compute_local_mechanical_metrics.cpp's
+  // RefGradientComputeOp post-processing step, purely pointwise (vecgrad/l/m/n are
+  // all already-computed per-particle inputs, no neighbor list needed here).
+  struct DislocationIndicatorsFunctor
+  {
+    ONIKA_HOST_DEVICE_FUNC inline void operator () (
+       const Mat3d& vecgrad, const Vec3d& l, const Vec3d& m, const Vec3d& n
+     , double& dislo, double& vis, double& coin, Vec3d& dislol, Vec3d& dislolo ) const
+    {
+      const Mat3d transfer = make_mat3d( l, m, n );
+      const Mat3d proj = AikBkj( AikBkj( transpose(transfer), vecgrad ), transfer );
+      const double comp_coin = proj.m21;
+      const double comp_vis  = proj.m22;
+      dislo = sqrt( comp_coin*comp_coin + comp_vis*comp_vis );
+      vis = comp_vis;
+      coin = comp_coin;
+      dislolo = comp_coin*l + comp_vis*m;
+      dislol = cross( n, dislolo );
+    }
+  };
 }
 
 namespace exanb
@@ -217,6 +241,7 @@ namespace exanb
   template<> struct ComputeCellParticlesTraits<exaStamp::TensorInvariantsFunctor>    { static inline constexpr bool CudaCompatible = true; };
   template<> struct ComputeCellParticlesTraits<exaStamp::VonMisesFunctor>            { static inline constexpr bool CudaCompatible = true; };
   template<> struct ComputeCellParticlesTraits<exaStamp::ShearStrainFunctor>         { static inline constexpr bool CudaCompatible = true; };
+  template<> struct ComputeCellParticlesTraits<exaStamp::DislocationIndicatorsFunctor> { static inline constexpr bool CudaCompatible = true; };
 }
 
 namespace exaStamp
@@ -589,6 +614,75 @@ compute_shear_strain:
     }
   };
 
+  template<class GridT>
+  class ComputeDislocationIndicators : public OperatorNode
+  {
+    ADD_SLOT( GridT       , grid              , INPUT_OUTPUT );
+    ADD_SLOT( std::string , vecgrad_field     , INPUT , std::string("vecgrad")   , DocString{"Name of the input microrotation spatial gradient field (see compute_microrotation_gradient)"} );
+    ADD_SLOT( std::string , burgerpar_field   , INPUT , std::string("burgerpar")   , DocString{"Name of the input Burgers-parallel slip basis vector field (see compute_slip_tripod)"} );
+    ADD_SLOT( std::string , burgerortho_field , INPUT , std::string("burgerortho") , DocString{"Name of the input Burgers-orthogonal slip basis vector field (see compute_slip_tripod)"} );
+    ADD_SLOT( std::string , glide_field       , INPUT , std::string("glide")       , DocString{"Name of the input glide-plane basis vector field (see compute_slip_tripod)"} );
+    ADD_SLOT( std::string , dislo_field       , INPUT , std::string("dislo")   , DocString{"Name of the resulting dislocation indicator scalar field"} );
+    ADD_SLOT( std::string , vis_field         , INPUT , std::string("vis")     , DocString{"Name of the resulting screw-character component scalar field"} );
+    ADD_SLOT( std::string , coin_field        , INPUT , std::string("coin")    , DocString{"Name of the resulting edge-character component scalar field"} );
+    ADD_SLOT( std::string , dislol_field      , INPUT , std::string("dislol")  , DocString{"Name of the resulting dislocation line vector field"} );
+    ADD_SLOT( std::string , dislolo_field     , INPUT , std::string("dislolo") , DocString{"Name of the resulting dislocation line orthogonal vector field"} );
+
+  public:
+    inline void execute () override final
+    {
+      if( grid->number_of_cells() == 0 ) return;
+      if( ! grid->has_allocated_field( field::mk_generic_mat3( *vecgrad_field ) ) )
+      {
+        fatal_error() << "compute_dislocation_indicators: input field '" << *vecgrad_field << "' does not exist (run compute_microrotation_gradient first, or check vecgrad_field)" << std::endl;
+      }
+      if( ! grid->has_allocated_field( field::mk_generic_vec3( *burgerpar_field ) ) )
+      {
+        fatal_error() << "compute_dislocation_indicators: input field '" << *burgerpar_field << "' does not exist (run compute_slip_tripod first, or check burgerpar_field)" << std::endl;
+      }
+      auto vecgrad_acc = grid->field_const_accessor( field::mk_generic_mat3( *vecgrad_field ) );
+      auto l_acc       = grid->field_const_accessor( field::mk_generic_vec3( *burgerpar_field ) );
+      auto m_acc       = grid->field_const_accessor( field::mk_generic_vec3( *burgerortho_field ) );
+      auto n_acc       = grid->field_const_accessor( field::mk_generic_vec3( *glide_field ) );
+      auto dislo_acc   = grid->field_accessor( field::mk_generic_real( *dislo_field ) );
+      auto vis_acc     = grid->field_accessor( field::mk_generic_real( *vis_field ) );
+      auto coin_acc    = grid->field_accessor( field::mk_generic_real( *coin_field ) );
+      auto dislol_acc  = grid->field_accessor( field::mk_generic_vec3( *dislol_field ) );
+      auto dislolo_acc = grid->field_accessor( field::mk_generic_vec3( *dislolo_field ) );
+      compute_cell_particles( *grid, false, DislocationIndicatorsFunctor{}
+                             , onika::make_flat_tuple( vecgrad_acc, l_acc, m_acc, n_acc, dislo_acc, vis_acc, coin_acc, dislol_acc, dislolo_acc )
+                             , parallel_execution_context() );
+    }
+
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+
+Second and final step of the dislocation-detection chain (see
+compute_microrotation_gradient for the first step): projects the microrotation
+spatial gradient onto the local slip-plane basis tripod (l,m,n, see
+compute_slip_tripod) to get the edge (coin) / screw (vis) dislocation character
+components, an overall indicator magnitude (dislo), and the dislocation line
+vectors (dislol, dislolo). Pointwise, no neighbor list needed -- everything it
+reads is already a per-particle field.
+
+Usage example:
+
+compute_dislocation_indicators:
+  vecgrad_field: vecgrad
+  burgerpar_field: burgerpar
+  burgerortho_field: burgerortho
+  glide_field: glide
+  dislo_field: dislo
+  vis_field: vis
+  coin_field: coin
+  dislol_field: dislol
+  dislolo_field: dislolo
+
+)EOF";
+    }
+  };
+
   // === register factories ===
   ONIKA_AUTORUN_INIT(compute_strain_from_deformation_gradient)
   {
@@ -601,6 +695,7 @@ compute_shear_strain:
     OperatorNodeFactory::instance()->register_factory( "compute_strain_invariants", make_grid_variant_operator< ComputeTensorInvariants > );
     OperatorNodeFactory::instance()->register_factory( "compute_von_mises_strain", make_grid_variant_operator< ComputeVonMisesStrain > );
     OperatorNodeFactory::instance()->register_factory( "compute_shear_strain", make_grid_variant_operator< ComputeShearStrain > );
+    OperatorNodeFactory::instance()->register_factory( "compute_dislocation_indicators", make_grid_variant_operator< ComputeDislocationIndicators > );
   }
 
 }
