@@ -26,6 +26,8 @@ under the License.
 #include <array>
 #include <functional>
 #include <onika/cuda/cuda.h>
+#include <onika/cuda/cuda_math.h>
+#include <onika/cuda/stl_adaptors.h>
 
 #define ROTATE(a,i,j,k,l) g=a[i][j];h=a[k][l];a[i][j]=g-s*(h+g*tau);a[k][l]=h+s*(g-h*tau);
 
@@ -124,7 +126,7 @@ namespace exaStamp
       }/* for (i=0;i<50;i++) */    
     {
       
-      lerr << "Diagonalization of a Tensor_o2 is not possible in less than " << nb_trials << " steps" << std::endl;
+      onika::cuda::PrintfBaseStdOutStream{} << "Diagonalization of a Tensor_o2 is not possible in less than " << int64_t(nb_trials) << " steps\n";
 	
     }
   sortie:;
@@ -167,11 +169,11 @@ namespace exaStamp
     
     if (lambda.x < 1e-9 or lambda.y < 1e-9 or lambda.z < 1e-9)
       {
-    	std::cout << "Negative eigen value for the square of a stretch strain!" << std::endl;
+    	onika::cuda::PrintfBaseStdOutStream{} << "Negative eigen value for the square of a stretch strain!\n";
       }
-    lambda.x = std::max(lambda.x, 0.0);
-    lambda.y = std::max(lambda.y, 0.0);
-    lambda.z = std::max(lambda.z, 0.0);
+    lambda.x = onika::cuda::max(lambda.x, 0.0);
+    lambda.y = onika::cuda::max(lambda.y, 0.0);
+    lambda.z = onika::cuda::max(lambda.z, 0.0);
 
     double Umat[3][3]={0.,0.,0.,0.,0.,0.,0.,0.,0.};
     double lambdavec[3]={lambda.x,lambda.y,lambda.z};
