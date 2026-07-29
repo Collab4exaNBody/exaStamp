@@ -15,6 +15,6 @@
 # under the License.
 #
 
-set(exaStampAnalysisParticle_LINK_LIBRARIES exaStampCompute exaStampThermoState exanbDefBox exanbIO exanbParticleNeighbors exaStampSnapLegacy exaStampParticleSpecies)
+set(exaStampAnalysisParticle_LINK_LIBRARIES exaStampCompute exaStampThermoState exanbDefBox exanbIO exanbParticleNeighbors exaStampParticleSpecies)
 onika_add_plugin(exaStampAnalysisParticle ${CMAKE_CURRENT_SOURCE_DIR})
 
