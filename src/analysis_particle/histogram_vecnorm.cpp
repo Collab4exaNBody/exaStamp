@@ -53,6 +53,8 @@ namespace exaStamp
     ADD_SLOT( GridT     , grid      , INPUT , REQUIRED );
     ADD_SLOT( long      , samples   , INPUT , 1000 );
     ADD_SLOT( bool      , ghost     , INPUT , false );
+    ADD_SLOT( ValueType , hist_min  , INPUT , OPTIONAL , DocString{"if set together with hist_max, clamps the histogram interval instead of computing it from the data"} );
+    ADD_SLOT( ValueType , hist_max  , INPUT , OPTIONAL , DocString{"if set together with hist_min, clamps the histogram interval instead of computing it from the data"} );
     ADD_SLOT( Histogram<> , histogram , OUTPUT );
 
     inline void execute () override final
@@ -72,49 +74,64 @@ namespace exaStamp
       ssize_t gl = grid->ghost_layers();
       if( *ghost ) { gl = 0; }
 
-      // min max computation
-      ValueType min_val = std::numeric_limits<ValueType>::max();
-      ValueType max_val = std::numeric_limits<ValueType>::lowest();
+      // min max computation, unless a clamp interval was provided
+      ValueType min_val;
+      ValueType max_val;
 
-#     pragma omp parallel
+      if( hist_min.has_value() && hist_max.has_value() )
       {
-        ValueType local_min_val = std::numeric_limits<ValueType>::max();
-        ValueType local_max_val = std::numeric_limits<ValueType>::lowest();
-        
-        GRID_OMP_FOR_BEGIN(dims-2*gl,_,loc /*, reduction(min:min_val) reduction(max:max_val) */ )
+        min_val = *hist_min;
+        max_val = *hist_max;
+      }
+      else
+      {
+        min_val = std::numeric_limits<ValueType>::max();
+        max_val = std::numeric_limits<ValueType>::lowest();
+
+#       pragma omp parallel
         {
-          size_t i = grid_ijk_to_index( dims , loc + gl );
-          size_t n = cells[i].size();          
-          const auto * __restrict__ value_x_ptr = cells[i][field_x];
-          const auto * __restrict__ value_y_ptr = cells[i][field_y];
-          const auto * __restrict__ value_z_ptr = cells[i][field_z];
+          ValueType local_min_val = std::numeric_limits<ValueType>::max();
+          ValueType local_max_val = std::numeric_limits<ValueType>::lowest();
+
+          GRID_OMP_FOR_BEGIN(dims-2*gl,_,loc /*, reduction(min:min_val) reduction(max:max_val) */ )
+          {
+            size_t i = grid_ijk_to_index( dims , loc + gl );
+            size_t n = cells[i].size();
+            const auto * __restrict__ value_x_ptr = cells[i][field_x];
+            const auto * __restrict__ value_y_ptr = cells[i][field_y];
+            const auto * __restrict__ value_z_ptr = cells[i][field_z];
 
 //#         pragma omp simd reduction(min:min_val) reduction(max:max_val)
-          for(size_t j=0;j<n;j++)
+            for(size_t j=0;j<n;j++)
+            {
+              auto x = value_x_ptr[j];
+              auto y = value_y_ptr[j];
+              auto z = value_z_ptr[j];
+              auto vecn = std::sqrt(x*x+y*y+z*z);
+              local_min_val = std::min( local_min_val , vecn );
+              local_max_val = std::max( local_max_val , vecn );
+            }
+          }
+          GRID_OMP_FOR_END
+#         pragma omp critical
           {
-            auto x = value_x_ptr[j];
-            auto y = value_y_ptr[j];
-            auto z = value_z_ptr[j];
-            auto vecn = std::sqrt(x*x+y*y+z*z);
-            local_min_val = std::min( local_min_val , vecn );
-            local_max_val = std::max( local_max_val , vecn );
+            min_val = std::min( local_min_val , min_val );
+            max_val = std::max( local_max_val , max_val );
           }
         }
-        GRID_OMP_FOR_END
-#       pragma omp critical
-        {
-          min_val = std::min( local_min_val , min_val );
-          max_val = std::max( local_max_val , max_val );
-        }
-      }
 
-      // MPI min/max
-      if( nprocs > 1 )
-      {
-        ValueType tmp[2] = { -min_val , max_val };
-        MPI_Allreduce(MPI_IN_PLACE,tmp,2, onika::mpi::mpi_datatype<ValueType>() ,MPI_MAX,comm);
-        min_val = - tmp[0];
-        max_val = tmp[1];
+        // MPI min/max
+        if( nprocs > 1 )
+        {
+          ValueType tmp[2] = { -min_val , max_val };
+          MPI_Allreduce(MPI_IN_PLACE,tmp,2, onika::mpi::mpi_datatype<ValueType>() ,MPI_MAX,comm);
+          min_val = - tmp[0];
+          max_val = tmp[1];
+        }
+
+        // a single bound may be provided while the other is auto-computed
+        if( hist_min.has_value() ) { min_val = *hist_min; }
+        if( hist_max.has_value() ) { max_val = *hist_max; }
       }
 
       // std::cout << "min="<<min_val<<", max="<<max_val<<std::endl;
@@ -196,8 +213,8 @@ namespace exaStamp
   // === register factories ===  
   ONIKA_AUTORUN_INIT(histogram_vecnorm)
   {
-   OperatorNodeFactory::instance()->register_factory( "histogram_velocity" , make_grid_variant_operator< HistogramVelocityNorm > );
-   OperatorNodeFactory::instance()->register_factory( "histogram_force" , make_grid_variant_operator< HistogramForceNorm > );
+   OperatorNodeFactory::instance()->register_factory( "histogram_v" , make_grid_variant_operator< HistogramVelocityNorm > );
+   OperatorNodeFactory::instance()->register_factory( "histogram_f" , make_grid_variant_operator< HistogramForceNorm > );
   }
 
 }

@@ -14,9 +14,6 @@
 # specific language governing permissions and limitations
 # under the License.
 #
-# =======================================
-# === exaStamp Grid Analysis library  ===
-# =======================================
 
 set(exaStampAnalysisGrid_LINK_LIBRARIES exaStampCompute exanbParticleNeighbors exanbMPI exaStampParticleSpecies exanbGridCellParticles)
 onika_add_plugin(exaStampAnalysisGrid ${CMAKE_CURRENT_SOURCE_DIR})

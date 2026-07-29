@@ -18,7 +18,7 @@
 
 add_subdirectory(debug)
 add_subdirectory(analysis_grid)
-add_subdirectory(analysis_particles)
+add_subdirectory(analysis_particle)
 add_subdirectory(particle_species)
 add_subdirectory(io)
 add_subdirectory(compute)

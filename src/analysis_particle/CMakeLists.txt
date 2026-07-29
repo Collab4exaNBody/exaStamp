@@ -14,10 +14,7 @@
 # specific language governing permissions and limitations
 # under the License.
 #
-# =================================
-# === micro-stamp Analytics library  ===
-# =================================
 
-set(exaStampAnalysisParticles_LINK_LIBRARIES exaStampCompute exaStampThermoState exanbDefBox exanbIO exanbParticleNeighbors exaStampSnapLegacy exaStampParticleSpecies)
-onika_add_plugin(exaStampAnalysisParticles ${CMAKE_CURRENT_SOURCE_DIR})
+set(exaStampAnalysisParticle_LINK_LIBRARIES exaStampCompute exaStampThermoState exanbDefBox exanbIO exanbParticleNeighbors exaStampSnapLegacy exaStampParticleSpecies)
+onika_add_plugin(exaStampAnalysisParticle ${CMAKE_CURRENT_SOURCE_DIR})
 
