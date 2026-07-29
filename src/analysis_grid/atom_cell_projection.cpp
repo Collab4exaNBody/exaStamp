@@ -25,6 +25,7 @@ under the License.
 #include <exaStamp/compute/physics_functors.h>
 #include <exanb/analytics/particle_cell_projection.h>
 #include <exanb/core/grid_particle_field_accessor.h>
+#include <exanb/core/grid_additional_fields.h>
 
 #include <exaStamp/compute/physics_functors.h>
 #include <exanb/compute/field_combiners.h>
@@ -67,7 +68,7 @@ namespace exaStamp
       using namespace ParticleCellProjectionTools;
 
       if( grid->number_of_cells() == 0 ) return;
-        
+
       int rank=0;
       MPI_Comm_rank(*mpi, &rank);
 
@@ -83,6 +84,35 @@ namespace exaStamp
       auto proj_fields = make_field_tuple_from_field_set( grid->field_set, count, vnorm, mv2, mass, momentum, mv2tensor, velocity, force );
       auto field_selector = [flist = *fields] ( const std::string& name ) -> bool { for(const auto& f:flist) if( std::regex_match(name,std::regex(f)) ) return true; return false; } ;
       project_particle_fields_to_grid( ldbg, *grid, *grid_cell_values, *grid_subdiv, *splat_size, field_selector, proj_fields );
+
+      // Also project any currently-registered dynamic (runtime-named) particle fields
+      // matching the same selector -- e.g. defgrad/green_lagrange/etc from the
+      // analysis_particle pointwise operators. project_particle_fields_to_grid only
+      // accepts a fixed-size compile-time tuple, so a runtime-sized collection of
+      // dynamic fields can't be fed to it in one call; instead call it once per
+      // dynamic field. GridCellValues::add_fields() is additive (extends storage,
+      // never clobbers what's already there), so repeated calls accumulate correctly
+      // into the same grid_cell_values.
+      
+      GridAdditionalFields dyn_fields( grid );
+      for( const auto& f : dyn_fields.m_opt_real_fields )
+      {
+        auto acc = grid->field_accessor( f );
+        auto t = onika::make_flat_tuple( acc );
+        project_particle_fields_to_grid( ldbg, *grid, *grid_cell_values, *grid_subdiv, *splat_size, field_selector, t );
+      }
+      for( const auto& f : dyn_fields.m_opt_vec3_fields )
+      {
+        auto acc = grid->field_accessor( f );
+        auto t = onika::make_flat_tuple( acc );
+        project_particle_fields_to_grid( ldbg, *grid, *grid_cell_values, *grid_subdiv, *splat_size, field_selector, t );
+      }
+      for( const auto& f : dyn_fields.m_opt_mat3_fields )
+      {
+        auto acc = grid->field_accessor( f );
+        auto t = onika::make_flat_tuple( acc );
+        project_particle_fields_to_grid( ldbg, *grid, *grid_cell_values, *grid_subdiv, *splat_size, field_selector, t );
+      }
     }
 
     // -----------------------------------------------
