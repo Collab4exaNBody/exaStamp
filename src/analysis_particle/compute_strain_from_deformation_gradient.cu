@@ -339,6 +339,46 @@ compute_microrotation:
   };
 
   template<class GridT>
+  class ComputeVorticity : public OperatorNode
+  {
+    ADD_SLOT( GridT       , grid          , INPUT_OUTPUT );
+    ADD_SLOT( std::string , velgrad_field , INPUT , std::string("velgrad")  , DocString{"Name of the input velocity gradient tensor field (see compute_velocity_gradient_tensor)"} );
+    ADD_SLOT( std::string , vort_field    , INPUT , std::string("vorticity"), DocString{"Name of the resulting vorticity vector field"} );
+
+  public:
+    inline void execute () override final
+    {
+      if( grid->number_of_cells() == 0 ) return;
+      if( ! grid->has_allocated_field( field::mk_generic_mat3( *velgrad_field ) ) )
+      {
+        fatal_error() << "compute_vorticity: input field '" << *velgrad_field << "' does not exist (run compute_velocity_gradient_tensor first, or check velgrad_field)" << std::endl;
+      }
+      auto L_acc   = grid->field_const_accessor( field::mk_generic_mat3( *velgrad_field ) );
+      auto phi_acc = grid->field_accessor( field::mk_generic_vec3( *vort_field ) );
+      // vorticity is the axial vector of the skew part of L, exactly the same operation
+      // microrotation performs on R -- same functor, no need to duplicate it
+      compute_cell_particles( *grid, false, MicrorotationFunctor{}, onika::make_flat_tuple( L_acc, phi_acc ), parallel_execution_context() );
+    }
+
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+
+Computes the vorticity vector phi (axial vector of the skew part of the velocity
+gradient tensor L) per particle, from an already-computed velocity gradient tensor
+field (see compute_velocity_gradient_tensor). Pointwise, no neighbor list needed.
+
+Usage example:
+
+compute_vorticity:
+  velgrad_field: velgrad
+  vort_field: vorticity
+
+)EOF";
+    }
+  };
+
+  template<class GridT>
   class ComputeSlipTripod : public OperatorNode
   {
     ADD_SLOT( GridT       , grid              , INPUT_OUTPUT );
@@ -555,6 +595,7 @@ compute_shear_strain:
     OperatorNodeFactory::instance()->register_factory( "compute_green_lagrange_strain", make_grid_variant_operator< ComputeGreenLagrangeStrain > );
     OperatorNodeFactory::instance()->register_factory( "compute_polar_decomposition", make_grid_variant_operator< ComputePolarDecomposition > );
     OperatorNodeFactory::instance()->register_factory( "compute_microrotation", make_grid_variant_operator< ComputeMicrorotation > );
+    OperatorNodeFactory::instance()->register_factory( "compute_vorticity", make_grid_variant_operator< ComputeVorticity > );
     OperatorNodeFactory::instance()->register_factory( "compute_slip_tripod", make_grid_variant_operator< ComputeSlipTripod > );
     OperatorNodeFactory::instance()->register_factory( "compute_jacobian", make_grid_variant_operator< ComputeJacobian > );
     OperatorNodeFactory::instance()->register_factory( "compute_strain_invariants", make_grid_variant_operator< ComputeTensorInvariants > );
