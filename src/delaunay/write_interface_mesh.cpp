@@ -74,17 +74,34 @@ namespace exaStamp
 
       const DelaunayTessellation& mesh = *delaunay_tessellation;
       const InterfaceMesh& iface = *interface_mesh;
-      const size_t nb_cells = iface.triangles.size();
 
-      // compact to only the vertices actually referenced by an interface triangle
+      // With keep_ghost_tets, this rank's own ghost territory overlaps a neighbor's own owned
+      // territory -- a facet lying entirely within that overlap gets independently reconstructed
+      // by BOTH ranks (this rank via its ghost copy, the neighbor via its own owned view), so
+      // writing every facet unconditionally doubles it up once every rank's piece is merged for
+      // viewing. Only write a facet this rank owns at least one vertex of; the neighbor rank owns
+      // and writes the rest. No ownership info (keep_ghost_tets=false) -- keep everything, same
+      // as before this fix.
+      std::vector<uint32_t> kept_cells;
+      kept_cells.reserve( iface.triangles.size() );
+      for(size_t c=0;c<iface.triangles.size();c++)
+      {
+        bool owned = mesh.vertex_is_owned.empty();
+        for(int lv=0;lv<3 && !owned;lv++) { if( mesh.vertex_is_owned[ iface.triangles[c][lv] ] ) { owned = true; } }
+        if( owned ) { kept_cells.push_back( static_cast<uint32_t>(c) ); }
+      }
+      const size_t nb_cells = kept_cells.size();
+
+      // compact to only the vertices actually referenced by a KEPT interface triangle
       std::vector<int64_t> vertex_remap( mesh.vertices.size(), -1 );
       std::vector<Vec3d> out_vertices;
       std::vector<std::array<uint32_t,3>> out_triangles( nb_cells );
       for(size_t c=0;c<nb_cells;c++)
       {
+        const auto& tri = iface.triangles[ kept_cells[c] ];
         for(int lv=0;lv<3;lv++)
         {
-          const uint32_t v = iface.triangles[c][lv];
+          const uint32_t v = tri[lv];
           if( vertex_remap[v] < 0 )
           {
             vertex_remap[v] = static_cast<int64_t>( out_vertices.size() );

@@ -103,6 +103,7 @@ namespace exaStamp
       result.edge_triangles.clear();
       result.edge_ideal_vector.clear();
 
+      size_t n_ghost_gap_skipped = 0;
       for(const auto& [key, refs] : face_tets)
       {
         if( refs.size() != 2 ) { continue; } // this rank's own tessellation boundary, far side unknown
@@ -115,6 +116,25 @@ namespace exaStamp
 
         const uint32_t good_t = good_a ? ta : tb;
         const uint32_t bad_t  = good_a ? tb : ta;
+
+        // An "unresolved" bad tet (an edge never resolved a crystal-path vector) is NOT always a
+        // ghost-halo data gap -- deep in the interior, missing an edge is often a genuine physical
+        // signal (the crystal-path search itself fails to find a coherent path near a real
+        // dislocation core), and skipping those facets unconditionally shattered the quadrupole's
+        // dense interior network into far more fragments (17 vs the known-good ~9-11 at np=1,
+        // where there's no ghost boundary to speak of). The ghost-halo-limit artifact this guards
+        // against only happens where the tet actually reaches into ghost territory (keep_ghost_tets
+        // pushed the tessellation right up against the true edge of the ghost halo, where
+        // crystal_path_steps hops can't reach any further) -- so only skip when at least one of the
+        // bad tet's own 4 vertices is a ghost (not owned); a fully-owned unresolved tet keeps being
+        // meshed exactly as before this fix.
+        if( cls.unresolved[bad_t] && !mesh.vertex_is_owned.empty() )
+        {
+          bool touches_ghost = false;
+          for( uint32_t v : mesh.tetrahedra[bad_t] ) { if( !mesh.vertex_is_owned[v] ) { touches_ghost = true; break; } }
+          if( touches_ghost ) { ++n_ghost_gap_skipped; continue; }
+        }
+
         const int bad_f = good_a ? fb : fa;
         const auto& bad_tet_verts = mesh.tetrahedra[bad_t];
 
@@ -163,7 +183,8 @@ namespace exaStamp
       *n_interface_triangles = static_cast<long>( result.triangles.size() );
       *n_interface_cutoff_edges = static_cast<long>( n_cutoff );
       lout << "compute_dxa_elastic_interface_mesh: " << result.triangles.size() << " interface triangles, "
-           << n_cutoff << " cutoff edges (domain-decomposition boundary)" << std::endl;
+           << n_cutoff << " cutoff edges (domain-decomposition boundary), " << n_ghost_gap_skipped
+           << " good/data-gap facets skipped (ghost-halo limit, not a real defect surface)" << std::endl;
     }
 
     inline std::string documentation() const override final

@@ -113,8 +113,16 @@ namespace exaStamp
   // DelaunayTessellation::tetrahedra. 1.0=good (part of the undistorted lattice), 0.0=bad (a
   // defect) -- double, not bool, so write_delaunay_vtk can write it straight out as CellData with
   // no conversion, same convention as the old DXATetClassification.
+  //
+  // `unresolved` distinguishes WHY a tet is bad: 1 means at least one of its 6 edges never got a
+  // crystal-path vector at all (a data gap, not a defect signal) -- with keep_ghost_tets, this
+  // happens for every tet near the true outer limit of the ghost halo, since crystal_path_steps
+  // hops can't reach past it. 0 means all 6 edges resolved and the Burgers/Frank test itself
+  // failed -- a genuine defect. compute_dxa_elastic_interface_mesh uses this to avoid meshing the
+  // ghost-halo data boundary as if it were a real dislocation-core surface.
   struct DXAElasticMappingTetClassification
   {
     std::vector<double> good;
+    std::vector<uint8_t> unresolved;
   };
 }

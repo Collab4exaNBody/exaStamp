@@ -17,6 +17,7 @@ under the License.
 
 #include <exaStamp/delaunay/dxa_lattice_correspondence.h>
 
+#include <algorithm>
 #include <cmath>
 #include <deque>
 
@@ -70,7 +71,7 @@ namespace exaStamp
     }
   }
 
-  void dxa_build_lattice_clusters( DXALatticeCorrespondence& lc, const std::vector<Vec3d>& pos, DXALatticeClusters& result )
+  void dxa_build_lattice_clusters( DXALatticeCorrespondence& lc, const std::vector<Vec3d>& pos, const std::vector<uint64_t>& global_id, DXALatticeClusters& result )
   {
     const size_t n_particles = lc.structure_type.size();
 
@@ -85,8 +86,18 @@ namespace exaStamp
     }
 
     // --- buildClusters ---
-    for(size_t seed=0; seed<n_particles; seed++)
+    // Seed order is sorted by global_id, NOT local array index -- see this function's own
+    // declaration comment (dxa_lattice_correspondence.h) for why: the local index is an arbitrary
+    // accident of this rank's own particle layout, and basing the seed (hence the arbitrary
+    // reference orientation each new cluster grows from) on it let independent computations of the
+    // same physical region disagree near a real defect.
+    std::vector<size_t> seed_order( n_particles );
+    for(size_t a=0;a<n_particles;a++) { seed_order[a] = a; }
+    std::sort( seed_order.begin(), seed_order.end(), [&]( size_t a, size_t b ) { return global_id[a] < global_id[b]; } );
+
+    for(size_t seed_idx : seed_order)
     {
+      const size_t seed = seed_idx;
       if( result.atom_cluster[seed] != 0 ) { continue; }
       const auto st = static_cast<LatticeStructureType>( lc.structure_type[seed] );
       if( st == LATTICE_OTHER ) { continue; }

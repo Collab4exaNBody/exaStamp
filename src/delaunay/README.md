@@ -619,6 +619,148 @@ DXA's published pipeline has 9 steps. Status:
    Thompson tetrahedra" template (different from BCC's 6 quads) — tables already extracted from
    DXA1.3.6 during this investigation (see git history / session log), just not transcribed into
    the operator yet.
+6. **DONE, validated (2026-08-03) — cross-rank line stitching, `compute_dxa_mpi_stitch_lines`.**
+   User noticed dislocations get split into multiple pieces that coincide with MPI domain
+   boundaries when running with more than one rank. Real, measured effect: `compute_dxa_circuit_
+   sweep` runs entirely per-rank on that rank's own local interface mesh, so a dislocation crossing
+   into a neighboring rank's owned cells simply stops there (`StopReason::OpenEdge`) and gets
+   reported as a genuine dead end — physical dislocation count on the quadrupole case grew with
+   rank count on the identical input (8/11/18 at 1/2/4 ranks) purely from this, not from any real
+   change in the underlying physics. **No OVITO mechanism to port here** — OVITO's own DXA
+   implementation isn't domain-decomposed, so this is a new problem specific to running it inside
+   exaStamp's MPI framework, not something reverse-engineerable from their source.
+
+   New operator, `src/delaunay/compute_dxa_mpi_stitch_lines.cpp`, run right after
+   `compute_dxa_circuit_sweep` and before `smooth_dxa_dislocation_lines`. `DXADislocationLines`
+   gained 2 new per-line flags, `open_boundary_front`/`open_boundary_back`, populated by
+   `compute_dxa_circuit_sweep` itself (true wherever that end's own final stop was `OpenEdge`, a
+   *candidate* for cross-rank stitching, not a guarantee — could also be a genuine single-rank
+   physical boundary, e.g. a non-fully-periodic test system; matching is opportunistic, an end that
+   finds no partner just stays a normal standalone end unchanged from before).
+
+   **First attempt matched by fuzzy position + Burgers-vector proximity alone — user correctly
+   rejected the result ("the gap should be almost zero").** Measured gaps of 2.5-2.8 Å between two
+   ranks' own independently-recorded stopping points at a verified real crossing — small, but the
+   user's bar is right: two ranks tracing the *same* real dislocation core through literally the same
+   ghost-shared atoms shouldn't disagree by that much just because each side's own swept-circuit
+   *centroid* (an average over a whole loop of vertices, not any single atom's own position) happened
+   to differ in shape/size at the moment it stopped. Fixed properly rather than just loosening the
+   tolerance: `DelaunayTessellation` gained `vertex_global_id` (populated in `compute_delaunay.cpp`
+   from `field::id`, exaStamp's own persistent particle id — identical on every rank holding a ghost
+   copy of that atom, unlike the existing `vertex_particle_index`, which is purely a local flat index).
+   `compute_dxa_circuit_sweep` now records, for every `OpenEdge`-stopped end, the global id + real
+   position of every vertex in that end's own final loop (`DXADislocationLines::boundary_loop_atom_
+   id_front/back` + `..._pos_front/back`). Two ends on different ranks that share even one such atom
+   id are, by construction, looking at the exact same real physical location — an EXACT match, no
+   distance tolerance needed for correctness (the old fuzzy method is kept only as a fallback for an
+   end that shares no atom id with anything, which shouldn't normally trigger). Once matched, the
+   shared atoms' own real position (averaged if several are shared) OVERWRITES each fragment's own
+   raw connecting point (not appended — this is safe here, unlike the earlier same-rank junction-
+   endpoint bug that also tried overwriting: there the "match" was resolved through an unverified
+   merge chain, here it's a direct, confirmed physical identity check) and the redundant duplicate
+   point on the joining fragment's own near end is dropped, so the two fragments end up sharing the
+   literal same coordinate at the seam, not two independently-computed points a few Å apart.
+
+   Mechanism otherwise as before: gather every rank's own lines (now including the boundary atom
+   data) to rank 0 via `MPI_Gatherv` (same pattern `write_dxa_ca_file`/`write_ovito_interface_mesh`
+   already use); each line has only 2 ends and each end matches at most 1 partner, so the match graph
+   has max degree 2 per line — a union of simple paths and simple cycles, walked directly (a closed
+   multi-rank loop detected when a walk's next partner is the line it started from). Result lives
+   entirely on rank 0 afterward; every other rank's own `DXADislocationLines` is cleared to empty,
+   composing for free with every existing consumer.
+
+   **Verified via actual point-to-point jump distances in the final output, not just the match log**:
+   on the real quadrupole case at 2 and 4 ranks, every single point-to-point jump across every
+   assembled line falls in the normal 2.8-8.7 Å range matching ordinary circuit-sweep spacing
+   elsewhere in the same lines — no anomalous jump anywhere a stitch occurred (checked directly, not
+   inferred). The exact-atom-id method also found *more* real matches than the old fuzzy one on the
+   same input (5-8 exact matches vs. the fuzzy method's 1) — confirming it isn't just more precise,
+   it's also more complete, since several real crossings sit just outside the old method's own
+   position tolerance despite genuinely sharing ghost atoms. One elevated jump (10.4 Å) was found and
+   traced to the already-existing, already-verified junction-endpoint-reconciliation mechanism (see
+   this file's own entry on that above), not to stitching — confirmed unrelated before accepting the
+   result. At 4 ranks, multi-fragment chains (up to 3 pieces long) were correctly assembled; total
+   line count converges to roughly the single-rank reference (9-11) instead of growing with rank
+   count as before the fix. Not every open-boundary end finds a partner (expected: the two ranks'
+   own independent local sweeps don't necessarily produce a symmetric pair of dangling ends at every
+   real crossing, since one side's own arm might already be absorbed into a same-rank merge/junction
+   before reaching the boundary) — a real, accepted limitation of matching only at *stopped* ends,
+   not a bug. Screw dipole (single-rank in this project's own test file) unaffected, confirmed 0
+   stitches / exact 2/2 unchanged.
+
+   **Follow-up, same day: two more real bugs, both found via user re-testing.** User reported (1)
+   the reported Burgers vector per stitched line looked wrong/inconsistent, and (2) MPI still didn't
+   look right at boundaries.
+
+   **Bug A, confirmed and fixed: Burgers vector sign never corrected for a reversed fragment.** The
+   walk's *starting* fragment can itself need reversing (whenever its own free end happens to be its
+   back, not its front — a coin-flip depending on unrelated mesh/seed non-determinism), but
+   `chain.burgers` was set to that fragment's raw recorded vector unconditionally. A fragment's own
+   Burgers vector is tied to ITS OWN original tangent direction; reporting it unflipped while walking
+   the fragment in reverse is physically inconsistent, and which fragment ends up "first" (hence
+   whether the flip was needed) varies run to run — this is exactly what looked like "the vector
+   changes". Fixed: compute each fragment's own direction-corrected vector as it's walked (negate if
+   reversed), use the *first* fragment's corrected value as the chain's own, and log a warning if a
+   later fragment's own corrected value disagrees (see Bug B below — this diagnostic is what
+   surfaced it).
+
+   **Bug B, more serious, confirmed and fixed: shared ghost atoms are necessary but not sufficient
+   evidence of a valid 2-way pass-through.** The Bug-A warning kept firing even after fixing the
+   sign issue — tracing it down revealed the real problem: a real 3+-way junction can sit exactly at
+   an MPI boundary just as easily as a clean 2-way crossing can (every arm gets its own independent
+   OpenEdge stop there, and can share some of the same boundary atoms), and the original greedy
+   "pair with whoever shares the most atoms" matching had no way to tell the two cases apart — it
+   silently spliced together two arbitrary arms of what was really a junction, exactly the "still
+   doesn't work" and "Burgers vector wrong" bugs the user hit. Fixed with two layers, mirroring
+   `compute_dxa_circuit_sweep`'s own same-rank real-vs-junction distinction: (1) group ALL candidates
+   sharing any atom into one connected component (union-find) before deciding anything — a component
+   of exactly 2 is a candidate pass-through, 3+ is a real junction straddling the boundary, left
+   entirely unstitched (no attempt at cross-rank junction-node reconstruction, out of scope here);
+   (2) even for a 2-member component, cross-check Burgers-vector compatibility (correctly sign-
+   adjusted for the SPECIFIC end-topology being joined: front-back is a natural continuation and
+   should agree directly, front-front/back-back requires a reversal and should be exactly opposite)
+   before committing — shared atoms alone were letting through pairs whose Burgers vectors plainly
+   didn't match, i.e. genuinely different nearby dislocations, not one continuous line.
+
+   **Consequence, verified against the project's own documented ground truth**: on the quadrupole
+   case specifically, this now correctly finds **zero** valid 2-way stitches at any rank count tested
+   (2 or 3) — which is *correct*, not a regression: this system's real topology has "7 junctions —
+   six 3-way, one 4-way, **zero 2-way pass-throughs anywhere**" (already documented ground truth, see
+   item 3 above), so there is no valid 2-way crossing to find here regardless of how the domain gets
+   split; every candidate pairing that shares atoms is, correctly, an arm of a real junction or a
+   genuinely different nearby line, and the fix now correctly declines to merge any of them (the
+   earlier "5 exact matches" reported before this fix were, on reflection, exactly these same
+   erroneous splices).
+
+   **Positive validation on a junction-free system**: the screw dipole (documented ground truth:
+   exactly 2 dislocations, no junctions) doesn't cut cleanly at 2 ranks (the domain split happened to
+   separate its 2 lines whole rather than cutting either), but at 6 ranks one line gets genuinely cut
+   by an MPI boundary — the fix found and correctly stitched it (`pre-snap centroid offset 0.62 Å`,
+   confirmed a real, tight match) plus its own periodic self-closure on the other side, confirming the
+   whole mechanism (atom-id matching, junction/Burgers vetting, snap-to-exact-position) does work
+   correctly on a genuine pass-through, not just correctly decline everything.
+
+   **A third, separate bug found and fixed along the way**: the snap position (average of shared
+   atoms) didn't account for periodic images — the same real ghost atom can be recorded at a
+   different periodic image on each rank's own side (e.g. one side's own ghost halo wraps it near
+   z=110, the other's near z=0, ~110 Å apart in raw, un-wrapped coordinates despite being the same
+   real location). Averaging naively landed the snap point at a nonsensical mid-box position. Fixed
+   by adding `domain` as a new input and wrapping one side's own recorded position to the periodic
+   image closest to the other's (minimum-image convention) before averaging.
+
+   **One more issue found, NOT yet fixed — flagged honestly, not glossed over**: after stitching, the
+   *raw* (pre-smoothing) assembled points for the screw-dipole's own closed periodic loop are
+   confirmed correct (checked directly: monotonic, periodicity-consistent, no real discontinuity) —
+   but `smooth_dxa_dislocation_lines`'s own coarsening/Taubin-smoothing pass produces a visibly wrong,
+   garbled point order (and a real ~54 Å jump) for this specific line afterward. Root cause isolated
+   to `smooth_dxa_dislocation_lines` itself, not this operator: its own distance/grouping math
+   appears not to be periodic-image-aware, so a closed loop whose own point sequence crosses a
+   periodic-wrap discontinuity mid-array (which only happens for a loop assembled by stitching across
+   an MPI boundary AND a periodic self-closure at the same time — a real but comparatively narrow
+   combination) gets miscoarsened. This is a pre-existing limitation of that operator, newly exposed
+   by this work, not introduced by it — not fixed yet, would need `smooth_dxa_dislocation_lines` to
+   become periodic-aware (or to reorder/re-cut a closed loop's own points to avoid a periodic seam
+   before coarsening).
 
 **Superseded** by item 0's full elastic-mapping re-architecture (stages 1-4), which measurably beats
 this on every metric (0.5% interface-mesh error vs. this path's 2.5-3x, exact classification match).
@@ -626,8 +768,9 @@ Recommended pipeline now (see `data/regression_new/dxa/compute_dxa_elastic_sweep
 `compute_dxa_lattice_correspondence` (discrete classifier, needs `target_structure`) →
 `compute_dxa_lattice_clusters` → `compute_delaunay` → `compute_dxa_crystal_path_edge_vectors` →
 `compute_dxa_elastic_mapping_tet_classification` → `compute_dxa_elastic_interface_mesh` →
-`compute_dxa_circuit_sweep` → `smooth_dxa_dislocation_lines`. The paragraph below (PTM+CNA+angle-snap
-path) is kept for historical context only -- its own regression `.msp` files were removed in the
+`compute_dxa_circuit_sweep` → `compute_dxa_mpi_stitch_lines` → `smooth_dxa_dislocation_lines`. The
+paragraph below (PTM+CNA+angle-snap path) is kept for historical context only -- its own regression
+`.msp` files were removed in the
 2026-08-03 `data/regression_new/delaunay` cleanup (218MB -> 17MB) since nothing exercises this path
 anymore; the operators themselves (`compute_dxa_edge_vectors`, `compute_dxa_tet_classification`,
 `compute_interface_mesh`, `compute_atomistic_interface_mesh`) are still in the codebase, just
@@ -1687,3 +1830,282 @@ gives `vertex_count=816` (exact match to OVITO's own reference), `face_count=166
 1648, the same small residual gap already documented elsewhere in this file); 2 ranks gives
 824/1631, 4 ranks gives 837/1624 — every case loads cleanly with vertex/face counts matching the
 file's own declared header exactly, confirming the cross-rank index rebasing is correct.
+
+## Ghost-inclusive tessellation + MPI clamping/stitching (2026-08-03): 5 real bugs found and fixed, plus one deep foundational issue found and NOT fixed
+
+Following the user's own architectural suggestion — do the full DXA analysis on **owned + ghost**
+domains per rank (`compute_delaunay: { keep_ghost_tets: true }`, new flag; keeps Delaunay tets whose
+centroid falls in ghost territory instead of discarding them), letting a circuit grow past the old
+hard owned/ghost cutoff before finally clamping near the true seam — then stitching across MPI ranks
+using the clamp points, the same `compute_dxa_mpi_stitch_lines` exact-ghost-atom-id mechanism already
+built for `OpenEdge` stops. `DelaunayTessellation` gained `vertex_global_id`/`vertex_is_owned` to
+support this. Iterating on this surfaced a chain of real, independently-verified bugs:
+
+**1. `compute_delaunay` never applied `domain->xform()` to vertex positions (real bug, silently
+masked).** Geogram was fed raw/reduced `field::rx/ry/rz` directly, never transformed into real
+Euclidean space — every existing test case uses an identity xform, so this was invisible until the
+user explicitly asked to audit "every process that needs true positions." Fixed with a parallel
+`points_real` array (`xform * Vec3d{rx,ry,rz}`) fed to Geogram and `result.vertices`, while the raw
+`points` array is kept unchanged for cell-classification logic that genuinely needs the reduced
+frame. Found + fixed the same class of bug in `compute_dxa_mpi_stitch_lines`'s own periodic-wrap
+`box_size` computation. Audited every other DXA file using `field::rx` directly — `compute_dxa_
+lattice_correspondence`/`compute_dxa_lattice_clusters` already applied the xform correctly, no
+further fixes needed. Verified: 96000 tets across 1/2/4 ranks unchanged (expected, since xform is
+identity everywhere tested).
+
+**2. Ghost-halo-limit "fake wall" in the interface mesh (root cause of the zig-zagging clamp points
+the user reported).** `compute_dxa_elastic_mapping_tet_classification`'s "bad" verdict conflates two
+different situations under one `good=0`: a genuine Burgers/Frank test failure (a real defect), and a
+tet where an edge simply never resolved a crystal-path vector (`dxa_is_elastic_mapping_compatible`
+returns false at the "all 6 edges resolved" check itself) — the latter happens for every tet near the
+true outer limit of the ghost halo, since `crystal_path_steps` hops can't reach past it. Since
+`compute_dxa_elastic_interface_mesh` meshed both kinds identically, it faked a whole extra "defect"
+surface tracing the ghost-halo's own data boundary, and the circuit sweep walked it — visible as
+zig-zagging exactly where this fake surface crossed the real one. Fixed by adding a real
+`DXAElasticMappingTetClassification::unresolved` flag (distinct from `good`) and skipping interface
+facets where the bad tet is `unresolved`.
+
+**First version of this fix was too broad and caused a real regression** — skipping every
+`unresolved` bad tet unconditionally shattered the quadrupole's dense interior network from ~9 to 17
+dislocations at np=1 (28 spurious open-mesh-edge stops), because "unresolved" also fires legitimately
+deep in the interior, near genuine dislocation cores where crystal-path resolution can fail for real
+physical reasons, not just a data-availability gap. **Fixed properly** by gating the skip on whether
+the tet actually touches ghost territory (`mesh.vertex_is_owned` — at least one of the tet's 4
+vertices not owned): a fully-owned unresolved tet is still meshed exactly as before this whole fix.
+Verified both directions after the gate: quadrupole np=1 back to 9 dislocations (0 open-mesh-edge),
+quadrupole np=4 stable, screw-dipole np=4 keeps the fragmentation improvement (16 raw fragments → 4,
+zero spurious "3+-way junction" false positives, down from 4).
+
+**3. Duplicate interface-mesh triangles in ParaView at ghost/owned overlaps (user-caught via visual
+inspection).** With `keep_ghost_tets`, one rank's ghost territory is another rank's owned territory —
+`write_interface_mesh`/`write_ovito_interface_mesh` wrote every rank's *entire* local mesh with zero
+cross-rank dedup, so a facet in that overlap got written twice (once per rank's own independent local
+reconstruction), visible as doubled/overlapping mesh exactly at MPI boundaries. Fixed both writers to
+only emit a facet if this rank owns at least one of its vertices (`vertex_is_owned`) — the neighbor
+rank owns and writes the rest. Verified: rank 0's own piece on the screw-dipole test dropped from 258
+raw facets to 162 kept, the other ranks covering the remainder.
+
+**4. Fallback matcher's Burgers-vector check was topology-blind, silently re-admitting an
+exact-match-rejected pair.** `compute_dxa_mpi_stitch_lines`' fallback (fuzzy position+Burgers,
+"shouldn't normally trigger" safety net for candidates with no atom-id match) accepted *either* sign
+relationship (`|b_a-b_b|<tol` OR `|b_a+b_b|<tol`) regardless of end topology, while the primary
+exact-match pass correctly requires *one specific* relationship based on which ends are being joined
+(same-sense end pair ⟹ vectors should be opposite; opposite-sense ⟹ equal). A candidate pair the
+exact pass correctly rejected (real shared-atom evidence, wrong relation for those ends) could still
+be found again by the fallback via pure proximity and waved through by its looser check. Fixed the
+fallback to use the identical topology-aware relation. Verified on the screw-dipole np=4 case:
+before the fix, the exact pass rejected line0/line1 at both ends, then the fallback silently
+re-stitched the exact same two endpoints anyway; after the fix, they correctly stay rejected in both
+passes.
+
+**5. Junction-grouping over-triggered on incidental single-atom proximity in dense networks.** The
+union-find step (grouping candidates that share ANY atom into one connected component — size 2 =
+stitch, size 3+ = real junction, leave standalone) was too permissive for the quadrupole's dense
+network: two genuinely *different* nearby dislocations can each have a boundary loop that happens to
+touch one of the same nearby atoms without being the same crossing at all, getting spuriously lumped
+into one fake multi-arm "junction" (measured: one 4-arm group, 0 real stitches). A real single
+crossing's two independently-recorded loops share *several* atoms (3, in every verified screw-dipole
+match), so required `MIN_SHARED_ATOMS_FOR_UNION = 2` before treating two candidates as connected at
+all. Verified: the spurious 4-arm grouping on the quadrupole disappeared entirely, recovering the
+first genuine cross-rank stitch on that case (0 → 1); screw-dipole unaffected.
+
+**Clamp-overshoot fix, alongside #2 above**: the original `GHOST_BOUNDARY_GRACE_ITERS = 3` (added
+earlier to fix a real zig-zagging bug, itself likely *caused* by bug #2's fake wall) required the
+loop's ghost-vertex majority to hold for 3 more full growth rounds before committing — but each of
+those rounds lets the loop keep growing, so by the time the streak was confirmed the circuit had
+already advanced roughly `3 × per-round growth` past the true seam, into a neighboring rank's own
+redundant ghost territory. Measured directly: two ranks' supposedly-matching clamp points for the
+*same* crossing landing 5.7–11.5 Å apart (screw-dipole/quadrupole nearest-unmatched-candidate
+diagnostic) — consistent with `rcut_max + rcut_inc ≈ 7 Å`, i.e. roughly 2× ghost-halo depth, not
+coincident. Fixed by decoupling "wait for stability" from "let the loop grow": instead of requiring
+more growth rounds, require a *decisive* ratio (`> 2/3` ghost, not just `> 1/2`) to commit
+immediately on the first round crossing it — a loop still centered on the seam wobbles in a fairly
+narrow band around 50/50 (the original zig-zag cause), but a loop that's genuinely swept past the
+seam quickly becomes overwhelmingly ghost. Verified: `GhostBoundary` stops now actually fire (were 0
+in both test cases before this fix, since circuits were overshooting all the way to a real
+`OpenEdge` first) and land close to the true boundary, with no zig-zag regression on either test
+case.
+
+**New test case added by the user: a closed rectangular dislocation loop**
+(`data/regression_new/dxa/compute_dxa_elastic_sweep_rect_loop.msp` / `rectangular_loop.xyz`) — a
+single continuous, self-closing dislocation by construction (np=1 ground truth: exactly 1 dislocation,
+length 338.85 Å). Valuable specifically *because* it's topologically trivial: any Burgers-vector
+mismatch between its own MPI fragments is unambiguously a bug, unlike the screw-dipole/quadrupole
+cases where "2 distinct nearby dislocations" was always a plausible (if usually wrong) alternative
+explanation for a rejected match.
+
+**Deep foundational issue found via this test, then fixed in a follow-up session (user explicitly
+asked to tackle it after initially choosing to pause).** At np=4, the rect-loop's 5 raw fragments
+reported 3 genuinely different `<111>/2`-family Burgers vectors (not just differently signed):
+`(-0.5,0.5,0.5)`, `(-0.5,0.5,-0.5)` ×3, `(0.5,0.5,0.5)` — comparing against np=1's own value
+`(0.5,-0.5,-0.5)`, only one fragment was actually correct (its negation); the rest were each wrong by
+exactly one flipped component. Traced to `compute_dxa_lattice_clusters`' `buildClusters`
+(`dxa_lattice_clusters_algo.cpp`): it BFS-grows `atom_symmetry_permutation` from an arbitrary
+per-rank seed (`= 0` at the first not-yet-visited classified atom, iterated in raw LOCAL particle
+array index order), propagating consistency outward — for a single perfect crystal (this whole
+system resolves as "1 cluster, 0 transitions"), there are multiple mutually-consistent permutation
+choices related by the lattice's own point-group symmetry, and nothing forced different MPI ranks
+(each with their own local seed + BFS order) to converge on the same one; near a real dislocation
+core, where the consistency test's tolerance can plausibly accept more than one nearby
+symmetry-equivalent choice, different ranks' independently-grown permutation assignments could end up
+subtly different, propagating through `ideal_vector()` into different crystal-path edge vectors and,
+from there, different accumulated Burgers vectors for fragments of what is provably the same physical
+line.
+
+**Fix**: `dxa_build_lattice_clusters` now takes a `global_id` array (persistent, cross-rank-identical
+particle id — same convention as `DelaunayTessellation::vertex_global_id`) and picks the seed order
+by sorting all classified atoms by `global_id` ascending, instead of iterating raw local array index.
+This makes the seed choice — and hence the whole cluster's downstream permutation assignment, since
+BFS growth from a fixed seed is otherwise already fully deterministic (fixed per-atom template slot
+order, plain FIFO queue) — independent of the arbitrary local particle layout that differs between
+MPI ranks and can even vary run-to-run under multithreading if cell-local particle order isn't
+perfectly stable. `compute_dxa_lattice_clusters.cpp` flattens `field::id` into this array the same
+way it already flattens positions.
+
+**Verified**: rect-loop np=4's 5 fragments now agree on the exact same family, `(0.5,0.5,0.5)`
+(4 fragments) and its exact negation `(-0.5,-0.5,-0.5)` (1 fragment, ordinary traversal-direction
+sign convention) — matching np=1's own value exactly. Repeated np=1 runs with `OMP_NUM_THREADS=8`
+always report the same family (only the overall sign varies run to run, which is expected/harmless —
+segment *length* still varies slightly, 338.7-340.0 Å, from the separate already-documented
+mesh-triangle-order non-determinism, unrelated to this fix).
+
+**This also surfaced a second, independent bug in `compute_dxa_mpi_stitch_lines`' own matching
+logic**, now that Burgers vectors were finally reliable enough to test it properly: the
+Burgers-compatibility check tried to *predict*, from end topology (front=0 vs back=1), which sign
+relationship should hold between two candidates' vectors ("opposite-sense" ⟹ equal, "same-sense" ⟹
+opposite) — measured directly to be wrong: the exact same physical pair of fragments showed up in one
+run labeled "same-sense" with opposite vectors (accepted, right answer by luck) and in another run
+labeled "opposite-sense" with the *same* (still-opposite) vectors (rejected, wrong). Root cause: a
+fragment's own front/back label is just which end of its own points array is index 0 vs last — an
+arbitrary artifact of which direction its own independent circuit trace happened to grow, with no
+fixed relationship to the sign of its own stored Burgers vector (see `burgers_of_loop`'s own doc
+comment in `compute_dxa_circuit_sweep.cpp`). Fixed to a direction-agnostic check (compatible if either
+equal or exact negatives, in both the exact-match and fallback passes) — still correctly rejects a
+genuinely different `<111>/2` family (neither equal nor negatives of a different family axis), it just
+stops trying to guess which specific relation a fixed-but-meaningless label predicts.
+
+**Net result after both fixes**: screw-dipole np=4 now gives the **exact correct 2/2** result (up
+from 3 lines) — both pairs of fragments correctly stitch at both ends into 2 closed rings, matching
+np=1 exactly. Rect-loop np=4's Burgers-vector family is now fully consistent (verified above), though
+its exact fragment/stitch *count* still varies run to run (1-3 lines observed across repeated runs) —
+a separate, pre-existing mesh-triangle-order non-determinism affecting circuit growth paths. Quadrupole
+np=4 was unaffected by these two fixes alone (still 0 stitches / 18 raw fragments) — a distinct, deeper
+issue, tackled next.
+
+## Two more real bugs found and fixed via the rectangular-loop test: redundant per-rank fragments near domain-decomposition corners
+
+User visual feedback drove this: after the two fixes above, the rect-loop's `write_dxa_dislocation_lines`
+output at np=4 still showed a short "loose end" dangling off partway along the main line, and separately
+"duplicated lines... at the mpi boundaries" — both turned out to be the SAME underlying phenomenon,
+just described from two different camera angles in ParaView (confirmed directly: rank 0's own output
+had exactly 2 cells, one large assembled loop and one short standalone line whose bbox sat entirely
+inside the main loop's own bbox — not literally 2 ranks writing the same data, but 2 genuinely separate
+lines on rank 0 that spatially overlap after gathering).
+
+**Bug 1: `compute_dxa_circuit_sweep`'s own seed search had no ownership check.** The seed-scanning loop
+(`for(uint32_t root=0; root<n_vertices; root++) { ...; try_seed_from(root, circuit_len); }`) tried every
+mesh vertex as a potential seed, including vertices that are pure ghost (not owned by this rank) —
+with `keep_ghost_tets`, this let a rank originate a BRAND NEW circuit entirely within a neighboring
+rank's own owned territory, redundantly rediscovering a segment the owning rank's own sweep will
+independently find too. Mirrors the exact same duplicate-coverage principle already applied to the
+interface-mesh writers, just never extended to the circuit sweep's own seeding. Fixed: skip `root` if
+`mesh.vertex_is_owned` says it's not owned (a circuit can still GROW into ghost territory once seeded
+from an owned vertex — that's the whole point of `keep_ghost_tets` — this only stops one from
+originating there). **Verified**: rect-loop np=4 went from 5 raw fragments/3 lines (varying 1-3 across
+runs) to 4 raw fragments/2 lines, now fully deterministic across repeated runs.
+
+**Bug 2: even a legitimately-owned seed can still produce a redundant fragment.** One short leftover
+fragment remained even after Bug 1's fix — its own seed genuinely sat in this rank's own owned
+territory (near a *different* domain-decomposition corner), but the resulting short circuit still
+entirely duplicated a stretch of the physical line a NEIGHBORING rank's own (much longer) fragment
+already covers, because both ranks' own `keep_ghost_tets` views legitimately overlap near their shared
+boundary. This can't be prevented at seed time (the seed itself is legitimately owned) — it has to be
+caught after gathering, by comparing the assembled lines against each other. Fixed with a new
+post-stitching pass in `compute_dxa_mpi_stitch_lines` (right before writing the final `assembled` list
+back to `DXADislocationLines`): for every pair of assembled lines, if a strictly shorter line has
+*every* one of its own points within 5 Å (`REDUNDANT_POINT_TOL`, same scale as `match_tolerance`'s own
+default) of some point on a strictly longer line (`REDUNDANT_COVERAGE_FRACTION = 0.9`, i.e. ≥90%
+covered), drop the shorter line entirely — it's a duplicate ghost-overlap recording, not a real second
+dislocation. A genuinely separate, real nearby dislocation would not have this property (its own points
+trace a physically distinct path, not one that's ~entirely covered by another line).
+
+**Verified, all 3 test cases**: rect-loop np=4 now gives the **exact correct 1/1** result, every run
+(the redundant leftover is reliably detected — typically 100% or 19/20 of its own points fall within
+tolerance — and dropped). Screw-dipole np=4 is unaffected, still exact 2/2 (a well-separated system
+correctly has no redundant fragments to drop). Quadrupole np=4 improved from 18 raw fragments/0 useful
+stitches to 13-14 lines (down from the long-stuck 18) across repeated runs, with 1-3 real redundant
+fragments (19-26 points each, 96-100% covered) correctly identified and dropped every run — real,
+substantial progress, though still short of the np=1 baseline of ~9. The remaining gap is very likely
+the separate, previously-diagnosed issue (some real crossings' boundary-loop atoms don't spatially
+overlap between ranks at all in this denser, junction-rich network — nearest-unmatched-candidate gaps
+of 5.7-11.5 Å, found earlier this same investigation) — a distinct problem from redundant-fragment
+duplication, not addressed by either fix here.
+
+## Deeper structural limit found at np=8: the "exactly 2 ranks per crossing" assumption breaks down under a full 3D domain decomposition
+
+With rect-loop fixed cleanly at np=4 (exact 1/1, see above), the user re-tested at np=8 and got **3
+lines**, not 1. Diagnosed by dumping every raw fragment's own atom-sharing evidence: of 6 raw
+fragments (12 open ends), only ONE pair shared any exact ghost atom at all (2 atoms — correctly
+rejected too, genuinely incompatible Burgers vectors, `(0.5,0.5,0.5)` vs `(0.5,-0.5,0.5)`); every
+other pair shared **zero**. The one successful stitch in the final output came entirely from the fuzzy
+position-only fallback (no atom evidence at all) — a much weaker signal than np=4's typical 2-3 shared
+atoms per real crossing.
+
+**User's own diagnosis (correct, confirmed against the actual grid numbers)**: the domain here is
+132.096 Å per side with a `13×13×13`-cell global grid (`cell_size: 10 ang`). At np=4, the domain
+decomposition very likely only needs to split 2 of the 3 axes (e.g. 2×2×1) to balance 4 ranks — every
+internal boundary is then a simple face or a 4-way edge *within one plane*, so any single crossing is
+touched by at most 2 ranks, exactly what the whole stitching mechanism (`compute_dxa_mpi_stitch_lines`,
+and the dominant-pair-extraction fix earlier this same investigation) assumes. At np=8, balancing 8
+ranks on this same grid almost certainly forces a full 3D split (2×2×2) — now interior edges and
+corners are shared by 3, 4, or up to 8 ranks *simultaneously*. If one of the rectangular loop's own 4
+corners lands near one of these richer 3D convergence points, a single physical crossing gets touched
+by 3+ ranks' own independent `keep_ghost_tets` views at once, each recording only a fragment of the
+true shared-atom overlap — diluting the atom-sharing signal across more than 2 sets so that no single
+*pair* retains a clean, full overlap anymore. This is the same "3+-way false junction near a domain
+corner" pattern already found and handled for np=4 (see the dominant-pair-extraction fix above), just
+occurring at a richer, harder-to-disentangle scale as the decomposition goes fully 3D.
+
+**Update, same session: fixed via a different approach than the N-way-consensus redesign floated
+above — pin every boundary node to the exact sub-domain boundary plane, per the user's own
+suggestion ("should we pin any dislocation node crossing the MPI sub domain... to be exactly on that
+boundary for simplicity?").**
+
+**Design**: every rank knows its own owned sub-domain's real-space bounding box EXACTLY and
+IDENTICALLY — it comes straight from the domain decomposition (`simple_block_rcb`, a clean disjoint
+tiling of the global cell grid, `grid->grid_bounds_no_ghost()`), not from ghost data or any
+mesh/growth heuristic. The old approach (shared-ghost-atom matching) depended on two ranks'
+independent circuit-sweeps happening to grow far enough into each other's ghost territory to record
+literally the same atoms before some heuristic told them to stop — which the np=8 finding above shows
+can fail almost completely once the decomposition is finer/fully-3D. Pinning sidesteps that: instead
+of reporting wherever growth happened to stop, walk the segment's own already-recorded point history
+(`segs[...].line`, appended once per growth round via `append_point` — already a polyline of loop
+centroids tracing from deep inside owned territory out toward the stop point) to find the last point
+still inside my own owned box and the first one past it, then interpolate the EXACT point where that
+segment crosses the boundary (a standard ray-vs-AABB slab test) and truncate the recorded line to end
+exactly there. Implemented in `compute_dxa_circuit_sweep.cpp` (`pin_boundary_point`, called at both
+the `OpenEdge` and `GhostBoundary` stop sites) — required converting the operator from
+`make_simple_operator` to `make_grid_variant_operator` (added `grid`/`domain` slots) to get
+`grid->grid_bounds_no_ghost()` + `domain->xform()`. Same diagonal-xform-only caveat as everywhere
+else in this pipeline (a genuinely sheared xform would need all 8 box corners transformed, not just
+2 — not implemented, flagged not silently assumed away).
+
+**Verified, dramatic improvement across every test case**: rect-loop now gives the exact correct
+**1/1 at BOTH np=4 and np=8** (was 3 lines at np=8 before this fix) — every run, repeatably. The
+fallback (pure position, zero shared atoms) matches now land at essentially machine-precision gaps
+(measured: `0 Å`, `3.5e-15 Å`, `1.4e-14 Å`) instead of relying on ghost-atom overlap at all — exactly
+the predicted effect of two ranks independently computing the same exact geometric crossing.
+Screw-dipole unaffected, still exact 2/2. Quadrupole at np=4 jumped from 13-14 lines to **9-10 lines**
+(np=1's own baseline is 8-9) — 7-8 successful cross-rank matches now succeed via the newly-precise
+fallback, up from just 1 before this fix.
+
+**Quadrupole at np=8 is still rough (20-22 lines) — but this is now a DIFFERENT, harder problem than
+what pinning fixed.** Unlike the topologically trivial rect-loop, the quadrupole has real multi-way
+junctions; at np=8's finer 3D decomposition, those genuine junctions get physically split across more
+ranks, producing actual "boundary junctions left unstitched" (2-3 per run, correctly detected as real
+3+-way groups, not a precision artifact) and several correctly-REJECTED pairs (genuinely incompatible
+Burgers vectors — real distinct nearby dislocations, not a stitching bug). Pinning fixed the *position
+precision* problem (which was the full explanation for rect-loop's failure); a dense real junction
+network hitting genuine N-way splits at rank-grid corners is the harder, still-open problem the
+N-way-consensus idea above was originally aimed at — not resolved by this fix, and likely needs that
+bigger redesign if pursued further.

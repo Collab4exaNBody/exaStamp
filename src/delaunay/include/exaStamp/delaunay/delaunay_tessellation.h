@@ -41,5 +41,23 @@ namespace exaStamp
     // write_delaunay_vtk's color_field) look up any per-particle grid field for a tet's vertices,
     // parallel to `vertices`.
     std::vector<uint32_t> vertex_particle_index;
+
+    // vertex_global_id[v] is vertices[v]'s own persistent, cross-rank-comparable particle id
+    // (field::id) -- unlike vertex_particle_index (a purely LOCAL flat index, meaningless outside
+    // this rank), this is the SAME value on every rank holding a copy of that particle (owned or
+    // ghost, since exaStamp's own ghost duplication preserves id verbatim) -- lets a consumer
+    // recognize "this is literally the same real atom" across ranks, e.g.
+    // compute_dxa_mpi_stitch_lines matching a dislocation's own domain-boundary stopping point
+    // against the ghost-shared atom the neighboring rank sees at the exact same physical location.
+    std::vector<uint64_t> vertex_global_id;
+
+    // vertex_is_owned[v]: true if vertices[v] is one of this rank's own OWNED particles, false if
+    // it's a ghost copy (of either a periodic image or a cross-rank neighbor). Only meaningful when
+    // compute_delaunay was run with keep_ghost_tets: true (the default, owned-only mode never keeps
+    // a ghost-centroid tet at all, so every vertex in that mode is trivially owned) -- lets a
+    // consumer that DOES see ghost-region tets (e.g. compute_dxa_circuit_sweep, to grow a circuit
+    // past this rank's own owned/ghost seam instead of stopping there) tell when it has crossed out
+    // of genuinely owned territory into redundant, also-computed-by-a-neighbor-rank ghost territory.
+    std::vector<uint8_t> vertex_is_owned;
   };
 }

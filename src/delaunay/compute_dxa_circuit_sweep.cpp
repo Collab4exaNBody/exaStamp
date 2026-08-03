@@ -21,6 +21,10 @@ under the License.
 #include <onika/scg/operator_factory.h>
 #include <onika/math/basic_types.h>
 
+#include <exanb/core/grid.h>
+#include <exanb/core/domain.h>
+#include <exanb/core/make_grid_variant_operator.h>
+
 #include <exaStamp/delaunay/delaunay_tessellation.h>
 #include <exaStamp/delaunay/interface_mesh.h>
 #include <exaStamp/delaunay/dxa_dislocation_lines.h>
@@ -135,8 +139,11 @@ namespace exaStamp
 {
   using namespace exanb;
 
+  template<class GridT>
   class ComputeDXACircuitSweep : public OperatorNode
   {
+    ADD_SLOT( GridT                 , grid                      , INPUT , REQUIRED );
+    ADD_SLOT( Domain                , domain                    , INPUT , REQUIRED );
     ADD_SLOT( DelaunayTessellation , delaunay_tessellation     , INPUT , REQUIRED );
     ADD_SLOT( InterfaceMesh        , interface_mesh            , INPUT , REQUIRED );
     ADD_SLOT( DXADislocationLines  , dxa_dislocation_lines     , OUTPUT , DocString{"Same slot name as the earlier (superseded/approximated) line-extraction operators' own output, deliberately, so write_dxa_dislocation_lines auto-wires -- don't run more than one of them in the same pipeline"} );
@@ -158,6 +165,51 @@ namespace exaStamp
       const int max_stretch = max_len + static_cast<int>( *circuit_stretchability );
       const int step_cap = static_cast<int>( *max_sweep_steps );
       const double burgers_threshold = *min_burgers_norm;
+
+      // Pin dislocation nodes crossing an MPI sub-domain boundary to the EXACT boundary plane,
+      // rather than reporting whatever position the loop's own centroid happened to be at when the
+      // (heuristic) stop condition triggered. Every rank knows this exact plane identically -- it
+      // comes straight from the domain decomposition (simple_block_rcb), not from ghost data -- so
+      // two ranks tracing the same physical crossing should now report much closer positions than
+      // the old "wherever growth happened to stop, somewhere in ghost territory" approach, which
+      // depended on mesh-overlap/ghost-atom-sharing that this session found breaks down entirely at
+      // higher rank counts (np=8 rect-loop: only 1 of 6 fragment-pairs shared any ghost atom at all).
+      // Only meaningful when compute_delaunay ran with keep_ghost_tets: true (a circuit needs to
+      // actually reach past this rank's own owned territory for there to be anything to pin).
+      // grid_bounds_no_ghost() is in the reduced (pre-xform) frame -- apply domain->xform() the same
+      // way compute_delaunay.cpp/compute_dxa_mpi_stitch_lines.cpp already do for real-space
+      // positions. Valid for a diagonal/scaling xform (every case exercised in this project so far);
+      // a genuinely sheared xform would need all 8 box corners transformed, not just 2 -- not
+      // implemented, flagged honestly rather than silently assumed away (same caveat already
+      // documented elsewhere in this pipeline).
+      const auto reduced_box = grid->grid_bounds_no_ghost();
+      const Mat3d xform = domain->xform();
+      const Vec3d owned_lo = xform * reduced_box.bmin;
+      const Vec3d owned_hi = xform * reduced_box.bmax;
+      auto is_owned_real = [&]( const Vec3d& p ) -> bool
+      {
+        return p.x >= owned_lo.x && p.x <= owned_hi.x
+            && p.y >= owned_lo.y && p.y <= owned_hi.y
+            && p.z >= owned_lo.z && p.z <= owned_hi.z;
+      };
+      // Ray-vs-AABB exit parameter: given p_in strictly inside the owned box and p_out possibly
+      // outside it, find the smallest t in [0,1] where p_in + t*(p_out-p_in) first leaves the box
+      // (a standard slab test) -- that's the exact point the line crosses the boundary.
+      auto exit_t = [&]( const Vec3d& p_in, const Vec3d& p_out ) -> double
+      {
+        double t_min = 1.0;
+        const Vec3d d = p_out - p_in;
+        auto consider = [&]( double p0, double d0, double lo, double hi )
+        {
+          if( std::abs(d0) < 1e-12 ) { return; }
+          const double t = ( d0 > 0.0 ) ? ( (hi - p0) / d0 ) : ( (lo - p0) / d0 );
+          if( t >= 0.0 && t < t_min ) { t_min = t; }
+        };
+        consider( p_in.x, d.x, owned_lo.x, owned_hi.x );
+        consider( p_in.y, d.y, owned_lo.y, owned_hi.y );
+        consider( p_in.z, d.z, owned_lo.z, owned_hi.z );
+        return t_min;
+      };
 
       auto directed_key = []( uint32_t a, uint32_t b ) -> uint64_t { return (uint64_t(a)<<32) | uint64_t(b); };
 
@@ -205,7 +257,7 @@ namespace exaStamp
       std::vector<int32_t> facet_owner( iface.triangles.size(), -1 );
       std::unordered_map<uint64_t,int32_t> edge_owner;
 
-      enum class StopReason { MaxLength, SelfClosure, Junction, OpenEdge, Exhausted };
+      enum class StopReason { MaxLength, SelfClosure, Junction, OpenEdge, Exhausted, GhostBoundary };
 
       struct NodeState
       {
@@ -228,6 +280,15 @@ namespace exaStamp
         std::vector<int32_t> blocking_nodes;
         int32_t stable_merge_rounds = 0; // consecutive rounds the exclusive-mutual merge condition below has held
         int32_t resolved_to = -1; // once merged away (absorbed as a "near" node), the surviving node representing this territory going forward
+        // Populated only when stop_reason becomes OpenEdge: this node's own final loop, expressed as
+        // (global atom id, real position) pairs -- lets compute_dxa_mpi_stitch_lines find an EXACT
+        // cross-rank match (a shared ghost atom) instead of a fuzzy position guess. See
+        // DXADislocationLines::boundary_loop_atom_id_front/back's own doc comment for why this
+        // matters more than it might look like it should.
+        std::vector<uint64_t> boundary_atom_id;
+        std::vector<Vec3d> boundary_atom_pos;
+        // Consecutive shrink/expand iterations (see trace_node_round's own ghost-boundary check)
+        // the loop's own vertex majority has stayed ghost, without dropping back to owned-majority.
       };
       struct SegmentState
       {
@@ -240,7 +301,7 @@ namespace exaStamp
       std::vector<SegmentState> segs;
       std::vector<int32_t> dangling_nodes;
 
-      long n_stop_maxlen=0, n_stop_closure=0, n_stop_junction=0, n_stop_openedge=0, n_stop_exhausted=0;
+      long n_stop_maxlen=0, n_stop_closure=0, n_stop_junction=0, n_stop_openedge=0, n_stop_exhausted=0, n_stop_ghostboundary=0;
 
       // `facet_owner[T]` freezes whichever node FIRST claimed triangle T -- if that node later gets
       // absorbed into a two-arm merge, the frozen id becomes stale: a real third arm that later runs
@@ -263,6 +324,56 @@ namespace exaStamp
         const int32_t cs = static_cast<int32_t>( nd.loop.size() );
         if( nd.is_forward ) { segs[nd.segment].line.push_back(c); segs[nd.segment].core_size.push_back(cs); }
         else { segs[nd.segment].line.push_front(c); segs[nd.segment].core_size.push_front(cs); }
+      };
+
+      // Called once a node's own growth is about to be recorded as an MPI-boundary stop (OpenEdge
+      // or GhostBoundary) -- see this function's own owned-box setup above for the rationale.
+      // segs[...].line already holds the segment's full history of appended centroids, tracing from
+      // deep inside owned territory (where the seed started) out toward wherever the stop condition
+      // triggered (somewhere in ghost territory, an arbitrary distance past the true boundary).
+      // Finds the LAST point in that history still inside this rank's own owned box and the FIRST
+      // one after it that isn't, interpolates the exact boundary-plane crossing between them, then
+      // truncates the recorded line to end exactly there -- discarding the (redundant, ghost-side)
+      // points beyond it, which another rank's own sweep will cover from its own side anyway.
+      auto pin_boundary_point = [&]( int32_t node_id )
+      {
+        NodeState& nd = nodes[node_id];
+        auto& line = segs[nd.segment].line;
+        auto& csz  = segs[nd.segment].core_size;
+        const size_t n = line.size();
+        if( n < 2 ) { return; } // not enough history to find a crossing, leave as-is
+
+        if( nd.is_forward )
+        {
+          // newest point is at the back (closest to/past the boundary); walk backward for the last
+          // still-owned point.
+          size_t last_owned = n;
+          for( size_t i = n; i-- > 0; ) { if( is_owned_real(line[i]) ) { last_owned = i; break; } }
+          if( last_owned == n || last_owned + 1 >= n ) { return; } // never crossed, or already at the end
+          const Vec3d p_in = line[last_owned];
+          const Vec3d p_out = line[last_owned+1];
+          const int32_t pinned_core = csz[last_owned+1];
+          const double t = exit_t( p_in, p_out );
+          line.erase( line.begin() + static_cast<long>(last_owned) + 1, line.end() );
+          csz.erase( csz.begin() + static_cast<long>(last_owned) + 1, csz.end() );
+          line.push_back( p_in + t * ( p_out - p_in ) );
+          csz.push_back( pinned_core );
+        }
+        else
+        {
+          // newest point is at the front; walk forward for the last still-owned point.
+          size_t last_owned = n;
+          for( size_t i = 0; i < n; i++ ) { if( is_owned_real(line[i]) ) { last_owned = i; break; } }
+          if( last_owned == n || last_owned == 0 ) { return; }
+          const Vec3d p_in = line[last_owned];
+          const Vec3d p_out = line[last_owned-1];
+          const int32_t pinned_core = csz[last_owned-1];
+          const double t = exit_t( p_in, p_out );
+          line.erase( line.begin(), line.begin() + static_cast<long>(last_owned) );
+          csz.erase( csz.begin(), csz.begin() + static_cast<long>(last_owned) );
+          line.push_front( p_in + t * ( p_out - p_in ) );
+          csz.push_front( pinned_core );
+        }
       };
 
       // Grows one node's circuit as far as possible this round: fully shrink to a local minimum
@@ -355,6 +466,51 @@ namespace exaStamp
           }
 
           if( static_cast<int>(nd.loop.size()) >= max_stretch ) { ++n_stop_maxlen; nd.dangling = false; nd.retired = true; nd.stop_reason = StopReason::MaxLength; return; }
+
+          // Only meaningful when compute_delaunay ran with keep_ghost_tets: true (mesh.vertex_is_owned
+          // is otherwise trivially all-true): a circuit encircling a dislocation core that sits AT or
+          // straddles this rank's own owned/ghost seam NEEDS ghost vertices in its own loop just to
+          // stay closed around the core's cross-section -- so "the loop touches a ghost vertex" can't
+          // be the stop signal (it would trip almost immediately for exactly the cores we're trying to
+          // let this operator reach in the first place). What actually marks "this circuit has now
+          // swept PAST this rank's own owned region, into territory a neighboring rank is redundantly
+          // computing too" is the loop's own vertex MAJORITY flipping from owned to ghost -- naturally
+          // near 50/50 while centered on a boundary-straddling core, then decisively ghost-majority
+          // once growth has genuinely advanced past the seam along the line's own length. Stopping here
+          // (rather than continuing to grow into fully-redundant ghost-side territory) is exactly the
+          // "clamp to the owned region" the user asked for; compute_dxa_mpi_stitch_lines then stitches
+          // at this clamp point using the same shared-ghost-atom mechanism OpenEdge already provides.
+          // A loop straddling the seam can flip across the 50% line move to move as its own shape
+          // changes slightly. The original fix required the ghost majority to hold for several
+          // consecutive GROWTH rounds before committing -- but each of those rounds lets the loop
+          // keep growing, so by the time the streak was confirmed the circuit had already advanced
+          // roughly (grace_rounds * per-round growth) past the true seam, deep into a neighboring
+          // rank's own ghost-redundant territory -- measured as a ~2x-ghost-halo-depth gap between
+          // two ranks' own supposedly-matching clamp points for the SAME crossing (correct by luck
+          // for a simple straight pass-through whose core tube doesn't change over that extra
+          // distance, but wrong for a real junction, where overshooting past the seam just wanders
+          // into unrelated nearby topology). Requiring growth rounds conflated two different needs:
+          // waiting for stability, and letting the loop advance -- decouple them by requiring a
+          // DECISIVE ratio (not just >50%) to commit on the very FIRST round that crosses it, no
+          // further growth needed: a loop still centered on the seam wobbles within a fairly narrow
+          // band around 50/50 (that's what caused the original zig-zag), but a loop that has
+          // genuinely swept past the seam quickly becomes overwhelmingly ghost, not just barely
+          // over half.
+          static constexpr int32_t GHOST_MAJORITY_NUM = 2, GHOST_MAJORITY_DEN = 3; // commit at ghost fraction > 2/3, not just > 1/2
+          if( !mesh.vertex_is_owned.empty() )
+          {
+            size_t n_ghost_verts = 0;
+            for( uint32_t v : nd.loop ) { if( !mesh.vertex_is_owned[v] ) { ++n_ghost_verts; } }
+            if( n_ghost_verts * GHOST_MAJORITY_DEN > nd.loop.size() * GHOST_MAJORITY_NUM )
+            {
+              ++n_stop_ghostboundary; nd.dangling = false; nd.retired = true; nd.stop_reason = StopReason::GhostBoundary;
+              nd.boundary_atom_id.reserve( nd.loop.size() ); nd.boundary_atom_pos.reserve( nd.loop.size() );
+              for( uint32_t v : nd.loop ) { nd.boundary_atom_id.push_back( mesh.vertex_global_id[v] ); nd.boundary_atom_pos.push_back( mesh.vertices[v] ); }
+              pin_boundary_point( node_id );
+              return;
+            }
+          }
+
           if( static_cast<int>(nd.loop.size()) >= round_cap ) { return; } // pause: retry with a bigger cap next round
 
           bool saw_open_edge=false, saw_foreign_claim=false, saw_self_claim=false;
@@ -395,6 +551,17 @@ namespace exaStamp
                             : ( saw_open_edge ? StopReason::OpenEdge : StopReason::Exhausted ) );
             nd.blocking_nodes = saw_foreign_claim ? foreign_nodes : std::vector<int32_t>{};
             nd.retired = !saw_foreign_claim; // Junction stops are resolved later (merge vs standalone); everything else is final now
+            if( nd.stop_reason == StopReason::OpenEdge )
+            {
+              nd.boundary_atom_id.reserve( nd.loop.size() );
+              nd.boundary_atom_pos.reserve( nd.loop.size() );
+              for( uint32_t v : nd.loop )
+              {
+                nd.boundary_atom_id.push_back( mesh.vertex_global_id[v] );
+                nd.boundary_atom_pos.push_back( mesh.vertices[v] );
+              }
+              pin_boundary_point( node_id );
+            }
             switch(nd.stop_reason)
             {
               case StopReason::Junction: ++n_stop_junction; break;
@@ -756,6 +923,18 @@ namespace exaStamp
           for(uint32_t root=0; root<n_vertices; root++)
           {
             if( adj[root].empty() ) { continue; }
+            // With keep_ghost_tets, this rank's own local mesh extends into a neighboring rank's
+            // owned territory -- seeding a BRAND NEW circuit from a vertex that's entirely ghost
+            // (not owned by this rank) redundantly rediscovers a segment the owning rank's own
+            // circuit sweep will independently find too, showing up as an extra short "duplicate"
+            // dislocation near the shared boundary once every rank's own lines are stitched
+            // together (found via the rectangular-loop test: a single physical closed loop still
+            // came out as 3 lines after stitching -- 1 correct long loop plus 2 short redundant
+            // fragments seeded from ghost-only vertices near the same domain-decomposition corner).
+            // A circuit CAN still grow into ghost territory once seeded from an owned vertex (that's
+            // the entire point of keep_ghost_tets) -- this only stops a new one from ORIGINATING
+            // there. Mirrors the same ownership rule already applied to the interface-mesh writers.
+            if( !mesh.vertex_is_owned.empty() && !mesh.vertex_is_owned[root] ) { continue; }
             ++n_tried;
             try_seed_from( root, circuit_len );
           }
@@ -926,11 +1105,34 @@ namespace exaStamp
       };
 
       // Group every retired node by its CURRENT segment (mutated by merges above) to know, per
-      // surviving active segment, whether either final end closed on itself (is_loop).
+      // surviving active segment, whether either final end closed on itself (is_loop), and which of
+      // its own 2 live ends (if any) stopped at an unresolved mesh edge (OpenEdge) -- a candidate for
+      // compute_dxa_mpi_stitch_lines to splice across an MPI domain-decomposition boundary. Exactly
+      // one final (resolved_to==-1) forward node and one backward node should exist per active
+      // segment; a node that got absorbed into a merge (resolved_to!=-1) no longer represents an end.
       std::vector<uint8_t> segment_has_self_closure( segs.size(), 0 );
-      for(const auto& nd : nodes)
+      std::vector<uint8_t> segment_open_front( segs.size(), 0 ), segment_open_back( segs.size(), 0 );
+      std::vector<std::vector<uint64_t>> segment_boundary_id_front( segs.size() ), segment_boundary_id_back( segs.size() );
+      std::vector<std::vector<Vec3d>> segment_boundary_pos_front( segs.size() ), segment_boundary_pos_back( segs.size() );
+      for(size_t n=0; n<nodes.size(); n++)
       {
+        const NodeState& nd = nodes[n];
         if( nd.retired && nd.stop_reason == StopReason::SelfClosure ) { segment_has_self_closure[nd.segment] = 1; }
+        if( nd.resolved_to != -1 ) { continue; } // absorbed into another chain, not a current live end
+        // Both a real OpenEdge (ran out of mesh data) and a GhostBoundary (clamped at this rank's
+        // own owned/ghost seam, see the growth-loop's own comment above) are cross-rank stitching
+        // candidates for compute_dxa_mpi_stitch_lines -- the distinction only matters for diagnostics.
+        const bool is_open = ( nd.stop_reason == StopReason::OpenEdge || nd.stop_reason == StopReason::GhostBoundary );
+        if( nd.is_forward )
+        {
+          segment_open_back[nd.segment] = is_open ? 1 : 0;
+          if( is_open ) { segment_boundary_id_back[nd.segment] = nd.boundary_atom_id; segment_boundary_pos_back[nd.segment] = nd.boundary_atom_pos; }
+        }
+        else
+        {
+          segment_open_front[nd.segment] = is_open ? 1 : 0;
+          if( is_open ) { segment_boundary_id_front[nd.segment] = nd.boundary_atom_id; segment_boundary_pos_front[nd.segment] = nd.boundary_atom_pos; }
+        }
       }
 
       DXADislocationLines& result = *dxa_dislocation_lines;
@@ -941,6 +1143,12 @@ namespace exaStamp
       result.junction_vertices.clear();
       result.burgers_vector.clear();
       result.dislocation_id.clear();
+      result.open_boundary_front.clear();
+      result.open_boundary_back.clear();
+      result.boundary_loop_atom_id_front.clear();
+      result.boundary_loop_atom_id_back.clear();
+      result.boundary_loop_atom_pos_front.clear();
+      result.boundary_loop_atom_pos_back.clear();
 
       std::vector<double> final_lengths;
       for(int32_t s=0; s<static_cast<int32_t>(segs.size()); s++)
@@ -952,6 +1160,12 @@ namespace exaStamp
         result.core_size.push_back( std::vector<int32_t>( segs[s].core_size.begin(), segs[s].core_size.end() ) );
         result.is_loop.push_back( segment_has_self_closure[s] );
         result.dislocation_id.push_back( static_cast<int32_t>( result.dislocation_id.size() ) );
+        result.open_boundary_front.push_back( segment_open_front[s] );
+        result.open_boundary_back.push_back( segment_open_back[s] );
+        result.boundary_loop_atom_id_front.push_back( segment_boundary_id_front[s] );
+        result.boundary_loop_atom_id_back.push_back( segment_boundary_id_back[s] );
+        result.boundary_loop_atom_pos_front.push_back( segment_boundary_pos_front[s] );
+        result.boundary_loop_atom_pos_back.push_back( segment_boundary_pos_back[s] );
         final_lengths.push_back( segment_length( segs[s].line ) );
       }
 
@@ -967,7 +1181,7 @@ namespace exaStamp
            << n_tried << " local trial-circuit searches attempted), sweep stops: "
            << n_stop_maxlen << " max-length, " << n_stop_closure << " self-closure, "
            << n_stop_junction << " junction, " << n_stop_openedge << " open-mesh-edge, "
-           << n_stop_exhausted << " exhausted-no-move" << std::endl;
+           << n_stop_exhausted << " exhausted-no-move, " << n_stop_ghostboundary << " clamped at owned/ghost boundary" << std::endl;
       lout << "compute_dxa_circuit_sweep: " << n_dislocations_found << " physical dislocations survive after "
            << "incremental two-way merging (" << (n_segments_created - n_dislocations_found) << " absorbed), lengths "
            << (final_lengths.empty()?0.0:final_lengths.front())
@@ -1000,7 +1214,7 @@ compute_dxa_circuit_sweep: {}
   // === register factory ===
   ONIKA_AUTORUN_INIT(compute_dxa_circuit_sweep)
   {
-    OperatorNodeFactory::instance()->register_factory( "compute_dxa_circuit_sweep", make_simple_operator< ComputeDXACircuitSweep > );
+    OperatorNodeFactory::instance()->register_factory( "compute_dxa_circuit_sweep", make_grid_variant_operator< ComputeDXACircuitSweep > );
   }
 
 }

@@ -53,6 +53,7 @@ namespace exaStamp
       const size_t n_particles = dxa_lattice_correspondence->structure_type.size();
 
       std::vector<Vec3d> pos( n_particles );
+      std::vector<uint64_t> global_id( n_particles );
       {
         auto cells = grid->cells();
         const size_t * const cpo = grid->cell_particle_offset_data();
@@ -64,11 +65,12 @@ namespace exaStamp
           {
             const size_t i = cpo[c] + p;
             pos[i] = domain->xform() * Vec3d{ cells[c][field::rx][p], cells[c][field::ry][p], cells[c][field::rz][p] };
+            global_id[i] = cells[c][field::id][p];
           }
         }
       }
 
-      dxa_build_lattice_clusters( *dxa_lattice_correspondence, pos, *dxa_lattice_clusters );
+      dxa_build_lattice_clusters( *dxa_lattice_correspondence, pos, global_id, *dxa_lattice_clusters );
 
       *n_clusters = static_cast<long>( dxa_lattice_clusters->graph.clusters.size() ) - 1;
       long n_conn = 0;

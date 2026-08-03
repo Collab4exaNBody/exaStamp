@@ -52,6 +52,7 @@ namespace exaStamp
 
       DXAElasticMappingTetClassification& result = *dxa_elastic_mapping_tet_classification;
       result.good.assign( n_tets, 0.0 );
+      result.unresolved.assign( n_tets, 0 );
 
       static constexpr int edge_lv[6][2] = { {0,1}, {0,2}, {0,3}, {1,2}, {1,3}, {2,3} };
 
@@ -74,7 +75,7 @@ namespace exaStamp
             const auto it = ev.edge_index.find( DXACrystalPathEdgeVectors::key( tet[edge_lv[i][0]], tet[edge_lv[i][1]] ) );
             all_resolved = ( it != ev.edge_index.end() ) && ev.resolved[it->second];
           }
-          if( all_resolved ) { ++n_bad_all_resolved; } else { ++n_bad_missing_edge; }
+          if( all_resolved ) { ++n_bad_all_resolved; } else { ++n_bad_missing_edge; result.unresolved[t] = 1; }
         }
       }
 

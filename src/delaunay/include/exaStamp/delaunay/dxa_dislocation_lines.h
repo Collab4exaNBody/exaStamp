@@ -80,5 +80,34 @@ namespace exaStamp
     // is a complete dislocation on its own (or a real multi-way branch arm, kept separate on
     // purpose). Empty for the other extractors.
     std::vector<int32_t> dislocation_id;
+
+    // same shape as `line_positions` (one entry per line) -- whether this line's own front()/back()
+    // endpoint (line_positions[i].front()/.back()) stopped at an unresolved mesh edge
+    // (compute_dxa_circuit_sweep's own StopReason::OpenEdge) rather than a genuine dead end
+    // (self-closure, max-length, or a real multi-way junction). This is a CANDIDATE flag, not a
+    // guarantee: an unresolved edge can be either a real MPI domain-decomposition cutoff (this
+    // rank's own local interface mesh simply doesn't extend past its owned cells) or a genuine
+    // single-rank physical boundary (e.g. a non-fully-periodic test system) -- compute_dxa_mpi_
+    // stitch_lines treats it as opportunistic (only stitches ends that actually find a matching
+    // counterpart on another rank; a physical boundary end just won't match anything and stays a
+    // normal standalone end). Only populated by compute_dxa_circuit_sweep; empty for other
+    // extractors.
+    std::vector<uint8_t> open_boundary_front;
+    std::vector<uint8_t> open_boundary_back;
+
+    // for each line with the corresponding open_boundary_front/back flag set: the global particle
+    // id (DelaunayTessellation::vertex_global_id, cross-rank-comparable) and real position of every
+    // mesh vertex in that end's own final circuit loop, at the moment it stopped. compute_dxa_mpi_
+    // stitch_lines uses this to find an EXACT match across ranks (a shared ghost atom id, not a
+    // fuzzy position guess) and to snap the stitched seam to that atom's own real, ghost-identical
+    // coordinate rather than either rank's own approximate circuit centroid -- the whole point being
+    // that two ranks' own independently-grown circuits can stop with genuinely different final loop
+    // shapes/centroids even at the exact same real crossing, so matching (and snapping) on the
+    // shared real atom is far more precise than matching on either side's own centroid. Empty
+    // whenever the corresponding open_boundary_front/back flag is false, or for other extractors.
+    std::vector<std::vector<uint64_t>> boundary_loop_atom_id_front;
+    std::vector<std::vector<uint64_t>> boundary_loop_atom_id_back;
+    std::vector<std::vector<Vec3d>>    boundary_loop_atom_pos_front;
+    std::vector<std::vector<Vec3d>>    boundary_loop_atom_pos_back;
   };
 }

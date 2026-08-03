@@ -101,7 +101,22 @@ namespace exaStamp
   // connectClusters() port. Deliberately grid/operator-independent (only needs each atom's already
   // -flattened real position) so it can be unit-tested standalone; the operator itself just
   // flattens grid positions and calls this. May append entries to lc.neighbor_atom (see
-  // DXALatticeClusters::atom_neighbor_count's own comment). pos.size() must equal
-  // lc.structure_type.size().
-  void dxa_build_lattice_clusters( DXALatticeCorrespondence& lc, const std::vector<Vec3d>& pos, DXALatticeClusters& result );
+  // DXALatticeClusters::atom_neighbor_count's own comment). pos.size() and global_id.size() must
+  // both equal lc.structure_type.size().
+  //
+  // `global_id`: a persistent, cross-rank-identical particle id (same convention as
+  // DelaunayTessellation::vertex_global_id, exaStamp's own field::id) -- buildClusters seeds each
+  // new cluster from the lowest-global-id not-yet-assigned classified atom, NOT the lowest LOCAL
+  // array index. The local array index is an accident of this rank's own particle layout (and can
+  // even vary run-to-run under multithreading if cell-local particle order isn't stable), so basing
+  // the seed choice on it let two independent computations of "the same" physical crystal region
+  // (different MPI rank, different thread schedule) each pick a different arbitrary reference
+  // orientation (the seed's own atom_symmetry_permutation=0 choice) and then propagate it outward --
+  // for atoms near a real defect, where the per-bond symmetry-match tolerance can plausibly accept
+  // more than one nearby point-group element, this could resolve to genuinely different (not just
+  // differently-signed) permutation assignments depending purely on which arbitrary seed grew there
+  // first. Sorting by a canonical, rank/thread-independent key removes that source of non-determinism
+  // (found via a deliberately unambiguous test case: a single closed dislocation loop reporting 3
+  // different Burgers-vector families across MPI fragments of what must physically be one).
+  void dxa_build_lattice_clusters( DXALatticeCorrespondence& lc, const std::vector<Vec3d>& pos, const std::vector<uint64_t>& global_id, DXALatticeClusters& result );
 }

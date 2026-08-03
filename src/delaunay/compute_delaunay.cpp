@@ -59,6 +59,7 @@ namespace exaStamp
     ADD_SLOT( GridT               , grid                 , INPUT );
     ADD_SLOT( Domain              , domain               , INPUT , REQUIRED );
     ADD_SLOT( DelaunayTessellation, delaunay_tessellation, OUTPUT );
+    ADD_SLOT( bool                , keep_ghost_tets      , INPUT , false , DocString{"false (default): keep only tets whose centroid falls in an owned cell -- the original no-gaps/no-duplicates convention every other consumer (write_delaunay_vtk, the 96000-tet MPI/ghost regression test, ...) relies on. true: ALSO keep tets whose centroid falls in a ghost cell (still discarding genuinely out-of-block ones) -- gives each rank a full local view extending into its own ghost halo, deliberately overlapping with neighboring ranks' own equally-extended view of the same shared region, so a consumer like compute_dxa_circuit_sweep can fully grow a circuit even when its real core sits at or straddles this rank's own owned/ghost seam, rather than being cut off right there. Populates the new DelaunayTessellation::vertex_is_owned so such a consumer can still tell owned from ghost territory and clamp/stitch accordingly."} );
 
   public:
     inline void execute () override final
@@ -69,6 +70,8 @@ namespace exaStamp
       result.vertices.clear();
       result.tetrahedra.clear();
       result.vertex_particle_index.clear();
+      result.vertex_global_id.clear();
+      result.vertex_is_owned.clear();
 
       const size_t n_cells = grid->number_of_cells();
       auto cells = grid->cells();
@@ -79,19 +82,42 @@ namespace exaStamp
       // (PTM's flat output buffers, compute_bispectrum's, ...) without relying on iteration-order
       // coincidence.
       const size_t * const cell_particle_offset = grid->cell_particle_offset_data();
+      // `points` stays in the SAME raw/reduced (pre-xform) frame as field::rx/ry/rz -- this is the
+      // frame domain_periodic_location()/cell partitioning itself operates in (see the classification
+      // loop below, and its own comment), so it's the right one for CLASSIFYING which cell a point
+      // falls in. It is NOT, in general, real Euclidean space -- Geogram's own Delaunay computation
+      // (nearest-neighbor/circumsphere tests) is only geometrically meaningful in real space, and a
+      // non-trivial xform (shear, non-uniform scale) can change which triangulation is actually
+      // Delaunay between the two frames. `points_real` (== `points` whenever the domain's own xform
+      // is the identity, which every test case run so far uses -- this bug was real but silently
+      // masked until now) is the one actually fed to Geogram, and the one whose values become
+      // DelaunayTessellation::vertices, so every downstream consumer (interface mesh, circuit sweep's
+      // own recorded positions/Burgers vectors, compute_dxa_mpi_stitch_lines' own atom-position
+      // matching) gets real physical coordinates.
       std::vector<double> points;
+      std::vector<double> points_real;
       std::vector<uint32_t> point_flat_index;
+      std::vector<uint64_t> point_global_id;
+      std::vector<uint8_t> point_is_owned;
       points.reserve( grid->number_of_particles() * 3 );
+      points_real.reserve( grid->number_of_particles() * 3 );
       point_flat_index.reserve( grid->number_of_particles() );
+      point_global_id.reserve( grid->number_of_particles() );
+      point_is_owned.reserve( grid->number_of_particles() );
+      const Mat3d xform = domain->xform();
       for(size_t c=0;c<n_cells;c++)
       {
         const size_t np = cells[c].size();
+        const uint8_t cell_owned = grid->is_ghost_cell(c) ? 0 : 1;
         for(size_t p=0;p<np;p++)
         {
-          points.push_back( cells[c][field::rx][p] );
-          points.push_back( cells[c][field::ry][p] );
-          points.push_back( cells[c][field::rz][p] );
+          const Vec3d r { cells[c][field::rx][p], cells[c][field::ry][p], cells[c][field::rz][p] };
+          const Vec3d r_real = xform * r;
+          points.push_back( r.x ); points.push_back( r.y ); points.push_back( r.z );
+          points_real.push_back( r_real.x ); points_real.push_back( r_real.y ); points_real.push_back( r_real.z );
           point_flat_index.push_back( static_cast<uint32_t>( cell_particle_offset[c] + p ) );
+          point_global_id.push_back( cells[c][field::id][p] );
+          point_is_owned.push_back( cell_owned );
         }
       }
       const size_t nb_points = points.size() / 3;
@@ -102,7 +128,7 @@ namespace exaStamp
       }
 
       GEO::PeriodicDelaunay3d delaunay( false );
-      delaunay.set_vertices( static_cast<GEO::index_t>(nb_points), points.data() );
+      delaunay.set_vertices( static_cast<GEO::index_t>(nb_points), points_real.data() );
       delaunay.compute();
 
       // classify + compact: keep only tets whose centroid falls in one of this rank's owned cells
@@ -162,7 +188,12 @@ namespace exaStamp
           && local_ijk.j>=0 && local_ijk.j<local_dims.j
           && local_ijk.k>=0 && local_ijk.k<local_dims.k;
         if( !inside_local_grid ) { n_oob++; continue; }
-        if( grid->is_ghost_cell(local_ijk) ) { n_ghost++; continue; }
+        const bool is_ghost_tet = grid->is_ghost_cell(local_ijk);
+        if( is_ghost_tet )
+        {
+          n_ghost++;
+          if( !*keep_ghost_tets ) { continue; }
+        }
 
         std::array<uint32_t,4> local_v;
         for(int lv=0;lv<4;lv++)
@@ -170,8 +201,10 @@ namespace exaStamp
           if( vertex_remap[v[lv]] < 0 )
           {
             vertex_remap[v[lv]] = static_cast<int32_t>( result.vertices.size() );
-            result.vertices.push_back( { points[3*v[lv]+0], points[3*v[lv]+1], points[3*v[lv]+2] } );
+            result.vertices.push_back( { points_real[3*v[lv]+0], points_real[3*v[lv]+1], points_real[3*v[lv]+2] } );
             result.vertex_particle_index.push_back( point_flat_index[v[lv]] );
+            result.vertex_global_id.push_back( point_global_id[v[lv]] );
+            result.vertex_is_owned.push_back( point_is_owned[v[lv]] );
           }
           local_v[lv] = static_cast<uint32_t>( vertex_remap[v[lv]] );
         }
@@ -180,9 +213,9 @@ namespace exaStamp
       }
 
       ldbg << "compute_delaunay: " << nb_points << " points (owned+ghost) -> "
-           << nb_cells_delaunay << " tetrahedra, " << n_kept << " owned by this rank ("
+           << nb_cells_delaunay << " tetrahedra, " << n_kept << " kept by this rank ("
            << result.vertices.size() << " vertices), " << n_oob << " out-of-local-grid, "
-           << n_ghost << " in ghost cells" << std::endl;
+           << n_ghost << " in ghost cells (" << ( *keep_ghost_tets ? "kept" : "discarded" ) << ")" << std::endl;
     }
 
     inline std::string documentation() const override final
@@ -191,11 +224,18 @@ namespace exaStamp
 
 Builds a 3D Delaunay tessellation of this rank's owned+ghost particles, using Geogram's
 PeriodicDelaunay3d in non-periodic mode (exaStamp's own ghost layer already encodes
-periodicity/domain decomposition, so Geogram doesn't need to). Only tetrahedra whose centroid
-falls in one of this rank's own owned (non-ghost) cells are kept, in a DelaunayTessellation OUTPUT
-slot (compacted local vertex/tetrahedra numbering) -- this guarantees no gaps or duplicates when
-every rank's output is combined, and discards exactly the tets that could be unreliable near the
-ghost fringe. See write_delaunay_vtk to export the result.
+periodicity/domain decomposition, so Geogram doesn't need to). By default (keep_ghost_tets: false),
+only tetrahedra whose centroid falls in one of this rank's own owned (non-ghost) cells are kept, in
+a DelaunayTessellation OUTPUT slot (compacted local vertex/tetrahedra numbering) -- this guarantees
+no gaps or duplicates when every rank's output is combined, and discards exactly the tets that could
+be unreliable near the ghost fringe. See write_delaunay_vtk to export the result.
+
+With keep_ghost_tets: true, ghost-centroid tets are ALSO kept (only genuinely out-of-block ones are
+discarded), giving each rank a full local view extending into its own ghost halo -- deliberately
+overlapping with neighboring ranks' own equally-extended view of the same shared region, so a
+consumer needing to grow something (a circuit, a region) across what would otherwise be a hard
+owned/ghost cutoff has room to do so. DelaunayTessellation::vertex_is_owned distinguishes owned from
+ghost vertices in this mode (trivially all-owned in the default mode).
 
 Usage example:
 
