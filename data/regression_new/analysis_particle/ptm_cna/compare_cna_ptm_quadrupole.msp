@@ -1,0 +1,39 @@
+species:
+  - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+
+chunk_neighbors:
+  config:
+    chunk_size: 1
+    build_particle_offset: true
+
+setup_system:
+  - domain:
+      cell_size: 10 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_extended_xyz_file:
+      filename: "quadrupole_dislo.xyz"
+      bounds_mode: FILE
+
+global:
+  max_iteration: 0
+  simulation_thermostate_screen_frequency: 10
+  simulation_thermostate_file_frequency: -1
+  simulation_snapshot_frequency: 10
+  rcut_inc: 1.0 ang
+  dt: 5.0e-3 ps
+  rcut_max: 6.0 ang
+
+simulation_epilog:
+  - compute_ptm:
+      rcut: 5.0 ang
+      rmsd_cutoff: 0.1
+#  - ptm_shrink_disorder: { rcut: 5.0 ang, min_neighbor_fraction: 0.5, n_iterations: 3 }
+  - ptm_fields:
+      struct_field: ptm_type
+  - compute_cna:
+      rcut: 5.0 ang
+  - cna_fields:
+      struct_field: cna_type
+  - timestep_file: "compare_ptm_cna.xyz"
+  - write_xyz: { fields: [ id, type, ptm_type, cna_type ] }

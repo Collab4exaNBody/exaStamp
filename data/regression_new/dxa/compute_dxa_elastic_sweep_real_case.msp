@@ -1,0 +1,44 @@
+species:
+  - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+
+chunk_neighbors:
+  config:
+    chunk_size: 1
+    build_particle_offset: true
+
+setup_system:
+  - domain:
+      cell_size: 10 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_extended_xyz_file:
+      filename: "quadrupole_dislo.xyz"
+      bounds_mode: FILE
+
+global:
+  max_iteration: 0
+  simulation_thermostate_screen_frequency: 10
+  simulation_thermostate_file_frequency: -1
+  simulation_snapshot_frequency: 10
+  rcut_inc: 1.0 ang
+  dt: 5.0e-3 ps
+  rcut_max: 6.0 ang
+
+simulation_epilog:
+# Analysis functions    
+  - compute_dxa_lattice_correspondence: { rcut: 5.0 ang }
+  - compute_dxa_lattice_clusters: {}
+  - compute_delaunay
+  - compute_dxa_crystal_path_edge_vectors: { crystal_path_steps: 4 }
+  - compute_dxa_elastic_mapping_tet_classification: {}
+  - compute_dxa_elastic_interface_mesh: {}
+  - compute_dxa_circuit_sweep: { min_burgers_norm: 0.3 }
+  - smooth_dxa_dislocation_lines: { target_point_interval: 2.5, target_smoothing_level: 1 }
+# Output functions    
+  - write_interface_mesh: { filename: "paraview/interface_mesh_quadruole" }
+  - write_dxa_dislocation_lines: { filename: "paraview/dxa_lines_quadrupole" }
+  - write_dxa_ca_file: { filename: "ovitodata/our_quadrupole_result.ca" }
+  - dxa_print_n_interface_triangles: { rebind: { value: n_interface_triangles }, body: [print_int: { suffix: "\n" }] }
+  - dxa_print_n_lines_extracted: { rebind: { value: n_lines_extracted }, body: [print_int: { suffix: "\n" }] }
+  - dxa_print_n_seeds_tried: { rebind: { value: n_seeds_tried }, body: [print_int: { suffix: "\n" }] }
+  - dxa_print_n_dislocations: { rebind: { value: n_dislocations }, body: [print_int: { suffix: "\n" }] }

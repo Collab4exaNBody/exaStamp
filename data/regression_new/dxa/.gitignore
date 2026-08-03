@@ -1,0 +1,3 @@
+# exaStamp auto-writes these into the CWD on every run -- not real regression assets
+plugins.db
+thermodynamic_state.csv

@@ -1,0 +1,45 @@
+species:
+  - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+
+eam_alloy_force:
+  rcut: 5.30 ang
+  parameters:
+    file: "../../potentials/Ta1_Ravelo_2013.eam.alloy"
+
+compute_force: eam_alloy_force
+
+chunk_neighbors:
+  config:
+    chunk_size: 1
+    build_particle_offset: true
+
+setup_system:
+  - domain:
+      cell_size: 6.6 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - bulk_lattice:
+      structure: HCP
+      types: [ Ta, Ta, Ta, Ta ]
+      size: [ 3.3 ang, 3.3 ang, 4.3 ang ]
+      repeat: [ 10, 10, 10]
+  - gaussian_noise_r:
+      sigma: 0.05 ang
+
+global:
+  max_iteration: 0
+  simulation_thermostate_screen_frequency: 10
+  simulation_thermostate_file_frequency: -1
+  simulation_snapshot_frequency: 10
+  rcut_inc: 1.0 ang
+  dt: 5.0e-3 ps
+
+compute_ptm:
+  rcut: 5.0 ang
+  rmsd_cutoff: 0.2
+  
+simulation_epilog:
+  - compute_ptm
+  - ptm_print_n_matched: { rebind: { value: ptm_n_matched }, body: [print_int: { suffix: "\n" }] }
+  - timestep_file: "hcp_sample.xyz"
+  - write_xyz: { fields: [ id, type ] }
