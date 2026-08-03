@@ -12,7 +12,7 @@ setup_system:
       periodic: [ true, true, true ]
       expandable: false
   - read_extended_xyz_file:
-      filename: "screw_dislo_dipole.xyz"
+      filename: "rectangular_loop.xyz"
       bounds_mode: FILE
 
 global:
@@ -25,9 +25,11 @@ global:
   rcut_max: 6.0 ang
 
 simulation_epilog:
-# Analysis functions    
+# Analysis functions
+  - ghost_update_r
   - compute_dxa_lattice_correspondence: { rcut: 5.0 ang }
   - compute_dxa_lattice_clusters: {}
+  - dxa_lattice_cluster_fields: { cluster_field: dxa_cluster_id }
   - compute_delaunay: { keep_ghost_tets: true }
   - compute_dxa_crystal_path_edge_vectors: { crystal_path_steps: 4 }
   - compute_dxa_elastic_mapping_tet_classification: {}
@@ -35,11 +37,13 @@ simulation_epilog:
   - compute_dxa_circuit_sweep: { min_burgers_norm: 0.3 }
   - compute_dxa_mpi_stitch_lines: {}
 #  - smooth_dxa_dislocation_lines: { target_point_interval: 2.5, target_smoothing_level: 1 }
-# Output functions
-  - write_interface_mesh: { filename: "paraview/interface_mesh_screw_dipole" }
-  - write_dxa_dislocation_lines: { filename: "paraview/dxa_lines_screw_dipole" }
-  - write_dxa_ca_file: { filename: "ovitodata/our_screw_dipole_result.ca" }
+# Output functions    
+  - write_interface_mesh: { filename: "paraview/interface_mesh_rect_loop" }
+  - write_dxa_dislocation_lines: { filename: "paraview/dxa_lines_rect_loop" }
+  - write_dxa_ca_file: { filename: "ovitodata/our_rect_loop_result.ca" }
+  - write_ovito_interface_mesh: { filename: "ovitodata/our_interface_mesh_rect_loop.vtk" }
   - dxa_print_n_interface_triangles: { rebind: { value: n_interface_triangles }, body: [print_int: { suffix: "\n" }] }
   - dxa_print_n_lines_extracted: { rebind: { value: n_lines_extracted }, body: [print_int: { suffix: "\n" }] }
+  - dxa_print_n_seeds_tried: { rebind: { value: n_seeds_tried }, body: [print_int: { suffix: "\n" }] }
   - dxa_print_n_dislocations: { rebind: { value: n_dislocations }, body: [print_int: { suffix: "\n" }] }
   - dxa_print_n_mpi_stitches: { rebind: { value: n_mpi_stitches }, body: [print_int: { suffix: "\n" }] }

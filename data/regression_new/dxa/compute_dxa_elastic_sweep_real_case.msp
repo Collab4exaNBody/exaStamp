@@ -22,19 +22,20 @@ global:
   simulation_snapshot_frequency: 10
   rcut_inc: 1.0 ang
   dt: 5.0e-3 ps
-  rcut_max: 6.0 ang
+  rcut_max: 8.0 ang
 
 simulation_epilog:
 # Analysis functions    
   - compute_dxa_lattice_correspondence: { rcut: 5.0 ang }
   - compute_dxa_lattice_clusters: {}
   - dxa_lattice_cluster_fields: { cluster_field: dxa_cluster_id }
-  - compute_delaunay
+  - compute_delaunay: { keep_ghost_tets: true }
   - compute_dxa_crystal_path_edge_vectors: { crystal_path_steps: 4 }
   - compute_dxa_elastic_mapping_tet_classification: {}
   - compute_dxa_elastic_interface_mesh: {}
   - compute_dxa_circuit_sweep: { min_burgers_norm: 0.3 }
-  - smooth_dxa_dislocation_lines: { target_point_interval: 2.5, target_smoothing_level: 1 }
+  - compute_dxa_mpi_stitch_lines: {}
+#  - smooth_dxa_dislocation_lines: { target_point_interval: 2.5, target_smoothing_level: 1 }
 # Output functions    
   - write_xyz: { filename: "xyz/test_output.xyz", fields: [ dxa_cluster_id ] }
   - write_interface_mesh: { filename: "paraview/interface_mesh_quadruole" }
@@ -45,3 +46,4 @@ simulation_epilog:
   - dxa_print_n_lines_extracted: { rebind: { value: n_lines_extracted }, body: [print_int: { suffix: "\n" }] }
   - dxa_print_n_seeds_tried: { rebind: { value: n_seeds_tried }, body: [print_int: { suffix: "\n" }] }
   - dxa_print_n_dislocations: { rebind: { value: n_dislocations }, body: [print_int: { suffix: "\n" }] }
+  - dxa_print_n_mpi_stitches: { rebind: { value: n_mpi_stitches }, body: [print_int: { suffix: "\n" }] }
