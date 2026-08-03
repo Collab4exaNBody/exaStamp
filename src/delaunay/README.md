@@ -5,6 +5,11 @@ Stukowski, Bulatov, Arsenlis, *"Automated identification and indexing of disloca
 crystal interfaces"*, Model. Simul. Mater. Sci. Eng. 20 (2012) 085007
 (local copy: `/home/lafourcadep/Bureau/DXA_ref.pdf`).
 
+**Regression data layout (split 2026-08-03)**: `data/regression_new/delaunay/` now holds only the
+raw Delaunay-tessellation test (`compute_delaunay.msp`, MPI/ghost tet-count correctness -- no DXA
+operator involved at all); every actual DXA test (`.msp`, `.xyz` inputs, OVITO ground truth under
+`ovitodata/`, outputs under `paraview/`) moved to the sibling `data/regression_new/dxa/` folder.
+
 DXA's published pipeline has 9 steps. Status:
 
 | Step | What it does | Status |
@@ -617,7 +622,7 @@ DXA's published pipeline has 9 steps. Status:
 
 **Superseded** by item 0's full elastic-mapping re-architecture (stages 1-4), which measurably beats
 this on every metric (0.5% interface-mesh error vs. this path's 2.5-3x, exact classification match).
-Recommended pipeline now (see `data/regression_new/delaunay/compute_dxa_elastic_sweep_real_case.msp`):
+Recommended pipeline now (see `data/regression_new/dxa/compute_dxa_elastic_sweep_real_case.msp`):
 `compute_dxa_lattice_correspondence` (discrete classifier, needs `target_structure`) →
 `compute_dxa_lattice_clusters` → `compute_delaunay` → `compute_dxa_crystal_path_edge_vectors` →
 `compute_dxa_elastic_mapping_tet_classification` → `compute_dxa_elastic_interface_mesh` →
@@ -763,7 +768,7 @@ flat buffer directly rather than via a named field — DXA step (iii) can do the
 orientation buffer. Note: only *owned* cells are touched by the loop, so ghost-particle slots in
 these buffers are left at their `CudaMMVector::resize()` default, not a real PTM result.
 
-**Verified** (`data/regression_new/delaunay/compute_ptm.msp`, same 16000-atom BCC Ta lattice as
+**Verified** (test file removed in an earlier cleanup, same 16000-atom BCC Ta lattice as
 the Delaunay test, unrotated/unnoised): all 16000 owned particles matched `PTM_MATCH_BCC` with
 `mean rmsd=0.000000` and `mean |angle from identity|=0.000000 deg` — exact match, as expected for
 a perfect unrotated lattice. (An operator whose only outputs are non-grid-field OUTPUT slots gets
@@ -1147,7 +1152,7 @@ comparison used `compute_ptm` at `rmsd_cutoff: 0.1` (`compare_cna_ptm_quadrupole
 setting), not the actual pipeline's `0.2` (`compute_dxa_real_case.msp`). At the pipeline's real
 tolerance, PTM matches **127719/176309** (only 281 owned atoms rejected) vs CNA's **126976**
 (1024 rejected) — a **3.6x** difference. The user supplied OVITO's own real CNA output on the
-identical file (`data/regression_new/delaunay/ovitodata/output_cna_ovito.xyz`): **1026** non-BCC
+identical file (`data/regression_new/dxa/ovitodata/output_cna_ovito.xyz`): **1026** non-BCC
 atoms — matching this codebase's own (now bug-fixed) `compute_cna` almost exactly (1024 vs 1026).
 So the original "3x-wider-than-OVITO" mystery was, in large part, simply PTM's continuous RMSD fit
 being far more strain-tolerant than any real discrete crystal-structure classifier — `compute_ptm`
@@ -1206,7 +1211,7 @@ edge list and `vertex_matches_target` flags as input.
    identical file. Re-ran the atomistic mesh: **2020 triangles**, only 34 open edges remaining
    (out of 924948 total tessellation edges) — down from ~3x off to **~22% over** OVITO's 1648.
 
-**Current best pipeline** (`data/regression_new/delaunay/compute_dxa_real_case_cna_atomistic.msp`):
+**Current best pipeline** (test file removed in the 2026-08-03 cleanup, superseded by the elastic-mapping pipeline, item 0 above):
 `compute_ptm` (still needed for `ptm_orientation` — `compute_cna` doesn't produce per-atom
 orientation) → `compute_cna`/`cna_fields` (classification) → `ghost_update_opt` on both
 `cna_type`+`ptm_orientation` → `compute_delaunay` → `compute_dxa_edge_vectors` with
@@ -1245,7 +1250,7 @@ is elsewhere:**
 See "Remaining work" at the top of this file for what's next (line extraction can proceed against
 this mesh as-is; the 22% gap and FCC/HCP support are tracked there too).
 
-Test files: `data/regression_new/delaunay/compute_cna_test.msp` (pure-lattice CNA validation),
+Test file removed in an earlier cleanup (was pure-lattice CNA validation),
 `compute_dxa_real_case_atomistic.msp` (atomistic mesh, PTM-driven classification — the 91-triangle
 under-coverage case), `compute_dxa_real_case_cna_atomistic.msp` (atomistic mesh, CNA-driven — the
 2020-triangle result), `ovitodata/output_cna_ovito.xyz` + `ovitodata/output_dxa_ovito.vtk`
@@ -1326,7 +1331,7 @@ disordered population is **one single connected network**, not 4 separate lines 
 validates using a junction-aware graph approach over a simpler per-component (e.g. PCA-per-blob)
 method that was considered and rejected before implementing thinning.
 
-Test file: `data/regression_new/delaunay/compute_dxa_dislocation_lines_test.msp`.
+Test file removed in the 2026-08-03 cleanup (superseded for line extraction, see item 2 above).
 
 ## `compute_dxa_mesh_burgers_circuits`: DXA steps (vi)-(vii), corrected — circuits on the interface mesh itself
 
@@ -1374,7 +1379,7 @@ where sweeps merge or the circuit needs to stretch past a kink. This is what act
 smooth 1D lines instead of just a set of flagged edges. `compute_dxa_dislocation_lines.cpp` (the
 superseded operator above) should eventually be replaced by this, not extended.
 
-Test file: `data/regression_new/delaunay/compute_dxa_mesh_burgers_test.msp`.
+Test file removed in the 2026-08-03 cleanup (operator still in the codebase, just unexercised).
 
 ## `compute_dxa_mesh_dislocation_lines`: DXA steps (viii)-(ix), stage 2 — seeded from confirmed circuits, still fragmented
 
@@ -1402,7 +1407,7 @@ is meaningfully better than raw noisy connectivity, but doesn't fully solve frag
 own. Next candidates, not yet tried: a real advancing-front sweep implementation, or a
 simplification pass (merge close junctions, prune/absorb short segments below a length threshold).
 
-Test file: `data/regression_new/delaunay/compute_dxa_mesh_lines_test.msp`.
+Test file removed in the 2026-08-03 cleanup (superseded for line extraction, see item 2 above).
 
 ## `compute_dxa_circuit_sweep`: the real advancing-front sweep — verified against the actual 2012 paper, working
 
@@ -1494,21 +1499,21 @@ consistent with the expected ⟨111⟩-type pattern. Line lengths mostly 0.7-101
 almost immediately" artifact flagged separately (not yet fixed, tracked as item 1 in "Remaining
 work").
 
-Test file: `data/regression_new/delaunay/compute_dxa_circuit_sweep_test.msp`.
+Test file removed in the 2026-08-03 cleanup (ran this same operator on the old, worse atomistic mesh -- superseded by `data/regression_new/dxa/compute_dxa_elastic_sweep_real_case.msp`).
 
 ### Follow-up: single screw dislocation dipole, a controlled test with no real junctions
 
 To isolate whether the quadrupole's over-fragmentation (see "Remaining work" item 3) is a general
 sweep/seeding bug or specific to that dataset's real junction network, generated a synthetic BCC Ta
 sample with exactly two straight a/2⟨111⟩ screw dislocations (opposite sign, a periodic dipole — the
-minimal way to embed a real dislocation under full 3D periodic boundary conditions). Built with `data/regression_new/delaunay/gen_screw_dipole.py`: orthogonal simulation frame
+minimal way to embed a real dislocation under full 3D periodic boundary conditions). Built with `data/regression_new/dxa/gen_screw_dipole.py`: orthogonal simulation frame
 x=[1,-1,0], y=[1,1,-2], z=[1,1,1] (line direction), lattice tiled exactly via rotate-and-crop of the
 standard 2-atom BCC basis, then displaced with the exact isotropic elastic screw solution
 `u_z = b/(2π) * (atan2(y-y0,x-x1) - atan2(y-y0,x-x2))` for two cores at the same y, separated along x
 by half the box (a periodic-compatible dipole placement) — no relaxation run afterward
 (`max_iteration: 0`), so atoms sit on the raw continuum-displaced positions.
-File: `data/regression_new/delaunay/screw_dislo_dipole.xyz` (128963 atoms, 140x146x114 Å box). Test
-file: `data/regression_new/delaunay/compute_dxa_screw_dipole_test.msp`.
+File: `data/regression_new/dxa/screw_dislo_dipole.xyz` (128963 atoms, 140x146x114 Å box). Test
+file removed in the 2026-08-03 cleanup (superseded by `data/regression_new/dxa/compute_dxa_elastic_sweep_screw_dipole.msp`).
 
 **Result: the sweep/merge code found essentially the right answer.** 3 raw segments (not 43-like
 fragmentation), 0 max-length stops: 2 real, long dislocations (146 Å and 184 Å) each correctly
@@ -1582,10 +1587,103 @@ Deliberately simplified relative to a real OVITO-written file:
   (see `compute_dxa_circuit_sweep`'s own "ponytail" note), so every dislocation is written as a
   trivial self-referential 2-cycle — OVITO will render every line as an independent, unconnected
   segment, exactly what this operator actually knows, no more.
-- Single-rank only: no cross-rank gather (the `.ca` format has no native multi-piece convention to
-  hang that off of, unlike `write_dxa_dislocation_lines.cpp`'s VTK `.pvtu` pieces). Fine for the
-  single-MPI-rank validation runs used throughout this investigation.
+- No native multi-piece convention exists for `.ca` (unlike `write_dxa_dislocation_lines.cpp`'s VTK
+  `.pvtu` pieces) — **fixed 2026-08-03** (was single-rank-only before, a real bug the user hit
+  running with MPI>1: every rank raced to open/truncate the same output path independently). Now
+  gathers every rank's own lines to rank 0 via `MPI_Gatherv` (serialized into a flat, self-delimiting
+  `double` buffer: burgers.x/y/z, npoints, then npoints*4 doubles), only rank 0 writes the file,
+  re-numbering every line 0..N-1 as it writes (the original per-rank index doesn't need to survive
+  the gather). Verified with 1/2/4 MPI ranks on the real quadrupole case: loads cleanly in real OVITO
+  Pro (`ovitos`) every time, segment count growing with rank count (15/18 vs single-rank's 11) exactly
+  as expected — MPI domain decomposition splits the interface mesh, so a line crossing a rank boundary
+  becomes 2 independent segments (one per rank's own local circuit sweep); this is the same, already-
+  documented cross-rank fragmentation any per-rank-local DXA analysis has, not a gather bug.
 
-Wired into both `compute_dxa_screw_dipole_test.msp` and `compute_dxa_circuit_sweep_test.msp`,
-writing to `ovitodata/our_screw_dipole_result.ca` / `ovitodata/our_quadrupole_result.ca` (same
+Wired into `compute_dxa_elastic_sweep_real_case.msp`/`compute_dxa_elastic_sweep_screw_dipole.msp`,
+writing to `ovitodata/our_quadrupole_result.ca` / `ovitodata/our_screw_dipole_result.ca` (same
 directory as the user's own ground-truth `.ca` files, for easy side-by-side loading in OVITO).
+
+**Follow-up, same day: "every dislocation shows up as 'Other' in OVITO" — real bug, found and
+fixed, but not where suspected.** User noticed OVITO's own DXA classification always labeled our
+dislocations "Other" and suspected `BURGERS_VECTOR_FAMILY`. That table WAS genuinely incomplete
+(only the catch-all "Other" family was declared) and got fixed first — now a faithful copy of
+OVITO's real 4-family BCC table (`Other`, `1/2<111>`, `<100>`, `<110>`, verbatim reference
+vectors/colors cross-checked against a real OVITO-exported `.ca` file). **But this alone didn't fix
+it** — measured directly via `ovitos` (`data.tables['disloc-lengths']`/`data.tables['disloc-counts']`,
+the actual per-type length/count breakdown OVITO computes on import) that everything still classified
+as "Other" after the family-table fix.
+
+Root-caused by bisection against the real OVITO reference file rather than guessing: took the known-
+good reference `.ca`, and one at a time (a) changed a dislocation's own Burgers vector to a
+sign/permutation-symmetric variant, (b) forced `CLUSTER_ORIENTATION` to identity, (c) renumbered
+`STRUCTURE_TYPE`'s own id, (d) spliced our own real dislocation records into the good header — none
+of these broke classification. Only forcing `CLUSTER_SIZE` from its real value down to **0** broke
+it completely (every dislocation instantly became "Other"). This operator had always written a
+hardcoded `CLUSTER_SIZE 0` (it never had the real atom count available at all) — OVITO's importer
+apparently treats a zero-size cluster as invalid for Burgers-vector-family matching, regardless of
+how correct the family table itself is. Fixed by taking `DXALatticeClusters` as a new input: cluster
+1's real `atom_count` (summed across MPI ranks via `MPI_Reduce`, since `compute_dxa_lattice_clusters`
+is per-rank local) now goes into `CLUSTER_SIZE`, and its real least-squares `orientation` fit (rank
+0's own local value — display/diagnostic only in OVITO, no cross-rank reconciliation needed) now
+goes into `CLUSTER_ORIENTATION` instead of a hardcoded identity matrix.
+
+**Verified via `ovitos`'s own classification tables, not just "loads without error"**: quadrupole
+case now splits cleanly into `1/2<111>` and `<100>` with zero "Other", at 1 and 2 MPI ranks alike
+(counts differ slightly per run from the same pre-existing cross-rank/mesh-order non-determinism
+documented elsewhere in this file, but the "Other" bucket is empty every time). While in this code,
+also fixed a smaller, unrelated gap noticed along the way: the per-point trailing value in the
+`DISLOCATIONS` section (OVITO's own "core size") was hardcoded to a constant 0 for every point even
+though `DXADislocationLines::core_size` already tracks the real value (same data
+`smooth_dxa_dislocation_lines` consumes) — now written through properly.
+
+**Follow-up, same day: header now declares all 5 of OVITO's own structure types, not just the one
+used.** User pointed out that a real OVITO-written `.ca` always declares all 5 built-in structure
+types (fcc/hcp/bcc/diamond/hex_diamond) even when a given DXA run only ever analyzes one of them.
+This operator previously only declared the single "bcc" type it actually uses (as id 1, an arbitrary
+choice). Now writes all 5 verbatim (same names/reference vectors/colors as OVITO's own file), with
+`bcc` at OVITO's own real id (3) — `CLUSTER_STRUCTURE` updated to match. Purely a format-fidelity
+change (already confirmed the numeric STRUCTURE_TYPE id doesn't affect classification correctness,
+see the CLUSTER_SIZE finding above), verified via `ovitos`: `data.dislocations.crystal_structures`
+now lists all 5 names correctly (plus OVITO's own built-in "Unidentified structure" at index 0), and
+classification is still exactly correct (0 "Other").
+
+**Follow-up, same session: built.** New operator, `src/delaunay/dxa_lattice_cluster_fields.cpp`,
+copying `DXALatticeClusters::atom_cluster` (0 = unresolved) into a named per-particle grid field —
+identical `exanb::compute_cell_particles` pointwise-copy pattern as `cna_fields`/`ptm_fields`
+(`src/cna/compute_cna.cu`), just reading a `std::vector<int32_t>` member off `DXALatticeClusters`
+instead of a standalone `CudaMMVector<double>` slot. Verified on the real quadrupole case via
+`write_xyz` (`dxa_lattice_cluster_fields: { cluster_field: dxa_cluster_id }` right after
+`compute_dxa_lattice_clusters`, then `write_xyz: { fields: [id, type, dxa_cluster_id] }`): the field's
+own value distribution matched the operator's own printed stats exactly (126974 atoms at cluster id
+1, 1026 at 0/unresolved, out of 128000 owned particles). Wired into `compute_dxa_elastic_sweep_
+real_case.msp` right after `compute_dxa_lattice_clusters` (cheap, pointwise, no extra output file by
+default -- only materializes the field, doesn't write anything on its own).
+
+## `write_ovito_interface_mesh`: writes our own interface mesh in OVITO's own legacy VTK format
+
+New operator, `src/delaunay/write_ovito_interface_mesh.cpp` (2026-08-03, user request). Unlike
+`write_interface_mesh.cpp`'s own XML `.pvtu`/per-rank-piece convention, this instead byte-for-byte
+matches the *legacy* VTK ASCII format OVITO Pro itself writes for its own interface-mesh export
+(cross-checked directly against a real OVITO-exported reference file): `# vtk DataFile Version 3.0`
+header, `DATASET UNSTRUCTURED_GRID`, `POINTS n double`, `CELLS n 4n` (`"3 v0 v1 v2"` rows,
+`VTK_TRIANGLE`), `CELL_TYPES n` (all `5`), then both `CELL_DATA`/`POINT_DATA` carrying one
+`SCALARS cap unsigned_char` field. Legacy VTK has no multi-piece convention at all (it's inherently
+one self-contained file), so — unlike `write_interface_mesh.cpp` — this operator does a real
+`MPI_Gatherv` of every rank's own (deduplicated, referenced-only) vertices and triangle connectivity
+to rank 0, rebasing each rank's own local vertex indices by that rank's running point-count offset
+before writing; only rank 0 touches the filesystem.
+
+**Honest caveat on `cap`**: a real OVITO file can have `cap==1` triangles (confirmed on the real
+screw-dipole reference: 506/3004 capped) — synthetic triangles OVITO adds to close the surface at a
+non-periodic domain boundary. This operator's own `InterfaceMesh` never synthesizes such triangles
+(a boundary edge is simply left open, see `InterfaceMesh::edge_triangles`'s own doc comment), so `cap`
+is always written as `0` here. This matches OVITO's file *format* exactly (loads identically into
+OVITO/ParaView), not its capping *semantics* — synthesizing real cap triangles would be a separate,
+substantially bigger feature, not attempted.
+
+**Verified** with the real quadrupole case, 1/2/4 MPI ranks, loaded via real `ovitos`
+(`import_file(path, input_format="vtk/legacy/mesh")`, `data.triangle_meshes['mesh']`): single-rank
+gives `vertex_count=816` (exact match to OVITO's own reference), `face_count=1660` (OVITO's own:
+1648, the same small residual gap already documented elsewhere in this file); 2 ranks gives
+824/1631, 4 ranks gives 837/1624 — every case loads cleanly with vertex/face counts matching the
+file's own declared header exactly, confirming the cross-rank index rebasing is correct.
