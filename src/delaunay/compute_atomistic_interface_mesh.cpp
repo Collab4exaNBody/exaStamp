@@ -34,6 +34,7 @@ under the License.
 #include <vector>
 #include <set>
 #include <unordered_map>
+#include <functional>
 #include <string>
 
 // Alternative DXA step (v): builds the interface mesh the way Stukowski's own reference DXA
@@ -77,10 +78,17 @@ under the License.
 //      toward the generating crystalline atom A (i.e. outward from the non-crystalline region),
 //      matching InterfaceMesh's own established sign convention.
 //
-// ponytail: hole-closing only handles clean simple loops (see the pass itself, below) -- not
-// DXA1.3.6's full bounded backtracking search (`closeFacetHoles`/`removeUnnecessaryFacets`/
-// `duplicateSharedMeshNodes`/`fixMeshEdges`, a real half-edge-mesh cleanup machinery). Upgrade path
-// is that full search if n_interface_open_edges shows real data needs it.
+// ponytail: hole-closing (below) does a bounded DFS/backtracking search including branch points,
+// but without DXA1.3.6's own Burgers-vector-zero acceptance check (no ideal vector exists for
+// hole-to-hole edges here). No `removeUnnecessaryFacets`/`duplicateSharedMeshNodes`/`fixMeshEdges`
+// (a real half-edge-mesh cleanup machinery) -- a quad-level "same 4 vertices from two different
+// generating atoms" dedup was tried and reverted: measured on the real quadrupole case, it
+// actively made things worse (2020->2000 triangles but 34->47 open edges) because that situation
+// is usually two GENUINELY distinct facet sheets (e.g. the top and bottom surface of a 1-plane-
+// thin disordered layer) that happen to share the same 4 vertex positions, not a true duplicate --
+// exactly DXA1.3.6's own `duplicateSharedMeshNodes` scenario (split the shared nodes so both sheets
+// keep their own facets), not a case to delete one side of. Upgrade path if a measured gap points
+// there again.
 //
 // CRITICAL requirement, found empirically: dxa_edge_vectors' struct_field (hence
 // vertex_matches_target here) MUST come from compute_cna, not compute_ptm/ptm_fields. On the real
@@ -227,7 +235,14 @@ namespace exaStamp
 
       std::set<std::array<uint32_t,3>> seen_triangles;
 
-      auto emit_triangle = [&]( uint32_t A, uint32_t a, uint32_t b, uint32_t c )
+      auto raw_slot_vec = []( int slot ) -> Vec3d { return { bcc_ideal_raw[slot][0], bcc_ideal_raw[slot][1], bcc_ideal_raw[slot][2] }; };
+
+      // emit_triangle takes each vertex's own canonical BCC slot (index into bcc_ideal_raw,
+      // relative to generating atom A) alongside the vertex itself, so it can also derive each
+      // edge's ideal lattice vector the same way DXA1.3.6 does: from A's own resolved template
+      // directions, not from either (non-crystalline) mesh vertex's own orientation -- neither has
+      // one. See InterfaceMesh::edge_ideal_vector's own comment.
+      auto emit_triangle = [&]( uint32_t A, uint32_t a, int slot_a, uint32_t b, int slot_b, uint32_t c, int slot_c )
       {
         // orient so the normal points toward A (the generating crystalline atom), i.e. outward
         // from the non-crystalline region -- same sign convention as compute_interface_mesh.cpp.
@@ -236,7 +251,8 @@ namespace exaStamp
         const Vec3d normal = cross( pb-pa, pc-pa );
         const Vec3d toward_A = mesh.vertices[A] - centroid;
         uint32_t v0=a, v1=b, v2=c;
-        if( normal.x*toward_A.x + normal.y*toward_A.y + normal.z*toward_A.z < 0.0 ) { std::swap(v1,v2); }
+        int s0=slot_a, s1=slot_b, s2=slot_c;
+        if( normal.x*toward_A.x + normal.y*toward_A.y + normal.z*toward_A.z < 0.0 ) { std::swap(v1,v2); std::swap(s1,s2); }
 
         std::array<uint32_t,3> key { v0, v1, v2 };
         std::array<uint32_t,3> sorted_key = key;
@@ -248,6 +264,19 @@ namespace exaStamp
         result.edge_triangles[ InterfaceMesh::edge_key(v0,v1) ].push_back( tri_index );
         result.edge_triangles[ InterfaceMesh::edge_key(v1,v2) ].push_back( tri_index );
         result.edge_triangles[ InterfaceMesh::edge_key(v2,v0) ].push_back( tri_index );
+
+        const Mat3d& orient_A = flat_orient[ mesh.vertex_particle_index[A] ];
+        const Vec3d ia = raw_slot_vec(s0), ib = raw_slot_vec(s1), ic = raw_slot_vec(s2);
+        auto store_edge_ideal = [&]( uint32_t x, uint32_t y, const Vec3d& ix, const Vec3d& iy )
+        {
+          const uint64_t k = InterfaceMesh::edge_key(x,y);
+          if( result.edge_ideal_vector.count(k) ) { return; } // first-seen wins, see struct comment
+          const Vec3d diff = orient_A * (iy - ix); // physical-space ideal vector, x->y direction
+          result.edge_ideal_vector[k] = (x < y) ? diff : Vec3d{-diff.x,-diff.y,-diff.z};
+        };
+        store_edge_ideal(v0,v1,ia,ib);
+        store_edge_ideal(v1,v2,ib,ic);
+        store_edge_ideal(v2,v0,ic,ia);
       };
 
       for(uint32_t A=0; A<n_vertices; A++)
@@ -271,15 +300,15 @@ namespace exaStamp
 
           if( present[0] && present[1] && present[2] && present[3] )
           {
-            emit_triangle( A, vtx[0], vtx[1], vtx[2] );
-            emit_triangle( A, vtx[0], vtx[2], vtx[3] );
+            emit_triangle( A, vtx[0], quad.idx[0], vtx[1], quad.idx[1], vtx[2], quad.idx[2] );
+            emit_triangle( A, vtx[0], quad.idx[0], vtx[2], quad.idx[2], vtx[3], quad.idx[3] );
           }
           else if( second_is_hole )
           {
             for(int v1=0; v1<4; v1++)
             {
               const int v2 = (v1+1)%4;
-              if( present[v1] && present[v2] ) { emit_triangle( A, vtx[v1], vtx[v2], static_cast<uint32_t>(second_v) ); }
+              if( present[v1] && present[v2] ) { emit_triangle( A, vtx[v1], quad.idx[v1], vtx[v2], quad.idx[v2], static_cast<uint32_t>(second_v), quad.second ); }
             }
           }
         }
@@ -289,57 +318,75 @@ namespace exaStamp
       // the per-atom quad construction above only fires where a whole quad-face's worth of
       // neighbors are holes at once, which under-covers a *thin* (1-2 atom radius) dislocation
       // core -- exactly the common case here. Real boundary of an oriented facet is itself a
-      // consistently-oriented 1-manifold, so: for every open (used-by-exactly-1-triangle) edge,
-      // the closing facet must traverse it in the OPPOSITE direction from however the existing
-      // triangle already winds it -- collect that required direction for every open edge, then
-      // walk each vertex's unique required outgoing edge until back at the start, and fan-
-      // triangulate the loop in its own traversal order (preserves the induced orientation).
-      // ponytail: only closes clean simple cycles (every loop vertex has exactly one required
-      // outgoing direction) -- a branch point (3+ open edges) or a genuine dangling edge
-      // (domain-decomposition cutoff) makes every loop touching it unwalkable and is left open;
-      // upgrade path is DXA1.3.6's full bounded backtracking search if that turns out to matter.
+      // consistently-oriented 1-manifold, so: for every open (used-by-exactly-1-triangle) edge, the
+      // closing facet must traverse it in the OPPOSITE direction from however the existing triangle
+      // already winds it -- collect that required directed edge for every open edge (a vertex can
+      // have several, at a branch point, unlike the simple-loop-only version this replaces), then
+      // do a small bounded DFS/backtracking search from each unconsumed directed edge for a path of
+      // other not-yet-consumed required directed edges back to the start, and fan-triangulate the
+      // loop found (preserves the induced orientation automatically, same reasoning as before).
+      // ponytail: no Burgers-vector-zero acceptance check (DXA1.3.6's own validity gate on a
+      // candidate closure) -- hole-to-hole edges have no resolved ideal lattice vector here (only
+      // crystalline atoms get one, see resolve_slot above), so there's nothing to sum. Relies
+      // instead on the small MAX_LOOP_EDGES bound to keep any accepted closure local/plausible.
       long n_loops_closed = 0;
       {
-        std::unordered_map<uint32_t,uint32_t> outgoing; // from -> to, only where unambiguous (see below)
-        std::unordered_map<uint32_t,int> out_count;
+        static constexpr int MAX_LOOP_EDGES = 8; // verified on the real quadrupole case: raising this to 20 closed zero additional loops -- the remaining opens aren't loop-length-limited
+
+        std::unordered_map<uint32_t, std::vector<uint32_t>> outgoing_options; // from -> possible 'to's
         for(const auto& tri : result.triangles)
         {
           for(int e=0;e<3;e++)
           {
             const uint32_t a = tri[e], b = tri[(e+1)%3];
             if( result.edge_triangles[ InterfaceMesh::edge_key(a,b) ].size() != 1 ) { continue; }
-            // this triangle winds a->b; the closing facet must use b->a
-            outgoing[b] = a;
-            ++out_count[b];
+            outgoing_options[b].push_back(a); // this triangle winds a->b; the closing facet must use b->a
           }
         }
-        // an ambiguous vertex (more than one candidate outgoing edge, i.e. a branch point) can't
-        // be walked unambiguously -- drop it from 'outgoing' so any loop reaching it stops there.
-        for(const auto& kv : out_count) { if( kv.second != 1 ) { outgoing.erase(kv.first); } }
 
-        std::set<uint32_t> consumed;
-        for(const auto& start_kv : outgoing)
+        std::set<std::array<uint32_t,2>> used_directed_edge; // consumed by an already-accepted closure
+
+        std::vector<std::array<uint32_t,2>> all_starts;
+        for(const auto& kv : outgoing_options) { for(uint32_t to : kv.second) { all_starts.push_back({kv.first,to}); } }
+
+        for(const auto& start_edge : all_starts)
         {
-          const uint32_t start = start_kv.first;
-          if( consumed.count(start) ) { continue; }
+          if( used_directed_edge.count(start_edge) ) { continue; }
 
-          std::vector<uint32_t> loop_verts;
-          uint32_t cur = start;
-          bool ok = false;
-          for(int step=0; step<64; step++)
+          std::vector<uint32_t> path { start_edge[0], start_edge[1] };
+          std::vector<std::array<uint32_t,2>> path_edges { start_edge };
+
+          std::function<bool()> dfs = [&]() -> bool
           {
-            auto it = outgoing.find(cur);
-            if( it == outgoing.end() || consumed.count(cur) ) { break; }
-            loop_verts.push_back(cur);
-            cur = it->second;
-            if( cur == start ) { ok = true; break; }
-          }
-          if( ok && loop_verts.size() >= 3 )
-          {
-            for(uint32_t v : loop_verts) { consumed.insert(v); }
-            for(size_t i=1; i+1<loop_verts.size(); i++)
+            if( static_cast<int>(path_edges.size()) >= MAX_LOOP_EDGES ) { return false; }
+            const uint32_t cur = path.back();
+            auto it = outgoing_options.find(cur);
+            if( it == outgoing_options.end() ) { return false; }
+            for(uint32_t nxt : it->second)
             {
-              const std::array<uint32_t,3> tri { loop_verts[0], loop_verts[i], loop_verts[i+1] };
+              const std::array<uint32_t,2> de { cur, nxt };
+              if( used_directed_edge.count(de) ) { continue; }
+              bool in_path = false;
+              for(const auto& pe : path_edges) { if( pe == de ) { in_path = true; break; } }
+              if( in_path ) { continue; }
+
+              path.push_back(nxt);
+              path_edges.push_back(de);
+              if( nxt == start_edge[0] && path.size() >= 4 ) { return true; } // closed, >=3 distinct loop vertices
+              if( nxt != start_edge[0] && dfs() ) { return true; }
+              path.pop_back();
+              path_edges.pop_back();
+            }
+            return false;
+          };
+
+          if( dfs() )
+          {
+            for(const auto& de : path_edges) { used_directed_edge.insert(de); }
+            // path = [start0, v1, ..., start0] (closed) -- drop the repeated final vertex
+            for(size_t i=1; i+1<path.size()-1; i++)
+            {
+              const std::array<uint32_t,3> tri { path[0], path[i], path[i+1] };
               const uint32_t tri_index = static_cast<uint32_t>( result.triangles.size() );
               result.triangles.push_back( tri );
               result.edge_triangles[ InterfaceMesh::edge_key(tri[0],tri[1]) ].push_back( tri_index );

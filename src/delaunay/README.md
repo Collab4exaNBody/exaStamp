@@ -9,13 +9,628 @@ DXA's published pipeline has 9 steps. Status:
 
 | Step | What it does | Status |
 |---|---|---|
-| (i) | Atomic structure identification: crystal type **and** local lattice orientation per atom | crystal type: done (`compute_slcsa`, `src/analysis_particle/`). Orientation: **done** via PTM, see below |
+| (i) | Atomic structure identification: crystal type **and** local lattice orientation per atom | crystal type: **use `compute_cna`** (`src/cna/`), not `compute_ptm` -- PTM's continuous RMSD fit under-classifies real defects (see "`compute_cna`" section below). Orientation: **done** via PTM's `ptm_orientation` (`compute_cna` doesn't produce one) |
 | (ii) | Space-filling Delaunay tessellation | **done** — this directory |
-| (iii) | Assign an ideal lattice vector to each tessellation edge | **done** — `compute_dxa_edge_vectors`, `src/ptm/`, see below |
-| (iv) | Classify each tetrahedron good/bad from edge compatibility | **done** — `compute_dxa_tet_classification`, `src/ptm/`, see below |
-| (v) | Build the interface mesh (2D manifold separating good/bad regions, half-edge structure) | **done** — `compute_interface_mesh`, `src/delaunay/`, see below |
-| (vi)-(vii) | Burgers circuit construction, real-vs-noise defect filtering | **done** — `compute_dxa_burgers_circuits`, `src/delaunay/`, see below |
-| (viii)-(ix) | Sweep along the interface mesh to extract dislocation line geometry, junction detection | not started |
+| (iii) | Assign an ideal lattice vector to each tessellation edge | **done** — `compute_dxa_edge_vectors`, `src/ptm/`, see below (use `struct_field: cna_type`) |
+| (iv) | Classify each tetrahedron good/bad from edge compatibility | **done, matches OVITO's documented criterion** — `compute_dxa_tet_classification`, `src/ptm/`: bad if any of its 6 edges is unresolved (fixed from an earlier vertex-matching test that undershot the docs, though empirically identical at this system's `angle_tolerance=40`, see below) |
+| (v) | Build the interface mesh (2D manifold separating good/bad regions) | **done, two alternative implementations, open question on which is right** — `compute_interface_mesh` (tet-classification-boundary, matches OVITO's own documented construction) and `compute_atomistic_interface_mesh` (DXA1.3.6's *older* atom-centric construction, empirically closer to OVITO's actual triangle count) — see "Remaining work" item 1 |
+| (vi)-(vii) | Burgers circuit construction, real-vs-noise defect filtering | **corrected mid-session** — circuits must be built on the interface mesh's own edges (OVITO's documented algorithm), not a whole-crystal graph. `compute_dxa_mesh_burgers_circuits` (new, `src/delaunay/`) does this correctly on the atomistic mesh; `compute_dxa_burgers_circuits` (older, whole-crystal graph) is kept for the tet-boundary mesh's own bad-tet-reclassification use. See below |
+| (vi)-(ix) | Burgers circuits + line/junction extraction | **rewritten to match OVITO's own real (non-public) source, `DislocationTracer.cpp`** — `compute_dxa_circuit_sweep` now does territorial exclusion in the seed search itself, lockstep incremental growth over increasing trial-circuit length, and incremental (not post-hoc) 2-arm merging. Validated against exact `.ca` ground truth from the user: **screw dipole exact 2/2** (no merging even needed); **quadrupole ~19-20 vs. true 11**, but 100% precision (every fragment maps onto a real line, zero false positives) — pure over-fragmentation, not noise. **One open bug**: circuits can drift across a real 3+-way junction into a neighboring dislocation's core during ordinary growth (not a merge-decision issue — reproduced with all merging disabled) — see item 3 below for the full diagnosis and a promising lead (OVITO's `CrystalPathFinder`, item 4). `compute_dxa_dislocation_lines`/`compute_dxa_mesh_dislocation_lines` (earlier line-tracing attempts) remain superseded; `compute_dxa_mesh_burgers_circuits`/`compute_dxa_burgers_circuits` remain independently valid for other uses. |
+
+## Remaining work (checked here before resuming — see linked sections below for full detail)
+
+0. **IN PROGRESS: full re-architecture to match OVITO's real, current DXA source exactly** (user
+   request, checked directly against `ovito/src/ovito/crystalanalysis/modifier/dxa/*.{h,cpp}` --
+   the actual 2025 source, not the old DXA1.3.6 predecessor or the public manual). This traces the
+   drift bug and interface-mesh gap to something deeper than item 4's original CrystalPathFinder
+   lead: OVITO's real elastic mapping doesn't use a PTM-style continuous orientation fit at all --
+   `StructureAnalysis::determineLocalStructure` does a DISCRETE graph-topology match (CNA signature
+   + neighbor-bond-graph isomorphism) against fixed reference tables, and
+   `InterfaceMesh::createMesh`'s good/bad criterion is `ElasticMapping::isElasticMappingCompatible`
+   (a genuine per-tetrahedron Burgers-circuit-closure + Frank-rotation test), not our current
+   per-vertex/per-edge-count heuristics. Full plan (4 stages, user confirmed "full port, in order"):
+   1. **DONE, validated** -- discrete neighbor-slot classifier + cluster graph, replacing PTM's role
+      entirely for this pipeline. New files: `lattice_structure.h/.cpp` (verbatim BCC/FCC/HCP
+      tables + point-group symmetry-permutation search, unit-tested standalone: FCC/BCC both find
+      the correct 48-element Oh group, HCP the correct 12-element local group), `cluster_graph.h/
+      .cpp` (Cluster/ClusterTransition/ClusterGraph, unit-tested standalone), `compute_dxa_lattice_
+      correspondence.cpp` (per-atom backtracking permutation match --
+      `StructureAnalysis::determineLocalStructure` port), `dxa_lattice_clusters_algo.cpp` +
+      `compute_dxa_lattice_clusters.cpp` (BFS cluster growth + inter-cluster transitions --
+      `buildClusters`/`connectClusters` port). **Verified on the real installed build**
+      (`compute_dxa_lattice_clusters.msp`, same unrotated 16000-atom BCC Ta lattice `compute_ptm`
+      was originally validated on): **16000/16000 owned particles matched, exactly 1 cluster, 0
+      transitions** -- matches physical expectation exactly for a single perfect grain.
+   2. **DONE, validated** -- `CrystalPathFinder` port. New files: `dxa_crystal_path.h` (header),
+      `dxa_crystal_path_finder.cpp` (grid-independent `dxa_crystal_path_find`, unit-tested
+      standalone on the same synthetic BCC lattice as stage 1: **756/756 direct-neighbor pairs and
+      11/11 multi-hop, non-directly-bonded pairs exactly reproduce the real spatial vector** once
+      transformed back through the cluster's own orientation fit), `compute_dxa_crystal_path_edge_
+      vectors.cpp` (grid operator, `assignIdealVectorsToEdges` port). **Along the way, found and
+      fixed a real integration gap**: `compute_dxa_lattice_correspondence` originally only
+      classified owned cells (matching compute_ptm/compute_cna's own convention), leaving every
+      ghost-copy atom unclassified -- since Delaunay tessellation vertices routinely land on ghost
+      particles, this left ~7% of edges unresolved purely from ghost atoms never having a
+      correspondence at all (measured: 104861/113012, 92.8%, on the plain BCC Ta system). Widened
+      the classifier to cover the full grid including ghost cells (no PTM/CNA-style named-field
+      `ghost_update_opt` sync needed, since `DXALatticeCorrespondence` isn't a named field anyway,
+      and a ghost is its own real atom with its own real neighborhood -- classifying it directly is
+      both simpler and correct for this project's single-MPI-rank scope, where every "ghost" is a
+      periodic self-image with a fully populated local environment). Fixed: **113012/113012
+      (100%)** edges resolved on the plain BCC Ta system. Documented caveat in the operator's own
+      comment: a genuine multi-rank cross-rank ghost near the outer halo edge could still see a
+      truncated neighbor count, same "ghost-fringe-trust" concern `compute_delaunay.cpp` already
+      has for tets -- not yet exercised multi-rank. **Verified on the real quadrupole dislocation
+      case** too (`compute_dxa_crystal_path_real_case.msp`): 152571/176309 matched (owned+ghost),
+      **3 clusters, 0 transitions** (plausible: a real dislocation network can locally separate
+      otherwise-good BCC regions from each other with no directly-bonded matched-atom path between
+      them), **914276/924948 (98.85%) edges resolved** -- correctly less than 100% now that a real
+      defect network exists, unlike the perfect-lattice case.
+   3. **DONE, validated** -- `isElasticMappingCompatible` port (`dxa_elastic_mapping_compatible.cpp`
+      + `compute_dxa_elastic_mapping_tet_classification.cpp`): a genuine per-tetrahedron
+      Burgers-circuit-closure + Frank-rotation test on the new `DXACrystalPathEdgeVectors` data,
+      replacing the old per-vertex/edge-resolution-count heuristics entirely. **On the plain,
+      perfect BCC Ta system: 91200/91200 (100%) tetrahedra good** -- exactly right, zero defects.
+      **On the real quadrupole dislocation case: 755770/768041 (98.4%) good, 12271 bad (1.6%)** -- a
+      small, tight defect-core fraction, qualitatively much tighter than either old heuristic ever
+      achieved (tet-boundary mesh: 5164 triangles off ~172559 tets, ~3%; atomistic mesh: 2020
+      triangles vs OVITO's real 1648) -- though not yet directly comparable in the same units until
+      stage 4 actually builds an interface mesh from this classification and gives a triangle count
+      to compare against OVITO's 1648 reference.
+   4. **DONE, validated -- and this is the actual fix for the open drift/over-fragmentation bug.**
+      New file `compute_dxa_elastic_interface_mesh.cpp`: same tet-boundary triangle-extraction
+      algorithm as `compute_interface_mesh.cpp`, fed by the new elastic-mapping classification
+      (stage 3) instead of the old edge-resolution-count criterion; edge ideal vectors come directly
+      from `DXACrystalPathEdgeVectors` (every interface-mesh edge IS a real tessellation edge here,
+      unlike the atomistic mesh, so no re-derivation needed). Produces the *same* `InterfaceMesh`
+      struct `compute_dxa_circuit_sweep` already consumes -- **the sweep itself needed zero code
+      changes**, confirming the earlier analysis that OVITO's own `DislocationTracer` never
+      re-checks elastic-mapping consistency during sweep; the fix has to come from (and only from)
+      the interface mesh being built correctly in the first place.
+
+      **Real quadrupole case, no additional tuning at all**: interface mesh has **5164 triangles**
+      (vs. OVITO's 1648 -- more on this below) but the metric that actually matters, dislocation
+      count after the sweep, is **18 physical dislocations vs. the true 11** -- beating this
+      project's previous best (19-20, achieved only after extensive move-set tuning on the
+      atomistic mesh) on the very first run of the new architecture, with clean stop reasons (0
+      max-length, 0 self-closure, 78 junction, 0 open-edge, 0 exhausted). **Screw dipole case
+      (regression check)**: still **exact 2/2**, lengths 110.0/110.4 Å, matching the previous best
+      result exactly (4 open-mesh-edge stops, same known non-periodic-image-summed synthetic-field
+      boundary artifact as before).
+
+      **Honest open finding, not yet resolved**: the interface mesh's own triangle count (5164) is
+      *higher* than both OVITO's reference (1648, ~3.1x) and this project's own current live
+      edge-resolution-count pipeline (2794, ~1.7x) -- so by triangle-count alone the new, more
+      principled classifier currently looks numerically worse, even though it produces a
+      substantially better final dislocation count. Two candidate causes identified, neither yet
+      confirmed: (a) `CA_LATTICE_VECTOR_EPSILON=1e-3`/`CA_TRANSITION_MATRIX_EPSILON=1e-4` (OVITO's
+      own published values) may be tighter than this dataset's real MD relaxation noise tolerates
+      -- back-of-envelope: 0.01 Å thermal noise at this system's lattice constant is already ~3x
+      the 1e-3 lattice-unit epsilon: not yet swept/measured. (b) tried loosening
+      `crystal_path_steps` 4->8: **zero effect** (edge-resolved count identical bit-for-bit),
+      ruling out path-length as the lever -- the ~1.15% unresolved edges are dominated by genuinely
+      unclassified-atom endpoints (`cluster==0` short-circuit before any path search even runs), not
+      a too-short search radius. Not yet investigated further given the strong downstream result
+      already achieved; worth an epsilon sweep next if the triangle-count gap itself becomes
+      important (e.g. for a defect-mesh visualization matching OVITO's own more tightly, as opposed
+      to just correct dislocation-line topology).
+
+      **Follow-up investigation, same day: epsilon and ghost-margin both ruled out; classifier
+      itself confirmed exactly correct.** Swept `CA_LATTICE_VECTOR_EPSILON`/
+      `CA_TRANSITION_MATRIX_EPSILON` over a 9-point grid (1e-3 to 5e-2, ~50x range): **bit-identical
+      result every time** (755770/768041 good, 5164 triangles) -- epsilon has zero effect, ruled
+      out definitively. Added a diagnostic counting atoms that pass the aggregate CNA count but fail
+      the exact bond-topology permutation match: **0**, on the real quadrupole case -- the discrete
+      classifier's extra graph-isomorphism stage never rejects anything CNA's own aggregate count
+      wouldn't already reject. Then directly compared owned-only match counts (compute_cna never
+      touches ghost cells, so its own raw "matched/total" is misleadingly denominated over
+      owned+ghost): **this classifier's owned-only match is 126976/128000, bit-identical to
+      compute_cna's own owned-only match on the same file** -- full confirmation the classifier
+      itself is exactly faithful, not the source of the gap. Tried widening the ghost halo margin
+      (`rcut_max` 6.0->10.0 ang) in case ghost atoms near the halo's outer edge were getting
+      spuriously rejected from a truncated neighbor search: raised owned+ghost matched count
+      (152571->175285) but **the downstream tet-classification and triangle count were completely
+      unchanged** (bit-identical 755770/768041, 5164) -- ruling out ghost margin too, since
+      `compute_delaunay`'s own centroid-in-owned-cell trust rule already restricts which tets (and
+      therefore which ghost vertices) matter, and none of the newly-recovered far-ghost atoms were
+      referenced by any kept tet anyway.
+
+      **Follow-up, next session: the "smoothed defect mesh" hypothesis above was WRONG, disproven
+      directly.** User pointed out a real, runnable OVITO Pro Python interpreter exists locally
+      (`/home/lafourcadep/CODES/VISU/ovito-pro-3.14.1-x86_64/bin/ovitos`) -- previously assumed
+      unavailable (OVITO's own source-only checkout has an unbuilt `build/` dir, no compiled
+      binary). This is a genuinely reusable capability going forward: OVITO ground truth no longer
+      has to be user-supplied by hand, it can be generated directly for any test case via `ovitos` +
+      `DislocationAnalysisModifier` + `export_file(..., "vtk/trimesh", key="dxa-interface-mesh")`
+      (the defect mesh is a separate object, `key="dxa-defect-mesh"`).
+
+      Re-generated the quadrupole's own interface mesh fresh via `ovitos`: **1648 triangles, 6400.9
+      Å², identical line count to the user-supplied `output_dxa_ovito.vtk`** -- confirms that file
+      IS the raw interface mesh (not the defect mesh, which for this same system exports as a
+      degenerate 12-triangle mesh, clearly a different/oddly-behaved object, not what was being
+      compared against all along). The "different metric" hypothesis is dead; the 3.1x triangle/area
+      gap on the quadrupole is a real, apples-to-apples comparison.
+
+      **But then generated the screw dipole's own OVITO interface mesh for the first time ever**
+      (no such reference existed before this session) and got a real surprise: **OVITO's own screw-
+      dipole interface mesh is 3004 triangles, 9479 Å²** -- our own screw-dipole mesh (3462
+      triangles, 12617 Å²) is only **1.15x the triangles, 1.33x the area** of OVITO's real
+      reference -- nowhere near the quadrupole's 3.1x gap. (A same-session self-consistency estimate
+      using area/length ratios, made before this real ground truth existed, wrongly concluded the
+      screw dipole was proportionally *worse* than the quadrupole -- retracted; that heuristic's
+      implicit assumption, that BCC Ta's tube width-per-length should be similar between the two
+      test systems, turns out false even in OVITO's own real output: OVITO's own screw-dipole
+      area/length ratio is ~41 Å vs. its own quadrupole's ~10 Å, i.e. OVITO's real tube is *itself*
+      proportionally much fatter on this specific (unrelaxed, synthetic-displacement-field) dataset
+      than on the real MD-relaxed quadrupole.) **Conclusion: the ~3x-wider-region gap is concentrated
+      in the quadrupole's junction-dense, real-relaxed-MD regime specifically, not a generic
+      property of the elastic-mapping classifier** -- a much more localized, actionable lead than
+      "epsilon" or "smoothed-mesh-mismatch" ever were. Next step if pursued: compare where in the
+      quadrupole's own mesh the extra area concentrates (near real junctions vs. along ordinary line
+      segments) to isolate the cause further.
+
+      Fresh OVITO references saved for reuse: `ovitodata/output_dxa_screw_dipole_interface_ovito.vtk`
+      (3004 triangles, the new ground truth), `ovitodata/output_dxa_screw_dipole_defect_ovito.vtk`,
+      `ovitodata/output_dxa_quadrupole_defect_ovito.vtk` (the degenerate 12-triangle defect mesh,
+      kept for reference even though it turned out not to be what `output_dxa_ovito.vtk` was).
+
+      **Follow-up, same session: found and fixed the actual root cause -- a whole missing port
+      step, `ElasticMapping::assignVerticesToClusters()`.** User asked to keep pushing for an exact
+      match. Systematically re-tested and ruled out, each with a clean measurement: (a) a
+      cluster-graph-transition mechanism (only 11/924948 edges affected, negligible); (b) the
+      `DXA_MAX_NEIGHBORS` append cap silently dropping neighbors (0 drops measured); (c)
+      `StructureAnalysis::formSuperClusters()` -- confirmed via `grep` that OVITO's real DXA
+      pipeline (`DislocationAnalysisEngine.cpp`) never even calls it (only a *different* modifier,
+      Elastic Strain, does) -- a real, clean dead end, not a bug; (d) classifier fidelity at the
+      SET level (not just count): dumped both our own and OVITO's own per-atom rejected-atom id
+      lists via `ovitos` and diffed them directly -- **our rejected set is a perfect subset of
+      OVITO's, differing by exactly 2 atoms out of 1026** (OVITO rejects 2 extra borderline atoms
+      we accept) -- as close to "exact" as classification gets, and far too small to explain a 3x
+      gap; (e) tessellation density -- cross-checked our own Geogram-based tessellation's tets/edge-
+      per-atom ratio against an independent SciPy/Qhull triangulation of the identical raw point
+      cloud: 6.00/7.23 (ours) vs 6.05/7.05 (Qhull) tets,edges per atom -- normal, unremarkable,
+      ruling out "our tessellation is unusually dense" too.
+
+      **The real cause, found by re-reading `ElasticMapping::assignIdealVectorsToEdges` once more
+      and noticing it calls `clusterOfVertex()`, not `structureAnalysis().atomCluster()`, for its
+      own gate check** (`if(cluster1->id==0 || cluster2->id==0) continue;`) -- `clusterOfVertex()`
+      returns a value from a SEPARATE, previously-unported method,
+      `ElasticMapping::assignVerticesToClusters()`, which propagates a cluster id to **every**
+      tessellation vertex (not just classified atoms) by flood-filling outward through ordinary
+      tessellation-edge adjacency from already-clustered vertices -- entirely distinct from
+      `StructureAnalysis::buildClusters`/`connectClusters` (both purely atom-classification-level,
+      restricted to each atom's own *native* 14-neighbor list). Our port only ever had the
+      atom-classification-level cluster (0 for any unclassified atom, permanently), and used THAT
+      raw value for the edge-resolution gate -- meaning every tessellation edge touching *any* of
+      the ~1024 unclassified atoms was rejected outright before `CrystalPathFinder` ever got a
+      chance to route around it via its own reverse-neighbor-search mechanism (which was ported
+      correctly and does still use the raw, un-propagated cluster internally, exactly matching
+      `CrystalPathFinder::findPath`'s own `structureAnalysis().atomCluster()` call --
+      only the *outer gate check* was using the wrong cluster source). New function
+      `dxa_propagate_vertex_clusters()` (`dxa_crystal_path_finder.cpp`, BFS flood-fill over the full
+      tessellation-edge graph -- OVITO's own "repeat until no change" scan converges to an
+      equivalent result, just less efficiently) now feeds the gate check, the re-expression target,
+      and the edge's own recorded cluster transition in `compute_dxa_crystal_path_edge_vectors.cpp`
+      -- exactly mirroring which of the two cluster sources OVITO's own code uses at each specific
+      point.
+
+      **Result, quadrupole (no other changes)**: edge resolution 98.85% -> **99.98%** (924768/
+      924948); tets good 98.4% -> **99.87%** (767017/768041, bad tets 12271 -> 1024); **interface
+      mesh 5164 -> 1692 triangles vs. OVITO's 1648 -- a 2.7% difference, down from 3.13x.**
+      Downstream circuit sweep (no code changes there either, confirming again the fix belongs
+      entirely at the mesh-construction level): **8 physical dislocations vs. the true 11** (was
+      18-21), total length 612.62 Å vs. OVITO's real coarsened 629.16 Å (2.6% off). Per-line
+      breakdown against ground truth is very clean: our 3 shortest lines (6.56, 7.23, 13.25 Å)
+      closely match OVITO's own 3 short junction-type lines (9.05, 9.4, 15.08 Å); 3 of our
+      "classical" lines land right on 3 of OVITO's 8 (68.29≈68.24, 72.69/72.77≈72.24/73.68); and our
+      remaining two long lines (152.93, 218.9 Å) sum to 371.83 Å, matching the sum of OVITO's
+      remaining 5 classical lines (381.47 Å) within 2.5% -- **the sweep is finding the same 11
+      physical dislocations, but the incremental two-arm merge logic is occasionally still
+      over-merging 2-3 real, distinct dislocations that meet at one junction into a single long
+      segment.** This is now a narrow, well-characterized remaining gap in `compute_dxa_circuit_
+      sweep`'s own merge heuristic (likely `MERGE_GRACE_ROUNDS` needing retuning now that more edges
+      resolve and arm growth timing has changed), not a classification, tessellation, or
+      elastic-mapping problem -- those are now effectively solved.
+
+      **Screw dipole regression, more nuanced**: interface mesh dropped 3462 -> 941 triangles
+      (OVITO's own reference: 3004) -- now *under*, not over. But the actual dislocation output is
+      completely unaffected (still exact 2/2, lengths ~110/110 Å, matching before and OVITO's own
+      228.8 Å reference closely) -- the lost mesh area doesn't touch the real dislocation cores.
+      Likely explanation, not fully confirmed: this specific synthetic test file has an
+      already-documented confound (no periodic-image summing in its own construction, leaving a
+      genuine spurious strained ribbon at the domain boundary, `239 cutoff edges` here) -- before
+      this fix, part of that ribbon was included as "bad" purely via the missing-edge shortcut
+      (not real physics); now that real edges resolve there and get a fair Frank/Burgers test (240
+      genuine failures now, vs. 0 before), much of that region correctly comes back "good" instead
+      of being auto-flagged bad. Not chased further this session -- the quadrupole (real, MD-relaxed
+      ground truth) is the reliable signal, and it improved dramatically.
+
+      **Follow-up, same session: found and fixed a second real bug, this time in
+      `compute_dxa_circuit_sweep`'s own merge logic**, by re-reading OVITO's real
+      `DislocationTracer::joinSegments()` + `DislocationNode::connectNodes()`/`formsJunctionWith()`
+      in detail. OVITO's real 2-way-vs-3+-way junction decision is a proper ring-union structure
+      (`junctionRing`, a circular linked list): while scanning a stopped circuit's *entire*
+      boundary, it calls `connectNodes()` for *every* distinct adjacent circuit it touches,
+      naturally building a ring whose size (`countJunctionArms()`) directly says "how many circuits
+      meet here" -- `armCount>=3` is a real junction (kept separate), `armCount==2` merges. Our own
+      port only ever recorded a *single* `blocking_node` per stopped node -- when a circuit's
+      boundary directly touched 2+ *different* other circuits at once (exactly the local signature
+      of a real 3+-way junction), whichever was encountered *last* while scanning silently
+      overwrote the earlier one, discarding the direct evidence and falling back on a *global*
+      incoming-count proxy that isn't equivalent. Fixed: `NodeState::blocking_node` ->
+      `blocking_nodes` (collects every distinct touched node, not just the last), plus a new
+      `resolved_distinct_blockers()` helper (resolves each through any prior merge chain and dedups)
+      used everywhere a merge decision is made -- if a node's own resolved set has size != 1, that
+      alone is now definitive, immediate, local evidence of a real 3+-way junction (no need to even
+      wait on the incoming-count/grace-period checks).
+
+      **Result on the quadrupole**: raw segments 12 -> 9, absorbed-via-merge 4 -> 1 -- a real,
+      measured reduction in improper merges (matches the mechanism fix directly). Final dislocation
+      count stayed at **8** (unchanged) and total length improved slightly (612.6 -> 615.5 Å, now
+      2.2% off OVITO's 629.2 Å, down from 2.6%) -- the fix is verified correct and real, but the
+      remaining 8-vs-11 gap has shifted: it's no longer primarily an incorrect-merge problem (that
+      mechanism is now much more locally principled, matching OVITO's own), it looks more like a
+      **raw seed-discovery gap** -- only 9 independent segments get seeded in the first place for a
+      system with 11 real dislocations + 7 real junctions, before any merging even happens. Not yet
+      investigated; the natural next place to look is `try_seed_from`'s own local trial-circuit
+      search (why doesn't every real arm get its own independent seed before growth starts
+      colliding with a neighbor's territory) rather than anything in the merge logic itself.
+
+      **Follow-up, same session: diagnosed the seed-discovery gap precisely -- it's an
+      order-dependent territorial race in `try_seed_from`'s sequential vertex scan, confirmed but
+      not yet fixed.** Compared against OVITO's real `DislocationTracer::findPrimarySegments()`:
+      structurally very similar (same "stop at first valid closing edge" BFS, same territorial
+      exclusion checks) -- one real, but currently inert, faithfulness gap found: OVITO's search
+      also verifies the accumulated Frank-rotation matrix agrees between the two BFS paths meeting
+      at a candidate closing edge (`frankRotation.equals(neighborStruct->tm, ...)`), not just that
+      the Burgers vector is nonzero; our own `try_seed_from` never checks this. Doesn't currently
+      matter for either test system (both are single-cluster, so every transition is trivially the
+      identity) but would matter for a genuine multi-grain system -- worth porting for full fidelity
+      even though it's not the cause of the current gap. **The real, confirmed cause**: reversed the
+      seed-scan order (`for(root=n_vertices-1; ...; root--)` instead of ascending) as a diagnostic,
+      with zero other changes -- **result jumped from 8 to 10 physical dislocations** (vs. the true
+      11), with all 3 short junction-type lines now found (previously only 2) and only one remaining
+      compound-merged line (vs. two before). This conclusively confirms the gap is a genuine
+      territorial race: whichever of two nearby real dislocation arms gets tried as a seed *first*
+      (by raw vertex index) claims territory the other needs, and the second arm never gets its own
+      independent seed at all -- it just silently disappears rather than erroring. **Not adopted as
+      a fix**: reversing the scan order is itself just as arbitrary as the original ascending order
+      -- it happens to do better on this one test case, but adopting it outright would be curve-
+      fitting to the only ground truth available, not a real solution. A genuine fix would need a
+      properly order-*independent* seed strategy (e.g. a "most locally-constrained region first"
+      priority, or a truly simultaneous/parallel seeding pass) -- a real design effort, not
+      attempted this session. Also re-tested `create_secondary_segment` (disabled since an earlier
+      session, when it measurably made results worse) now that the real Frank-rotation-based
+      elastic mapping exists: **still makes things worse** (22 dislocations, several exactly
+      degenerate/zero-length) -- re-confirms the issue is specifically the hole-closing loop's own
+      missing consistency check (not the general elastic-mapping fidelity, which is now good), left
+      disabled.
+
+      **Follow-up, same session: found and fixed a real, narrow classification bug behind the
+      remaining gap, per user's "if the seed strategy is the same, why is our result different?"
+      question.** Rather than accept the seed-ordering race as an unavoidable design limit, checked
+      whether the *input* to the sweep (the interface mesh, and the classification feeding it) was
+      truly identical to OVITO's, atom for atom, not just count-for-count. Clustered the 11
+      dislocations' own endpoints from OVITO's real `.ca` ground truth into 7 junction positions
+      (matching the known 6x3-way + 1x4-way topology exactly), then checked the 2 atoms where our
+      classification still differed from OVITO's own (found earlier via the direct id-set diff, see
+      item 0 above): **both sit within ~3.5 Å of the exact same real junction**, and straddle it
+      almost symmetrically. Reproduced the BCC classification test independently in Python for these
+      2 atoms and confirmed they correctly FAIL the BCC 14-neighbor sanity gate (matches OVITO) --
+      but then found they also happen to **exactly satisfy the FCC 12-neighbor combinatorial test**
+      (n421=12, a perfect topological match) purely from local strain distortion, even though the
+      whole system is pure BCC. Root cause: `compute_dxa_lattice_correspondence` tested FCC/HCP
+      *then* BCC unconditionally for every atom, regardless of what the pipeline actually wanted --
+      unlike OVITO's real `DislocationAnalysisModifier`, whose `input_crystal_structure` is a single
+      required choice that's the *only* structure ever tested per atom. Fixed: new required
+      `target_structure` slot (`"BCC"`/`"FCC"`/`"HCP"`, default `"BCC"`), gating which family the
+      functor even attempts -- exactly mirroring OVITO's own single-target design.
+
+      **Result: classification now 126974/128000 -- an EXACT match to OVITO's own real
+      DXA-internal count** (previously 126976, a 2-atom mismatch, now closed to zero). Interface
+      mesh **1656 triangles vs. OVITO's 1648 -- 0.5% off**, down from 2.5-2.7% before this fix.
+      Circuit sweep: **9 physical dislocations vs. the true 11** (up from 8), lengths [7.14, 7.19,
+      12.63, 66.77, 67.34, 72.97, 73.79, 153.29, 153.58], total 614.71 Å vs. OVITO's 629.16 Å
+      (2.3% off) -- the 3 short junction-type lines are now found essentially exactly (7.14/7.19/
+      12.63 vs. OVITO's 9.05/9.4/15.08), and only 2 of OVITO's 8 classical lines remain compound-
+      merged (down from a messier split before). Screw dipole regression: completely unaffected
+      (still exact 2/2, mesh still 941 triangles) -- expected, since that test never had a spurious
+      FCC-classified atom to begin with (single-cluster, no junction network). **This closes the
+      classification-fidelity gap entirely** -- the residual 9-vs-11 count is now attributable
+      solely to the still-open, still-unfixed order-dependent seed-race documented in the paragraph
+      above, not to any remaining classification or mesh-construction discrepancy.
+
+   5. **DONE, validated -- line coarsening + smoothing** (user request, matching OVITO's own
+      `linePointInterval`/`lineSmoothingLevel` mechanism exactly). New files:
+      `smooth_dxa_dislocation_lines.cpp` (`coarsen_dislocation_line`/`smooth_dislocation_line`, ported
+      from `DislocationNetwork::coarsenDislocationLine()`/`smoothDislocationLine()`), plus a new
+      `DXADislocationLines::core_size` field (parallel to `line_positions`, the sweeping circuit's own
+      loop size when each point was recorded -- OVITO's own `DislocationSegment::coreSize`, used to
+      weight the coarsening merge so points recorded near a junction/wide-circuit region get merged
+      more aggressively than narrow, well-defined ones) populated by `compute_dxa_circuit_sweep`
+      (`append_point`/`commit_new_segment`/`do_merge` all updated to track it alongside `line`).
+      Coarsening: adaptive merge-group sizing (`target_point_interval`, default 2.5, OVITO's own
+      default) with open-segment endpoints always pinned (so junction connectivity isn't disturbed)
+      and a proper closed-loop "seam" point. Smoothing: 2D Taubin (SIGGRAPH 95) alternating
+      lambda/mu relaxation, `target_smoothing_level` (default 1, OVITO's own default) iterations.
+      One subtlety found tracing OVITO's own C++ scoping precisely: the closed-loop closing point
+      deliberately reuses the two boundary half-interval passes' own accumulator (not the middle
+      loop's last group) -- OVITO's middle loop declares its own shadowing local variables of the
+      same name, easy to miss porting from the raw source without noticing the shadowing.
+
+      **Verified real quadrupole case**: 3018 raw points -> 141 coarsened+smoothed points (~21x
+      reduction), total length 953.96 -> 599.69 Å (a real 37% reduction from tortuosity, not points
+      lost -- raw sweep moves genuinely zig-zag, especially near junctions). **Screw dipole
+      regression check** (an already near-straight line, minimal real tortuosity to remove): 803 ->
+      34 points, but length barely changes (220.39 -> 220.01 Å, 0.17%) -- confirms the algorithm
+      preserves a genuinely straight line's own length and only shortens real zig-zag, not a
+      systematic bias. Segment/dislocation count is unaffected either way (coarsening runs strictly
+      after the sweep, touches point shape only, not topology) -- the run-to-run dislocation-count
+      variance seen between these two test runs (19 vs 23 on the quadrupole) is the same pre-existing
+      OMP-triangle-emission-order non-determinism already documented elsewhere in this file, not
+      caused by this feature.
+
+   **Not yet touched, still on the OLD (PTM+angle-snap) path**: `compute_dxa_edge_vectors`,
+   `compute_dxa_tet_classification`, `compute_interface_mesh`, `compute_atomistic_interface_mesh`,
+   `compute_dxa_circuit_sweep`, and everything below in this file describing them -- none of that is
+   broken or changed yet, this new work is purely additive so far (new files only, nothing rewired).
+   Read this item first; the rest of the file describes the pre-existing (still currently used)
+   pipeline until stages 2-4 above land.
+
+1. **Which interface mesh should Burgers circuits actually be built on?** OVITO's own documentation
+   states the interface mesh is "those triangular Delaunay facets having a good tetrahedral element
+   on one side and a bad element on the other" — i.e. `compute_interface_mesh`'s tet-boundary
+   construction, not the atom-centric `compute_atomistic_interface_mesh` (built from DXA1.3.6's
+   source, which turns out to implement the *older*, 2010 Stukowski-Albe algorithm, not the current
+   2012 Stukowski-Bulatov-Arsenlis one the documentation describes and OVITO actually runs).
+   *However*, empirically the tet-boundary mesh gives 5164 triangles (even with the now-corrected,
+   documented edge-resolution tet criterion) vs. the atomistic mesh's 2020 — OVITO's real reference
+   is 1648, so the atomistic mesh is closer despite being architecturally the "wrong" one per the
+   docs. Current decision (user-confirmed): build circuits on the atomistic mesh anyway
+   (`compute_dxa_mesh_burgers_circuits`, see below) since it's tighter/less noisy, revisit if this
+   turns out to matter once line-sweeping is working. Separately, the atomistic mesh's own
+   remaining ~22% gap vs. OVITO (2020 vs 1648) is still open — see the "not yet tried" list in its
+   own section below (DXA1.3.6's real neighbor-sorting algorithm, or its actual half-edge
+   `removeUnnecessaryFacets`/`duplicateSharedMeshNodes`/`fixMeshEdges` machinery).
+2. **DXA steps (vi)-(ix): done and verified against the actual 2012 paper, cross-segment merging
+   added, one remaining gap.** `compute_dxa_circuit_sweep` implements the real algorithm end-to-end:
+   local bounded-BFS trial-circuit search (step vi), Burgers vector from the seed circuit's own
+   edges (step vii), halfedge-based sweep with shrink-before-expand priority and explicit per-facet
+   ownership (step vii), self-closure/junction stop detection (step ix) — see its own section below
+   for the full history (two prior bugs found and fixed: a first attempt missing the move-
+   priority/facet-ownership mechanism entirely, built against the OVITO manual's summary rather than
+   the paper; a second seeding from a global spanning-tree signal that doesn't localize defects,
+   giving ~zero Burgers vectors for most lines) — plus Union-Find merging of raw segments across
+   clean two-way (non-branching) junctions into `DXADislocationLines::dislocation_id` groups, since
+   one physical dislocation is often discovered as several independently-seeded segments (see the
+   "Follow-up: merging segments into physical dislocations" subsection below). Result on the real
+   quadrupole: ~40 raw segments, all with physically real Burgers vectors (0.58-0.88, vs. BCC Ta's
+   real a/2⟨111⟩=0.866), merged down by only a couple in this particular (genuinely branchy) network.
+   **One gap remains**: a real multi-way junction's shared node position/connectivity isn't
+   reconstructed — arms are correctly kept as separate segments/ids, but
+   `DXADislocationLines::junction_vertices` stays empty (only counted/classified, not assembled into
+   a shared coordinate). Not needed for length statistics, would matter for skeleton-graph rendering
+   or node-degree analysis downstream.
+
+   **Follow-up (2026-08-03): attempted a fix for the visible symptom of this gap — junction endpoints
+   not coinciding in space — REVERTED, wrong approach identified.** User noticed (visually, via
+   Paraview) that lines meeting at a junction don't share an exact endpoint; measured a real 0.5-2 Å
+   gap per junction on the quadrupole by comparing every segment's raw endpoint against its nearest
+   other-segment endpoint in the `.ca` output. First attempt: a post-growth pass that clustered every
+   unmerged Junction-stopped node with whichever other node its own `blocking_nodes` resolved to
+   (through `resolved_distinct_blockers`, i.e. through the merge-resolution chain), then snapped every
+   member's endpoint to the cluster's average. This measured as 0.0 Å gaps everywhere on one run — but
+   the user immediately caught (visually) that it was wrong: it mixed up which points belong to which
+   junction, adding spurious excess line length. **Root cause of the wrong fix**: `resolve_node`/
+   `resolved_distinct_blockers` exist to answer "which segment-chain does this territory currently
+   belong to" for MERGE bookkeeping, not "where is this node physically right now" — `facet_owner[T]`
+   freezes whichever node claimed T at whatever point during ITS OWN growth that happened to be, which
+   can be long before that node's own eventual final stopping position (it may have kept growing well
+   past T before halting somewhere else). Resolving a blocker through the merge chain can land on a
+   node whose CURRENT final endpoint is the far end of an already-grown, already-merged chain,
+   potentially spatially unrelated to the actual junction location — averaging that in corrupts the
+   geometry instead of reconciling it.
+
+   **Second attempt, same day: fixed correctly, checked directly against OVITO's real
+   `DislocationTracer::joinSegments`** (`ovito/src/ovito/crystalanalysis/modifier/dxa/
+   DislocationTracer.cpp`, lines ~1105-1327, read at the user's request before retrying). OVITO's real
+   mechanism: builds a `junctionRing` (circular linked list) from `Edge::circuit` -- which node
+   currently owns the *live boundary edge* right there, right now -- not from historical interior-face
+   ownership; for `armCount>=3` it computes the ring's average position and **extends** every arm with
+   one brand new point reaching that shared center (`line.push_back(...)`), it never overwrites the
+   real last recorded point. Reimplemented with the equivalent distinction already present in this
+   operator's own two ownership layers (see this file's own header comment): use `edge_owner` (live,
+   continuously updated, matches `Edge::circuit`), never `facet_owner`/the merge-resolution chain
+   (permanent historical record, matches nothing OVITO uses for this). For a stopped node's own final
+   loop boundary edge (a,b), whichever node currently owns the exact reverse edge (b,a) is
+   definitionally still sitting right there (or frozen exactly where it stopped, since `do_merge` never
+   touches `edge_owner`/`facet_owner`) -- cluster only nodes that are BOTH still-standalone (unmerged)
+   Junction survivors and directly, currently share such a live reverse edge, then **append** (not
+   overwrite) one new point per arm at the cluster's average position, duplicating that arm's own last
+   `core_size` for the new point (matching OVITO's `coreSize.push_back(coreSize.back())`).
+
+   **Verified carefully this time** (a bit-exact before/after A/B wasn't possible -- the interface mesh
+   itself varies run-to-run even at `OMP_NUM_THREADS=1`, upstream of this operator entirely -- so
+   verified the fixed run's own output directly instead, across 5 separate runs): every junction
+   endpoint gap is **exactly 0.0 Å every time** (segment counts varied 8-11 run to run, gap was 0.0 Å
+   regardless); the newly appended point's own jump distance is always in the same 2-8 Å range as every
+   other consecutive-point jump in that same line (checked point-by-point) -- i.e. a small, physically
+   reasonable last hop, not the wild spatially-unrelated jump the first (reverted) attempt produced;
+   total raw sweep length stayed in the same 800-820 Å ballpark across all 5 runs, no blow-up. Screw
+   dipole regression unaffected either way (0 junction stops in that test case, confirmed unchanged:
+   exact 2/2, ~110/110 Å).
+3. **Line count still doesn't match the quadrupole's real ground truth — over-fragmentation,
+   substantially reduced but not fixed.** User provided OVITO's actual `.ca` (Crystal Analysis)
+   output for both test cases (`ovitodata/output_dxa_no_coarsening.ca`,
+   `output_dxa_screw_dipole_no_coarsening.ca`), giving *exact* ground truth (parsed directly,
+   including decoding the `DISLOCATION_JUNCTIONS` circular-linked-list format from OVITO's own
+   exporter source): **quadrupole = 11 dislocations** (8 classical a/2⟨111⟩ at |b|=0.866 exactly,
+   lengths 85-107 Å; 3 junction-type a⟨100⟩ at |b|=1.0 exactly, lengths 11-19 Å; connected via 7
+   junction nodes — six 3-way, one 4-way, **zero clean 2-way pass-throughs anywhere**);
+   **screw dipole = exactly 2 dislocations** (|b|=0.866 exact, ~114.5 Å each, self-closing via the
+   periodic wrap).
+
+   User also obtained OVITO's own actual (non-public) DXA source (`DislocationTracer.cpp`) directly,
+   which let this be diagnosed against the real algorithm instead of just the paper. Confirmed two
+   structural gaps versus the first sweep implementation: (1) territorial exclusion (already-claimed
+   mesh edges/facets) must be baked into the *seed search* itself, not just the sweep; (2) segments
+   must grow in lockstep via an outer loop over increasing trial-circuit length, not be swept to full
+   completion one at a time. `compute_dxa_circuit_sweep.cpp` was rewritten around both. This alone,
+   with only a post-hoc (end-of-run) merge step, made the screw dipole *perfect* (2/2) but made the
+   quadrupole *worse* (116, up from the original 41) — diagnosed as: once two adjacent redundant
+   seeds mutually block each other, post-hoc merging correctly records them as one dislocation for
+   length statistics, but neither keeps *growing through the gap* afterward, inviting more redundant
+   reseeding nearby each round. Fixed by moving 2-arm merging *inside* the growth loop (run every
+   round, splicing the absorbed segment's far end onto the survivor as a still-growing node) —
+   matching what OVITO's own `joinSegments` does. Result: quadrupole down to **69** (repeatable
+   improvement: 116 → 87 with post-hoc merge only → 69 with incremental merge-and-continue). Screw
+   dipole stays exactly **2/2**.
+
+   **Still 69 vs. 11 on the quadrupole (~6x too many)** — since the real topology has *zero* 2-way
+   pass-throughs, the remaining fragments are almost certainly still redundant, independently-seeded
+   duplicates of the same physical arcs that happen to cluster in groups of 3+ near each other
+   (correctly refused a merge by the 3+-arm rule, since the code can't tell a genuine 3-way junction
+   from 3 spurious neighbors). Burgers-vector character: 62/69 cluster near ⟨111⟩ (0.5-0.9), only 3
+   show any hint of the axis-aligned junction character (magnitudes 0.8-1.2) vs. the true 8-classical
+   + 3-junction split — still not resolved. Two documented simplifications kept from the first
+   version (simpler 2-move set instead of OVITO's 5; no `createSecondarySegment`) are the leading
+   suspects for the residual redundant seeding, not yet tried.
+
+   Checked in with the user at this point (69 vs 11, real progress but not closing the gap) rather
+   than continuing to iterate further without confirming direction — see
+   [[feedback_dxa_collab_style]] for why.
+
+   **Follow-up, same day: two more real bugs found and fixed, and a diagnostic that changed the
+   plan.** First, verified precisely (not just guessed) that the 69 fragments were the right kind of
+   problem: mapped every one of them against OVITO's exact ground-truth line positions and found
+   **100% precision** — all 69 landed within 0.3-2 Å of one of the 11 real lines, zero false
+   positives anywhere else. So the seed search and territory are correct; only fragment count is
+   wrong. User then asked for a `write_dxa_ca_file` operator to load our own output directly into
+   OVITO (built — see its own section below) and pushed for continued exact-fidelity work rather
+   than a pragmatic geometric-proximity consolidation shortcut, backed by another concrete
+   observation: OVITO's own uncoarsened `.ca` output has ~95 points for one 85 Å dislocation (i.e.
+   its raw sweep runs ~95 elementary moves *without ever stopping*), while `line_coarsening` is a
+   separate, unrelated point-density-reduction step applied *after* tracing (same 11 dislocations
+   with or without it) — ruling out "the missing piece is a coarsening pass" and confirming the fix
+   has to be in the sweep mechanics themselves.
+
+   Found two concrete bugs by direct comparison with the exact move preconditions in
+   `DislocationTracer.cpp`:
+   - **`tryRemoveTwoCircuitEdges` ("remove-2") was being explicitly skipped, not just omitted.** The
+     shrink-move code had `if(a==c) continue;` for the exact vertex pattern (a "spike" a→b→a in the
+     loop) this move exists to collapse — a plausible source of real fragmentation on the
+     quadrupole's irregular mesh (vs. the screw dipole's clean uniform tube, which never develops
+     spikes and worked perfectly even before this fix). Implemented it, but naively let a size-4
+     loop shrink to a degenerate 2-vertex pseudo-loop, which broke the screw dipole (2→4) via
+     downstream modular-index assumptions expecting >=3 vertices — fixed by requiring the
+     precondition to hold for size >=5 in this vector-based (not raw pointer-spliced) implementation.
+   - **`trySweepTwoFacets` was entirely missing** — the move that slides the loop boundary sideways
+     across two adjacent unclaimed triangles sharing a common far apex, needed when neither triangle
+     individually offers a valid single-facet move. Implemented directly in vertex-list terms (find
+     the two triangles owning consecutive loop edges (a,b),(b,c); if their two "third vertices" are
+     the same vertex w and the resulting new edges aren't already claimed, replace b with w in
+     place — same loop length, both facets claimed). `tryRemoveThreeCircuitEdges` ("remove-3") was
+     checked and found structurally impossible to trigger here (it requires the loop to revisit a
+     vertex it's already visited a few steps earlier, which the expand move's own self-intersection
+     guard already prevents) — not a gap, just dead code if implemented.
+
+   **Result: quadrupole 69 → ~19-20** (run-to-run variance from the known non-deterministic mesh
+   triangle order), screw dipole **stays exact at 2/2, now needing zero merging at all** (both seeds
+   grow to their full ~114 Å length directly, matching ground truth almost exactly without ever
+   fragmenting). Re-ran the same spatial-mapping check against ground truth: most of the 11 real
+   lines are now recovered as 1 clean piece; a handful are still split into 2-3, and at least 2-3
+   fragments show total length *exceeding* their own ground-truth line's full length — a sign of at
+   least one incorrect cross-dislocation merge somewhere, not just remaining under-fragmentation.
+   Not yet root-caused. `write_dxa_ca_file` (new operator, see below) writes our own result straight
+   into OVITO's own file format for the user to inspect visually going forward, rather than only via
+   ad hoc point-cloud comparison scripts.
+
+   **Follow-up, same day: root-caused the length-overshoot bug — real, fixed it, then found a
+   second, deeper one that's still open.** User asked to pursue both the overshoot root-cause and
+   full OVITO move-set fidelity in parallel ("DO both").
+   - **Bug found and fixed: `facet_owner` staleness after a merge.** `facet_owner[T]` freezes
+     whichever node first claimed triangle T. Once that node gets absorbed into a two-arm merge, the
+     frozen id is stale — a genuine third arm arriving later at a real 3-way junction would record a
+     `blocking_node` pointing at an already-retired node, so it was never counted against the
+     already-committed 2-arm merge's own exclusivity check, letting two of the three real arms get
+     incorrectly spliced together before the third (often slower-growing, e.g. a short a⟨100⟩
+     junction segment) revealed the true 3-way topology. Fixed with a `resolve_node` indirection
+     (each merged-away node points to the surviving node representing that chain, chased/compressed
+     like a Union-Find) applied everywhere `blocking_node` affects a merge decision. Also added a
+     grace period (a candidate 2-arm merge must look exclusively mutual for several consecutive
+     rounds before committing) as an extra safety margin against timing races between differently-
+     paced arms.
+   - **A second, deeper, still-open bug found while isolating the first one.** Directly tested
+     with ALL merging disabled (not even the final forced pass): a single, entirely unmerged, raw
+     grown segment still had 81 of its own points tracing one real ground-truth line and 10 tracing
+     a *different* one it shares a real junction with — proving the chimera problem isn't (only) a
+     merge-decision bug at all: a circuit's own growth can drift, step by step, across a real 3+-way
+     junction from encircling one dislocation's core into encircling a neighboring one's, with every
+     individual shrink/expand/sweep-two-facets move staying locally valid throughout (no facet
+     double-claim, no size blowup — `n_stop_maxlen` is 0). Nothing in this implementation
+     re-validates that a move keeps the circuit's own local elastic mapping self-consistent — this is
+     exactly the kind of drift OVITO's Frank-rotation check exists to catch, which this operator
+     omitted as "not needed for a single-grain system" (true for the *original* purpose of that
+     check — grain-boundary compatibility — but it turns out to also serve as a general "is this
+     circuit still encircling the same real defect" guard, which single-grain systems need too).
+     Implementing an equivalent would mean tracking per-vertex local lattice orientation drift during
+     growth, not just a one-time compatibility test — substantially more work than anything else in
+     this file, and not yet attempted. See `compute_dxa_circuit_sweep.cpp`'s own "KNOWN OPEN BUG"
+     header comment for the full technical detail.
+   - **`createSecondarySegment` implemented, then measured and disabled.** User asked for it anyway
+     ("the other half of 'do both'") even after the drift bug was found. Implemented faithfully:
+     every round, each dangling node's own boundary is scanned for edges whose opposite side is
+     genuinely unclaimed (a "hole"); that hole's own perimeter is walked, and if it's a valid,
+     nonzero-Burgers loop bordering >=2 distinct known segments, it's committed as a new segment.
+     Measured result on the quadrupole: **made things worse, not better** (16-20 → 37 physical
+     dislocations), and 8 of the 37 were exactly degenerate (a single point, zero length) — spurious
+     tiny "holes" that pass the nonzero-Burgers-vector + touches-2-segments test without being real
+     defects. This is the same root gap as the drift bug above: OVITO's own version guards this with
+     its Frank-rotation consistency check on the hole's own loop, which this operator doesn't have.
+     **Disabled** (the loop body is intact and documented in `compute_dxa_circuit_sweep.cpp`, gated
+     off with a `false` condition) rather than shipped as a regression — re-enable once an equivalent
+     consistency check exists to reject spurious holes.
+4. **Parameter/algorithm consistency check against OVITO's real DXA workflow** (user request,
+   checked by reading `DislocationAnalysisModifier`/`StructureAnalysis`/`ElasticMapping` directly).
+   **Already correctly matched**: our `compute_cna.cu` already implements the same *adaptive*
+   per-atom cutoff CNA as OVITO's real `StructureAnalysis::determineLocalStructure` (same formula
+   constants, e.g. `(1+√2)/2`) — `rcut` is just the neighbor-search radius the adaptive cutoff is
+   computed within, not a naive fixed classification cutoff. `max_circuit_length`/
+   `circuit_stretchability` defaults (14/9) exactly match OVITO's own hardcoded defaults.
+   **Real differences found**: (a) OVITO computes lattice orientation via its own per-*cluster*
+   least-squares fit tied directly to CNA-identified bonds (`StructureAnalysis::identifyStructures`);
+   we use a separate `compute_ptm` per-*atom* RMSD fit layered on top of CNA classification — a
+   plausible contributor to the Burgers-vector magnitude undershoot seen on the screw dipole. (b)
+   **OVITO assigns each tessellation edge its ideal lattice vector via `CrystalPathFinder`** — a
+   graph walk connecting two atoms entirely *through the good crystal region* (never stepping
+   through a defective atom), robust even when the two atoms aren't direct neighbors. Our
+   `compute_dxa_edge_vectors` instead requires *both* endpoints to individually be good crystal and
+   does a direct angle-tolerance snap using one endpoint's own orientation. This is a concrete,
+   promising lead for the open growth-drift bug above (item 3), since `CrystalPathFinder` is
+   specifically designed to stay robust near defects/junctions — exactly the failure regime found.
+   Not yet traced through to whether/how it would change `compute_atomistic_interface_mesh.cpp`'s
+   own edge-vector derivation (what the circuit sweep actually consumes) — worth investigating next.
+5. **FCC/HCP support for `compute_atomistic_interface_mesh`** — BCC-only right now. Needs the "8
+   Thompson tetrahedra" template (different from BCC's 6 quads) — tables already extracted from
+   DXA1.3.6 during this investigation (see git history / session log), just not transcribed into
+   the operator yet.
+
+**Superseded** by item 0's full elastic-mapping re-architecture (stages 1-4), which measurably beats
+this on every metric (0.5% interface-mesh error vs. this path's 2.5-3x, exact classification match).
+Recommended pipeline now (see `data/regression_new/delaunay/compute_dxa_elastic_sweep_real_case.msp`):
+`compute_dxa_lattice_correspondence` (discrete classifier, needs `target_structure`) →
+`compute_dxa_lattice_clusters` → `compute_delaunay` → `compute_dxa_crystal_path_edge_vectors` →
+`compute_dxa_elastic_mapping_tet_classification` → `compute_dxa_elastic_interface_mesh` →
+`compute_dxa_circuit_sweep` → `smooth_dxa_dislocation_lines`. The paragraph below (PTM+CNA+angle-snap
+path) is kept for historical context only -- its own regression `.msp` files were removed in the
+2026-08-03 `data/regression_new/delaunay` cleanup (218MB -> 17MB) since nothing exercises this path
+anymore; the operators themselves (`compute_dxa_edge_vectors`, `compute_dxa_tet_classification`,
+`compute_interface_mesh`, `compute_atomistic_interface_mesh`) are still in the codebase, just
+unexercised by any current test.
+
+`compute_ptm` (orientation only) → `compute_cna`/`cna_fields` (classification) →
+`ghost_update_opt` on both `cna_type`+`ptm_orientation` → `compute_delaunay` →
+`compute_dxa_edge_vectors` with `struct_field: cna_type` → `compute_atomistic_interface_mesh`.
 
 ## This directory: Delaunay tessellation (done, verified)
 
@@ -496,18 +1111,9 @@ recovered there too, but interface triangles barely moved (5324→5254) — corr
 "bad" region is genuinely non-BCC bulk, not strain noise, and majority-vote recovery has no reason
 to touch it. No cross-phase contamination observed.
 
-**Next steps, in order:**
-1. The remaining ~1.7x gap is still open — likely needs either a deeper look at how OVITO's own
-   PTM/structure-identification step differs (neighbor scheme, defaults), or a genuinely different
-   shrink mechanism (e.g. iterating shrink+re-classify together, or a two-shell consensus).
-2. Steps (viii)-(ix): sweep along the (now further-filtered) interface mesh to extract each
-   dislocation's line geometry (a 1D curve through the tube of confirmed-bad tetrahedra), and
-   detect junctions where multiple dislocations meet. `InterfaceMesh::edge_triangles`'s adjacency
-   will need to grow into real traversal for this.
-3. `DXABurgersCircuits::burgers_vector` gives a per-edge closure-failure vector already, but
-   distinct dislocation lines nearby haven't been segmented/labeled yet — likely needed once line
-   extraction exists, so each extracted line gets one clean Burgers vector rather than a cloud of
-   per-edge residuals.
+**Superseded**: the "~1.7x gap" framing above predates the `compute_cna` classifier finding
+further down this file (PTM was simply under-classifying defects, not a mesh-construction issue).
+See "Remaining work" at the top of this file for the current, accurate state.
 
 ## `compute_cna`: OVITO's actual DXA classifier, tried as a `struct_field` swap-in — made things worse
 
@@ -606,18 +1212,380 @@ orientation) → `compute_cna`/`cna_fields` (classification) → `ghost_update_o
 `cna_type`+`ptm_orientation` → `compute_delaunay` → `compute_dxa_edge_vectors` with
 `struct_field: cna_type` → `compute_atomistic_interface_mesh`.
 
-**Next steps, in order:**
-1. Close the remaining ~22% gap (2020 vs 1648): likely candidates are the 34 still-open edges
-   (branch points this operator's simple hole-closer can't resolve — DXA1.3.6's full bounded
-   backtracking search is the natural upgrade), or minor edge-resolution/`angle_tolerance`
-   differences from OVITO's own exact pipeline.
-2. FCC/HCP support (Thompson-tetrahedra templates, already extracted from DXA1.3.6, not yet wired
-   into `compute_atomistic_interface_mesh`) if a non-BCC target_structure is ever needed here.
-3. Steps (viii)-(ix) (dislocation line extraction, junction detection) — unchanged from before,
-   now more promising to pursue against this operator's much-closer-to-OVITO mesh.
+**Attempted closing the remaining 22% gap — one fix was wrong, one was neutral, the gap itself
+is elsewhere:**
+1. *Tried*: quad-level dedup, to catch a hypothesized case of two different crystalline atoms both
+   emitting a full quad over the identical 4 hole vertices (via different diagonal splits, so the
+   existing exact-triangle dedup misses it). **Actively made things worse** (2020→2000 triangles
+   but 34→47 open edges) and was reverted. Root issue: that situation is usually *not* a duplicate —
+   it's two genuinely distinct facet sheets (e.g. the top and bottom surface of a 1-plane-thin
+   disordered layer) that happen to coincide at the same 4 vertex positions. Deleting one side is
+   exactly the wrong move; DXA1.3.6's own `duplicateSharedMeshNodes` handles this case by *splitting*
+   the shared nodes so both sheets keep their own facets, not by picking one to delete.
+2. *Tried*: generalized the hole-closer from "clean simple loops only" to a bounded DFS/
+   backtracking search that also covers branch points (3+ open edges at a vertex), matching
+   DXA1.3.6's `constructFacetRecursive` in spirit (minus its Burgers-vector-zero validity check,
+   which needs an ideal vector for hole-to-hole edges that doesn't exist here). **Measured zero
+   additional loops closed** on the real quadrupole case — found exactly the same 10 loops the
+   simpler unique-outgoing-edge walker already found. Also tried raising the max loop length from
+   8 to 20 edges: still zero additional closures, so the remaining 34 opens aren't loop-length-
+   limited either. Kept anyway (strictly more general, no measured downside), but it isn't the
+   lever here.
+3. **Conclusion**: the 22% gap (2020 vs 1648) is *not* dominated by hole-closing/dedup gaps at the
+   scale these two fixes could reach — 34 open edges out of ~3000 edge-uses is too small a
+   contributor on its own. The likely remaining candidates are more fundamental: (a) DXA1.3.6's own
+   `orderBCCAtomNeighbors` uses bond-connectivity + orientation-consistency checks to sort a
+   crystalline atom's neighbors into canonical slots, not plain nearest-ideal-direction snapping
+   (this operator's `resolve_slot`) — could disagree on slot assignment for atoms right at the
+   disordered boundary, where directions are least clean; (b) the real `removeUnnecessaryFacets`
+   (quad-diagonal flipping + genuine redundant-facet-pair removal, a proper half-edge operation, not
+   the vertex-set-level dedup tried and reverted above) and `duplicateSharedMeshNodes`/`fixMeshEdges`
+   machinery is still fully unported. Both are bigger investments than what's been tried so far.
+
+See "Remaining work" at the top of this file for what's next (line extraction can proceed against
+this mesh as-is; the 22% gap and FCC/HCP support are tracked there too).
 
 Test files: `data/regression_new/delaunay/compute_cna_test.msp` (pure-lattice CNA validation),
 `compute_dxa_real_case_atomistic.msp` (atomistic mesh, PTM-driven classification — the 91-triangle
 under-coverage case), `compute_dxa_real_case_cna_atomistic.msp` (atomistic mesh, CNA-driven — the
 2020-triangle result), `ovitodata/output_cna_ovito.xyz` + `ovitodata/output_dxa_ovito.vtk`
 (user-supplied OVITO ground truth: 1026 non-BCC atoms, 1648-triangle reference mesh).
+
+## `compute_dxa_dislocation_lines` + `write_dxa_dislocation_lines`: DXA steps (viii)-(ix), first cut — SUPERSEDED, architecturally wrong
+
+**Correction (user, citing `ovito/doc/manual/reference/pipelines/modifiers/dislocation_analysis.rst`,
+"Technical background")**: this whole approach is built on a misunderstanding of how DXA actually
+constructs Burgers circuits and dislocation lines. The documentation is explicit: trial circuits
+are closed sequences of **interface mesh edges** (not raw atom-to-atom hops through the disordered
+atom population), found by enumerating circuits in order of increasing length until one has a
+non-zero Burgers vector, and the dislocation line itself is generated by *sweeping* that circuit
+along the mesh, taking its **center of mass at each step** — none of which this operator does. It
+instead thins the raw hole-atom adjacency graph directly, which is exactly why it fragmented into
+293 tiny noise-dominated pieces (see below): raw atom positions/connectivity are noisy in a way a
+well-defined 2D surface isn't. Kept in the codebase for now (not deleted) since the general
+topological-thinning code may still be reusable, but **do not use this for real results** — see
+`compute_dxa_mesh_burgers_circuits` below for the corrected direction, and "Remaining work" at the
+top of this file for what's still missing (the actual sweep/line-tracing).
+
+Extracts 1D dislocation line geometry and junctions from the disordered ("hole") atom population.
+New files: `src/delaunay/compute_dxa_dislocation_lines.cpp` (extraction),
+`src/delaunay/write_dxa_dislocation_lines.cpp` (VTK output), `src/delaunay/include/exaStamp/
+delaunay/dxa_dislocation_lines.h` (`DXADislocationLines` struct).
+
+**Design choice: atom-graph-based, not a surface-mesh sweep.** DXA1.3.6's own reference approach
+(`DXATracing.cpp`, `burgersSearchWalkEdge`) sweeps an elementary Burgers circuit stepwise around the
+interface mesh's own tube (a half-edge walk with per-step elastic-mapping re-evaluation). Skipped in
+favor of working directly on the hole-atom adjacency graph instead: since the atomistic interface
+mesh's own vertices already *are* the disordered atoms (`compute_atomistic_interface_mesh.cpp`),
+their adjacency already encodes almost all the topology a mesh-sweep would have to rediscover, at a
+fraction of the implementation cost. Traded off against a less rigorous notion of "skeleton" (graph
+thinning approximates a medial axis for tube-like topology, but isn't a rigorous one).
+
+**Algorithm**: build the hole-hole adjacency graph (from `DXAEdgeVectors`, reusing its
+`vertex_matches_target`/already-deduplicated edges) → **topological thinning**: repeatedly find any
+atom with graph-degree > 2 whose removal would not disconnect its neighbors (i.e. not an
+articulation point — Tarjan's algorithm, recomputed fresh after every single removal for
+correctness, cheap at this data scale) and remove it, until none remain → trace the thinned graph
+(walk from every degree≠2 vertex along its own edges to the next such vertex = an open line; any
+edges left over form a pure degree-2 cycle = a closed loop with no junctions) → per-line Burgers
+vector by averaging every `DXABurgersCircuits` "confirmed signal edge" whose midpoint's nearest
+skeleton point belongs to that line.
+
+**Why topological thinning, not fixed-depth erosion (the first version tried and discarded)**: the
+hole-atom population is not a 1D chain — it's a genuine tube *surface* (atoms wrap around the
+tube's own circumference, not just along its length). Measured both failure modes of a simpler
+fixed-depth erosion (BFS distance from the crystalline-touching "interface" shell, keep atoms with
+depth ≥ some threshold) on the real quadrupole case:
+- `min_core_depth=1` (drop just the interface shell): eroded almost everything away — only **2 tiny
+  4-point fragments** survived (length ~10 Å each) — the tube's local radius is barely more than 1
+  atomic layer almost everywhere, so removing that one layer leaves nothing to trace a line through.
+- `min_core_depth=0` (no erosion, use every hole atom): **1015 junctions out of 1026 atoms** — since
+  every atom on a tube's own circumference has several neighbors *around* the ring in addition to
+  along its length, almost everything looks like a "junction" (degree ≥ 3) even though it's just an
+  ordinary point on a smooth tube surface.
+
+Topological thinning fixes both failure modes at once, since it naturally adapts to locally-varying
+tube radius instead of applying one uniform depth everywhere.
+
+**Result on the real quadrupole case, and the open problem**: 1026 hole atoms → 419 skeleton atoms
+→ **293 lines, 160 junctions**. The algorithm runs correctly and produces real structure (the
+longest extracted lines, 27.5/22.2/22.0 Å, are plausible dislocation-segment lengths), but the
+output is clearly **over-fragmented**: median line length is only 3.5 Å, and 169/293 lines are under
+5 Å — way more pieces than the handful of lines a "quadrupole" (nominally ~4 dislocations) implies.
+Likely cause: real atomic data has thermal/positional noise, and a strict graph-connectivity test
+(articulation points, computed from an exact distance-cutoff-based edge graph) is sensitive to small
+local irregularities that create spurious "bottlenecks" — genuinely disconnecting in the *discrete
+graph* sense, even though they're not real physical branch points. **Not yet implemented**: a
+post-processing simplification pass (merge junction nodes within a small radius of each other into
+one; prune/absorb short dangling segments below a length threshold into their neighboring line) —
+needed before this output is actually usable, tracked in "Remaining work" at the top of this file.
+
+Also confirmed via a quick clustering check (not in the codebase, one-off analysis) that the real
+disordered population is **one single connected network**, not 4 separate lines — a genuine
+"quadrupole" defect network with real junctions where segments meet, not 4 independent objects. This
+validates using a junction-aware graph approach over a simpler per-component (e.g. PCA-per-blob)
+method that was considered and rejected before implementing thinning.
+
+Test file: `data/regression_new/delaunay/compute_dxa_dislocation_lines_test.msp`.
+
+## `compute_dxa_mesh_burgers_circuits`: DXA steps (vi)-(vii), corrected — circuits on the interface mesh itself
+
+Stage 1 of the correction above (working in stages, checking in after each, per user's direction).
+Implements the actual documented mechanism: a Burgers circuit is a closed sequence of **interface
+mesh edges**, and its Burgers vector is the sum of their ideal lattice vectors. `compute_
+dxa_burgers_circuits.cpp`'s existing spanning-tree/fundamental-cycle mechanism is exactly the right
+*technique* for "enumerate circuits in order of increasing length" (a spanning tree's non-tree
+edges each close exactly one fundamental cycle — the shortest one through that specific edge — with
+no combinatorial search needed) — it was just applied to the wrong graph (the whole crystal's
+resolved-edge graph, not the interface mesh's own edges). New operator `compute_dxa_mesh_burgers_
+circuits.cpp` does the same computation restricted to the mesh.
+
+**Prerequisite found along the way**: interface mesh edges connect two *non-crystalline* atoms,
+which have no orientation/ideal-vector of their own — so where does an edge's ideal vector even
+come from? DXA1.3.6's own source answers this: from the **generating crystalline atom's own
+resolved template slots** (`latticeVectors[v1]-latticeVectors[v]` in its `InterfaceMesh.cpp`), not
+from either mesh vertex. `compute_atomistic_interface_mesh.cpp` already computes exactly this
+per-atom slot resolution when building triangles — it just wasn't exposing it. Extended
+`InterfaceMesh` with a new `edge_ideal_vector` field (v0<v1 canonical direction, first-seen-wins if
+two different generating atoms disagree slightly) and `compute_atomistic_interface_mesh.cpp` now
+populates it directly from the same slot data already computed for triangle emission. Verified this
+addition doesn't change the triangle count (still 2020 on the real case) before moving on.
+
+**Result on the real quadrupole case**: **666 confirmed signal edges out of 2986** mesh edges that
+have a resolved ideal vector (22.3%). Sanity-checked the actual Burgers vector magnitudes against
+known crystallography: BCC Ta's real full dislocation is a/2⟨111⟩, magnitude 0.866 in
+`bcc_ideal_raw`'s own units — the measured histogram peaks in the 0.7-0.8 bin (202/666 edges), with
+a plausible tail out to ~1.7-1.8 (likely junction regions where a circuit inadvertently encloses
+more than one dislocation's worth of signal). This is a real, physically-plausible signal — a sharp
+contrast with the previous (wrong) approach's output.
+
+**Answering "why not build circuits on the atomistic (thin) mesh, since it's already closer to
+OVITO's triangle count than the tet-boundary one?"**: this operator does exactly that — it consumes
+`compute_atomistic_interface_mesh`'s output specifically (not `compute_interface_mesh`'s
+tet-boundary one), for exactly the reason above (the atomistic mesh's vertices are the actual
+disordered atoms, giving a much tighter, less noisy surface to build circuits on than the coarser
+tet-boundary mesh, which independently confirmed 5164 triangles with the exact-documented
+edge-resolution tet criterion — see "Remaining work" item 1 at the top of this file, still open).
+
+**Not yet done (next stage)**: the actual circuit **sweep** — advancing a confirmed signal circuit
+step-by-step along the interface mesh (an "advancing front" on the triangulated surface) and
+recording its center of mass at each step as the dislocation line's vertex, plus junction handling
+where sweeps merge or the circuit needs to stretch past a kink. This is what actually produces
+smooth 1D lines instead of just a set of flagged edges. `compute_dxa_dislocation_lines.cpp` (the
+superseded operator above) should eventually be replaced by this, not extended.
+
+Test file: `data/regression_new/delaunay/compute_dxa_mesh_burgers_test.msp`.
+
+## `compute_dxa_mesh_dislocation_lines`: DXA steps (viii)-(ix), stage 2 — seeded from confirmed circuits, still fragmented
+
+Stage 2 of the correction (see `compute_dxa_mesh_burgers_circuits` section above for stage 1).
+New operator: takes the confirmed signal edges from `compute_dxa_mesh_burgers_circuits`, builds a
+"core" vertex set from their endpoints, pulls in the interface mesh's own full edge connectivity
+among just those vertices (a signal edge is just one arbitrary closing edge of its own fundamental
+cycle, not necessarily touching its geometric neighbors along the tube — surrounding mesh edges
+restore that), then reuses `compute_dxa_dislocation_lines`' own validated topological-thinning +
+tracing machinery on this much smaller, pre-validated graph instead of the raw noisy hole-atom
+population. Output slot deliberately named `dxa_dislocation_lines` (same as the superseded
+operator's own) so `write_dxa_dislocation_lines` auto-wires — don't run both operators together.
+
+**This is explicitly an approximation of OVITO's documented advancing-front sweep** (see the
+superseded section's own correction), not a literal port of it — ponytail-noted in the file's own
+header comment. A real sweep would recompute and advance an actual circuit step by step, taking its
+center of mass; this instead thins the validated core region once and uses skeleton atoms' own
+positions directly. Revisit if results still don't look right after further tuning.
+
+**Result on the real quadrupole case**: 552 core atoms (from 590 signal edges) → 329 skeleton atoms
+→ **177 lines, 107 junctions**. A real, measured improvement over the superseded raw-hole-atom
+approach (293 lines / 160 junctions): median line length **3.5→5.45 Å**, longest line **27.5→40.2
+Å**. Still fragmented (82/177 lines under 5 Å) — confirms seeding from physically-validated signal
+is meaningfully better than raw noisy connectivity, but doesn't fully solve fragmentation on its
+own. Next candidates, not yet tried: a real advancing-front sweep implementation, or a
+simplification pass (merge close junctions, prune/absorb short segments below a length threshold).
+
+Test file: `data/regression_new/delaunay/compute_dxa_mesh_lines_test.msp`.
+
+## `compute_dxa_circuit_sweep`: the real advancing-front sweep — verified against the actual 2012 paper, working
+
+Per user's explicit request to implement the actual sweep. First attempt (see git history) was
+built against the OVITO *manual's* summary only, which turns out to omit the sweep's actual
+mechanism entirely — it only says a hard length limit stops the circuit at a junction, with no
+detail on *how*. That gap was diagnosed empirically (first attempt produced lines 700-1460 Å long
+in a ~131 Å box, wandering the whole connected defect network) before checking the primary source:
+Stukowski, Bulatov, Arsenlis 2012 (`/home/lafourcadep/Bureau/DXA_ref.pdf`, secs 2.4-2.6), which
+turned out to specify a materially different and much more precise mechanism. Rewrote against that.
+
+**The actual mechanism (verified via `pdftotext`-extracted, directly-quoted paper text)**:
+- The interface mesh is a proper **halfedge structure**: each triangle (v0,v1,v2) owns 3 directed
+  halfedges (v0→v1),(v1→v2),(v2→v0) — a manifold mesh has exactly one triangle owning any given
+  directed pair.
+- Seed circuit: genuine shortest cycle through a confirmed signal edge (BFS excluding the direct
+  edge, bounded by `max_circuit_length`, OVITO's own default 14) — same as the first attempt.
+- **Sweep, one elementary move at a time, with an explicit priority the first attempt didn't have**:
+  "*Moves that reduce the length of the circuit are given precedence over moves that extend it.*"
+  A **shrink** move: if 2 consecutive circuit halfedges (a→b),(b→c) are owned by the *same*
+  unclaimed triangle {a,b,c}, replace them with the single edge (a→c) — cutting the corner off that
+  triangle, claiming it. Only if *no* shrink is available does the circuit **expand**: absorb the
+  third vertex of the (unclaimed) triangle owning one of its own halfedges.
+- **Explicit per-facet ownership, which the first attempt didn't have at all**: "*Once a mesh facet
+  has been traversed by an advancing circuit, it is marked as belonging to the current dislocation
+  segment and no other circuit is allowed to sweep the same triangle again.*" A sweep genuinely
+  halts — not via an arbitrary cap — when every candidate move's facet is already claimed (by
+  itself: a closed loop; by another segment: a real junction) or doesn't exist (an open mesh edge).
+  This is the piece that was actually missing, and it's why the first attempt's ad-hoc safety caps
+  (path-length cap, "old ground" revisit detection) were symptom patches, not the fix — removed now
+  that the real mechanism replaces them.
+- Line vertex at each move = the circuit's own center of mass, literally as documented.
+
+**Result on the real quadrupole case — dramatic, physically sensible improvement**: 43 lines
+extracted, with **line lengths 1.7-82.2 Å (median 19.4 Å)** in the ~131 Å box — no more absurd
+wandering. Sweep stop reasons are now real, diagnostic signals instead of an arbitrary cap: 53
+max-length, **17 genuine self-closures** (the loop met its own earlier territory — a closed
+dislocation loop or a very short segment), **16 genuine junction collisions** (met another
+segment's claimed territory — an actual dislocation junction), 0 open-mesh-edge, 0
+exhausted-no-move. `n_seeds_skipped` covers signal edges already consumed by an earlier line's
+sweep.
+
+**Still scoped out (ponytail, see file header comment)**: junction *connectivity* — splicing which
+lines meet at a node into a proper multi-arm representation (matching the CA file format's own
+circular-linked-list convention) — isn't built. The operator counts/classifies *why* each sweep
+stopped, but doesn't yet record *which other segment* a junction collision was with, or assemble
+that into `DXADislocationLines::junction_vertices` (left empty). This is the natural next piece if
+junction connectivity is needed downstream.
+
+`DXADislocationLines` gained a `line_positions` field (real `Vec3d`s, since this operator's line
+vertices are synthetic swept-circuit centroids, not atom indices) — `write_dxa_dislocation_lines.cpp`
+was extended to use it when present.
+
+### Follow-up correction: seed discovery was borrowing the wrong signal, Burgers vectors were ~zero
+
+The version above still seeded each sweep from `compute_dxa_mesh_burgers_circuits`' own confirmed
+signal edges (a global, arbitrary-root spanning-tree residual) and used that residual directly as
+the line's Burgers vector. Per user request, fixed to compute the Burgers vector properly: sum
+`InterfaceMesh::edge_ideal_vector` directly around the operator's *own* seed loop — "the discrete
+line integral over the initial forward circuit", literally as the paper specifies (§2.6), not a
+value borrowed from a different computation.
+
+**This surfaced a much bigger problem than a display value**: doing this revealed that **most seed
+loops had ~zero Burgers vector** (37 of 41 lines) — only 4 showed a real signal. Root cause: a
+global spanning-tree residual for edge (a,b) only proves *some* defect exists somewhere along the
+(possibly very long) loop `root→tree-path→a→b→tree-path-reversed→root` — it says nothing about
+whether the defect is anywhere *near* (a,b) itself. The genuinely local shortest cycle through (a,b)
+usually doesn't enclose anything at all, because the real defect the spanning tree detected is
+elsewhere along that long path. **Confirmed signal edges were the wrong tool for seeding a local
+sweep** — a real, methodological bug, not a proxy-value inconvenience.
+
+Fixed by implementing the paper's actual step (vi) directly, dropping the dependency on
+`compute_dxa_mesh_burgers_circuits` entirely (this operator is now fully self-contained, needing
+only the interface mesh): for each candidate mesh vertex, run one bounded-depth BFS (depth ≤
+`max_circuit_length/2`) rooted at it; every non-tree edge found closes a genuinely *local*
+fundamental cycle (bounded by construction, unlike the old global spanning tree); collect all such
+candidates and keep the shortest one whose own Burgers vector exceeds `min_burgers_norm` —
+equivalent to "circuits of increasing length until a non-zero one is found," computed in one BFS
+pass instead of literally re-searching at each length. Iterate over every mesh vertex (skipping
+ones already consumed by an earlier line) until the whole mesh is covered, matching step (viii).
+
+**Result on the real quadrupole case — every single line is now real**: 39 lines, from 39 local
+trial-circuit searches attempted (100% hit rate — expected here, since this atomistic mesh's
+vertices *are* the disordered atoms themselves, so almost any starting point is genuinely near the
+core network). **All 39 Burgers vector magnitudes cluster tightly between 0.58 and 0.88** — right
+around BCC Ta's real a/2⟨111⟩ full-dislocation magnitude (0.866) — with individual components
+consistent with the expected ⟨111⟩-type pattern. Line lengths mostly 0.7-101 Å (median 15.5 Å), but
+~12 lines are suspiciously short (under 2 Å) — plausibly the "seed collides with existing territory
+almost immediately" artifact flagged separately (not yet fixed, tracked as item 1 in "Remaining
+work").
+
+Test file: `data/regression_new/delaunay/compute_dxa_circuit_sweep_test.msp`.
+
+### Follow-up: single screw dislocation dipole, a controlled test with no real junctions
+
+To isolate whether the quadrupole's over-fragmentation (see "Remaining work" item 3) is a general
+sweep/seeding bug or specific to that dataset's real junction network, generated a synthetic BCC Ta
+sample with exactly two straight a/2⟨111⟩ screw dislocations (opposite sign, a periodic dipole — the
+minimal way to embed a real dislocation under full 3D periodic boundary conditions). Built with `data/regression_new/delaunay/gen_screw_dipole.py`: orthogonal simulation frame
+x=[1,-1,0], y=[1,1,-2], z=[1,1,1] (line direction), lattice tiled exactly via rotate-and-crop of the
+standard 2-atom BCC basis, then displaced with the exact isotropic elastic screw solution
+`u_z = b/(2π) * (atan2(y-y0,x-x1) - atan2(y-y0,x-x2))` for two cores at the same y, separated along x
+by half the box (a periodic-compatible dipole placement) — no relaxation run afterward
+(`max_iteration: 0`), so atoms sit on the raw continuum-displaced positions.
+File: `data/regression_new/delaunay/screw_dislo_dipole.xyz` (128963 atoms, 140x146x114 Å box). Test
+file: `data/regression_new/delaunay/compute_dxa_screw_dipole_test.msp`.
+
+**Result: the sweep/merge code found essentially the right answer.** 3 raw segments (not 43-like
+fragmentation), 0 max-length stops: 2 real, long dislocations (146 Å and 184 Å) each correctly
+extracted as a **self-closed loop** — exactly the expected topology for a straight line under PBC,
+since sweeping along it eventually re-enters its own already-claimed territory after 1+ periodic
+images. Their Burgers vectors point opposite directions (dominant component +0.68 vs -0.63),
+consistent with a dipole, though undershooting the ideal a/2⟨111⟩=0.866 magnitude somewhat (no
+relaxation was run, so the raw elastic core distorts the local circuit fit). The 3rd segment (1.15 Å,
+open) is very likely a construction artifact, not a code bug: the dipole separation (70 Å) is
+comparable to the distance from each core to the box edge (35 Å) rather than in the well-separated
+far-field regime, so the naive two-term (non periodic-image-summed) displacement field doesn't
+cancel exactly at the periodic boundary — visible as 234 open mesh edges (vs. 34 for the quadrupole)
+and 749 failed local seed attempts (only 3 succeeded), i.e. a broad spurious non-crystalline ribbon
+along the boundary that mostly (correctly) has zero Burgers vector.
+
+**Conclusion**: on a case with no real junctions, the sweep/merge mechanism recovers almost exactly
+the right topology. This points the quadrupole's 41-vs-12 over-fragmentation toward the
+junction-handling / dense-network regime specifically (redundant reseeding along real branch
+networks, as suspected), not a general defect in the sweep algorithm itself. If revisiting this test,
+use a proper periodic-image-summed dipole field (or a much larger box relative to separation) to
+remove the small 1.15 Å boundary artifact.
+
+### Follow-up: merging segments into physical dislocations for length statistics
+
+Per user request ("topologically a line can be an ensemble of segments... important to get the
+final dislocation length statistics"): a single physical dislocation is very often discovered as
+several separate raw segments, purely because they were seeded independently and happened to sweep
+into each other's already-claimed territory (`StopReason::Junction`). That collision alone doesn't
+mean a real 3+-arm branch — it only means "not the first segment to reach this facet". Reporting
+each raw segment's length separately would badly fragment the true per-dislocation length.
+
+Fixed with Union-Find: `sweep_move`/`sweep_direction` now also report `blocking_segment` — the id of
+whichever *other* segment's claimed facet actually stopped a sweep (when `reason==Junction`). For
+each segment B, `incoming_count[B]` counts how many other segments' sweeps were stopped by B. If a
+segment A's sweep stopped at B and `incoming_count[B]==1`, there's no branching decision to make — A
+and B are the same continuous line, `union(A,B)`. This chains transitively across longer clean
+pass-through runs. A real multi-way junction (`incoming_count[B]>=2`) is left un-merged there on
+purpose: each arm keeps its own id, since which of the >=2 incoming segments is "the real
+continuation" isn't decidable from this signal alone. New `DXADislocationLines::dislocation_id`
+field (one per raw segment/line) carries the merge grouping; `write_dxa_dislocation_lines.cpp` now
+emits it as an `Int32` `dislocation_id` CellData array so ParaView can color/group merged segments.
+New `n_dislocations` OUTPUT slot reports the post-merge count.
+
+**Result on the real quadrupole case**: raw segment count varies run-to-run (41-43, since
+`compute_atomistic_interface_mesh`'s OMP-parallel triangle emission order — and therefore this
+operator's vertex-iteration seed order — isn't deterministic across runs); a representative run gave
+43 raw segments, only 2 of which met the clean-pass-through merge criterion, giving 41 physical
+dislocations, lengths 0.74-120.6 Å (median 9.6 Å, total network length 924.6 Å). Most junction stops
+in this particular network land on a segment with `incoming_count >= 2` (a real multi-way hub, left
+un-merged on purpose) rather than a clean 1-in pass-through — expected for a genuinely branchy
+quadrupole dislocation network. So the merging logic is verified working and structurally correct,
+but on this test case it only resolves a small minority of the raw segments; the shortest merged
+dislocation is still ~0.74 Å, about the same order as before merging. The previously-flagged "~12
+suspiciously short (<2 Å) lines" (item 1 in "Remaining work") are therefore only partly explained by
+pass-through fragmentation — most are genuinely short arms terminating at a real multi-way junction,
+not an artifact merging should eliminate.
+
+## `write_dxa_ca_file`: writes our own result into OVITO's own `.ca` format
+
+New operator, `src/delaunay/write_dxa_ca_file.cpp`. Writes a `DXADislocationLines` (only
+`compute_dxa_circuit_sweep` populates the fields this needs: `line_positions`, `burgers_vector`)
+into OVITO's own "Crystal Analysis" file format, reverse-engineered directly from OVITO's real
+exporter/importer source (`CAExporter.cpp`/`CAImporter.cpp`, obtained by the user, not from public
+docs) — so our result can be loaded straight into OVITO for visual side-by-side comparison against
+its own DXA output, rather than only via ad hoc point-cloud comparison scripts.
+
+Deliberately simplified relative to a real OVITO-written file:
+- Only one bare `STRUCTURE_TYPE` stub is declared (enough for the importer's header parsing, not a
+  faithful reproduction of OVITO's real per-structure Burgers vector family tables).
+- `DISLOCATION_JUNCTIONS`: this operator doesn't reconstruct real multi-way junction connectivity
+  (see `compute_dxa_circuit_sweep`'s own "ponytail" note), so every dislocation is written as a
+  trivial self-referential 2-cycle — OVITO will render every line as an independent, unconnected
+  segment, exactly what this operator actually knows, no more.
+- Single-rank only: no cross-rank gather (the `.ca` format has no native multi-piece convention to
+  hang that off of, unlike `write_dxa_dislocation_lines.cpp`'s VTK `.pvtu` pieces). Fine for the
+  single-MPI-rank validation runs used throughout this investigation.
+
+Wired into both `compute_dxa_screw_dipole_test.msp` and `compute_dxa_circuit_sweep_test.msp`,
+writing to `ovitodata/our_screw_dipole_result.ca` / `ovitodata/our_quadrupole_result.ca` (same
+directory as the user's own ground-truth `.ca` files, for easy side-by-side loading in OVITO).

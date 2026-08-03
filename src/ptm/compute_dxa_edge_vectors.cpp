@@ -252,22 +252,23 @@ compute_dxa_edge_vectors: { target_structure: BCC, angle_tolerance: 40.0 }
   };
 
   // DXA pipeline step (iv): a tetrahedron is "good" (part of the undistorted target-structure
-  // lattice) iff all 4 of its vertices individually match target_structure
-  // (DXAEdgeVectors::vertex_matches_target, from step iii) -- "bad" (a defect: dislocation core,
-  // grain boundary, stacking fault, second phase, ...) otherwise. No grid access needed at all
-  // (purely a DelaunayTessellation + DXAEdgeVectors post-process), so this is a plain
-  // (non-grid-variant) operator.
+  // lattice) iff all 6 of its edges are resolved (DXAEdgeVectors::resolved, from step iii) --
+  // "bad" (adjacent to a bad edge: a dislocation core, grain boundary, stacking fault, second
+  // phase, ...) otherwise. No grid access needed at all (purely a DelaunayTessellation +
+  // DXAEdgeVectors post-process), so this is a plain (non-grid-variant) operator.
   //
-  // First attempt (superseded, see git history) additionally required all six edges to resolve
-  // AND their six ideal vectors to close consistently around the tetrahedron (an edge-vector
-  // closure test). Checked against two independent reference DXA implementations
-  // (LAMMPS fix_disloc's 2014 CNA-triangulation method, and Stukowski's own 2010 CNA-based DXA
-  // predecessor, DXA1.3.6) after finding the resulting "bad" region on a real dislocation
-  // quadrupole test case came out much wider than OVITO's own DXA output on the identical
-  // configuration. Neither reference defines "good/bad" via anything like an edge-vector-closure
-  // test -- both use exactly this simpler per-atom criterion (their atomic-structure-typing
-  // result alone) and defer ALL consistency/defect detection to a later, global circuit-closure
-  // test -- compute_dxa_burgers_circuits' job here.
+  // This is OVITO's own documented criterion (dislocation_analysis.rst, "Technical background"):
+  // "Those Delaunay elements... that are adjacent to one or more bad edges, which could not be
+  // mapped to an ideal lattice vector, are themselves marked as bad elements, while all others are
+  // considered good" -- an edge-resolution test, deliberately NOT a vertex-matching test (an edge
+  // needs BOTH endpoints to match target_structure to resolve at all, per compute_dxa_edge_vectors,
+  // so this criterion is strictly stronger than "all 4 vertices match": a tet with 4 good vertices
+  // can still have one edge whose one-sided ideal-direction snap misses angle_tolerance, and that
+  // alone should make it bad). Two earlier attempts (see git history) got this wrong in opposite
+  // directions: an edge-vector-*closure* test (require the 6 edges' ideal vectors to also sum to
+  // zero around the tet, not just each resolve independently) was too strict, and a vertex-only
+  // test (this file's previous version) was too lenient -- neither matches what OVITO's own
+  // documentation actually specifies. Edge-resolution-only is the documented middle ground.
   class ComputeDXATetClassification : public OperatorNode
   {
     ADD_SLOT( DelaunayTessellation , delaunay_tessellation , INPUT , REQUIRED );
@@ -285,13 +286,19 @@ compute_dxa_edge_vectors: { target_structure: BCC, angle_tolerance: 40.0 }
       DXATetClassification& result = *dxa_tet_classification;
       result.good.assign( n_tets, 0.0 );
 
+      static constexpr int edge_lv[6][2] = { {0,1}, {0,2}, {0,3}, {1,2}, {1,3}, {2,3} };
       size_t n_good = 0;
       for(size_t t=0;t<n_tets;t++)
       {
         const auto& tet = mesh.tetrahedra[t];
-        const bool all_match = ev.vertex_matches_target[tet[0]] && ev.vertex_matches_target[tet[1]]
-                             && ev.vertex_matches_target[tet[2]] && ev.vertex_matches_target[tet[3]];
-        if( all_match ) { result.good[t] = 1.0; ++n_good; }
+        bool all_resolved = true;
+        for(int e=0;e<6 && all_resolved;e++)
+        {
+          const uint32_t a = tet[ edge_lv[e][0] ], b = tet[ edge_lv[e][1] ];
+          const auto it = ev.edge_index.find( DXAEdgeVectors::key(a,b) );
+          all_resolved = ( it != ev.edge_index.end() ) && ev.resolved[ it->second ];
+        }
+        if( all_resolved ) { result.good[t] = 1.0; ++n_good; }
       }
 
       *n_tets_good = static_cast<long>( n_good );
@@ -304,12 +311,12 @@ compute_dxa_edge_vectors: { target_structure: BCC, angle_tolerance: 40.0 }
 
 DXA pipeline step (iv): classifies each Delaunay tetrahedron (compute_delaunay) as "good" (part of
 the undistorted target-structure lattice) or "bad" (part of a defect -- dislocation core, grain
-boundary, stacking fault, second phase, ...): good means all 4 of its vertices individually match
-target_structure (DXAEdgeVectors::vertex_matches_target, from compute_dxa_edge_vectors) -- not an
-edge-vector-closure test (that overclassifies a dislocation's ordinary elastic strain field as
-defective, see this file's own comment). Output is a plain 0/1 array parallel to the tessellation's
-own tetrahedra, directly usable as write_delaunay_vtk's dxa_tet_classification input for
-visualization.
+boundary, stacking fault, second phase, ...): good means all 6 of its edges are resolved
+(DXAEdgeVectors::resolved, from compute_dxa_edge_vectors) -- OVITO's own documented criterion (see
+this file's own comment), not a vertex-matching test and not an edge-vector-closure test (both
+tried and found not to match, see this file's own comment). Output is a plain 0/1 array parallel to
+the tessellation's own tetrahedra, directly usable as write_delaunay_vtk's dxa_tet_classification
+input for visualization.
 
 Usage example:
 

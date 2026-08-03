@@ -17,6 +17,7 @@ under the License.
 
 #pragma once
 
+#include <onika/math/basic_types.h>
 #include <vector>
 #include <array>
 #include <unordered_map>
@@ -24,6 +25,7 @@ under the License.
 
 namespace exaStamp
 {
+  using namespace exanb;
   // DXA pipeline step (v) output (see compute_interface_mesh.cpp): the 2D surface separating
   // "good" from "bad" DelaunayTessellation tetrahedra (DXATetClassification) -- one triangle per
   // tetrahedron face where a good tet and a bad tet meet. Vertex indices reference
@@ -48,6 +50,18 @@ namespace exaStamp
     // need this to walk the surface; not resolved into a strict half-edge (twin/next/prev)
     // structure yet since that traversal pattern isn't scoped out yet.
     std::unordered_map<uint64_t, std::vector<uint32_t>> edge_triangles;
+
+    // per-mesh-edge ideal lattice vector (PTM template units, same convention as
+    // DXAEdgeVectors::ideal_vector), only populated by compute_atomistic_interface_mesh -- computed
+    // from the *generating crystalline atom's* own resolved template slots (DXA1.3.6's own
+    // technique: an edge between two non-crystalline mesh vertices still has a well-defined ideal
+    // vector, derived from whichever crystalline atom's local quad/tet template produced that
+    // specific edge, not from either mesh vertex's own orientation -- neither has one). Always
+    // stored for the canonical v0<v1 direction (edge_key's own convention); if two different
+    // generating atoms would compute slightly different vectors for the same physical edge (only
+    // possible where the local orientation genuinely varies atom-to-atom, e.g. right at a defect),
+    // first-seen wins -- not averaged. Empty for compute_interface_mesh's own tet-boundary output.
+    std::unordered_map<uint64_t, Vec3d> edge_ideal_vector;
 
     static inline uint64_t edge_key(uint32_t v0, uint32_t v1) noexcept
     {
