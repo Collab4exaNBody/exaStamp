@@ -22,6 +22,7 @@ under the License.
 
 #include <exanb/core/domain.h>
 #include <exaStamp/delaunay/dxa_dislocation_lines.h>
+#include <exaStamp/delaunay/dxa_core_ownership.h>
 
 #include <mpi.h>
 #include <algorithm>
@@ -107,7 +108,8 @@ namespace exaStamp
     ADD_SLOT( MPI_Comm             , mpi                  , INPUT , REQUIRED );
     ADD_SLOT( Domain                , domain               , INPUT , REQUIRED , DocString{"Only used for periodic-image-aware wrapping when averaging a shared ghost atom's own position (the same real atom can be recorded at a different periodic image on each rank)"} );
     ADD_SLOT( DXADislocationLines  , dxa_dislocation_lines , INPUT_OUTPUT , REQUIRED );
-    ADD_SLOT( double               , match_tolerance       , INPUT , 5.0 , DocString{"Max distance (same units as line_positions) between two ranks' own open-boundary endpoints for them to be considered the same real crossing point -- both ranks trace the identical dislocation core through the same ghost-shared atoms there, so a real match should coincide much more tightly than this; kept generous to tolerate ordinary circuit-centroid noise without needing exact agreement"} );
+    ADD_SLOT( DXALocalToFinalDislocationId , dxa_local_to_final_dislocation_id , OUTPUT , DocString{"Translates THIS rank's own local (pre-stitch) dislocation_id into the final, post-stitch dislocation id -- populated on EVERY rank (unlike dxa_dislocation_lines itself, which only ends up non-empty on rank 0). Lets a consumer like dxa_mark_core_atoms resolve compute_dxa_core_atoms' own per-rank-local tet ownership into the final numbering, without needing full tessellation data to ever leave its own rank."} );
+    ADD_SLOT( double               , match_tolerance       , INPUT , 7.0 , DocString{"Max distance (same units as line_positions) between two ranks' own open-boundary endpoints for them to be considered the same real crossing point -- both ranks trace the identical dislocation core through the same ghost-shared atoms there, so a real match should coincide much more tightly than this; kept generous to tolerate ordinary circuit-centroid noise without needing exact agreement. Measured directly (rectangular-loop test, now that positions are precisely pinned): a genuine same-crossing gap can still legitimately be ~5.1-5.2 Å, right at the old 5.0 Å default's own edge -- raised to comfortably clear that, not just barely miss it run to run."} );
     ADD_SLOT( double               , burgers_tolerance     , INPUT , 0.1 , DocString{"Max |difference| (or |sum|, to allow an opposite-sign convention from the other rank's own sweep direction) between two candidate ends' Burgers vectors for them to be considered compatible"} );
     ADD_SLOT( long                 , n_mpi_stitches        , OUTPUT , DocString{"Number of cross-rank end-to-end matches actually performed"} );
 
@@ -121,6 +123,11 @@ namespace exaStamp
       if( np <= 1 )
       {
         *n_mpi_stitches = 0;
+        // No stitching at all -- this rank's own local dislocation_id already IS the final id,
+        // unchanged (identity remap), so dxa_mark_core_atoms doesn't need its own special case.
+        auto& remap = dxa_local_to_final_dislocation_id->final_id;
+        remap.resize( dxa_dislocation_lines->dislocation_id.size() );
+        for(size_t i=0;i<remap.size();i++) { remap[i] = static_cast<int32_t>(i); }
         return; // nothing to stitch -- single rank already has everything it will ever have
       }
 
@@ -194,17 +201,35 @@ namespace exaStamp
         dl.open_boundary_front.clear(); dl.open_boundary_back.clear();
         dl.boundary_loop_atom_id_front.clear(); dl.boundary_loop_atom_id_back.clear();
         dl.boundary_loop_atom_pos_front.clear(); dl.boundary_loop_atom_pos_back.clear();
+        dl.junction_positions.clear();
         *n_mpi_stitches = 0;
+        // Receive this rank's own "local dislocation_id -> final id" slice from rank 0 (matching
+        // Send further below) -- see DXALocalToFinalDislocationId's own doc comment for why every
+        // rank needs this, not just rank 0.
+        dxa_local_to_final_dislocation_id->final_id.resize( n_local );
+        if( n_local > 0 )
+        {
+          MPI_Recv( dxa_local_to_final_dislocation_id->final_id.data(), static_cast<int>(n_local), MPI_INT32_T, 0, 0, *mpi, MPI_STATUS_IGNORE );
+        }
         return;
       }
 
       struct BoundaryAtom { uint64_t id; Vec3d pos; };
       struct DecodedLine { Vec3d burgers; std::vector<Vec3d> pts; std::vector<int32_t> core; bool open_front=false, open_back=false, is_loop=false; std::vector<BoundaryAtom> front_atoms, back_atoms; };
       std::vector<DecodedLine> all_lines;
+      // Parallel to all_lines: which rank each raw fragment came from, and its own LOCAL index
+      // within that rank's own contribution (matching that rank's own compute_dxa_circuit_sweep::
+      // DXADislocationLines::dislocation_id numbering, i.e. compute_dxa_core_atoms' own local
+      // dislocation_id numbering too) -- needed below to send each rank back a "my own local
+      // dislocation_id -> final (post-stitch) dislocation_id" remap, since core-atom marking must
+      // happen per-rank (tets only exist locally) but final dislocation ids are only known here,
+      // after stitching, on rank 0.
+      std::vector<int> line_origin_rank, line_origin_local_index;
       for(int r=0;r<np;r++)
       {
         size_t pos = static_cast<size_t>( displs[r] );
         const size_t end = pos + static_cast<size_t>( recvcounts[r] );
+        int local_index = 0;
         while( pos < end )
         {
           DecodedLine line;
@@ -234,6 +259,9 @@ namespace exaStamp
             }
           }
           all_lines.push_back( std::move(line) );
+          line_origin_rank.push_back(r);
+          line_origin_local_index.push_back(local_index);
+          ++local_index;
         }
       }
       const int N = static_cast<int>( all_lines.size() );
@@ -278,6 +306,182 @@ namespace exaStamp
         return ref + d;
       };
 
+      // A fragment whose own growth reached far enough (via keep_ghost_tets) to trace almost the
+      // WHOLE periodic length of a dislocation extends a bit PAST the true global domain boundary
+      // on each of its own two ends before compute_dxa_circuit_sweep's own stop condition triggers
+      // -- unlike an ordinary MPI rank boundary (pinned exactly by compute_dxa_circuit_sweep's own
+      // pin_boundary_point), nothing pins THIS specific crossing, since from any single rank's own
+      // perspective it looks like just another owned/ghost exit. Left alone, comparing the two
+      // raw (overshot) ends for self-closure below finds them still measurably apart (~8-9 Å in the
+      // screw-dipole test, over match_tolerance) even though they're the exact same physical point.
+      // Trim each end back to the exact global-domain-boundary crossing first -- same ray-vs-AABB
+      // exit-parameter interpolation as pin_boundary_point, just against the GLOBAL domain bounds
+      // (identical for every rank) instead of one rank's own local owned box.
+      const AABB reduced_domain = domain->bounds();
+      const Vec3d domain_lo = xform * reduced_domain.bmin;
+      const Vec3d domain_hi = xform * reduced_domain.bmax;
+      auto is_in_domain = [&]( const Vec3d& p ) -> bool
+      {
+        return p.x >= domain_lo.x && p.x <= domain_hi.x
+            && p.y >= domain_lo.y && p.y <= domain_hi.y
+            && p.z >= domain_lo.z && p.z <= domain_hi.z;
+      };
+      auto domain_exit_t = [&]( const Vec3d& p_in, const Vec3d& p_out ) -> double
+      {
+        double t_min = 1.0;
+        const Vec3d d = p_out - p_in;
+        auto consider = [&]( double p0, double d0, double lo, double hi )
+        {
+          if( std::abs(d0) < 1e-12 ) { return; }
+          const double t = ( d0 > 0.0 ) ? ( (hi - p0) / d0 ) : ( (lo - p0) / d0 );
+          if( t >= 0.0 && t < t_min ) { t_min = t; }
+        };
+        consider( p_in.x, d.x, domain_lo.x, domain_hi.x );
+        consider( p_in.y, d.y, domain_lo.y, domain_hi.y );
+        consider( p_in.z, d.z, domain_lo.z, domain_hi.z );
+        return t_min;
+      };
+      // Trims the given end (front_end=true: pts.front(); false: pts.back()) back to the exact
+      // point the path crosses the global domain boundary, discarding the ghost-overshoot points
+      // beyond it. No-op if that end is already inside the domain (nothing to trim) or the whole
+      // fragment never re-enters (degenerate, leave as-is).
+      // Returns true iff this end was genuinely outside the global domain and got trimmed --
+      // false means it was already inside (nothing to do). The caller needs this to distinguish a
+      // fragment that genuinely ghost-overshot past the periodic boundary (both ends outside) from
+      // one that never left the domain at all, whose front/back merely happen to sit close together
+      // by coincidence (see the self-closure check's own comment below for why that distinction
+      // matters -- a short fragment near an MPI corner can have close-together endpoints without
+      // ever having exited the domain on either side).
+      auto pin_to_domain_edge = [&]( std::vector<Vec3d>& pts, std::vector<int32_t>& core, bool front_end ) -> bool
+      {
+        const size_t n = pts.size();
+        if( n < 2 ) { return false; }
+        if( front_end )
+        {
+          if( is_in_domain(pts[0]) ) { return false; }
+          size_t first_in = n;
+          for( size_t i=0;i<n;i++ ) { if( is_in_domain(pts[i]) ) { first_in = i; break; } }
+          if( first_in == n ) { return false; }
+          const Vec3d p_in = pts[first_in], p_out = pts[first_in-1];
+          const int32_t pinned_core = core[first_in-1];
+          const Vec3d pinned = p_in + domain_exit_t(p_in,p_out) * ( p_out - p_in );
+          pts.erase( pts.begin(), pts.begin() + static_cast<long>(first_in) );
+          core.erase( core.begin(), core.begin() + static_cast<long>(first_in) );
+          pts.insert( pts.begin(), pinned );
+          core.insert( core.begin(), pinned_core );
+          return true;
+        }
+        else
+        {
+          if( is_in_domain(pts.back()) ) { return false; }
+          size_t last_in = n;
+          for( size_t i=n; i-->0; ) { if( is_in_domain(pts[i]) ) { last_in = i; break; } }
+          if( last_in == n ) { return false; }
+          const Vec3d p_in = pts[last_in], p_out = pts[last_in+1];
+          const int32_t pinned_core = core[last_in+1];
+          const Vec3d pinned = p_in + domain_exit_t(p_in,p_out) * ( p_out - p_in );
+          pts.erase( pts.begin() + static_cast<long>(last_in) + 1, pts.end() );
+          core.erase( core.begin() + static_cast<long>(last_in) + 1, core.end() );
+          pts.push_back( pinned );
+          core.push_back( pinned_core );
+          return true;
+        }
+      };
+
+      // Drop RAW fragments that are already ~entirely redundant with a LONGER raw fragment, BEFORE
+      // any matching happens -- found via the screw-dipole test: two ranks' own independent
+      // keep_ghost_tets views can each reconstruct almost the WHOLE physical line on their own (not
+      // just a short overlap near a boundary), and if both ends of each near-complete copy
+      // legitimately share ghost atoms with the corresponding end of the OTHER copy, the matcher
+      // stitches them end-to-end as if closing a ring -- but the ring it closes is 2 REDUNDANT
+      // copies concatenated, roughly double the true length (confirmed: measured total length
+      // 490.7 Å vs the expected 2x box Z-length of 228.8 Å). This is the same "dislocations at the
+      // global periodic boundary shouldn't be mapped to the other side" mistake in a different
+      // guise: an end near z=0 and the corresponding end of a REDUNDANT (not complementary) copy
+      // near z=Lz look, after periodic wrap, like a small gap worth closing, when really the two
+      // fragments are duplicates of the same whole line, not two halves of it. Same coverage test
+      // as the post-assembly redundant-line drop further below (>=90% of a shorter line's own
+      // points within 5 Å of the longer line's own path, periodic-wrap aware), just run on the RAW
+      // fragments before they ever reach the matcher, so a fragment already known to be a full
+      // duplicate never gets a chance to be "closed" into a doubled ring in the first place.
+      // Coverage alone (every point of a SHORT line sits within `tol` of SOME point on a LONGER
+      // line) is not sufficient to call the short one a duplicate: a genuinely DISTINCT short line
+      // that happens to share one exact corner/endpoint with the longer line -- heading off in a
+      // completely different direction from there, e.g. two adjacent edges of the rectangular loop
+      // meeting at a shared corner -- also satisfies plain coverage, since its own entire (short)
+      // span fits inside the tolerance ball around that ONE shared point. Found exactly this on the
+      // rect-loop test: an 8-point, ~4.9 Å-long fragment sharing its own front point exactly with a
+      // much longer line's own front got wrongly marked redundant and dropped, silently shortening
+      // the assembled loop by its own real physical contribution (measured: total length dropped
+      // from the correct ~339 Å to ~272 Å, a ~20% real length loss, not a duplicate-removal win).
+      // The real discriminator: a genuine duplicate's own front and back map to two DIFFERENT,
+      // well-separated points along the longer line (since it retraces a comparable REAL STRETCH of
+      // that line's own path) -- the false-positive corner case's own front AND back both map back
+      // to the SAME single point on the longer line (its shared corner), regardless of how far apart
+      // the short line's own front/back actually are in space. Require the arc span between the
+      // longer line's own best matches for the shorter line's front vs. back to be at least half the
+      // shorter line's own front-to-back distance -- a genuine duplicate easily clears this (its own
+      // matched span is comparable to or longer than its own length); the corner case collapses to
+      // ~0 span regardless of the short line's own real length.
+      auto is_genuine_duplicate = [&]( const std::vector<Vec3d>& short_pts, const std::vector<Vec3d>& long_pts, double tol ) -> bool
+      {
+        if( short_pts.empty() || long_pts.empty() ) { return false; }
+        size_t n_covered = 0;
+        for( const auto& p : short_pts )
+        {
+          for( const auto& q : long_pts ) { if( norm( p - wrap_to_reference(q,p) ) < tol ) { ++n_covered; break; } }
+        }
+        if( static_cast<double>(n_covered) / static_cast<double>(short_pts.size()) < 0.9 ) { return false; }
+
+        auto best_match = [&]( const Vec3d& p ) -> Vec3d
+        {
+          double best_d = 1e18; Vec3d best_q = long_pts.front();
+          for( const auto& q : long_pts ) { const double d = norm( p - wrap_to_reference(q,p) ); if( d < best_d ) { best_d = d; best_q = wrap_to_reference(q,p); } }
+          return best_q;
+        };
+        const Vec3d match_front = best_match( short_pts.front() );
+        const Vec3d match_back = best_match( short_pts.back() );
+        const double matched_span = norm( match_back - match_front );
+        const double own_span = norm( short_pts.back() - wrap_to_reference( short_pts.front(), short_pts.back() ) );
+        return matched_span >= 0.5 * own_span;
+      };
+
+      std::vector<bool> line_is_redundant( N, false );
+      // Which SURVIVING line index a redundant (dropped) line duplicates -- needed so a dropped
+      // line's own core-atom marking (computed on ITS OWN originating rank, tied to a tet index
+      // space that only exists there) can still be resolved to a real final dislocation id below,
+      // via whichever kept line's own final id it duplicates, instead of silently losing that
+      // rank's own core-atom coverage near this MPI seam. -1 if not redundant.
+      std::vector<int> redundant_with( N, -1 );
+      for(int i=0;i<N;i++)
+      {
+        if( all_lines[i].pts.empty() ) { continue; }
+        for(int j=0;j<N;j++)
+        {
+          if( i==j || line_is_redundant[j] || all_lines[i].pts.size() >= all_lines[j].pts.size() ) { continue; }
+          if( is_genuine_duplicate( all_lines[i].pts, all_lines[j].pts, 5.0 ) )
+          {
+            line_is_redundant[i] = true;
+            redundant_with[i] = j;
+            lout << "compute_dxa_mpi_stitch_lines: line " << i << " (" << all_lines[i].pts.size()
+                 << " points) is redundant with line " << j << " (" << all_lines[j].pts.size()
+                 << " points) BEFORE any matching -- excluded entirely so it can't be incorrectly "
+                 << "stitched into a doubled ring with its own duplicate" << std::endl;
+            break;
+          }
+        }
+      }
+      // redundant_with[i] may itself point to a line that ALSO turned out redundant (with some
+      // other line k, found later in the outer loop above) -- resolve the whole chain down to a
+      // definitely-kept (non-redundant) line before using it below.
+      for(int i=0;i<N;i++)
+      {
+        if( redundant_with[i] < 0 ) { continue; }
+        int j = redundant_with[i];
+        while( redundant_with[j] >= 0 ) { j = redundant_with[j]; }
+        redundant_with[i] = j;
+      }
+
       // Match candidates: every open_boundary-flagged end. end_partner[li][0/1] = the matched
       // (other_li, other_end, snap_pos) once matched, (-1,-1,{}) otherwise.
       const double pos_tol = *match_tolerance;
@@ -285,10 +489,64 @@ namespace exaStamp
       struct EndPartner { int li=-1; int end=-1; Vec3d snap_pos{0.,0.,0.}; };
       std::vector<std::array<EndPartner,2>> end_partner( N );
 
+      // A SURVIVING (non-redundant) fragment can already be a COMPLETE physical loop entirely on
+      // its own if this rank's own keep_ghost_tets view reached far enough to trace the WHOLE
+      // periodic length: its own front and back ends, after periodic wrap, land close together --
+      // not because it needs an external MPI partner, but because they're the SAME point, each
+      // recorded a bit past the true closure point on its own side (ghost overshoot). Handing this
+      // to the cross-rank matcher as an ordinary open end risks pairing it with some OTHER rank's
+      // own unrelated fragment instead of recognizing it already closes on its own -- the same "a
+      // dislocation at the global periodic boundary shouldn't be mapped to the other side" mistake
+      // as the raw-fragment redundancy check above, just for a single self-contained fragment
+      // rather than two duplicate copies. Resolve this BEFORE building candidates, not after, so a
+      // self-closing fragment's own ends never enter the cross-rank matching pool at all.
+      for(int li=0; li<N; li++)
+      {
+        if( line_is_redundant[li] || !all_lines[li].open_front || !all_lines[li].open_back ) { continue; }
+        if( all_lines[li].pts.size() < 2 ) { continue; }
+        // Trim the ghost-overshoot from each end first -- see pin_to_domain_edge's own comment.
+        // Require BOTH ends to have genuinely exited the global domain (real ghost-overshoot from
+        // tracing the whole periodic length) before even considering self-closure -- a short
+        // fragment near an ordinary MPI corner can have front/back sitting close together purely by
+        // coincidence (its own small local loop-back), without ever having left the domain at all;
+        // treating THAT as "already complete" would wrongly drop it from the matching pool entirely,
+        // leaving the real assembled loop short by whatever this fragment should have contributed
+        // (measured directly: rect-loop total length 339 -> 272 Å from exactly this false positive).
+        const bool front_exited = pin_to_domain_edge( all_lines[li].pts, all_lines[li].core, true );
+        const bool back_exited  = pin_to_domain_edge( all_lines[li].pts, all_lines[li].core, false );
+        if( !front_exited || !back_exited ) { continue; }
+        const Vec3d& front = all_lines[li].pts.front();
+        const Vec3d& back = all_lines[li].pts.back();
+        const double self_gap = norm( front - wrap_to_reference( back, front ) );
+        if( self_gap < pos_tol )
+        {
+          // Do NOT overwrite either end to a shared coordinate here (unlike the cross-rank exact-
+          // match snap below, which is safe because it joins two SEPARATE fragments whose own
+          // coordinate conventions were never related to begin with). This one fragment's own
+          // points already form a continuous, unwrapped path from ~one domain edge to the other
+          // (e.g. z~0 up to z~Lz) -- that's WHY summing consecutive raw distances already gives the
+          // correct physical length, exactly like a plain np=1 self-closing segment's own
+          // segment_length() in compute_dxa_circuit_sweep.cpp. Forcing pts.back() to match
+          // pts.front()'s own coordinate (both "at z~0") breaks that continuity: the point just
+          // before it is still expressed at its own natural z~Lz, so the last segment would jump
+          // the entire box width instead of the true short physical step across the periodic
+          // boundary -- measured directly: this exact mistake doubled the reported length (Lz ->
+          // ~2 Lz). Leaving the points as pin_to_domain_edge trimmed them keeps the path continuous;
+          // is_loop=true alone is enough to mark it closed.
+          all_lines[li].is_loop = true;
+          all_lines[li].open_front = false;
+          all_lines[li].open_back = false;
+          lout << "compute_dxa_mpi_stitch_lines: line " << li << " own front/back ends are " << self_gap
+               << " Ang apart after periodic wrap -- already a complete self-closing loop on its own, "
+               << "not an MPI-boundary crossing needing an external partner" << std::endl;
+        }
+      }
+
       struct Candidate { int li; int end; }; // end: 0=front, 1=back
       std::vector<Candidate> candidates;
       for(int li=0; li<N; li++)
       {
+        if( line_is_redundant[li] ) { continue; }
         if( all_lines[li].open_front ) { candidates.push_back({li,0}); }
         if( all_lines[li].open_back )  { candidates.push_back({li,1}); }
       }
@@ -378,6 +636,43 @@ namespace exaStamp
         const int li_b = candidates[b].li, end_b = candidates[b].end;
         if( li_a == li_b ) { return false; } // a line's own two ends sharing an atom with only each other -- not a real cross-rank stitch
 
+        // Shared atoms alone are NOT sufficient either, now that positions are precisely pinned to
+        // the exact MPI boundary plane (see compute_dxa_circuit_sweep's own pin_boundary_point):
+        // found via the rectangular-loop test (a single physical closed loop by construction, so any
+        // mismatch here is unambiguous) that two ends sharing only a WEAK amount of atom evidence
+        // (right at MIN_SHARED_ATOMS_FOR_UNION) can still be two GENUINELY DIFFERENT true crossings,
+        // ~11.5 Å apart -- their own boundary loops happened to touch a couple of the same nearby
+        // atoms without actually being the same point. That wrong match then stole both ends from
+        // their real (bit-identical position) partners, breaking what should have been a closed ring
+        // into an open path.
+        //
+        // A scaled tolerance (looser for more shared atoms) still turned out too aggressive: on the
+        // screw-dipole test, a GENUINE match with 3 shared atoms (strong evidence) landed as far as
+        // 44-50 Å apart in some runs -- almost certainly the same physical periodic line crossing the
+        // same rank pair's boundary at a second, separate point along its own length, not a wrong
+        // match, and rejecting it broke that dislocation's own closure just as badly as the original
+        // bug. 3+ shared atoms is exactly the evidence level every genuine match measured this session
+        // has had (the one proven-wrong match had precisely 2, the minimum for union at all) -- so
+        // only gate on position at that weakest, minimum-evidence level; trust 3+ shared atoms
+        // unconditionally, the same as this file's own original behavior all session.
+        const int n_shared_atoms = pair_shared( a, b );
+        if( n_shared_atoms <= 2 )
+        {
+          // Same periodic minimum-image wrap the snap-averaging step below already applies -- the
+          // same real crossing can be recorded on opposite sides of a periodic wrap by two different
+          // ranks, which without this looks like a huge (~box-size) spurious gap.
+          const double gap = norm( end_pos(li_a,end_a) - wrap_to_reference( end_pos(li_b,end_b), end_pos(li_a,end_a) ) );
+          if( gap >= pos_tol )
+          {
+            lout << "compute_dxa_mpi_stitch_lines: REJECTED line " << li_a << " end " << end_a << " <-> line "
+                 << li_b << " end " << end_b << ": shares only " << n_shared_atoms << " ghost atom(s) and pinned "
+                 << "positions are " << gap << " Ang apart (>= " << pos_tol
+                 << ") -- likely 2 distinct nearby crossings, not the same point; leaving both standalone"
+                 << std::endl;
+            return false;
+          }
+        }
+
         // Shared atoms are necessary but NOT sufficient evidence this is a genuine pass-through: two
         // physically different dislocation lines can pass close enough together (e.g. near an
         // otherwise-undetected junction, or just densely-packed nearby defects) that their own
@@ -441,6 +736,12 @@ namespace exaStamp
         return true;
       };
 
+      // Real cross-rank N-way junctions validated below (Frank's rule) get their shared point
+      // recorded here, in addition to overwriting each arm's own endpoint in all_lines[...].pts
+      // directly -- see the header comment at that check for the full mechanism.
+      std::vector<Vec3d> junction_positions_local;
+      long n_junctions_reconstructed = 0;
+
       for( const auto& kv : components )
       {
         std::vector<int> remaining = kv.second;
@@ -489,13 +790,85 @@ namespace exaStamp
 
         if( remaining.size() > 2 )
         {
-          // real 3+-way junction straddling the boundary -- leave every arm standalone, don't guess
-          // which two (of 3+) actually continue one another.
-          ++n_junctions_skipped;
-          lout << "compute_dxa_mpi_stitch_lines: 3+-way junction detected at an MPI boundary ("
-               << remaining.size() << " arms sharing ghost atoms there) -- leaving all "
-               << remaining.size() << " arms standalone, not stitching" << std::endl;
-          for( int c : remaining ) { candidate_used[static_cast<size_t>(c)] = true; } // exclude from the fallback pass too
+          // Real N-way junction candidate (no dominant pair left to peel off as redundant). Shared
+          // atoms/tight clustering already got us this far, but that alone doesn't distinguish a
+          // genuine physical junction from several unrelated dislocations that happen to pass close
+          // together near the same MPI boundary -- the same ambiguity the 2-way case resolves with
+          // its own Burgers-compatibility check. The N-way analog is Frank's rule: correctly signed
+          // (each arm's own tangent oriented toward the shared point), every arm's Burgers vector
+          // should sum to ~zero.
+          //
+          // Can't derive each arm's own correct sign from its `end` (front=0/back=1) alone --
+          // measured directly, twice this session, that end-topology has no fixed relationship to a
+          // fragment's own stored Burgers-vector sign (the same physical pair showed opposite
+          // end-topology labels across separate runs while their true vector relationship stayed
+          // constant -- see try_stitch_pair's own comment above). So this searches every sign
+          // assignment instead of guessing one: fix arm 0's own vector as reference, try both signs
+          // for every other arm (2^(N-1) combinations, cheap for the handful of arms a real junction
+          // has), accept if ANY combination sums within tolerance. This is deliberately permissive on
+          // sign (same reasoning as the 2-way check) but still requires genuine numerical agreement
+          // in magnitude/direction -- unrelated dislocations with different <111>/2 family axes won't
+          // pass just because they're allowed to flip signs freely.
+          const size_t n_arms = remaining.size();
+          bool frank_rule_ok = false;
+          std::vector<int> best_signs;
+          {
+            const Vec3d& b0 = all_lines[ candidates[remaining[0]].li ].burgers;
+            const size_t n_combos = size_t(1) << (n_arms - 1); // arm 0 fixed at sign +1
+            for( size_t combo = 0; combo < n_combos && !frank_rule_ok; combo++ )
+            {
+              Vec3d sum = b0;
+              std::vector<int> signs( n_arms, 1 );
+              for( size_t k = 1; k < n_arms; k++ )
+              {
+                const bool negate = ( (combo >> (k-1)) & 1u ) != 0;
+                signs[k] = negate ? -1 : 1;
+                const Vec3d& bk = all_lines[ candidates[remaining[k]].li ].burgers;
+                sum = sum + ( negate ? Vec3d{-bk.x,-bk.y,-bk.z} : bk );
+              }
+              if( norm(sum) < b_tol ) { frank_rule_ok = true; best_signs = signs; }
+            }
+          }
+
+          if( !frank_rule_ok )
+          {
+            // real 3+-way junction straddling the boundary, but no sign assignment closes the
+            // Burgers circuit -- likely unrelated dislocations passing close together, not one real
+            // junction. Leave every arm standalone, don't guess which (if any) actually connect.
+            ++n_junctions_skipped;
+            lout << "compute_dxa_mpi_stitch_lines: " << n_arms << "-way group at an MPI boundary shares atoms "
+                 << "but no Burgers-vector sign assignment satisfies Frank's rule (sum ~= 0) -- likely "
+                 << n_arms << " distinct nearby dislocations, not one real junction; leaving all standalone"
+                 << std::endl;
+            for( int c : remaining ) { candidate_used[static_cast<size_t>(c)] = true; } // exclude from the fallback pass too
+            continue;
+          }
+
+          // Validated: reconstruct the shared junction point as the average of every arm's own
+          // (already MPI-boundary-pinned, see compute_dxa_circuit_sweep's own pin_boundary_point)
+          // position, then snap every arm's own endpoint there directly -- same "don't discard real
+          // data, append/overwrite with a verified shared coordinate" principle as the 2-way exact
+          // match above. No end_partner entry is set (a junction isn't a 1:1 pairing), so the walk
+          // below leaves each arm as its own independent assembled line, now correctly terminating at
+          // the shared point instead of dangling at its own raw, unstitched position.
+          Vec3d junction_pos{0.,0.,0.};
+          for( int c : remaining ) { junction_pos = junction_pos + end_pos( candidates[c].li, candidates[c].end ); }
+          junction_pos = junction_pos / static_cast<double>( n_arms );
+
+          for( int c : remaining )
+          {
+            const int li = candidates[c].li, end = candidates[c].end;
+            auto& pts = all_lines[li].pts;
+            if( !pts.empty() ) { ( end == 0 ? pts.front() : pts.back() ) = junction_pos; }
+            candidate_used[static_cast<size_t>(c)] = true;
+          }
+          junction_positions_local.push_back( junction_pos );
+          ++n_junctions_reconstructed;
+          lout << "compute_dxa_mpi_stitch_lines: RECONSTRUCTED " << n_arms << "-way junction at "
+               << junction_pos.x << "," << junction_pos.y << "," << junction_pos.z
+               << " (Frank's rule satisfied, signs [";
+          for( int s : best_signs ) { lout << s << " "; }
+          lout << "]) -- " << n_arms << " arms now terminate at this shared point" << std::endl;
           continue;
         }
         if( remaining.size() == 2 ) { try_stitch_pair( remaining[0], remaining[1] ); }
@@ -518,7 +891,10 @@ namespace exaStamp
           if( candidate_used[b] || candidates[b].li == li_a ) { continue; }
           const int li_b = candidates[b].li, end_b = candidates[b].end;
           const Vec3d& pos_b = end_pos(li_b,end_b);
-          const double d = norm( pos_a - pos_b );
+          // Same periodic minimum-image wrap the exact-match pass and snap-averaging already
+          // apply -- without it, the same real crossing recorded on opposite sides of a periodic
+          // wrap looks like a huge (~box-size) spurious gap and this fallback wrongly misses it.
+          const double d = norm( pos_a - wrap_to_reference( pos_b, pos_a ) );
           if( d >= best_d ) { continue; }
           const Vec3d& b_b = all_lines[li_b].burgers;
           // Direction-agnostic, same as the exact-match pass above -- see that pass's own comment
@@ -532,7 +908,7 @@ namespace exaStamp
         {
           candidate_used[a] = true; candidate_used[static_cast<size_t>(best_b)] = true;
           const int li_b = candidates[best_b].li, end_b = candidates[best_b].end;
-          const Vec3d snap = ( pos_a + end_pos(li_b,end_b) ) / 2.;
+          const Vec3d snap = ( pos_a + wrap_to_reference( end_pos(li_b,end_b), pos_a ) ) / 2.;
           end_partner[li_a][end_a] = { li_b, end_b, snap };
           end_partner[li_b][end_b] = { li_a, end_a, snap };
           ++n_stitches; ++n_fallback;
@@ -560,9 +936,13 @@ namespace exaStamp
         return { std::vector<Vec3d>( L.pts.rbegin(), L.pts.rend() ), std::vector<int32_t>( L.core.rbegin(), L.core.rend() ) };
       };
 
-      std::vector<bool> visited( N, false );
+      std::vector<bool> visited( line_is_redundant ); // pre-excluded raw fragments never get their own assembled entry either
       struct AssembledLine { Vec3d burgers; std::vector<Vec3d> pts; std::vector<int32_t> core; bool is_loop; };
       std::vector<AssembledLine> assembled;
+      // Which (pre-post-assembly-dedup) assembled index each raw fragment li contributed to --
+      // only ever set for a li actually walked below (line_is_redundant lines never enter either
+      // walk at all; resolved separately via redundant_with, see the final remap-building block).
+      std::vector<int> li_to_assembled_index( N, -1 );
 
       for(int li=0; li<N; li++)
       {
@@ -579,6 +959,7 @@ namespace exaStamp
         for(;;)
         {
           visited[cur] = true;
+          li_to_assembled_index[cur] = static_cast<int>( assembled.size() );
           const bool forward = ( enter_end == 0 );
           auto ord = ordered_points( all_lines[cur], forward );
           const int exit_end = forward ? 1 : 0;
@@ -622,6 +1003,7 @@ namespace exaStamp
         for(;;)
         {
           visited[cur] = true;
+          li_to_assembled_index[cur] = static_cast<int>( assembled.size() );
           const bool forward = ( enter_end == 0 );
           auto ord = ordered_points( all_lines[cur], forward );
           const int exit_end = forward ? 1 : 0;
@@ -650,6 +1032,13 @@ namespace exaStamp
         assembled.push_back( std::move(chain) );
       }
 
+      // Same-purpose tracking as redundant_with (raw-fragment level), one level up: which SURVIVING
+      // assembled index a dropped (post-assembly-redundant) assembled entry duplicates, and the
+      // final old-assembled-index -> new-(compacted)-assembled-index map -- both needed below to
+      // build the complete li -> final dislocation_id remap sent back to each rank.
+      std::vector<int> assembled_redundant_with( assembled.size(), -1 );
+      std::vector<int> old_to_new_assembled_index( assembled.size(), -1 );
+
       // Drop short lines whose ENTIRE path is redundant with (retraces the same physical stretch
       // as) a longer line -- found via the rectangular-loop test (a single physical closed
       // dislocation by construction): with keep_ghost_tets, a rank whose own local view legitimately
@@ -663,8 +1052,12 @@ namespace exaStamp
       // spacing of SOME point on a strictly longer line -- a genuinely separate, real dislocation
       // nearby would not have this property (its own points would trace a physically distinct path).
       {
-        static constexpr double REDUNDANT_POINT_TOL = 5.0; // Ang -- same scale as match_tolerance's own default
-        static constexpr double REDUNDANT_COVERAGE_FRACTION = 0.9;
+        // Same is_genuine_duplicate check as the raw-fragment pre-pass above (arc-span-aware, not
+        // just point-coverage) -- see that check's own comment for why plain coverage alone wrongly
+        // flags a short, genuinely DISTINCT line that merely shares one corner point with a longer
+        // one. This post-assembly pass still exists as its own separate check (rather than relying
+        // solely on the pre-pass) because assembly/stitching can itself produce a short redundant
+        // line the raw fragments alone didn't already show as such.
         std::vector<bool> drop( assembled.size(), false );
         for(size_t i=0;i<assembled.size();i++)
         {
@@ -672,29 +1065,76 @@ namespace exaStamp
           for(size_t j=0;j<assembled.size();j++)
           {
             if( i==j || drop[j] || assembled[i].pts.size() >= assembled[j].pts.size() ) { continue; }
-            size_t n_covered = 0;
-            for( const auto& p : assembled[i].pts )
-            {
-              for( const auto& q : assembled[j].pts ) { if( norm(p-q) < REDUNDANT_POINT_TOL ) { ++n_covered; break; } }
-            }
-            if( static_cast<double>(n_covered) / static_cast<double>(assembled[i].pts.size()) >= REDUNDANT_COVERAGE_FRACTION )
+            if( is_genuine_duplicate( assembled[i].pts, assembled[j].pts, 5.0 ) )
             {
               drop[i] = true;
+              assembled_redundant_with[i] = static_cast<int>(j);
               lout << "compute_dxa_mpi_stitch_lines: dropping line " << i << " (" << assembled[i].pts.size()
                    << " points) as redundant with line " << j << " (" << assembled[j].pts.size() << " points) -- "
-                   << n_covered << "/" << assembled[i].pts.size() << " of its own points sit within "
-                   << REDUNDANT_POINT_TOL << " Ang of the longer line's own path, likely a duplicate ghost-overlap "
-                   << "recording near an MPI boundary, not a separate physical dislocation" << std::endl;
+                   << "likely a duplicate ghost-overlap recording near an MPI boundary, not a separate "
+                   << "physical dislocation" << std::endl;
               break;
             }
           }
         }
+        // Same chain-resolution as redundant_with above (a dropped entry's own "duplicate of"
+        // target can itself later turn out dropped too).
+        for(size_t i=0;i<assembled_redundant_with.size();i++)
+        {
+          if( assembled_redundant_with[i] < 0 ) { continue; }
+          int j = assembled_redundant_with[i];
+          while( assembled_redundant_with[j] >= 0 ) { j = assembled_redundant_with[j]; }
+          assembled_redundant_with[i] = j;
+        }
         if( std::any_of( drop.begin(), drop.end(), []( bool b ){ return b; } ) )
         {
           std::vector<AssembledLine> kept;
-          for(size_t i=0;i<assembled.size();i++) { if( !drop[i] ) { kept.push_back( std::move(assembled[i]) ); } }
+          for(size_t i=0;i<assembled.size();i++)
+          {
+            if( drop[i] ) { continue; }
+            old_to_new_assembled_index[i] = static_cast<int>( kept.size() );
+            kept.push_back( std::move(assembled[i]) );
+          }
           assembled = std::move(kept);
         }
+        else
+        {
+          for(size_t i=0;i<assembled.size();i++) { old_to_new_assembled_index[i] = static_cast<int>(i); }
+        }
+      }
+
+      // Build the complete li -> final dislocation_id remap (both layers of redundancy already
+      // fully chain-resolved above: raw-fragment level via redundant_with, assembly level via
+      // assembled_redundant_with), then send each originating rank its own local-index-keyed slice
+      // back -- see DXALocalToFinalDislocationId's own doc comment for why. A redundant (dropped)
+      // line resolves through whichever line it duplicates rather than defaulting to -1, so a
+      // rank whose own core-atom marking only reached a since-discarded duplicate fragment still
+      // gets a real final id for those atoms, not a false "not part of any dislocation."
+      {
+        std::vector<int32_t> li_to_final_id( N, -1 );
+        for(int li=0; li<N; li++)
+        {
+          const int source_li = line_is_redundant[li] ? redundant_with[li] : li;
+          if( source_li < 0 ) { continue; } // shouldn't happen (redundant_with is always chain-resolved to a real line), guard anyway
+          int assembled_idx = li_to_assembled_index[source_li];
+          if( assembled_idx < 0 ) { continue; } // shouldn't happen either, same reasoning
+          if( assembled_redundant_with[assembled_idx] >= 0 ) { assembled_idx = assembled_redundant_with[assembled_idx]; }
+          const int final_idx = old_to_new_assembled_index[assembled_idx];
+          if( final_idx >= 0 ) { li_to_final_id[li] = static_cast<int32_t>(final_idx); }
+        }
+
+        std::vector<int> local_counts( np, 0 );
+        for(int li=0; li<N; li++) { ++local_counts[ line_origin_rank[li] ]; }
+        std::vector<std::vector<int32_t>> per_rank_remap( np );
+        for(int r=0;r<np;r++) { per_rank_remap[r].resize( local_counts[r] ); }
+        for(int li=0; li<N; li++) { per_rank_remap[ line_origin_rank[li] ][ line_origin_local_index[li] ] = li_to_final_id[li]; }
+
+        for(int r=1;r<np;r++)
+        {
+          if( per_rank_remap[r].empty() ) { continue; } // matches the n_local==0 guard on the receiving end
+          MPI_Send( per_rank_remap[r].data(), static_cast<int>(per_rank_remap[r].size()), MPI_INT32_T, r, 0, *mpi );
+        }
+        dxa_local_to_final_dislocation_id->final_id = std::move( per_rank_remap[0] );
       }
 
       dl.lines.clear();
@@ -710,6 +1150,7 @@ namespace exaStamp
       dl.boundary_loop_atom_id_back.clear();
       dl.boundary_loop_atom_pos_front.clear();
       dl.boundary_loop_atom_pos_back.clear();
+      dl.junction_positions = std::move( junction_positions_local );
       for(size_t i=0;i<assembled.size();i++)
       {
         dl.lines.push_back( {} );
@@ -729,7 +1170,8 @@ namespace exaStamp
       *n_mpi_stitches = n_stitches;
       lout << "compute_dxa_mpi_stitch_lines: " << N << " raw fragments across " << np << " ranks, "
            << n_stitches << " cross-rank end-to-end matches (" << n_exact << " exact ghost-atom, "
-           << n_fallback << " fuzzy fallback), " << n_junctions_skipped << " boundary junctions left "
+           << n_fallback << " fuzzy fallback), " << n_junctions_reconstructed << " cross-rank junctions "
+           << "reconstructed, " << n_junctions_skipped << " boundary junctions left "
            << "unstitched, " << assembled.size() << " lines after stitching" << std::endl;
     }
 

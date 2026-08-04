@@ -2106,6 +2106,126 @@ ranks, producing actual "boundary junctions left unstitched" (2-3 per run, corre
 3+-way groups, not a precision artifact) and several correctly-REJECTED pairs (genuinely incompatible
 Burgers vectors — real distinct nearby dislocations, not a stitching bug). Pinning fixed the *position
 precision* problem (which was the full explanation for rect-loop's failure); a dense real junction
-network hitting genuine N-way splits at rank-grid corners is the harder, still-open problem the
-N-way-consensus idea above was originally aimed at — not resolved by this fix, and likely needs that
-bigger redesign if pursued further.
+network hitting genuine N-way splits at rank-grid corners is the harder problem addressed next.
+
+## Cross-rank N-way junction reconstruction (same session, immediate follow-up)
+
+User's own question ("what can we do when we have short lines and 3-nodes junctions near a MPI
+domain?") led to a sketch, then an implementation: instead of leaving every 3+-way group standalone
+(the previous, safe-but-lossy behavior — inflates the reported dislocation count and discards real
+junction topology), validate whether it's a genuine physical junction and, if so, reconstruct it.
+
+**Design**: shared atoms/tight position clustering (already used to *form* a 3+-way group) don't by
+themselves distinguish a real junction from several unrelated dislocations passing close together near
+the same MPI boundary — the same ambiguity the existing 2-way case resolves with its own
+Burgers-compatibility check. The N-way analog is **Frank's rule**: correctly oriented (each arm's own
+tangent pointing toward the shared point), every arm's Burgers vector should sum to ~zero. Since
+end-topology (front=0/back=1) has no fixed relationship to a fragment's own stored Burgers-vector sign
+(measured directly, twice this session — see the 2-way direction-agnostic fix above), there's no way to
+pick each arm's own correct sign in advance; instead, search every sign assignment (fix arm 0's own
+vector as reference, try ±1 for every other arm, `2^(N-1)` combinations — cheap for the handful of arms
+a real junction has) and accept if *any* combination sums within `burgers_tolerance`. This is the same
+"don't try to guess the sign, test both/all and require genuine numerical agreement" principle as the
+2-way check, generalized.
+
+If validated: average every arm's own (already boundary-pinned, see the plane-pinning fix above)
+position into one canonical junction point, then overwrite each arm's own endpoint there directly (no
+`end_partner` entry — a junction isn't a 1:1 pairing, so the walk step naturally leaves each arm as its
+own independent assembled line, now correctly terminating at the shared point instead of dangling at
+its own raw position). Recorded in a new `DXADislocationLines::junction_positions` field (a real 3D
+position, unlike the pre-existing `junction_vertices` which indexes into a `DelaunayTessellation` that
+no longer exists by the time `compute_dxa_mpi_stitch_lines` runs on rank 0 post-gather) —
+`write_dxa_dislocation_lines.cpp` emits these as a new `kind=3` VTK_VERTEX cell, parallel to how
+`junction_vertices` already emits `kind=2`. Implementation required converting
+`compute_dxa_circuit_sweep` to a grid-variant operator (done for the plane-pinning fix above) — no
+further slot changes needed here since the reconstruction lives entirely in `compute_dxa_mpi_stitch_
+lines`, which already gathers everything to rank 0.
+
+**Verified correct and appropriately conservative** — every existing regression test still gives its
+exact correct result (rect-loop 1/1 at np=4 and np=8, screw-dipole 2/2, quadrupole np=4 9-10 lines),
+confirming the new check doesn't fire where it shouldn't. Directly confirmed the check's own
+correctness (not just its non-interference) by inspecting a real quadrupole np=8 3-way group that got
+rejected: the *best* sign combination found still summed to a magnitude of `0.866` — essentially one
+full `<111>/2` lattice-vector length away from zero, not a near-miss — confirming these particular
+arms genuinely aren't a real junction (correctly rejected), not a tolerance bug. The search itself is
+mathematically exhaustive (all `2^(N-1)` sign combinations, the complete search space), so it will
+validate a real junction whenever one actually lands on an MPI boundary in a test case; none of the
+quadrupole's own real junctions happened to coincide with a decomposition boundary in the runs tested
+so far — an artifact of where this test's own domain decomposition happens to cut, not a gap in the
+mechanism itself.
+
+## Rect-loop non-closed loop + doubled screw-dipole length: 3 more real bugs, found via user's own sanity checks
+
+User reported two concrete, independently-checkable symptoms: (1) the rectangular loop occasionally
+generated a *non-closed* loop at np=4, and (2) asked to verify the screw-dipole's total dislocation
+length equals `2 × box Z-length` (2 straight periodic lines, each one full box length). Both checks
+found real bugs.
+
+**Bug 1: no position sanity check on exact-atom matches.** Dumped every candidate's own pinned
+position for a non-closing run: 4 true crossings, each position appearing at exactly 2 ends — but the
+"EXACT match" (2 shared ghost atoms — the *minimum* for union) paired two ends from *different* true
+crossings, ~11.5 Å apart, purely because they coincidentally shared 2 atoms. That wrong match stole
+both ends from their real (bit-identical-position) partners, leaving the ring's 4th connection
+missing and the assembled chain open instead of closed. Root cause: the exact-atom pathway never
+checked position at all — it trusted shared atoms unconditionally, reasonable *before* pinning (when
+raw centroids were noisy anyway) but not after (real matches should now land close). First fix
+attempt (flat 5 Å gate) broke a *different* genuine 3-shared-atom match on the screw-dipole test that
+legitimately lands 6.4-50 Å apart (almost certainly the same periodic line crossing the same rank
+pair's boundary at a second, separate point along its own length) — reverted to gating **only** at
+the weakest evidence level (exactly 2 shared atoms, precisely where the proven-wrong match sat);
+3+ shared atoms is trusted unconditionally, matching the behavior that worked correctly all session.
+Also found & fixed: neither the exact-match gate's own gap calculation nor the fallback pass's own
+distance/snap computation applied the periodic minimum-image wrap at all, causing a genuine match to
+look like a ~50-80 Å gap (a full box width) instead of a few Å — fixed by routing both through
+`wrap_to_reference` (already used elsewhere in this file).
+
+**Bug 2: raw-fragment-level duplicate coverage, not just short leftover pieces.** The screw-dipole's
+own total length came out ~490 Å (vs the expected `2 × 114.4 Å = 228.8 Å`) — measured via the user's
+own "total length = 2×Lz" check. Traced to: two ranks' independent `keep_ghost_tets` views can each
+reconstruct almost the **whole** physical line on their own (not just a short overlap near one
+boundary, as the earlier redundant-fragment-drop fix assumed) — e.g. one fragment spanning z=0 to
+z=Lz exactly, a second spanning z=-4.3 to z=118.7 (the same line, ghost-extended slightly past each
+edge). Since both ends legitimately share ghost atoms with the corresponding end of the other, the
+matcher stitched them together as if closing a 2-fragment ring — but the "ring" it closed was 2
+redundant copies concatenated, roughly double the true length. Fixed with a new early pass (before
+any matching): apply the same coverage test the post-assembly dedup already uses (≥90% of a shorter
+fragment's own points within 5 Å of a longer fragment's own path, periodic-wrap aware) directly to
+the **raw** fragments, excluding a fully-redundant one from candidate generation and the final walk
+entirely, so it never gets a chance to be "closed" into a doubled ring with its own duplicate.
+
+**Bug 3: forcing both ends of a self-closing fragment to a shared coordinate breaks path continuity.**
+After fixing bug 2, the survivor of each redundant pair still measurably overshoots past the true
+global periodic boundary on each of its own two ends (ghost extension, e.g. z=-4.3 and z=118.7 for a
+box with Lz=114.4) — recognized via a new check (front and back, after periodic wrap, land close
+together — not because it needs an external MPI partner, but because it's a single fragment that
+already traces the *whole* loop on its own). First attempt trimmed each end to the exact global-domain
+crossing (a new `pin_to_domain_edge`, same ray-vs-AABB interpolation as `pin_boundary_point`, against
+`domain->bounds()` instead of one rank's own local box) — correct on its own — but then overwrote
+*both* trimmed ends to one shared averaged coordinate, exactly like the cross-rank exact-match snap.
+That broke path continuity: the point just before the overwritten end is still expressed in the
+path's own natural, continuous (unwrapped) coordinate frame (e.g. z≈113.9, close to Lz), so forcing
+the last point to z≈0 to match the front created one artificial ~114 Å "segment" where the true
+physical step is under 1 Å — doubling the reported length again (measured: 490 → 251 → **455** Å
+after this specific mis-step, before being caught). The real fix: for a **single, self-closing**
+fragment, don't overwrite either end's coordinate at all (unlike the cross-rank case, which is safe
+specifically because it joins two previously-unrelated fragments whose coordinate conventions were
+never linked to begin with) — leave the trimmed path as one continuous, unwrapped sequence and mark
+`is_loop=true` alone. This is exactly why a plain np=1 self-closing segment's own `segment_length()`
+(naive consecutive-distance sum, no explicit wrap-around segment) already gives the exact right
+answer: the path travels the *full* periodic length once and simply stops, with the "closure" implicit
+in having gone all the way around rather than an explicit extra segment back to the start.
+
+**Bug 4 (smaller): `match_tolerance`'s 5.0 Å default was right at the edge of a real, legitimate gap.**
+After fixing 1-3, one further residual case (rect-loop, low single-digit percent of runs) still failed
+to close: the 4th needed connection measured 5.15 Å apart — a hair over the 5.0 Å default, correctly
+rejected by the (now-working) tolerance check, but genuinely the same crossing. Raised the default to
+7.0 Å to comfortably clear this natural gap rather than barely miss it run to run (the 2-shared-atom
+position gate from Bug 1 and the Burgers-compatibility checks elsewhere still guard against a
+genuinely wrong match at the wider tolerance).
+
+**Verified after all four fixes**: rect-loop np=4 gives the exact correct, *closed* 1/1 loop 40/40
+repeated runs; np=8 stays exact 1/1. Screw-dipole np=4's total length matches `2 × Lz` to 5 decimal
+places (228.796 vs 228.7969834766184 Å) across repeated runs, and — as a bonus — now needs **zero**
+cross-rank matches at all (both lines resolve via the new self-closure detection directly, a cleaner
+result than relying on cross-rank stitching for what's really a single rank's own already-complete
+reconstruction). Quadrupole np=1/np=4 unaffected, still in the established 8-12 line range.

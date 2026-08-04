@@ -28,6 +28,7 @@ under the License.
 #include <exaStamp/delaunay/delaunay_tessellation.h>
 #include <exaStamp/delaunay/interface_mesh.h>
 #include <exaStamp/delaunay/dxa_dislocation_lines.h>
+#include <exaStamp/delaunay/dxa_core_ownership.h>
 
 #include <algorithm>
 #include <array>
@@ -147,6 +148,7 @@ namespace exaStamp
     ADD_SLOT( DelaunayTessellation , delaunay_tessellation     , INPUT , REQUIRED );
     ADD_SLOT( InterfaceMesh        , interface_mesh            , INPUT , REQUIRED );
     ADD_SLOT( DXADislocationLines  , dxa_dislocation_lines     , OUTPUT , DocString{"Same slot name as the earlier (superseded/approximated) line-extraction operators' own output, deliberately, so write_dxa_dislocation_lines auto-wires -- don't run more than one of them in the same pipeline"} );
+    ADD_SLOT( DXATriangleOwnership , dxa_triangle_ownership    , OUTPUT , DocString{"Per-interface-mesh-triangle: which LOCAL (per-rank, pre-MPI-stitch) dislocation_id claimed it during growth (a read-only copy of this operator's own internal facet_owner, resolved to final per-rank segment numbering), or -1. Feeds compute_dxa_core_atoms' own bad-tet flood-fill -- see that operator's own header comment."} );
     ADD_SLOT( long                 , max_circuit_length        , INPUT , 14 , DocString{"Maximum seed-circuit length in mesh-edge steps (OVITO's own default) -- a dislocation whose core is too wide to enclose within this won't be found"} );
     ADD_SLOT( long                 , circuit_stretchability    , INPUT , 9  , DocString{"Extra loop-size elasticity allowed during growth beyond max_circuit_length before a segment stops (OVITO's own default)"} );
     ADD_SLOT( double               , min_burgers_norm          , INPUT , 0.3 , DocString{"Minimum |Burgers vector| (same units as InterfaceMesh::edge_ideal_vector) for a local trial circuit to count as enclosing a real dislocation rather than numerical noise"} );
@@ -1150,10 +1152,17 @@ namespace exaStamp
       result.boundary_loop_atom_pos_front.clear();
       result.boundary_loop_atom_pos_back.clear();
 
+      // segs[] index -> this operator's own local dislocation_id (the position each surviving
+      // segment ends up at in the filtered/renumbered output below) -- needed to translate
+      // facet_owner's own node ids into the same numbering DXADislocationLines::dislocation_id
+      // uses, for the new DXATriangleOwnership output right after this loop.
+      std::vector<int32_t> segment_to_local_dislocation_id( segs.size(), -1 );
+
       std::vector<double> final_lengths;
       for(int32_t s=0; s<static_cast<int32_t>(segs.size()); s++)
       {
         if( !segs[s].active ) { continue; }
+        segment_to_local_dislocation_id[s] = static_cast<int32_t>( result.dislocation_id.size() );
         result.burgers_vector.push_back( segs[s].burgers );
         result.lines.push_back( {} );
         result.line_positions.push_back( std::vector<Vec3d>( segs[s].line.begin(), segs[s].line.end() ) );
@@ -1167,6 +1176,23 @@ namespace exaStamp
         result.boundary_loop_atom_pos_front.push_back( segment_boundary_pos_front[s] );
         result.boundary_loop_atom_pos_back.push_back( segment_boundary_pos_back[s] );
         final_lengths.push_back( segment_length( segs[s].line ) );
+      }
+
+      // New output (purely additive -- see this file's own earlier comments on facet_owner: this
+      // is a read-only copy of that already-fully-computed array, taken here after every existing
+      // growth/merge/junction decision has already finished, changing nothing about them). Resolve
+      // each claimed triangle's own owning node through the same merge chain (resolve_node) already
+      // used everywhere else in this file, then translate that node's own current segment to this
+      // operator's own local dislocation_id numbering via the map just built above.
+      DXATriangleOwnership& tri_ownership = *dxa_triangle_ownership;
+      tri_ownership.triangle_dislocation_id.assign( iface.triangles.size(), -1 );
+      for(size_t t=0; t<facet_owner.size(); t++)
+      {
+        if( facet_owner[t] == -1 ) { continue; }
+        const int32_t owning_node = resolve_node( facet_owner[t] );
+        const int32_t owning_segment = nodes[owning_node].segment;
+        if( owning_segment < 0 ) { continue; }
+        tri_ownership.triangle_dislocation_id[t] = segment_to_local_dislocation_id[owning_segment];
       }
 
       const long n_dislocations_found = static_cast<long>( result.lines.size() );
