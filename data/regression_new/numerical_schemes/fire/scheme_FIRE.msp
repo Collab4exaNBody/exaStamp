@@ -1,0 +1,13 @@
+includes:
+  - baseline.yaml
+  - config_fire.msp
+
+# config_fire.msp overrides the whole 'simulation:' scenario (fire_trajectory_loop instead of
+# md_trajectory_loop), so there is no 'numerical_scheme:' to select here.
+
+# Same system as data/regression_new/numerical_schemes/conjugate_gradient/scheme_CG.msp (Cu
+# edge-dislocation-dipole, EAM), so FIRE 2.0 and CG can be compared directly on identical input.
+global:
+  fire_tolerance: 1.0e-5
+  fire_dt_start: 1.0e-3 ps
+  fire_dt: 1.0e-3 ps

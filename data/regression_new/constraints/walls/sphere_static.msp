@@ -1,0 +1,13 @@
+includes:
+  - baseline_sphere.yaml
+  - snapshot.yaml
+
+confinement_wall:
+  - sphere_wall:
+      center: [ 50.0 ang, 50.0 ang, 50.0 ang ] # domain center
+      radius: 45.0 ang
+      cutoff: 2.2 ang
+      epsilon: 1.0e-19 J
+
++compute_force:
+  - confinement_wall

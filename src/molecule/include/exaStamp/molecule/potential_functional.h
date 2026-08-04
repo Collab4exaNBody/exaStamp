@@ -58,9 +58,9 @@ namespace exaStamp
     
     if( m.coeff == 0.0 ) // this is the signal for a linear form of the functional
     {
-      const double x2 = pow(x,2);
-      const double x3 = pow(x,3);
-      const double x4 = pow(x,4);
+      const double x2 = x*x;
+      const double x3 = x2*x;
+      const double x4 = x2*x2;
       return { 2 * k1 *  x
              + 3 * k2 *  x2
              + 4 * k3 *  x3
