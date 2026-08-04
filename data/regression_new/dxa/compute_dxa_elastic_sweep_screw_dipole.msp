@@ -33,8 +33,12 @@ simulation_epilog:
   - compute_dxa_elastic_mapping_tet_classification: {}
   - compute_dxa_elastic_interface_mesh: {}
   - compute_dxa_circuit_sweep: { min_burgers_norm: 0.3 }
+  - compute_dxa_core_atoms: {}
   - compute_dxa_mpi_stitch_lines: {}
+  - dxa_mark_core_atoms: { dislocation_id_field: dxa_disloc_id }
+  - write_xyz: { filename: "xyz/screw_dipole_core.xyz", fields: [ dxa_disloc_id ] }
 #  - smooth_dxa_dislocation_lines: { target_point_interval: 2.5, target_smoothing_level: 1 }
+  - dxa_project_atom_field: { atom_field: dxa_disloc_id, cutoff: 5.0 ang }
 # Output functions
   - write_interface_mesh: { filename: "paraview/interface_mesh_screw_dipole" }
   - write_dxa_dislocation_lines: { filename: "paraview/dxa_lines_screw_dipole" }
