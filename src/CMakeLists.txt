@@ -39,6 +39,7 @@ add_subdirectory(shock)
 add_subdirectory(delaunay)
 add_subdirectory(ptm)
 add_subdirectory(cna)
+add_subdirectory(grains)
 
 if(USE_RSA)
 	add_subdirectory(rsa)

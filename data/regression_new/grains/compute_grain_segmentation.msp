@@ -1,0 +1,52 @@
+species:
+  - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+
+compute_force: nop
+
+chunk_neighbors:
+  config:
+    chunk_size: 1
+    build_particle_offset: true
+
+setup_system:
+  - domain:
+      cell_size: 20 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_extended_xyz_file:
+      filename: "final_large.xyz"
+      bounds_mode: FILE
+      
+global:
+  max_iteration: 0
+  simulation_thermostate_screen_frequency: 10
+  simulation_thermostate_file_frequency: -1
+  simulation_snapshot_frequency: 10
+  rcut_max: 8.0 ang
+  rcut_inc: 1.0 ang
+  dt: 5.0e-3 ps
+
+compute_ptm:
+  rcut: 6.0 ang
+  rmsd_cutoff: 0.5
+
+ptm_fields:
+  struct_field: ptm_type
+  orient_field: ptm_orientation
+  rmsd_field: ptm_rmsd
+
+compute_grain_bond_misorientation:
+  rcut: 6.0 ang
+
+compute_grain_clusters:
+  min_grain_atom_count: 100
+  orphan_adoption: true
+
+simulation_epilog:
+  - compute_ptm
+  - ptm_fields
+  - ghost_update_opt: { opt_fields: [ ptm_type, ptm_orientation ] }
+  - compute_grain_bond_misorientation
+  - compute_grain_clusters
+  - timestep_file: "result_polycrystal_large.xyz"
+  - write_xyz: { fields: [ id, type, ptm_type, grain_id ] }
