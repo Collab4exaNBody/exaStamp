@@ -20,6 +20,7 @@ under the License.
 #include <onika/math/basic_types.h>
 #include <vector>
 #include <cstdint>
+#include <string>
 
 namespace exaStamp
 {
@@ -109,5 +110,31 @@ namespace exaStamp
     std::vector<std::vector<uint64_t>> boundary_loop_atom_id_back;
     std::vector<std::vector<Vec3d>>    boundary_loop_atom_pos_front;
     std::vector<std::vector<Vec3d>>    boundary_loop_atom_pos_back;
+
+    // Real-space markers for a cross-rank N-way junction reconstructed by compute_dxa_mpi_stitch_
+    // lines (N>=3 open-boundary ends validated by Frank's rule -- the arms' own Burgers vectors, up
+    // to a per-arm sign, sum to ~zero -- and snapped to one shared averaged position). Parallel to
+    // `junction_vertices` in spirit (a point where 3+ line segments meet), but a real 3D position
+    // rather than a DelaunayTessellation vertex index: by the time compute_dxa_mpi_stitch_lines runs
+    // (after MPI_Gatherv, on rank 0 only), no shared tessellation object exists to index into.
+    // Each arm's own line in `line_positions` already has its front()/back() endpoint overwritten to
+    // match one of these positions exactly -- this field exists only so consumers (write_dxa_
+    // dislocation_lines) can mark the shared point itself, the same way they already mark
+    // `junction_vertices`. Empty unless compute_dxa_mpi_stitch_lines found and validated at least one.
+    std::vector<Vec3d> junction_positions;
+  };
+
+  // Output of dxa_project_atom_field: an arbitrary per-atom scalar field (any exanb generic_real
+  // grid field -- CNA/PTM type, a cluster id, a per-atom stress/strain component, ...), averaged
+  // from nearby atoms onto every dislocation-line node, for ParaView visualization (colour dislocation
+  // lines by a real physical/structural quantity instead of only Burgers vector or dislocation id).
+  // Same shape and indexing convention as DXADislocationLines::line_positions (one entry per line,
+  // same per-line point count/order) so a consumer can zip the two together directly. Lives entirely
+  // on rank 0 (same convention as DXADislocationLines itself after compute_dxa_mpi_stitch_lines) --
+  // every other rank's own copy is empty.
+  struct DXALineNodeFieldValues
+  {
+    std::string field_name;
+    std::vector<std::vector<double>> value;
   };
 }
