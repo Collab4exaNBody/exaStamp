@@ -6,7 +6,6 @@
 #include <exanb/core/grid_fields.h>
 #include <exanb/compute/compute_pair_buffer.h>
 
-#include <exaStamp/mechanical/cell_particles_local_structural_metrics.h>
 
 #include <vector>
 #include <algorithm>

@@ -2262,16 +2262,19 @@ static std::unique_ptr<TextFileHandler> create_file_handler(const std::string& p
     return std::make_unique<ASCIIFileHandler>(path, mode);
     break;
   case FileCompression::GZIP:
-    if constexpr (has_zlib)
-      return std::make_unique<GzipFileHandler>(path, mode);
+#ifdef USE_ZLIB
+    return std::make_unique<GzipFileHandler>(path, mode);
+#endif
     break;
   case FileCompression::BZIP2:
-    if constexpr (has_bzip2)
-      return std::make_unique<Bzip2FileHandler>(path, mode);
+#ifdef USE_BZIP2
+    return std::make_unique<Bzip2FileHandler>(path, mode);
+#endif
     break;
   case FileCompression::XZ:
-    if constexpr (has_lzma)
-      return std::make_unique<XzFileHandler>(path, mode);
+#ifdef USE_LZMA
+    return std::make_unique<XzFileHandler>(path, mode);
+#endif
     break;
   default:
     break;

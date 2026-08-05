@@ -14,10 +14,10 @@
 #include <exanb/core/grid.h>
 #include <exanb/particle_neighbors/chunk_neighbors.h>
 
-#include <exaStamp/compute/thermodynamic_state.h>
+#include <exaStamp/thermo_state/thermodynamic_state.h>
 #include <exaStamp/particle_species/particle_specie.h>
 
-#include <exaStamp/mechanical/compute_local_entropy.h>
+#include <exaStamp/analysis_particle/compute_local_entropy.h>
 
 namespace exaStamp
 {

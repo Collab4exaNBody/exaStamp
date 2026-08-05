@@ -87,7 +87,7 @@ namespace exaStamp
   ONIKA_HOST_DEVICE_FUNC inline double slip_tripod_sign( double x ) { return ( x >= 0.0 ) ? 1.0 : -1.0; }
 
   // local slip-plane basis tripod (Burgers-parallel l, Burgers-orthogonal m, glide-plane normal n)
-  // from A = F - I, same construction as compute_local_mechanical_metrics.cpp's dislocation analysis
+  // from A = F - I, same construction as compute_local_analysis_particle_metrics.cpp's dislocation analysis
   struct SlipTripodFunctor
   {
     ONIKA_HOST_DEVICE_FUNC inline void operator () ( const Mat3d& F, Vec3d& l, Vec3d& m, Vec3d& n ) const
@@ -209,7 +209,7 @@ namespace exaStamp
   // second step of the dislocation-detection chain (see compute_microrotation_gradient
   // for the first): project the microrotation spatial gradient onto the local slip
   // tripod (l,m,n from compute_slip_tripod) to get the edge/screw dislocation
-  // indicators. Same construction as compute_local_mechanical_metrics.cpp's
+  // indicators. Same construction as compute_local_analysis_particle_metrics.cpp's
   // RefGradientComputeOp post-processing step, purely pointwise (vecgrad/l/m/n are
   // all already-computed per-particle inputs, no neighbor list needed here).
   struct DislocationIndicatorsFunctor
@@ -434,7 +434,7 @@ compute_vorticity:
 Computes the local slip-plane basis tripod (Burgers-parallel l, Burgers-orthogonal m,
 glide-plane normal n) per particle, from an already-computed deformation gradient
 tensor field (see compute_deformation_gradient_tensor). Pointwise, no neighbor list
-needed. Same construction as compute_local_mechanical_metrics.cpp's dislocation
+needed. Same construction as compute_local_analysis_particle_metrics.cpp's dislocation
 analysis tripod (l,m,n), built from A = F - I.
 
 Usage example:

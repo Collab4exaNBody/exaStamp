@@ -34,7 +34,7 @@ under the License.
 // Spatial gradient of the microrotation vector mu across neighbors, matched between
 // a reference configuration (grid_t0/backup_r_lt) and the current one -- first step
 // of the dislocation-detection chain (Zimmerman et al.-style analysis, ported from
-// compute_local_mechanical_metrics.cpp's RefGradientComputeOp). Unlike
+// compute_local_analysis_particle_metrics.cpp's RefGradientComputeOp). Unlike
 // compute_deformation_gradient_tensor, this only ever works in the reference frame:
 // mu itself is a current-configuration quantity already, we're just computing how it
 // varies spatially over the *reference* neighborhood -- no current-frame position is

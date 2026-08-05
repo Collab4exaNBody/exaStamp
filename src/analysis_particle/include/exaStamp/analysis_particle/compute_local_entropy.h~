@@ -1,11 +1,10 @@
 #pragma once
 
-#include <exanb/compute/compute_pair_buffer.h>
+#include <exanb/thermo_state/compute_pair_buffer.h>
 #include <onika/math/basic_types.h>
 #include <onika/string_utils.h>
 
 #include <exaStamp/compute/thermodynamic_state.h>
-#include <exaStamp/mechanical/cell_particles_local_structural_metrics.h>
 
 #include <omp.h>
 #include <vector>

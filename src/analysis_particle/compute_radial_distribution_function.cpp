@@ -19,9 +19,9 @@
 #include <exanb/core/particle_type_properties.h>
 #include <exanb/particle_neighbors/chunk_neighbors.h>
 
-#include <exaStamp/compute/thermodynamic_state.h>
+#include <exaStamp/thermo_state/thermodynamic_state.h>
 #include <exaStamp/particle_species/particle_specie.h>
-#include <exaStamp/mechanical/cmp_utils.h>
+#include <exaStamp/analysis_particle/cmp_utils.h>
 
 // TODO: 
 // - File size might become an issue
