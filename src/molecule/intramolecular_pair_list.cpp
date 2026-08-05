@@ -118,7 +118,7 @@ namespace exaStamp
       ldbg << "map build time = " << profiling_timer_elapsed_restart(T) << std::endl;
 
       const size_t n_chemical_pairs = chemical_pair_pot_map->size();
-      chemical_pairs->assign( n_chemical_pairs , {0,0} );
+      chemical_pairs->assign( n_chemical_pairs , ChemicalPair{0,0} );
       intramolecular_parameters->m_pair_param_idx.assign( n_chemical_pairs , -1 );
 
       const int n_type_pairs = unique_pair_count( species->size() );
