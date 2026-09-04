@@ -30,10 +30,10 @@ under the License.
 
 // GPU-compatible supervised learning crystal structure analysis (SLCSA): classifies each
 // particle as BCC/FCC/HCP/SC/other from an already-computed per-particle bispectrum (see
-// compute_bispectrum) via a pretrained LDA projection + softmax + Mahalanobis-distance
+// compute_descriptor_snap) via a pretrained LDA projection + softmax + Mahalanobis-distance
 // rejection. Rewrite of supervised_learning_classifier.cpp: pointwise (no neighbor list),
 // reads the bispectrum flat buffer directly (via cell_particle_offset, same convention as
-// compute_bispectrum/snap_check_bispectrum) instead of the old ragged
+// compute_descriptor_snap/snap_check_bispectrum) instead of the old ragged
 // GridParticleLocalStructuralMetrics storage, and inverts the 4 covariance matrices once per
 // call instead of once per particle.
 namespace exaStamp
@@ -99,8 +99,8 @@ namespace exaStamp
   class ComputeSLCSA : public OperatorNode
   {
     ADD_SLOT( GridT   , grid          , INPUT_OUTPUT );
-    ADD_SLOT( onika::memory::CudaMMVector<double> , bispectrum , INPUT , REQUIRED , DocString{"Flat per-particle bispectrum buffer (see compute_bispectrum)"} );
-    ADD_SLOT( long     , ncoeff       , INPUT , REQUIRED , DocString{"Number of bispectrum components per particle (see compute_bispectrum)"} );
+    ADD_SLOT( onika::memory::CudaMMVector<double> , bispectrum , INPUT , REQUIRED , DocString{"Flat per-particle bispectrum buffer (see compute_descriptor_snap)"} );
+    ADD_SLOT( long     , ncoeff       , INPUT , REQUIRED , DocString{"Number of bispectrum components per particle (see compute_descriptor_snap)"} );
 
     ADD_SLOT( onika::memory::CudaMMVector<Vec3d>  , lda_scalings , INPUT , REQUIRED , DocString{"LDA projection matrix, ncoeff rows of 3 (one Vec3d per bispectrum component)"} );
     ADD_SLOT( onika::memory::CudaMMVector<double> , overall_mean , INPUT , REQUIRED , DocString{"Per-component bispectrum mean used to center data before LDA projection, ncoeff values"} );
@@ -153,14 +153,14 @@ namespace exaStamp
 
 Supervised learning crystal structure analysis (SLCSA): classifies each particle as
 BCC(0)/FCC(1)/HCP(2)/SC(3)/other(4) from its per-particle SNAP bispectrum (see
-compute_bispectrum), via a pretrained LDA dimensionality reduction to 3D, a 4-class
+compute_descriptor_snap), via a pretrained LDA dimensionality reduction to 3D, a 4-class
 softmax decision, and a final Mahalanobis-distance rejection against each class's
 reference distribution. Pointwise (no neighbor list): reads the bispectrum flat buffer
 directly via cell_particle_offset, writes a single scalar field. GPU-compatible.
 
 Usage example:
 
-compute_bispectrum:
+compute_descriptor_snap:
   parameters: { param: "W.snapparam", coef: "W.snapcoeff" }
 compute_slcsa:
   lda_scalings: [ ... ]   # ncoeff Vec3d rows

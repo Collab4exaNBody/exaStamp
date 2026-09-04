@@ -47,7 +47,7 @@ global:
   dt: 1.0e-3 ps
   rcut_max: 4.8 ang
 
-compute_bispectrum:
+compute_descriptor_snap:
   nneigh_bispectrum: 48
   closest_bispectrum: false
   neigh_margin: 0.1
@@ -112,7 +112,7 @@ compute_slcsa:
   crystal_structure_field: "CS"
   
 simulation_epilog:
-  - compute_bispectrum
+  - compute_descriptor_snap
   - compute_slcsa
   - write_xyz:
       fields: [ id , type , CS ]

@@ -19,7 +19,7 @@ global:
   dt: 1.0e-3 ps
   rcut_max: 4.8 ang
 
-compute_bispectrum:
+compute_descriptor_snap:
   nneigh_bispectrum: 32
   closest_bispectrum: false
   neigh_margin: 0.2
@@ -28,7 +28,7 @@ compute_bispectrum:
     coef: "coeff.txt"
 
 simulation_epilog:
-  - compute_bispectrum
+  - compute_descriptor_snap
   - print_test:
       rebind: { value: ncoeff }
       body:
