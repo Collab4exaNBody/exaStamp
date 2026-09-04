@@ -86,8 +86,8 @@ namespace exaStamp
     ADD_SLOT( std::vector<std::string> , fields , INPUT
             , std::vector<std::string>{"id","x","y","z","descriptor","derivative"}
             , DocString{"Columns to write, in this order. Choices: id, x, y, z, descriptor (ncoeff values), derivative (ncoeff*3 values -- the LAMMPS compute-snad/atom-equivalent aggregate, NOT the full per-neighbor-pair Jacobian)."} );
-    ADD_SLOT( std::string , filename , INPUT , std::string("descriptors.txt") , DocString{"Single combined output file, written once from rank 0 after gathering every rank's owned atoms. In 'npy' format this is used as a prefix (a trailing '.txt' is stripped) for the per-field .npy files."} );
-    ADD_SLOT( std::string , format , INPUT , std::string("text") , DocString{"Output format: 'text' (default, single combined plain-text file) or 'npy' (one .npy file per selected field, named '<filename-without-.txt>_<field>.npy', directly loadable via numpy.load())."} );
+    ADD_SLOT( std::string , filename , INPUT , std::string("descriptors.txt") , DocString{"Single combined output file, written once from rank 0 after gathering every rank's owned atoms. In 'npy' format this is used as a prefix (a trailing '.txt' is stripped) for the single combined '<prefix>.npy' file."} );
+    ADD_SLOT( std::string , format , INPUT , std::string("text") , DocString{"Output format: 'text' (default, single combined plain-text file) or 'npy' (single combined '<prefix>.npy' file, one row per atom, columns per `fields` -- same convention as write_descriptor_pod, NOT one file per field), directly loadable via numpy.load())."} );
 
   public:
     inline void execute() override final

@@ -25,6 +25,11 @@ under the License.
 #include <onika/file_utils.h>
 #include <onika/log.h>
 
+// header-only, no link dependency (not gated by EXASTAMP_BUILD_POD) -- k2b's real build path is
+// src/potential/pair_potentials/k2b/ (no symlinking, see AddPairPotential in
+// pair_potential_template/CMakeLists.txt), so this relative include resolves with no CMake change
+#include "../../mlip-pod/include/npy_writer.h"
+
 #include <cstdint>
 #include <fstream>
 #include <iomanip>
@@ -35,9 +40,10 @@ under the License.
 
 // Single combined, MPI-gathered per-atom export of compute_descriptor_k2b's outputs -- direct
 // structural copy of mlip-pod/write_descriptor_pod.cu (same hand-rolled MPI_Gather+MPI_Gatherv
-// pattern, text format only -- see write_descriptor_pod.cu for the npy variant if that's ever
-// needed here). Regardless of how many MPI ranks own the simulation, this writes ONE file (from
-// rank 0) with one row per globally-owned (non-ghost) atom, user-selectable columns.
+// pattern). Regardless of how many MPI ranks own the simulation, this writes ONE file (from
+// rank 0) with one row per globally-owned (non-ghost) atom, user-selectable columns, in either
+// 'text' (default) or 'npy' (single combined float64 array, same convention as write_descriptor_pod
+// and write_descriptor_snap) format.
 namespace exaStamp
 {
   using namespace exanb;
@@ -54,11 +60,17 @@ namespace exaStamp
     ADD_SLOT( std::vector<std::string> , fields , INPUT
             , std::vector<std::string>{"id","x","y","z","descriptor","derivative"}
             , DocString{"Columns to write, in this order. Choices: id, x, y, z, descriptor (ncoeff values), derivative (ncoeff*3 values -- the compact per-atom descriptor-derivative aggregate, NOT the full per-neighbor-pair Jacobian)."} );
-    ADD_SLOT( std::string , filename , INPUT , std::string("k2b_descriptors.txt") , DocString{"Single combined output file, written once from rank 0 after gathering every rank's owned atoms."} );
+    ADD_SLOT( std::string , filename , INPUT , std::string("k2b_descriptors.txt") , DocString{"Single combined output file, written once from rank 0 after gathering every rank's owned atoms. In 'npy' format this is used as a prefix (a trailing '.txt' is stripped) for the single combined '<prefix>.npy' file."} );
+    ADD_SLOT( std::string , format , INPUT , std::string("text") , DocString{"Output format: 'text' (default, single combined plain-text file) or 'npy' (single combined '<prefix>.npy' file, one row per atom, columns per `fields` -- same convention as write_descriptor_pod/write_descriptor_snap), directly loadable via numpy.load())."} );
 
   public:
     inline void execute() override final
     {
+      if( *format != "text" && *format != "npy" )
+      {
+        fatal_error() << "write_descriptor_k2b: unknown format '"<<*format<<"' (choices: text, npy)" << std::endl;
+      }
+
       bool want_id=false, want_x=false, want_y=false, want_z=false, want_desc=false, want_deriv=false;
       for( const auto & f : *fields )
       {
@@ -183,6 +195,42 @@ namespace exaStamp
 
       const long total_atoms = std::accumulate( counts.begin(), counts.end(), 0L );
 
+      if( *format == "npy" )
+      {
+        std::string prefix = *filename;
+        static constexpr const char * TXT_SUFFIX = ".txt";
+        if( prefix.size() >= 4 && prefix.compare(prefix.size()-4, 4, TXT_SUFFIX) == 0 ) prefix.resize(prefix.size()-4);
+
+        // one combined 2-D float64 array, columns in the same order as `fields` (id included as
+        // float64 -- exact for any realistic atom count) -- same convention as write_descriptor_pod
+        // and write_descriptor_snap, not one file per field.
+        long total_width = 0;
+        for( const auto & f : *fields )
+        {
+               if( f == "id" || f == "x" || f == "y" || f == "z" ) total_width += 1;
+          else if( f == "descriptor" ) total_width += nc;
+          else if( f == "derivative" ) total_width += nc*3;
+        }
+
+        std::vector<double> buf( static_cast<size_t>(total_atoms) * total_width );
+        for( long a=0; a<total_atoms; a++ )
+        {
+          double * const out = buf.data() + static_cast<size_t>(a)*total_width;
+          long c = 0;
+          for( const auto & f : *fields )
+          {
+                 if( f == "id" ) out[c++] = static_cast<double>( all_ids[a] );
+            else if( f == "x"  ) out[c++] = all_payload[static_cast<size_t>(a)*payload_width + off_x];
+            else if( f == "y"  ) out[c++] = all_payload[static_cast<size_t>(a)*payload_width + off_y];
+            else if( f == "z"  ) out[c++] = all_payload[static_cast<size_t>(a)*payload_width + off_z];
+            else if( f == "descriptor" ) { for( long k=0; k<nc;   k++ ) out[c++] = all_payload[static_cast<size_t>(a)*payload_width + off_desc + k]; }
+            else if( f == "derivative" ) { for( long k=0; k<nc*3; k++ ) out[c++] = all_payload[static_cast<size_t>(a)*payload_width + off_deriv + k]; }
+          }
+        }
+        write_npy( onika::data_file_path(prefix+".npy"), {static_cast<size_t>(total_atoms), static_cast<size_t>(total_width)}, "<f8", buf.data(), sizeof(double) );
+        return;
+      }
+
       std::ofstream fout( onika::data_file_path(*filename) );
       fout << std::setprecision(17);
       for( long a=0; a<total_atoms; a++ )
@@ -221,6 +269,13 @@ user-selectable columns, in the order given by `fields`:
                    neighbor), NOT the full per-neighbor-pair Jacobian. Read from the
                    deriv_agg_field_prefix-named dynamic fields -- run update_opt_from_ghost
                    on them first on a multi-rank run (see compute_descriptor_k2b's doc).
+
+Setting `format: npy` writes a single `.npy` v1.0 file, `<prefix>.npy` (`<prefix>` is `filename`
+with a trailing '.txt' stripped if present) -- a float64 array of shape (natoms, total_width), one
+row per atom, columns in the same order as `fields` (id: 1 column, x/y/z: 1 column each,
+descriptor: ncoeff columns, derivative: ncoeff*3 columns) -- same convention as
+write_descriptor_pod and write_descriptor_snap. `id` is stored as float64 in this combined array
+(exact for any realistic atom count). Directly loadable with `numpy.load()`, no custom parser needed.
 
 Usage example:
 
