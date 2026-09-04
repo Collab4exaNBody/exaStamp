@@ -1,0 +1,103 @@
+/*
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements. See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership. The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License. You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied. See the License for the
+specific language governing permissions and limitations
+under the License.
+*/
+
+#include <onika/scg/operator.h>
+#include <onika/scg/operator_factory.h>
+#include <onika/scg/operator_slot.h>
+#include <onika/memory/allocator.h>
+#include <onika/file_utils.h>
+#include <onika/log.h>
+
+#include <fstream>
+#include <iomanip>
+#include <string>
+
+#include "npy_writer.h"
+
+// Plain export of compute_descriptor_pod_global's output array -- much simpler than
+// write_descriptor_pod: compute_descriptor_pod_global is single-MPI-rank only (see its own
+// documentation), so the array is already fully global and no MPI gather is needed here at all.
+namespace exaStamp
+{
+  using namespace exanb;
+
+  class WriteDescriptorPodGlobal : public OperatorNode
+  {
+    ADD_SLOT( onika::memory::CudaMMVector<double> , pod_global , INPUT , REQUIRED , DocString{"see compute_descriptor_pod_global"} );
+    ADD_SLOT( long , ncoeff_all , INPUT , REQUIRED , DocString{"see compute_descriptor_pod_global"} );
+    ADD_SLOT( std::string , format , INPUT , std::string("text") , DocString{"Output format: 'text' (default, one line per row, space-separated) or 'npy' (single .npy v1.0 file, shape (rows,ncoeff_all))."} );
+    ADD_SLOT( std::string , filename , INPUT , std::string("pod_global.txt") , DocString{"Output file. In 'npy' format a trailing '.txt' is stripped and '.npy' appended."} );
+
+  public:
+    inline void execute() override final
+    {
+      if( *format != "text" && *format != "npy" )
+      {
+        fatal_error() << "write_descriptor_pod_global: unknown format '"<<*format<<"' (choices: text, npy)" << std::endl;
+      }
+
+      const long nc = *ncoeff_all;
+      const long rows = ( nc > 0 ) ? static_cast<long>(pod_global->size() / static_cast<size_t>(nc)) : 0;
+
+      if( *format == "npy" )
+      {
+        std::string prefix = *filename;
+        static constexpr const char * TXT_SUFFIX = ".txt";
+        if( prefix.size() >= 4 && prefix.compare(prefix.size()-4, 4, TXT_SUFFIX) == 0 ) prefix.resize(prefix.size()-4);
+        write_npy( onika::data_file_path(prefix+".npy"), {static_cast<size_t>(rows), static_cast<size_t>(nc)}, "<f8", pod_global->data(), sizeof(double) );
+        return;
+      }
+
+      std::ofstream fout( onika::data_file_path(*filename) );
+      fout << std::setprecision(17);
+      for( long r=0; r<rows; r++ )
+      {
+        const double * const prow = pod_global->data() + static_cast<size_t>(r)*nc;
+        for( long c=0; c<nc; c++ ) { if(c>0) fout << " "; fout << prow[c]; }
+        fout << "\n";
+      }
+    }
+
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+
+Writes compute_descriptor_pod_global's (1+3*natoms) x ncoeff_all array to a single file --
+row 0 = global per-configuration descriptor vector, rows 1..3*natoms = its gradient w.r.t. each
+atom (id-1)'s x/y/z (see compute_descriptor_pod_global's documentation for the exact layout and
+how to use it for linear-potential fitting).
+
+'format: npy' writes a single .npy v1.0 file, shape (1+3*natoms, ncoeff_all), directly loadable
+with numpy.load() -- no per-field splitting needed since the whole output is already one
+homogeneous 2-D array, unlike write_descriptor_pod's per-selected-field files.
+
+Usage example:
+
+pod_init: { parameters: { pod_file: "Ta_param.pod", coeff_file: "Ta_coefficients.pod" } }
+compute_descriptor_pod_global
+write_descriptor_pod_global: { filename: "pod_global.txt" }
+
+)EOF";
+    }
+  };
+
+  ONIKA_AUTORUN_INIT(write_descriptor_pod_global)
+  {
+    OperatorNodeFactory::instance()->register_factory( "write_descriptor_pod_global", make_simple_operator< WriteDescriptorPodGlobal > );
+  }
+
+}
