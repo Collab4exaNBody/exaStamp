@@ -61,6 +61,10 @@ EAPOD::EAPOD(const std::string &pod_file, const std::string &coeff_file) :
 {
   rin = 0.5;
   rcut = 5.0;
+  useScaledLJ = false;
+  scaleLJ = 1;
+  fadeinMu = 0.0;
+  fadeinDelta = 0.0;
   nClusters = 1;
   nComponents = 1;
   nelements = 1;
@@ -176,6 +180,9 @@ void EAPOD::read_pod_file(const std::string &pod_file)
         throw std::runtime_error("Improper POD file: keyword '" + keywd + "' expects 1 value");
       if (keywd == "rin")                                   rin          = std::stod(words[1]);
       if (keywd == "rcut")                                  rcut         = std::stod(words[1]);
+      if (keywd == "use_scaled_lj")                         useScaledLJ  = (std::stoi(words[1]) != 0);
+      if (keywd == "fadein_mu")                             fadeinMu     = std::stod(words[1]);
+      if (keywd == "fadein_delta")                          fadeinDelta  = std::stod(words[1]);
       if (keywd == "number_of_environment_clusters")        nClusters    = std::stoi(words[1]);
       if (keywd == "number_of_principal_components")        nComponents  = std::stoi(words[1]);
       if (keywd == "bessel_polynomial_degree")              besseldegree = std::stoi(words[1]);
@@ -194,6 +201,8 @@ void EAPOD::read_pod_file(const std::string &pod_file)
       if (keywd == "sevenbody_angular_degree")              P44          = std::stoi(words[1]);
     }
   }
+
+  if (useScaledLJ) scaleLJ = rin;
 
   if (nrbf3 < nrbf4)  throw std::runtime_error("POD: nrbf4 must be <= nrbf3");
   if (nrbf4 < nrbf33) throw std::runtime_error("POD: nrbf33 must be <= nrbf4");
@@ -1705,7 +1714,7 @@ void EAPOD::radialbasis(double *rbf, double *rbfx, double *rbfy, double *rbfz, d
     for (int i=0; i<inversedegree; i++) {
       int p = besseldegree*nbesselpars + i;
       int nij = n + N*p;
-      double a = powint(dij, i+1);
+      double a = powint(dij/scaleLJ, i+1);
 
       rbf[nij] = fcut/a;
 
@@ -1974,6 +1983,10 @@ void EAPOD::snapshots(double *rbf, double *xij, int N)
     // Compute the cutoff function
     double fcut = y6/exp(-1.0);
 
+    // Compute the fadein function times the cutoff function
+    double fincut = fcut;
+    if (fadeinMu > 0 && fadeinDelta > 0) fincut = fcut * 1/(1 + exp(-2/fadeinDelta * (dij - fadeinMu)));
+
     // Loop over all Bessel parameters
     for (int j=0; j<nbesselpars; j++) {
       double alpha = besselparams[j];
@@ -1987,7 +2000,7 @@ void EAPOD::snapshots(double *rbf, double *xij, int N)
         int nij = n + N*i + N*besseldegree*j;
 
         // Compute the RBF
-        rbf[nij] = b*fcut*sin(a*x)/r;
+        rbf[nij] = b*fincut*sin(a*x)/r;
       }
     }
 
@@ -1995,10 +2008,10 @@ void EAPOD::snapshots(double *rbf, double *xij, int N)
     for (int i=0; i<inversedegree; i++) {
       int p = besseldegree*nbesselpars + i;
       int nij = n + N*p;
-      double a = powint(dij, i+1);
+      double a = powint(dij/scaleLJ, i+1);
 
       // Compute the RBF
-      rbf[nij] = fcut/a;
+      rbf[nij] = fincut/a;
     }
   }
 }
@@ -2226,8 +2239,12 @@ int EAPOD::estimate_temp_memory(int Nj)
   // abf, abfx, abfy, abfz
   int nmax6 = 4*(Nj+1)*Kmax;
 
+  // P, cp, D, pca in peratom_environment_descriptors(), stored in the same region
+  int nmax6a = 3*nClusters + nComponents;
+
   // Determine the maximum amount of memory needed for U, Ux, Uy, Uz, sumU, cU, rbf, rbfx, rbfy, rbfz, abf, abfx, abfy, abfz
   int nmax7 = (nmax5 > nmax6) ? nmax5 : nmax6;
+  nmax7 = (nmax7 > nmax6a) ? nmax7 : nmax6a;
   int nmax8 = nmax2 + nmax3 + nmax4 + nmax7;
 
   // Determine the total amount of memory needed for all double memory
@@ -2245,11 +2262,22 @@ int EAPOD::estimate_temp_memory(int Nj)
 
 void EAPOD::allocate_temp_memory(int Nj)
 {
+  // guarantee a minimum size so all buffers exist even for atoms without neighbors
+  if (Nj < 1) Nj = 1;
   estimate_temp_memory(Nj);
   tmpmem = new double[ndblmem]();
   tmpint = new int[nintmem]();
   bd     = new double[Mdesc]();
-  bdd    = new double[3*Nj*Mdesc]();
+
+  // in peratomenergyforce2() the bdd buffer stores the coefficients cb and the
+  // force coefficients, which require (nl2 + nl3 + nl4) + nelements*K3*nrbf3
+  // entries. This size is set by the potential and does not depend on the
+  // number of neighbors, so it can exceed 3*Nj*Mdesc when Nj is small.
+  int nbdd = 3*Nj*Mdesc;
+  int ncb = (nl2 + nl3 + nl4) + nelements*K3*nrbf3;
+  if (nbdd < ncb) nbdd = ncb;
+  bdd    = new double[nbdd]();
+
   pd     = new double[nClusters]();
   pdd    = new double[3*Nj*nClusters]();
   // SoA scratch for peratomenergyforce2_soa
@@ -4376,4 +4404,15 @@ double EAPOD::peratomenergyforce2_soa(const double *drx, const double *dry, cons
         soa_tj[j] = type_map[tj_0indexed[j]];
     }
     return peratomenergyforce2(soa_fij, soa_rij, tmpmem, soa_ti, soa_tj, Nj);
+}
+
+void EAPOD::peratombase_descriptors_soa(const double *drx, const double *dry, const double *drz,
+                                        const int *tj_0indexed, int Nj, const int *type_map) {
+    for (int j = 0; j < Nj; j++) {
+        soa_rij[j*3+0] = drx[j];
+        soa_rij[j*3+1] = dry[j];
+        soa_rij[j*3+2] = drz[j];
+        soa_tj[j] = type_map[tj_0indexed[j]];
+    }
+    peratombase_descriptors(bd, bdd, soa_rij, tmpmem, soa_tj, Nj);
 }
