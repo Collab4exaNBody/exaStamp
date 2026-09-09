@@ -1,0 +1,72 @@
+includes:
+  - config_species.msp   # activates the real (non-nop) reduce_species_after_read
+
+# species:
+#   - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+
+list_file_directory:
+  xyz_database: "POD_DB_XYZ"
+
+read_single_file:
+  - read_xyz_file_with_xform:   # `filename` auto-binds to next_database_file's `filename` output
+      verbose: false
+
+get_desc_snap:
+  - compute_descriptor_snap:
+      compute_derivative: true
+      parameters:
+        param: "param.txt"
+        coef: "coeff.txt"
+  - update_opt_from_ghost:
+      opt_fields: [ "sda_.*" ]
+
+write_desc_snap:
+  rebind: { filename: output_filename }
+  body:
+    - write_descriptor_snap:
+        fields: [ id, descriptor, derivative ]
+        format: npy
+
+process_files_loop:
+  loop: true
+  name: get_desc_files_loop
+  condition: compute_desc_continue
+  body:
+    - next_database_file
+    - grid_clear
+#    - domain_override: { grid_dims: [ 0, 0, 0 ], cell_size: 2.0 ang }   # reset both every iteration: compute_domain_bounds rewrites cell_size to fit each file's own box, so it must be reset back to the same fixed value used in the top-level `domain:` block above (kept in sync with it manually)
+    - read_single_file
+    - species: { verbose: false , fail_if_empty: true }
+    - grid_post_processing
+    - reduce_species_after_read
+    - init_particles
+    - get_desc_snap
+    - write_desc_snap
+
+global:
+  rcut_max: 6.0 ang
+  rcut_inc: 1.0 ang
+  xyz_database: "DATABASE"
+  desc_database: "DESC_DATABASE"
+  compute_desc_continue: true
+
+simulation:
+  name: exaStamp_training
+  body:
+    - print_logo_banner
+    - hw_device_init
+    - make_empty_grid
+    - grid_flavor_full
+    - global
+    - init_parameters
+    - generate_default_species
+    - particle_regions
+    - preinit_rcut_max
+    - domain:
+        cell_size: 6.0 ang
+        periodic: [ true, true, true ]
+        expandable: false
+    - init_prolog
+    - list_file_directory
+    - process_files_loop
+    - hw_device_finalize
