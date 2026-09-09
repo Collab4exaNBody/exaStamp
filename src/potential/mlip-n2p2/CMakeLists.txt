@@ -18,20 +18,25 @@
 # === micro-stamp meam potential  ===
 # ===================================
 
-set(N2P2_ROOT_DIR /usr/local/n2p2 CACHE STRING "N2P2 installation directory")
+option(EXASTAMP_MLIP_N2P2_BUILD "Build N2P2 potential" OFF)
+set(EXASTAMP_MLIP_N2P2_ROOT_DIR /usr/local/n2p2 CACHE STRING "N2P2 installation directory")
 
-# default is disabled, user must explicitly enable it
-set(ONIKA_BUILD_exaStampN2P2_DEFAULT OFF)
-
-if(NOT IS_DIRECTORY ${N2P2_ROOT_DIR})
-	message(STATUS "N2P2 directory not found in ${N2P2_ROOT_DIR}, N2P2 is forced OFF")
+# Mirror our own explicit toggle into onika_add_plugin's auto-generated one so it doesn't show up
+# as a second, redundant, independently-settable ccmake entry -- FORCED in both branches, so it
+# always tracks EXASTAMP_MLIP_N2P2_BUILD (further forced OFF if the SDK directory isn't found).
+if(NOT IS_DIRECTORY ${EXASTAMP_MLIP_N2P2_ROOT_DIR})
+  if(EXASTAMP_MLIP_N2P2_BUILD)
+    message(STATUS "N2P2 directory not found in ${EXASTAMP_MLIP_N2P2_ROOT_DIR}, N2P2 is forced OFF")
+  endif()
   set(ONIKA_BUILD_exaStampN2P2_FORCED ON)
+  set(ONIKA_BUILD_exaStampN2P2_DEFAULT OFF)
 else()
-  set(ONIKA_BUILD_exaStampN2P2_FORCED OFF)
+  set(ONIKA_BUILD_exaStampN2P2_FORCED ON)
+  set(ONIKA_BUILD_exaStampN2P2_DEFAULT ${EXASTAMP_MLIP_N2P2_BUILD})
 endif()
 
 # ${MPI_CXX_LIBRARIES}
-set(microStampN2P2_INCLUDE_DIRS ${N2P2_ROOT_DIR}/include)
-set(microStampN2P2_LINK_LIBRARIES exaStampPotential ${N2P2_ROOT_DIR}/lib/libnnp.so ${N2P2_ROOT_DIR}/lib/libnnpif.so)
+set(microStampN2P2_INCLUDE_DIRS ${EXASTAMP_MLIP_N2P2_ROOT_DIR}/include)
+set(microStampN2P2_LINK_LIBRARIES exaStampPotential ${EXASTAMP_MLIP_N2P2_ROOT_DIR}/lib/libnnp.so ${EXASTAMP_MLIP_N2P2_ROOT_DIR}/lib/libnnpif.so)
 onika_add_plugin(exaStampN2P2 ${CMAKE_CURRENT_SOURCE_DIR})
 

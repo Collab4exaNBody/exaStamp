@@ -18,12 +18,30 @@
 # ===== exaStamp POD potential   =====
 # ====================================
 
-# BLAS and LAPACK are found in the top-level CMakeLists when EXASTAMP_BUILD_POD=ON.
-add_library(eapod STATIC eapod.cpp)
-target_include_directories(eapod PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_compile_features(eapod PUBLIC cxx_std_17)
-set_target_properties(eapod PROPERTIES POSITION_INDEPENDENT_CODE ON)
-target_link_libraries(eapod PUBLIC BLAS::BLAS LAPACK::LAPACK)
+option(EXASTAMP_MLIP_POD_BUILD "Build POD potential" OFF)
+set(EXASTAMP_MLIP_POD_BLAS_VENDOR "" CACHE STRING
+    "BLA_VENDOR hint for the POD potential (e.g. OpenBLAS, Intel10_64lp, Generic). Empty = CMake auto-selects.")
 
-set(exaStampPOD_LINK_LIBRARIES exaStampPotential exanbParticleNeighbors eapod)
+# Mirror our own explicit toggle into onika_add_plugin's auto-generated one so it doesn't show up
+# as a second, redundant, independently-settable ccmake entry.
+set(ONIKA_BUILD_exaStampPOD_DEFAULT ${EXASTAMP_MLIP_POD_BUILD})
+set(ONIKA_BUILD_exaStampPOD_FORCED ON)
+
+if(EXASTAMP_MLIP_POD_BUILD)
+  if(EXASTAMP_MLIP_POD_BLAS_VENDOR)
+    set(BLA_VENDOR ${EXASTAMP_MLIP_POD_BLAS_VENDOR})
+    message(STATUS "POD BLAS vendor: ${EXASTAMP_MLIP_POD_BLAS_VENDOR}")
+  endif()
+  find_package(BLAS REQUIRED)
+  find_package(LAPACK REQUIRED)
+
+  add_library(eapod STATIC eapod.cpp)
+  target_include_directories(eapod PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+  target_compile_features(eapod PUBLIC cxx_std_17)
+  set_target_properties(eapod PROPERTIES POSITION_INDEPENDENT_CODE ON)
+  target_link_libraries(eapod PUBLIC BLAS::BLAS LAPACK::LAPACK)
+
+  set(exaStampPOD_LINK_LIBRARIES exaStampPotential exanbParticleNeighbors eapod)
+endif()
+
 onika_add_plugin(exaStampPOD ${CMAKE_CURRENT_SOURCE_DIR})

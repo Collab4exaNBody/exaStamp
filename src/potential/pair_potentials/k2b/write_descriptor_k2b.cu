@@ -25,7 +25,7 @@ under the License.
 #include <onika/file_utils.h>
 #include <onika/log.h>
 
-// header-only, no link dependency (not gated by EXASTAMP_BUILD_POD) -- k2b's real build path is
+// header-only, no link dependency (not gated by EXASTAMP_MLIP_POD_BUILD) -- k2b's real build path is
 // src/potential/pair_potentials/k2b/ (no symlinking, see AddPairPotential in
 // pair_potential_template/CMakeLists.txt), so this relative include resolves with no CMake change
 #include "../../mlip-pod/include/npy_writer.h"

@@ -64,51 +64,12 @@ endif()
 find_package(exaNBody)
 
 
-# ====================================
-# === PACE potential external libs ===
-# ====================================
-option(EXASTAMP_BUILD_PACE "Build PACE potential" OFF)
-set(PACE_GIT_REPO "git@github.com:Collab4exaNBody/exaStamp_mlip_pace.git" CACHE STRING "Git repository URL for PACE compute libraries")
-set(PACE_GIT_TAG "main" CACHE STRING "Git tag/branch for PACE compute libraries")
-set(PACE_EXTERNAL_DIR "${CMAKE_BINARY_DIR}/external/pace")
-set(YAML_CPP_INSTALL_DIR "" CACHE PATH "yaml-cpp installation directory (forwarded to PACE build)")
+# yaml-cpp installation directory override -- general onika-ecosystem variable (see
+# onika/doc/yaml-build.txt), NOT specific to any one ML potential -- left untouched here.
+set(YAML_CPP_INSTALL_DIR "" CACHE PATH "yaml-cpp installation directory")
 
-if(EXASTAMP_BUILD_PACE)
-  if(NOT EXISTS "${PACE_EXTERNAL_DIR}/.git")
-    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/external")
-    message(STATUS "Cloning PACE libraries from ${PACE_GIT_REPO} (${PACE_GIT_TAG}) into ${PACE_EXTERNAL_DIR}")
-    execute_process(
-      COMMAND git clone --branch ${PACE_GIT_TAG} ${PACE_GIT_REPO} pace
-      WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external"
-      RESULT_VARIABLE _pace_clone_result
-    )
-    if(NOT _pace_clone_result EQUAL 0)
-      message(FATAL_ERROR "Failed to clone PACE repository (exit code: ${_pace_clone_result})")
-    endif()
-  else()
-    message(STATUS "PACE libraries already present in ${PACE_EXTERNAL_DIR}")
-  endif()
-endif()
-
-# ====================================
-# === POD potential external libs ====
-# ====================================
-option(EXASTAMP_BUILD_POD "Build POD potential" OFF)
-set(EXASTAMP_POD_BLAS_VENDOR "" CACHE STRING
-    "BLA_VENDOR hint for the POD potential (e.g. OpenBLAS, Intel10_64lp, Generic). Empty = CMake auto-selects.")
-if(EXASTAMP_BUILD_POD)
-  if(EXASTAMP_POD_BLAS_VENDOR)
-    set(BLA_VENDOR ${EXASTAMP_POD_BLAS_VENDOR})
-    message(STATUS "POD BLAS vendor: ${EXASTAMP_POD_BLAS_VENDOR}")
-  endif()
-  find_package(BLAS REQUIRED)
-  find_package(LAPACK REQUIRED)
-endif()
-
-# ====================================
-# ===== MTP potential (no external libs needed -- see mlip-mtp/CMakeLists.txt) =====
-# ====================================
-option(EXASTAMP_BUILD_MTP "Build MTP potential" OFF)
+# Machine-learning-potential build options (EXASTAMP_MLIP_<NAME>_*) now live in each potential's
+# own CMakeLists.txt (src/potential/mlip-pace, mlip-pod, mlip-mtp, n2p2, snaplmp) instead of here.
 
 option(USE_RSA "Add RSA Package" OFF)
 if(USE_RSA)

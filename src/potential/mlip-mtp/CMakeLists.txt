@@ -18,9 +18,17 @@
 # ===== exaStamp MTP potential   =====
 # ====================================
 
+option(EXASTAMP_MLIP_MTP_BUILD "Build MTP potential" OFF)
+
+# Mirror our own explicit toggle into onika_add_plugin's auto-generated one so it doesn't show up
+# as a second, redundant, independently-settable ccmake entry.
+set(ONIKA_BUILD_exaStampMTP_DEFAULT ${EXASTAMP_MLIP_MTP_BUILD})
+set(ONIKA_BUILD_exaStampMTP_FORCED ON)
+
 # Unlike POD, the core MTP math needs no BLAS/LAPACK (confirmed against the LAMMPS ML-MTP
 # reference implementation -- zero such dependency; the out-of-scope MaxVol active-learning
-# feature would need one, but even that's precomputed offline by MLIP-3, never inverted here).
+# feature would need one, but even that's precomputed offline by MLIP-3, never inverted here) --
+# so this static lib is cheap and safe to build unconditionally, unlike POD's eapod.
 add_library(emtp STATIC emtp.cpp)
 target_include_directories(emtp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_features(emtp PUBLIC cxx_std_17)
