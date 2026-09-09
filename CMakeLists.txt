@@ -105,6 +105,11 @@ if(EXASTAMP_BUILD_POD)
   find_package(LAPACK REQUIRED)
 endif()
 
+# ====================================
+# ===== MTP potential (no external libs needed -- see mlip-mtp/CMakeLists.txt) =====
+# ====================================
+option(EXASTAMP_BUILD_MTP "Build MTP potential" OFF)
+
 option(USE_RSA "Add RSA Package" OFF)
 if(USE_RSA)
 	find_package(rsa_mpi REQUIRED)

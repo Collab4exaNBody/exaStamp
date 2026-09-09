@@ -63,6 +63,10 @@ if(EXASTAMP_BUILD_POD)
   add_subdirectory(mlip-pod)
 endif()
 
+if(EXASTAMP_BUILD_MTP)
+  add_subdirectory(mlip-mtp)
+endif()
+
 add_subdirectory(n2p2)
 
 add_subdirectory(snap)
