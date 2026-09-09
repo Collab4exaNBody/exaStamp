@@ -20,6 +20,6 @@ option(EXASTAMP_MLIP_SNAP_BUILD "Build SNAP potential (snap + snaplegacy)" OFF)
 
 if(EXASTAMP_MLIP_SNAP_BUILD AND XNB_BUILD_mdSnap)
 #  message(STATUS "exaNBody has snap")
-  set(exaStampSnap_LINK_LIBRARIES mdSnap)
-  onika_add_plugin(exaStampSnap ${CMAKE_CURRENT_SOURCE_DIR})
+  set(exaStampMlipSnap_LINK_LIBRARIES mdSnap)
+  onika_add_plugin(exaStampMlipSnap ${CMAKE_CURRENT_SOURCE_DIR})
 endif()

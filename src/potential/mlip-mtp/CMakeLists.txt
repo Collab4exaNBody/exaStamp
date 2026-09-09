@@ -22,17 +22,21 @@ option(EXASTAMP_MLIP_MTP_BUILD "Build MTP potential" OFF)
 
 # Mirror our own explicit toggle into onika_add_plugin's auto-generated one so it doesn't show up
 # as a second, redundant, independently-settable ccmake entry.
-set(ONIKA_BUILD_exaStampMTP_DEFAULT ${EXASTAMP_MLIP_MTP_BUILD})
-set(ONIKA_BUILD_exaStampMTP_FORCED ON)
+set(ONIKA_BUILD_exaStampMlipMTP_DEFAULT ${EXASTAMP_MLIP_MTP_BUILD})
+set(ONIKA_BUILD_exaStampMlipMTP_FORCED ON)
 
 # Unlike POD, the core MTP math needs no BLAS/LAPACK (confirmed against the LAMMPS ML-MTP
 # reference implementation -- zero such dependency; the out-of-scope MaxVol active-learning
 # feature would need one, but even that's precomputed offline by MLIP-3, never inverted here) --
-# so this static lib is cheap and safe to build unconditionally, unlike POD's eapod.
-add_library(emtp STATIC emtp.cpp)
-target_include_directories(emtp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_compile_features(emtp PUBLIC cxx_std_17)
-set_target_properties(emtp PROPERTIES POSITION_INDEPENDENT_CODE ON)
+# but still only build it when actually wanted, matching every other MLIP (nothing should compile
+# when the toggle is off, regardless of how cheap/failure-free that compilation would be).
+if(EXASTAMP_MLIP_MTP_BUILD)
+  add_library(emtp STATIC emtp.cpp)
+  target_include_directories(emtp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+  target_compile_features(emtp PUBLIC cxx_std_17)
+  set_target_properties(emtp PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-set(exaStampMTP_LINK_LIBRARIES exaStampPotential exanbParticleNeighbors emtp)
-onika_add_plugin(exaStampMTP ${CMAKE_CURRENT_SOURCE_DIR})
+  set(exaStampMlipMTP_LINK_LIBRARIES exaStampPotential exanbParticleNeighbors emtp)
+endif()
+
+onika_add_plugin(exaStampMlipMTP ${CMAKE_CURRENT_SOURCE_DIR})

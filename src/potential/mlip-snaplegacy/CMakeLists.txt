@@ -18,9 +18,9 @@
 option(EXASTAMP_MLIP_SNAP_BUILD "Build SNAP potential (snap + snaplegacy)" OFF)
 
 if(EXASTAMP_MLIP_SNAP_BUILD AND XNB_BUILD_mdSnap)
-  set(exaStampSnapLegacy_COMPILE_DEFINITIONS -DLAMMPS=1 ${KMP_ALIGNED_ALLOCATOR_DEFINITIONS})
-  set(exaStampSnapLegacy_INCLUDE_DIRS ${SNAP_INCLUDE_DIRS})
-  set(exaStampSnapLegacy_LINK_LIBRARIES mdSnap exanbParticleNeighbors ${SNAP_LIBRARIES})
-  onika_add_plugin(exaStampSnapLegacy ${CMAKE_CURRENT_SOURCE_DIR})
+  set(exaStampMlipSnapLegacy_COMPILE_DEFINITIONS -DLAMMPS=1 ${KMP_ALIGNED_ALLOCATOR_DEFINITIONS})
+  set(exaStampMlipSnapLegacy_INCLUDE_DIRS ${SNAP_INCLUDE_DIRS})
+  set(exaStampMlipSnapLegacy_LINK_LIBRARIES mdSnap exanbParticleNeighbors ${SNAP_LIBRARIES})
+  onika_add_plugin(exaStampMlipSnapLegacy ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 

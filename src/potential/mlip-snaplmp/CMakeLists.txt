@@ -24,7 +24,7 @@ set(EXASTAMP_MLIP_SNAPLMP_LMP_SRC_DIR "${XSTAMP_THIRD_PARTY_TOOLS_ROOT}/lammps" 
 # Mirror our own explicit toggle into onika_add_plugin's auto-generated one so it doesn't show up
 # as a second, redundant, independently-settable ccmake entry -- FORCED in both branches, so it
 # always tracks EXASTAMP_MLIP_SNAPLMP_BUILD (further forced OFF if the LAMMPS source isn't found,
-# or if exaNBody's mdSnap contrib -- which exaStampSnapLMP_LINK_LIBRARIES links against below --
+# or if exaNBody's mdSnap contrib -- which exaStampMlipSnapLMP_LINK_LIBRARIES links against below --
 # isn't available).
 if(NOT IS_DIRECTORY ${EXASTAMP_MLIP_SNAPLMP_LMP_SRC_DIR} OR NOT XNB_BUILD_mdSnap)
   if(EXASTAMP_MLIP_SNAPLMP_BUILD)
@@ -35,15 +35,15 @@ if(NOT IS_DIRECTORY ${EXASTAMP_MLIP_SNAPLMP_LMP_SRC_DIR} OR NOT XNB_BUILD_mdSnap
       message(STATUS "exaNBody's mdSnap contrib not available, SnapLMP is forced OFF")
     endif()
   endif()
-  set(ONIKA_BUILD_exaStampSnapLMP_FORCED ON)
-  set(ONIKA_BUILD_exaStampSnapLMP_DEFAULT OFF)
+  set(ONIKA_BUILD_exaStampMlipSnapLMP_FORCED ON)
+  set(ONIKA_BUILD_exaStampMlipSnapLMP_DEFAULT OFF)
 else()
-  set(ONIKA_BUILD_exaStampSnapLMP_FORCED ON)
-  set(ONIKA_BUILD_exaStampSnapLMP_DEFAULT ${EXASTAMP_MLIP_SNAPLMP_BUILD})
+  set(ONIKA_BUILD_exaStampMlipSnapLMP_FORCED ON)
+  set(ONIKA_BUILD_exaStampMlipSnapLMP_DEFAULT ${EXASTAMP_MLIP_SNAPLMP_BUILD})
 endif()
 
-set(exaStampSnapLMP_EXTERNAL_SRCS ${EXASTAMP_MLIP_SNAPLMP_LMP_SRC_DIR}/src/memory.cpp ${EXASTAMP_MLIP_SNAPLMP_LMP_SRC_DIR}/src/math_special.cpp ${EXASTAMP_MLIP_SNAPLMP_LMP_SRC_DIR}/src/ML-SNAP/sna.cpp)
-set(exaStampSnapLMP_LINK_LIBRARIES mdSnap exaStampPotential exanbParticleNeighbors)
-set(exaStampSnapLMP_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR} ${EXASTAMP_MLIP_SNAPLMP_LMP_SRC_DIR}/src/ML-SNAP ${EXASTAMP_MLIP_SNAPLMP_LMP_SRC_DIR}/src)
-onika_add_plugin(exaStampSnapLMP ${CMAKE_CURRENT_SOURCE_DIR})
+set(exaStampMlipSnapLMP_EXTERNAL_SRCS ${EXASTAMP_MLIP_SNAPLMP_LMP_SRC_DIR}/src/memory.cpp ${EXASTAMP_MLIP_SNAPLMP_LMP_SRC_DIR}/src/math_special.cpp ${EXASTAMP_MLIP_SNAPLMP_LMP_SRC_DIR}/src/ML-SNAP/sna.cpp)
+set(exaStampMlipSnapLMP_LINK_LIBRARIES mdSnap exaStampPotential exanbParticleNeighbors)
+set(exaStampMlipSnapLMP_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR} ${EXASTAMP_MLIP_SNAPLMP_LMP_SRC_DIR}/src/ML-SNAP ${EXASTAMP_MLIP_SNAPLMP_LMP_SRC_DIR}/src)
+onika_add_plugin(exaStampMlipSnapLMP ${CMAKE_CURRENT_SOURCE_DIR})
 

@@ -25,8 +25,8 @@ set(EXASTAMP_MLIP_PACE_EXTERNAL_DIR "${CMAKE_BINARY_DIR}/external/pace")
 
 # Mirror our own explicit toggle into onika_add_plugin's auto-generated one so it doesn't show up
 # as a second, redundant, independently-settable ccmake entry.
-set(ONIKA_BUILD_exaStampPace_DEFAULT ${EXASTAMP_MLIP_PACE_BUILD})
-set(ONIKA_BUILD_exaStampPace_FORCED ON)
+set(ONIKA_BUILD_exaStampMlipPace_DEFAULT ${EXASTAMP_MLIP_PACE_BUILD})
+set(ONIKA_BUILD_exaStampMlipPace_FORCED ON)
 
 if(EXASTAMP_MLIP_PACE_BUILD)
   if(NOT EXISTS "${EXASTAMP_MLIP_PACE_EXTERNAL_DIR}/.git")
@@ -47,7 +47,7 @@ if(EXASTAMP_MLIP_PACE_BUILD)
   # YAML_CPP_INSTALL_DIR is a general onika-ecosystem variable, set at the top level, forwarded
   # implicitly to this external add_subdirectory (not PACE-specific -- do not rename/relocate it).
   add_subdirectory(${EXASTAMP_MLIP_PACE_EXTERNAL_DIR} ${CMAKE_CURRENT_BINARY_DIR}/pace-mlip)
-  set(exaStampPace_LINK_LIBRARIES exaStampPotential exanbParticleNeighbors pace::pace)
+  set(exaStampMlipPace_LINK_LIBRARIES exaStampPotential exanbParticleNeighbors pace::pace)
 endif()
 
-onika_add_plugin(exaStampPace ${CMAKE_CURRENT_SOURCE_DIR})
+onika_add_plugin(exaStampMlipPace ${CMAKE_CURRENT_SOURCE_DIR})

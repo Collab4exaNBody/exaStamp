@@ -24,8 +24,8 @@ set(EXASTAMP_MLIP_POD_BLAS_VENDOR "" CACHE STRING
 
 # Mirror our own explicit toggle into onika_add_plugin's auto-generated one so it doesn't show up
 # as a second, redundant, independently-settable ccmake entry.
-set(ONIKA_BUILD_exaStampPOD_DEFAULT ${EXASTAMP_MLIP_POD_BUILD})
-set(ONIKA_BUILD_exaStampPOD_FORCED ON)
+set(ONIKA_BUILD_exaStampMlipPOD_DEFAULT ${EXASTAMP_MLIP_POD_BUILD})
+set(ONIKA_BUILD_exaStampMlipPOD_FORCED ON)
 
 if(EXASTAMP_MLIP_POD_BUILD)
   if(EXASTAMP_MLIP_POD_BLAS_VENDOR)
@@ -41,7 +41,7 @@ if(EXASTAMP_MLIP_POD_BUILD)
   set_target_properties(eapod PROPERTIES POSITION_INDEPENDENT_CODE ON)
   target_link_libraries(eapod PUBLIC BLAS::BLAS LAPACK::LAPACK)
 
-  set(exaStampPOD_LINK_LIBRARIES exaStampPotential exanbParticleNeighbors eapod)
+  set(exaStampMlipPOD_LINK_LIBRARIES exaStampPotential exanbParticleNeighbors eapod)
 endif()
 
-onika_add_plugin(exaStampPOD ${CMAKE_CURRENT_SOURCE_DIR})
+onika_add_plugin(exaStampMlipPOD ${CMAKE_CURRENT_SOURCE_DIR})
