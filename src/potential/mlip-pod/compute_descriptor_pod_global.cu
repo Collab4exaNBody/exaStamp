@@ -32,6 +32,7 @@ under the License.
 
 #include <exanb/particle_neighbors/chunk_neighbors.h>
 
+#include <cstdint>
 #include <memory>
 #include <vector>
 #include <mpi.h>
@@ -41,9 +42,13 @@ under the License.
 #include "pod_force_op.h"    // PodComputeBuffer, CopyParticleType
 #include "pod_global_op.h"   // PodGlobalOp
 
-// Global-array descriptor+gradient pass, analogous to LAMMPS's compute pod/global -- see
-// pod_global_op.h for the exact algorithm and why rows are indexed by atom id-1. Single MPI rank
-// only, matching compute_pod_global.cpp's own restriction (no MPI reduction exists there either).
+// Global-array descriptor+gradient+virial pass, analogous to LAMMPS's compute pod/global (plus 6
+// virial rows LAMMPS's own pod/global doesn't have -- POD fitting there just doesn't use stress,
+// not a structural limitation; added here to match compute_descriptor_snap_global's shape) -- see
+// pod_global_op.h for the descriptor+gradient algorithm and why rows are indexed by atom id-1.
+// Single MPI rank only, matching compute_pod_global.cpp's own restriction (no MPI reduction exists
+// there either) -- this also means the virial pass below needs no Allreduce/pre-fold timing care,
+// unlike compute_descriptor_snap_global.cu's own virial pass.
 namespace exaStamp
 {
 
@@ -64,7 +69,7 @@ namespace exaStamp
     ADD_SLOT( PodContext                , pod_ctx         , INPUT , REQUIRED );
 
     ADD_SLOT( onika::memory::CudaMMVector<double>, pod_global, OUTPUT,
-               DocString{"Row-major (1+3*natoms) x ncoeff_all global array, natoms = number of owned (non-ghost) particles: row 0 = system-wide per-element summed descriptor vector (incl. one-body atom-count term); rows 1..3*natoms = gradient of row 0 w.r.t. atom (id-1)'s x/y/z. Matches LAMMPS compute pod/global exactly. Single MPI rank only."} );
+               DocString{"Row-major (1+3*natoms+6) x ncoeff_all global array, natoms = number of owned (non-ghost) particles: row 0 = system-wide per-element summed descriptor vector (incl. one-body atom-count term); rows 1..3*natoms = gradient of row 0 w.r.t. atom (id-1)'s x/y/z; rows 3*natoms+1..+6 = virial, Voigt order [xx,yy,zz,yz,xz,xy]. Rows 0..3*natoms match LAMMPS compute pod/global exactly; the virial rows have no LAMMPS counterpart (POD fitting there doesn't use stress) but follow the same formula compute_descriptor_snap_global uses. Single MPI rank only."} );
     ADD_SLOT( long, ncoeff_all, OUTPUT,
                DocString{"Number of columns = nCoeffPerElement*nelements"} );
 
@@ -102,7 +107,7 @@ namespace exaStamp
       *ncoeff_all = ncols;
 
       const size_t natoms = grid->number_of_particles() - grid->number_of_ghost_particles();
-      const size_t rows = 1 + 3*natoms;
+      const size_t rows = 1 + 3*natoms + 6;
       pod_global->clear();
       pod_global->resize( rows * ncols, 0.0 );
 
@@ -118,30 +123,74 @@ namespace exaStamp
           make_compute_pair_optional_args(nbh_it, cp_weight, cp_xform, cp_locks),
           global_buf, global_op, compute_global_field_set,
           parallel_execution_context());
+
+      // Virial rows: Σ r_atom . dDescriptor_atom/dr_atom over owned atoms, Voigt order
+      // [xx,yy,zz,yz,xz,xy] -- same formula as compute_descriptor_snap_global.cu's virial pass.
+      // Unlike SNAP, no local/pre-fold timing subtlety here: this operator is single-MPI-rank
+      // only (see above), and the (1+3N)-row block above is already the complete, final answer
+      // (ghost contributions already collapsed onto their owner's id-indexed row by the fused
+      // pair-loop's own atomic scatter) -- so this is just a plain finalization pass reading rows
+      // already written above, no separate reduction step needed.
+      {
+        double * const arr = pod_global->data();
+        const long virial_row0 = 1 + 3*static_cast<long>(natoms);
+        const size_t n_cells = grid->number_of_cells();
+        for( size_t ci=0; ci<n_cells; ci++ )
+        {
+          if( grid->is_ghost_cell(ci) ) continue;
+          const auto & cell = grid->cell(ci);
+          const size_t np = cell.size();
+          for( size_t pi=0; pi<np; pi++ )
+          {
+            const uint64_t id = cell[field::id][pi];
+            const double rx = cell[field::rx][pi];
+            const double ry = cell[field::ry][pi];
+            const double rz = cell[field::rz][pi];
+            const long grad_row0 = 1 + 3*static_cast<long>(id);
+            for( long k=0; k<ncols; k++ )
+            {
+              const double dx = arr[ (grad_row0+0)*ncols + k ];
+              const double dy = arr[ (grad_row0+1)*ncols + k ];
+              const double dz = arr[ (grad_row0+2)*ncols + k ];
+              arr[ (virial_row0+0)*ncols + k ] += dx*rx; // xx
+              arr[ (virial_row0+1)*ncols + k ] += dy*ry; // yy
+              arr[ (virial_row0+2)*ncols + k ] += dz*rz; // zz
+              arr[ (virial_row0+3)*ncols + k ] += dz*ry; // yz
+              arr[ (virial_row0+4)*ncols + k ] += dz*rx; // xz
+              arr[ (virial_row0+5)*ncols + k ] += dy*rx; // xy
+            }
+          }
+        }
+      }
     }
 
     inline std::string documentation() const override final
     {
       return R"EOF(
 
-Global-array analogue of LAMMPS's compute pod/global: a single, row-major
-(1+3*natoms) x ncoeff_all array (ncoeff_all = nCoeffPerElement*nelements):
+Global-array analogue of LAMMPS's compute pod/global, extended with 6 virial rows LAMMPS's own
+pod/global doesn't have (POD fitting there just doesn't use stress, not a structural limitation):
+a single, row-major (1+3*natoms+6) x ncoeff_all array (ncoeff_all = nCoeffPerElement*nelements):
 
-  row 0            -- system-wide per-element summed descriptor vector, including the nl1
-                       one-body atom-count term. Dot this with a coefficient vector to get the
-                       total configuration energy.
-  rows 1..3*natoms -- the gradient of row 0 w.r.t. atom (id-1)'s x/y/z. Dot row (1+3*(id-1)+xyz)
-                       with the same coefficient vector and negate to get that atom's force
-                       component: F = -coeff . row.
+  row 0             -- system-wide per-element summed descriptor vector, including the nl1
+                        one-body atom-count term. Dot this with a coefficient vector to get the
+                        total configuration energy.
+  rows 1..3*natoms  -- the gradient of row 0 w.r.t. atom id's x/y/z. Dot row (1+3*id+xyz)
+                        with the same coefficient vector and negate to get that atom's force
+                        component: F = -coeff . row.
+  rows 3N+1..3N+6   -- sum over atoms of position . gradient row, Voigt order
+                        [xx,yy,zz,yz,xz,xy]. Dot with the same coefficient vector to get the
+                        virial/stress tensor component.
 
 This is the design-matrix structure needed to fit a linear POD potential against total energy plus
-per-atom forces (stack these rows across many training configurations, stack the corresponding
-energy/force targets, solve by least squares).
+per-atom forces plus virial (stack these rows across many training configurations, stack the
+corresponding energy/force/virial targets, solve by least squares).
 
 Single MPI rank only -- matches compute_pod_global.cpp's own restriction (it has no MPI reduction
-either). Rows are indexed by atom id-1 rather than internal particle order: this makes row order
-directly comparable to LAMMPS's own output, and makes ghost/real folding automatic (a ghost carries
-the same field::id as its real counterpart), so no update_opt_from_ghost step is needed here.
+either). Rows are indexed by atom id rather than internal particle order: this makes row order
+directly comparable to LAMMPS's own output (for rows 0..3*natoms), and makes ghost/real folding
+automatic (a ghost carries the same field::id as its real counterpart), so no update_opt_from_ghost
+step is needed here.
 
 Usage example:
 

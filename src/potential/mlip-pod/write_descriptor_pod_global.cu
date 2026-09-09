@@ -76,12 +76,12 @@ namespace exaStamp
     {
       return R"EOF(
 
-Writes compute_descriptor_pod_global's (1+3*natoms) x ncoeff_all array to a single file --
+Writes compute_descriptor_pod_global's (1+3*natoms+6) x ncoeff_all array to a single file --
 row 0 = global per-configuration descriptor vector, rows 1..3*natoms = its gradient w.r.t. each
-atom (id-1)'s x/y/z (see compute_descriptor_pod_global's documentation for the exact layout and
-how to use it for linear-potential fitting).
+atom id's x/y/z, rows 3*natoms+1..+6 = virial (Voigt order) (see compute_descriptor_pod_global's
+documentation for the exact layout and how to use it for linear-potential fitting).
 
-'format: npy' writes a single .npy v1.0 file, shape (1+3*natoms, ncoeff_all), directly loadable
+'format: npy' writes a single .npy v1.0 file, shape (1+3*natoms+6, ncoeff_all), directly loadable
 with numpy.load() -- no per-field splitting needed since the whole output is already one
 homogeneous 2-D array, unlike write_descriptor_pod's per-selected-field files.
 
