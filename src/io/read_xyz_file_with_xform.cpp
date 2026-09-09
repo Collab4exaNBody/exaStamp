@@ -144,6 +144,7 @@ namespace exaStamp
     ADD_SLOT( ParticleSpecies , species         , INPUT ); // optional
     ADD_SLOT( ReadBoundsSelectionMode, bounds_mode , INPUT , ReadBoundsSelectionMode::FILE_BOUNDS );
     ADD_SLOT( bool            , read_velocities , INPUT , false );
+    ADD_SLOT( bool            , verbose         , INPUT , true , DocString{"Print detailed per-file diagnostics (lattice, xform, domain bounds/size/cell size/grid dimensions). false prints only the filename and particle count -- useful when reading many files in a loop."} );
 
   public:
     inline void execute () override final
@@ -157,7 +158,8 @@ namespace exaStamp
       std::string::size_type p = file_name.rfind("/");
       if( p != std::string::npos ) basename = file_name.substr(p+1);
       else basename = file_name;
-      lout << "======== " << basename << " ========" << std::endl;
+      if( *verbose ) lout << "======== " << basename << " ========" << std::endl;
+      else lout << basename << ": ";
 
       using ParticleTupleIO = onika::soatl::FieldTuple<field::_rx, field::_ry, field::_rz, field::_id, field::_type>;
       using ParticleTuple   = decltype( grid.cells()[0][0] );
@@ -232,7 +234,7 @@ namespace exaStamp
             std::abort();
           }
         }
-        lout << "H = " << H << std::endl;
+        if( *verbose ) lout << "H = " << H << std::endl;
 
         Vec3d a = Vec3d{H.m11, H.m12, H.m13};
         Vec3d b = Vec3d{H.m21, H.m22, H.m23};
@@ -242,9 +244,12 @@ namespace exaStamp
         double box_size_y = norm(b);
         double box_size_z = norm(c);
 
-        lout << "a = " << box_size_x << std::endl;
-        lout << "b = " << box_size_y << std::endl;
-        lout << "c = " << box_size_z << std::endl;
+        if( *verbose )
+        {
+          lout << "a = " << box_size_x << std::endl;
+          lout << "b = " << box_size_y << std::endl;
+          lout << "c = " << box_size_z << std::endl;
+        }
 
         // --- Parse Properties=... ---
         std::string props_str;
@@ -273,7 +278,7 @@ namespace exaStamp
           std::abort();
         }
 
-        if( *read_velocities )
+        if( *read_velocities && *verbose )
           lout << "Reading velocities from column " << vel_col << std::endl;
 
         // ----------------------------------------------------------------
@@ -351,7 +356,7 @@ namespace exaStamp
         // ----------------------------------------------------------------
         if( !domain.xform_is_identity() )
         {
-          lerr << "needs initial XForm, resetting XForm" << std::endl;
+          if( *verbose ) lout << "needs initial XForm, resetting XForm" << std::endl;
           domain.set_xform( make_identity_matrix() );
         }
 
@@ -375,7 +380,7 @@ namespace exaStamp
         domain_xform = Hbis * domain.xform();
 
         uniform_scale = is_uniform_scale(domain_xform);
-        lout << "Uniform scale    = " << std::boolalpha << uniform_scale << std::endl;
+        if( *verbose ) lout << "Uniform scale    = " << std::boolalpha << uniform_scale << std::endl;
         if( uniform_scale )
         {
           domain.set_xform( make_identity_matrix() );
@@ -387,17 +392,24 @@ namespace exaStamp
           domain.set_xform(domain_xform);
         }
 
-        lout << "Particles        = " << particle_data.size()          << std::endl;
-        lout << "Domain XForm     = " << domain.xform()                << std::endl;
-        lout << "Domain bounds    = " << domain.bounds()               << std::endl;
-        lout << "Domain size      = " << bounds_size(domain.bounds())  << std::endl;
-        lout << "Real size        = " << bounds_size(domain.bounds())
-                                        * Vec3d{domain.xform().m11,
-                                                domain.xform().m22,
-                                                domain.xform().m33}    << std::endl;
-        lout << "Cell size        = " << domain.cell_size()            << std::endl;
-        lout << "Grid dimensions  = " << domain.grid_dimension()
-             << " (" << grid_cell_count(domain.grid_dimension()) << " cells)" << std::endl;
+        if( *verbose )
+        {
+          lout << "Particles        = " << particle_data.size()          << std::endl;
+          lout << "Domain XForm     = " << domain.xform()                << std::endl;
+          lout << "Domain bounds    = " << domain.bounds()               << std::endl;
+          lout << "Domain size      = " << bounds_size(domain.bounds())  << std::endl;
+          lout << "Real size        = " << bounds_size(domain.bounds())
+                                          * Vec3d{domain.xform().m11,
+                                                  domain.xform().m22,
+                                                  domain.xform().m33}    << std::endl;
+          lout << "Cell size        = " << domain.cell_size()            << std::endl;
+          lout << "Grid dimensions  = " << domain.grid_dimension()
+               << " (" << grid_cell_count(domain.grid_dimension()) << " cells)" << std::endl;
+        }
+        else
+        {
+          lout << particle_data.size() << " particles" << std::endl;
+        }
       } // rank == 0
 
       // ----------------------------------------------------------------
@@ -444,7 +456,7 @@ namespace exaStamp
         }
       }
 
-      lout << "============================" << std::endl;
+      if( *verbose ) lout << "============================" << std::endl;
 
       grid.rebuild_particle_offsets();
 
