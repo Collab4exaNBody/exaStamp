@@ -46,9 +46,22 @@ under the License.
 // virial rows LAMMPS's own pod/global doesn't have -- POD fitting there just doesn't use stress,
 // not a structural limitation; added here to match compute_descriptor_snap_global's shape) -- see
 // pod_global_op.h for the descriptor+gradient algorithm and why rows are indexed by atom id-1.
-// Single MPI rank only, matching compute_pod_global.cpp's own restriction (no MPI reduction exists
-// there either) -- this also means the virial pass below needs no Allreduce/pre-fold timing care,
-// unlike compute_descriptor_snap_global.cu's own virial pass.
+//
+// Multi-MPI-rank capable (LAMMPS's own compute_pod_global.cpp is serial-only, but that's just
+// because it never needed to be otherwise -- nothing about the math requires it). Simpler than
+// compute_descriptor_snap_global.cu's own multi-rank handling: PodGlobalOp already "ghost-folds"
+// within a single rank by scattering directly through the flat array via atom id (a ghost's
+// neighbor-role contribution lands on the exact same row as its real owner's central-role
+// contribution, same id -- see pod_global_op.h), so each rank's local pass already produces a
+// complete PARTIAL sum for every row it touches; combining ranks is then just one MPI_Allreduce
+// over rows 0..3*natoms_global. The 6 virial rows are handled as a SEPARATE, later Allreduce
+// (not folded into the same call) specifically because they must be computed from the
+// POST-reduction gradient rows: each rank sums only over its own owned atoms (every atom is
+// owned by exactly one rank, so no double counting and nothing missed), but needs every atom's
+// COMPLETE gradient row to do that correctly -- unlike SNAP's virial pass (computed from each
+// rank's pre-reduction local aggregate via the fdotr identity, real+ghost instances each
+// contributing separately), that identity doesn't apply here since POD's ghost and real
+// instances of the same atom already share one row, not separate per-instance storage.
 namespace exaStamp
 {
 
@@ -69,7 +82,7 @@ namespace exaStamp
     ADD_SLOT( PodContext                , pod_ctx         , INPUT , REQUIRED );
 
     ADD_SLOT( onika::memory::CudaMMVector<double>, pod_global, OUTPUT,
-               DocString{"Row-major (1+3*natoms+6) x ncoeff_all global array, natoms = number of owned (non-ghost) particles: row 0 = system-wide per-element summed descriptor vector (incl. one-body atom-count term); rows 1..3*natoms = gradient of row 0 w.r.t. atom (id-1)'s x/y/z; rows 3*natoms+1..+6 = virial, Voigt order [xx,yy,zz,yz,xz,xy]. Rows 0..3*natoms match LAMMPS compute pod/global exactly; the virial rows have no LAMMPS counterpart (POD fitting there doesn't use stress) but follow the same formula compute_descriptor_snap_global uses. Single MPI rank only."} );
+               DocString{"Row-major (1+3*natoms+6) x ncoeff_all global array, natoms = TOTAL atom count across every MPI rank: row 0 = system-wide per-element summed descriptor vector (incl. one-body atom-count term); rows 1..3*natoms = gradient of row 0 w.r.t. atom (id-1)'s x/y/z; rows 3*natoms+1..+6 = virial, Voigt order [xx,yy,zz,yz,xz,xy]. Rows 0..3*natoms match LAMMPS compute pod/global exactly (single-rank); the virial rows have no LAMMPS counterpart (POD fitting there doesn't use stress) but follow the same formula compute_descriptor_snap_global uses. Identically Allreduce'd on every rank by the time this operator returns."} );
     ADD_SLOT( long, ncoeff_all, OUTPUT,
                DocString{"Number of columns = nCoeffPerElement*nelements"} );
 
@@ -82,14 +95,6 @@ namespace exaStamp
 
     inline void execute() override final
     {
-      int nprocs = 1;
-      MPI_Comm_size(*mpi, &nprocs);
-      if (nprocs > 1)
-      {
-        fatal_error() << "compute_descriptor_pod_global: only supported on a single MPI rank"
-                      << " (matches LAMMPS compute pod/global's own restriction -- it has no MPI reduction either)" << std::endl;
-      }
-
       assert( chunk_neighbors->number_of_cells() == grid->number_of_cells() );
       const size_t nt = omp_get_max_threads();
       if (nt > pod_ctx->m_eapod.size())
@@ -100,40 +105,55 @@ namespace exaStamp
         fatal_error() << "POD thread context size mismatch" << std::endl;
       }
 
-      if (grid->number_of_cells() == 0) { *ncoeff_all = 0; return; }
-
       auto& eapod0 = *pod_ctx->m_eapod[0];
       const long ncols = static_cast<long>(eapod0.nCoeffPerElement) * eapod0.nelements;
       *ncoeff_all = ncols;
 
-      const size_t natoms = grid->number_of_particles() - grid->number_of_ghost_particles();
-      const size_t rows = 1 + 3*natoms + 6;
+      // Local owned (non-ghost) atom count -> global total via one small Allreduce, so every
+      // rank sizes/id-indexes the array identically before the scatter below -- this rank must
+      // take part even if it locally owns zero cells (an empty subdomain), hence the ternary
+      // rather than an early return (which would desync the collectives below and hang).
+      const long natoms_local = ( grid->number_of_cells() == 0 ) ? 0
+                               : static_cast<long>( grid->number_of_particles() - grid->number_of_ghost_particles() );
+      long natoms_global = 0;
+      MPI_Allreduce( &natoms_local, &natoms_global, 1, MPI_LONG, MPI_SUM, *mpi );
+
+      const long grad_rows = 1 + 3*natoms_global;
+      const long virial_row0 = grad_rows;
+      const long rows = grad_rows + 6;
       pod_global->clear();
-      pod_global->resize( rows * ncols, 0.0 );
+      pod_global->resize( static_cast<size_t>(rows) * static_cast<size_t>(ncols), 0.0 );
+      double * const arr = pod_global->data();
 
-      ComputePairNullWeightIterator cp_weight{};
-      exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
-      auto global_buf = make_compute_pair_buffer<ComputeBuffer>();
-      LinearXForm cp_xform{ domain->xform() };
-      ComputePairOptionalLocks<false> cp_locks{};
-
-      PodGlobalOp global_op{ pod_ctx->m_eapod, pod_ctx->type_map, ncols, pod_global->data() };
-      compute_cell_particle_pairs(
-          *grid, *rcut_max, *ghost,
-          make_compute_pair_optional_args(nbh_it, cp_weight, cp_xform, cp_locks),
-          global_buf, global_op, compute_global_field_set,
-          parallel_execution_context());
-
-      // Virial rows: Σ r_atom . dDescriptor_atom/dr_atom over owned atoms, Voigt order
-      // [xx,yy,zz,yz,xz,xy] -- same formula as compute_descriptor_snap_global.cu's virial pass.
-      // Unlike SNAP, no local/pre-fold timing subtlety here: this operator is single-MPI-rank
-      // only (see above), and the (1+3N)-row block above is already the complete, final answer
-      // (ghost contributions already collapsed onto their owner's id-indexed row by the fused
-      // pair-loop's own atomic scatter) -- so this is just a plain finalization pass reading rows
-      // already written above, no separate reduction step needed.
+      if( grid->number_of_cells() > 0 )
       {
-        double * const arr = pod_global->data();
-        const long virial_row0 = 1 + 3*static_cast<long>(natoms);
+        ComputePairNullWeightIterator cp_weight{};
+        exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
+        auto global_buf = make_compute_pair_buffer<ComputeBuffer>();
+        LinearXForm cp_xform{ domain->xform() };
+        ComputePairOptionalLocks<false> cp_locks{};
+
+        PodGlobalOp global_op{ pod_ctx->m_eapod, pod_ctx->type_map, ncols, arr };
+        compute_cell_particle_pairs(
+            *grid, *rcut_max, *ghost,
+            make_compute_pair_optional_args(nbh_it, cp_weight, cp_xform, cp_locks),
+            global_buf, global_op, compute_global_field_set,
+            parallel_execution_context());
+      }
+
+      // Combine every rank's local partial contribution to rows 0..3*natoms_global. Each row is
+      // already "ghost-folded" within a single rank (see header comment), so this one Allreduce
+      // is all that's needed to get the complete, correct global descriptor+gradient block on
+      // every rank -- matching exactly what a single-rank run would have produced.
+      MPI_Allreduce( MPI_IN_PLACE, arr, static_cast<int>(grad_rows*ncols), MPI_DOUBLE, MPI_SUM, *mpi );
+
+      // Virial rows: Σ r_atom . dDescriptor_atom/dr_atom, Voigt order [xx,yy,zz,yz,xz,xy] --
+      // computed from the now-COMPLETE (post-Allreduce) gradient rows above, each rank summing
+      // only over its own owned atoms (every atom is owned by exactly one rank, so no double
+      // counting and nothing missed); one more (small) Allreduce combines every rank's partial
+      // virial sum into the final answer.
+      if( grid->number_of_cells() > 0 )
+      {
         const size_t n_cells = grid->number_of_cells();
         for( size_t ci=0; ci<n_cells; ci++ )
         {
@@ -162,6 +182,7 @@ namespace exaStamp
           }
         }
       }
+      MPI_Allreduce( MPI_IN_PLACE, arr + static_cast<size_t>(virial_row0)*ncols, static_cast<int>(6*ncols), MPI_DOUBLE, MPI_SUM, *mpi );
     }
 
     inline std::string documentation() const override final
@@ -186,11 +207,12 @@ This is the design-matrix structure needed to fit a linear POD potential against
 per-atom forces plus virial (stack these rows across many training configurations, stack the
 corresponding energy/force/virial targets, solve by least squares).
 
-Single MPI rank only -- matches compute_pod_global.cpp's own restriction (it has no MPI reduction
-either). Rows are indexed by atom id rather than internal particle order: this makes row order
-directly comparable to LAMMPS's own output (for rows 0..3*natoms), and makes ghost/real folding
-automatic (a ghost carries the same field::id as its real counterpart), so no update_opt_from_ghost
-step is needed here.
+Multi-MPI-rank capable (unlike LAMMPS's own compute pod/global, which is serial-only). Rows are
+indexed by atom id rather than internal particle order: this makes row order directly comparable
+to LAMMPS's own output (for rows 0..3*natoms, single-rank), and makes ghost/real folding automatic
+within a rank (a ghost carries the same field::id as its real counterpart), so no
+update_opt_from_ghost step is ever needed here. Cross-rank combination is two MPI_Allreduce calls
+(rows 0..3*natoms, then the 6 virial rows) -- see this file's header comment for why they're split.
 
 Usage example:
 

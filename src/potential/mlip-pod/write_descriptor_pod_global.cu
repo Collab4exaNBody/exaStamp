@@ -25,18 +25,21 @@ under the License.
 #include <fstream>
 #include <iomanip>
 #include <string>
+#include <mpi.h>
 
 #include "npy_writer.h"
 
-// Plain export of compute_descriptor_pod_global's output array -- much simpler than
-// write_descriptor_pod: compute_descriptor_pod_global is single-MPI-rank only (see its own
-// documentation), so the array is already fully global and no MPI gather is needed here at all.
+// Plain export of compute_descriptor_pod_global's output array. compute_descriptor_pod_global is
+// multi-rank capable and already identically MPI_Allreduce'd on every rank by the time this runs,
+// so this writer just needs to pick one rank (0) to actually write, to avoid every rank racing to
+// write the same file -- same pattern as write_descriptor_snap_global.cu.
 namespace exaStamp
 {
   using namespace exanb;
 
   class WriteDescriptorPodGlobal : public OperatorNode
   {
+    ADD_SLOT( MPI_Comm , mpi , INPUT , REQUIRED );
     ADD_SLOT( onika::memory::CudaMMVector<double> , pod_global , INPUT , REQUIRED , DocString{"see compute_descriptor_pod_global"} );
     ADD_SLOT( long , ncoeff_all , INPUT , REQUIRED , DocString{"see compute_descriptor_pod_global"} );
     ADD_SLOT( std::string , format , INPUT , std::string("text") , DocString{"Output format: 'text' (default, one line per row, space-separated) or 'npy' (single .npy v1.0 file, shape (rows,ncoeff_all))."} );
@@ -45,6 +48,10 @@ namespace exaStamp
   public:
     inline void execute() override final
     {
+      int rank = 0;
+      MPI_Comm_rank( *mpi, &rank );
+      if( rank != 0 ) return;
+
       if( *format != "text" && *format != "npy" )
       {
         fatal_error() << "write_descriptor_pod_global: unknown format '"<<*format<<"' (choices: text, npy)" << std::endl;
@@ -76,10 +83,11 @@ namespace exaStamp
     {
       return R"EOF(
 
-Writes compute_descriptor_pod_global's (1+3*natoms+6) x ncoeff_all array to a single file --
-row 0 = global per-configuration descriptor vector, rows 1..3*natoms = its gradient w.r.t. each
-atom id's x/y/z, rows 3*natoms+1..+6 = virial (Voigt order) (see compute_descriptor_pod_global's
-documentation for the exact layout and how to use it for linear-potential fitting).
+Writes compute_descriptor_pod_global's (1+3*natoms+6) x ncoeff_all array to a single file, from
+rank 0 only (the array is already identically MPI_Allreduce'd on every rank) -- row 0 = global
+per-configuration descriptor vector, rows 1..3*natoms = its gradient w.r.t. each atom id's x/y/z,
+rows 3*natoms+1..+6 = virial (Voigt order) (see compute_descriptor_pod_global's documentation for
+the exact layout and how to use it for linear-potential fitting).
 
 'format: npy' writes a single .npy v1.0 file, shape (1+3*natoms+6, ncoeff_all), directly loadable
 with numpy.load() -- no per-field splitting needed since the whole output is already one
