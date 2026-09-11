@@ -1,0 +1,40 @@
+compute_force_prolog:
+  - zero_force_energy: { ghost: true }
+
+compute_force_epilog:
+  - compute_sum_fdotr
+  - update_force_energy_from_ghost
+  - sum_forces
+  - force_to_accel
+
+species:
+  - Cu: { mass: 63.546 Da , z: 29 , charge: 0.0 e- }
+
+init_parameters:
+  - species
+  - mtp_init:
+      parameters:
+        mtp_file: "pot.almtp"
+
+compute_force:
+  - mtp_force
+
+setup_system:
+  - domain:
+      cell_size: 6.6 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_xyz_file_with_xform:
+      filename: "Cu_noisy.xyz"
+      bounds_mode: FILE
+
+numerical_scheme: verlet_nve
+
+global:
+  max_iteration: 0
+  simulation_thermostate_screen_frequency: 1
+  simulation_thermostate_file_frequency: 1
+  simulation_snapshot_frequency: -1
+  rcut_inc: 1.0 ang
+  dt: 0.001 ps
+  force_flush_file: true

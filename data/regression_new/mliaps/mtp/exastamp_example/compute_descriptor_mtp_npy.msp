@@ -1,0 +1,28 @@
+species:
+  - Cu: { mass: 63.546 Da , z: 29 , charge: 0.0 e- }
+
+init_parameters:
+  - species
+  - mtp_init:
+      parameters:
+        mtp_file: "pot.almtp"
+
+setup_system:
+  - domain:
+      cell_size: 6.6 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_xyz_file_with_xform:
+      filename: "Cu_noisy.xyz"
+      bounds_mode: FILE
+
+simulation_epilog:
+  - compute_descriptor_mtp: { compute_derivative: true }
+  - write_descriptor_mtp:
+      filename: "mtp_descriptors_npy.txt"
+      format: npy
+      fields: [ id, descriptor ]
+  - compute_descriptor_mtp_global
+  - write_descriptor_mtp_global:
+      filename: "mtp_global_npy.txt"
+      format: npy
