@@ -1,0 +1,39 @@
+# Demonstrate POD Ta potential
+
+# Initialize simulation
+
+variable nsteps index 200
+units           metal
+boundary        p p p
+
+read_data Ta_disturbed.lmp
+
+pair_style pod
+pair_coeff * * Ta_param.pod Ta_coefficients.pod Ta
+
+thermo          1
+thermo_style custom step pe ke etotal temp pxx pyy pzz pxy pxz pyz
+
+variable stepp equal step
+variable TK equal temp
+variable peatom equal pe/atoms
+variable keatom equal ke/atoms
+variable teatom equal etotal/atoms
+variable tps equal step*dt
+variable nats equal atoms
+variable pxxgpa equal pxx*1e5
+variable pyygpa equal pyy*1e5
+variable pzzgpa equal pzz*1e5
+variable pxygpa equal pxy*1e5
+variable pxzgpa equal pxz*1e5
+variable pyzgpa equal pyz*1e5
+
+fix extra all print 1 "${stepp} ${tps} ${nats} ${teatom} ${keatom} ${peatom} ${TK} ${pxxgpa} ${pyygpa} ${pzzgpa} ${pxygpa} ${pxzgpa} ${pyzgpa}" file thermo_lammps.txt
+
+timestep 0.005
+neighbor 1.0 bin
+
+fix 1 all nve
+
+run             ${nsteps}
+

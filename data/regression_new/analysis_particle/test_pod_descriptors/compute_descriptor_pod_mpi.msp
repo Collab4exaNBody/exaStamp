@@ -1,0 +1,31 @@
+species:
+  - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+
+init_parameters:
+  - species
+  - pod_init:
+      parameters:
+        pod_file: "Ta_param.pod"
+        coeff_file: "Ta_coefficients.pod"
+
+setup_system:
+  - domain:
+      cell_size: 6.6 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_xyz_file_with_xform:
+      filename: "Ta_disturbed.xyz"
+
+global:
+  max_iteration: 1
+  dt: 1.0e-3 ps
+
+# Same as compute_descriptor_pod.msp but uses write_descriptor_pod (real MPI_Gather/Gatherv,
+# single combined output file) instead of dump_descriptor_pod (single-rank-only, one line per
+# LOCAL particle, no multi-rank coordination -- unsuitable for an np=1 vs np=4 comparison) --
+# built specifically to verify write_descriptor_pod's multi-rank gather path.
+simulation_epilog:
+  - compute_descriptor_pod
+  - write_descriptor_pod:
+      filename: "exastamp_pod_descriptors_mpi.txt"
+      fields: [ id, x, y, z, descriptor ]

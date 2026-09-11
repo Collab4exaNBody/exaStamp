@@ -1,0 +1,24 @@
+# LAMMPS mirror of compute_descriptor_pod.msp: same Ta_disturbed configuration, real
+# LAMMPS compute pod/atom descriptor. Dumps one line per atom, id-sorted:
+#   id x y z d0 d1 ... d_{ncoeff-1}
+# to lammps_pod_descriptors.txt, directly comparable to exastamp_pod_descriptors.txt.
+
+units       metal
+atom_style  atomic
+boundary    p p p
+
+read_data   Ta_disturbed.lmp
+
+# compute pod/atom needs a pair style defined (to build the neighbor list) but no real
+# potential is needed here -- pair_style zero just sets the cutoff for neighbor-list
+# construction. Cutoff must be >= rcut = 5.0 (see Ta_param.pod).
+pair_style  zero 5.01
+pair_coeff  * *
+
+compute podd all pod/atom Ta_param.pod Ta_coefficients.pod Ta
+
+dump        1 all custom 1 lammps_pod_descriptors.txt id x y z c_podd[*]
+dump_modify 1 sort id
+dump_modify 1 format float "%.17g"
+
+run         0

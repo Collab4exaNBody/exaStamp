@@ -1,0 +1,24 @@
+# Small-system (8 atoms) LAMMPS ground truth for cross-validating exaStamp's
+# compute_descriptor_pod compute_derivative aggregate generalized to nClusters>1.
+# Same system/harness as in.pod_derivative_small, but Ta_param_multicluster.pod sets
+# number_of_environment_clusters 2 / number_of_principal_components 2, with synthetic
+# Proj/Centroids values in Ta_coefficients_multicluster.pod (values are arbitrary --
+# this only checks numerical consistency of the derivative formula against LAMMPS's
+# own nClusters-aware compute podd/atom, not physical fit quality).
+
+units       metal
+atom_style  atomic
+boundary    p p p
+
+read_data   Ta_small.lmp
+
+pair_style  zero 5.01
+pair_coeff  * *
+
+compute podd all podd/atom Ta_param_multicluster.pod Ta_coefficients_multicluster.pod Ta
+
+dump        1 all custom 1 lammps_pod_derivative_multicluster.txt id x y z c_podd[*]
+dump_modify 1 sort id
+dump_modify 1 format float "%.17g"
+
+run         0

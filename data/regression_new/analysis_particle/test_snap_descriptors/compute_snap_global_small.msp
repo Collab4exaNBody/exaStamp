@@ -1,0 +1,30 @@
+species:
+  - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+
+setup_system:
+  - domain:
+      cell_size: 8.0 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_xyz_file_with_xform:
+      filename: "Ta_small.xyz"
+
+global:
+  max_iteration: 1
+  dt: 1.0e-3 ps
+  rcut_max: 7.0 ang
+
+compute_descriptor_snap:
+  compute_derivative: true
+  parameters:
+    param: "param.txt"
+    coef: "coeff.txt"
+
+simulation_epilog:
+  - compute_descriptor_snap
+  - compute_descriptor_snap_global
+  - write_descriptor_snap_global: { filename: "exastamp_snap_global_small.txt" }
+  - print_test:
+      rebind: { value: ncoeff_all }
+      body:
+        - print_int: { prefix: "ncoeff_all=", suffix: "\n" }

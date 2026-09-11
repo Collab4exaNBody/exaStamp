@@ -1,0 +1,45 @@
+species:
+  - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+
+setup_system:
+  - domain:
+      cell_size: 6.0 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_xyz_file_with_xform:
+      filename: "tantalum_noisy.xyz"
+
+global:
+  max_iteration: 1
+  dt: 1.0e-3 ps
+  rcut_max: 7.0 ang
+
+compute_descriptor_snap:
+  compute_derivative: true
+  parameters:
+    param: "param.txt"
+    coef: "coeff.txt"
+
+dump_descriptor_snap:
+  filename: "exastamp_descriptors.txt"
+
+dump_descriptor_snap_aggregate:
+  filename: "exastamp_snad.txt"
+
+write_descriptor_snap:
+  filename: "exastamp_combined.txt"
+  fields: [ id, x, y, z, descriptor, derivative ]
+
+update_opt_from_ghost:
+  opt_fields: [ "sda_.*" ]
+
+simulation_epilog:
+  - compute_descriptor_snap
+  - update_opt_from_ghost   # required whenever compute_derivative is used on more than one rank
+  - dump_descriptor_snap
+  - dump_descriptor_snap_aggregate
+  - write_descriptor_snap
+  - print_test:
+      rebind: { value: ncoeff }
+      body:
+        - print_int: { prefix: "ncoeff=", suffix: "\n" }

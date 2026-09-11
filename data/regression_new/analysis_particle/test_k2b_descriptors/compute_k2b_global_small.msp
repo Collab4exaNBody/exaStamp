@@ -1,0 +1,23 @@
+species:
+  - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+
+setup_system:
+  - domain:
+      cell_size: 8.0 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_xyz_file_with_xform:
+      filename: "Ta_small.xyz"
+
+global:
+  max_iteration: 1
+  dt: 1.0e-3 ps
+  rcut_max: 6.0 ang
+
+simulation_epilog:
+  - compute_descriptor_k2b:
+      rcut: 6.0 ang
+      parameters: { n_rbf: 8, r_min: 0.5, r_cut: 6.0, sigma: 0.4, delta: 1.5, w: [ -1.057, -2.0949, 0.90561, -2.56538, 0.21529, -0.80587, -2.65201, 0.04461 ] }
+      compute_derivative: true
+  - compute_descriptor_k2b_global
+  - write_descriptor_k2b_global: { filename: "exastamp_k2b_global_small.txt" }

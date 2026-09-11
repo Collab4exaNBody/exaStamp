@@ -1,0 +1,23 @@
+# Small-system (8 atoms) LAMMPS ground truth for cross-validating exaStamp's new
+# compute_descriptor_pod compute_derivative aggregate. LAMMPS's real compute podd/atom is a dense
+# per-local-atom-row matrix (size_peratom_cols = 3*natoms*Mdesc), impractical to dump/parse at the
+# 16000-atom Ta_disturbed scale -- but tractable here. See compare_derivative.py for how the dense
+# matrix is reduced (summed down its rows, per column-atom) into the same compact per-atom
+# aggregate exaStamp's PodDescriptorOp scatter produces.
+
+units       metal
+atom_style  atomic
+boundary    p p p
+
+read_data   Ta_small.lmp
+
+pair_style  zero 5.01
+pair_coeff  * *
+
+compute podd all podd/atom Ta_param.pod Ta_coefficients.pod Ta
+
+dump        1 all custom 1 lammps_pod_derivative_small.txt id x y z c_podd[*]
+dump_modify 1 sort id
+dump_modify 1 format float "%.17g"
+
+run         0
