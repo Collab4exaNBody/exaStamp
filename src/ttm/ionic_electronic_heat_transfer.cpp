@@ -133,7 +133,7 @@ namespace exaStamp
         lerr << "no type information, can't retreive masses" << std::endl;
         std::abort();
       }
-      double masses[nSpecies];
+      std::vector<double> masses(nSpecies);
       for(size_t i=0;i<nSpecies;i++) { masses[i] = species->at(i).m_mass; }
 
       auto cells = grid->cells();
@@ -175,7 +175,7 @@ namespace exaStamp
             Vec3d r { rx[j] , ry[j] , rz[j] };
             Vec3d v { vx[j] , vy[j] , vz[j] };
 
-            const double mass = get_mass( j, atom_type, masses, has_type_field );
+            const double mass = get_mass( j, atom_type, masses.data(), has_type_field );
             const double v2 = norm2(v);
  
             IJK center_cell_loc;
@@ -282,7 +282,7 @@ namespace exaStamp
       double entropy_Te = 0.0;
 
       // compute Te laplace operator
-#     pragma omp parallel num_threads(1)
+#     pragma omp parallel
       {
         GRID_OMP_FOR_BEGIN(dims,cell_i,cell_loc, schedule(static) reduction(+:sum_Te,norm_dTe,entropy_Te) )
         {
@@ -462,7 +462,7 @@ namespace exaStamp
           const unsigned int n = cells[i].size();
           for(unsigned int j=0;j<n;j++)
           {
-            const double mass = get_mass( j, atom_type, masses, has_type_field );
+            const double mass = get_mass( j, atom_type, masses.data(), has_type_field );
             const Vec3d r { rx[j] , ry[j] , rz[j] };
             const Vec3d v { vx[j] , vy[j] , vz[j] };
             Vec3d f { 0. , 0. , 0. };
