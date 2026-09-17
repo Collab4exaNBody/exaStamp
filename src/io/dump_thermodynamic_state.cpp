@@ -25,6 +25,9 @@ under the License.
 #include <onika/physics/constants.h>
 #include <exanb/core/domain.h>
 
+#include <exaStamp/io/thermodynamic_log_config.h>
+
+#include <algorithm>
 #include <sstream>
 #include <mpi.h>
 
@@ -33,36 +36,28 @@ namespace exaStamp
   using namespace exanb;
 
   struct DumpThermodynamicStateNode : public OperatorNode
-  {  
+  {
     ADD_SLOT( MPI_Comm           , mpi                 , INPUT , MPI_COMM_WORLD );
     ADD_SLOT( long               , timestep            , INPUT, REQUIRED);
     ADD_SLOT( double             , physical_time       , INPUT );
-    ADD_SLOT( bool               , print_header        , INPUT, true );
+    ADD_SLOT( bool               , print_header        , INPUT , true );
+    ADD_SLOT( bool               , internal_units      , INPUT , false );
+    ADD_SLOT( std::string        , log_mode            , INPUT , "dump_default" , DocString{"'dump_default' (historical column set), any of print_thermodynamic_state's presets ('thermo_full', 'vol_fluct_tricl', 'mechanical', ...), or a ';'-separated list like 'stp;pht;mas;vol'"} );
+    ADD_SLOT( std::string        , log_format          , INPUT , OPTIONAL , DocString{"optional ';'-separated printf-style format overrides applied positionally to the active columns, e.g. '%10.3f;%12.6e'"} );
     ADD_SLOT( ThermodynamicState , thermodynamic_state , INPUT, REQUIRED);
     ADD_SLOT( double             , total_electronic_energy , INPUT, OPTIONAL );
     ADD_SLOT( double             , ion_transfer_energy     , INPUT, OPTIONAL );
     ADD_SLOT( std::string        , thermostate_file    , INPUT , "thermodynamic_state.csv" );
     ADD_SLOT( bool               , force_flush_file    , INPUT , false );
-    ADD_SLOT( bool               , force_append_thermo , INPUT , false );    
+    ADD_SLOT( bool               , force_append_thermo , INPUT , false );
     ADD_SLOT( bool               , is_dump_virial      , INPUT , false);
     // NEW
     ADD_SLOT(Domain              , domain              , INPUT , OPTIONAL, DocString{"Deformation box matrix"} );
 
+    ADD_SLOT(ThermodynamicLogConfig, log_config        , PRIVATE );
 
     inline void execute () override final
     {
-      static const double conv_temperature = 1.e4 * onika::physics::atomicMass / onika::physics::boltzmann ;	// internal units to Kelvin
-      //static const double conv_energy = 1.e4 * onika::physics::atomicMass;					// internal units to Joule
-      static const double conv_energy = 1.e4 * onika::physics::atomicMass / onika::physics::elementaryCharge;	// internal units to eV
-      //static const double conv_pressure = onika::physics::atomicMass * 1e20;					// ORIGINAL LINE - NO IDEA WHAT UNITS THIS IS (1e-14 Pascal)
-      static const double conv_pressure = 1.e4 * onika::physics::atomicMass * 1e30;				// internal units to Pascal
-      static const double conv_density = onika::physics::atomicMass*1e3*1e24; 					// internal units to g/cm^3
-	
-//     static const std::string header = "###  Step     Time (ps)     Particles  Tot. E. (eV/part)  Kin. E. (eV/part)  Pot. E. (eV/part)  Temp. (K)                     Tx/Ty/Tz (K)    Press. (Pa)                                            Pxx/Pyy/Pzz (Pa) Pxy/Pxz/Pyz (Pa)   sMises (Pa)                            A/B/C (ang)    alpha/beta/gamma (deg)     Vol. (ang^3)  Rho (g/cm^3)";
-     static const std::string header = "# Step     Time (ps)     Particles  Tot. E. (eV/part)  Kin. E. (eV/part)  Pot. E. (eV/part)  Temp. (K) Pxx Pyy Pzz Pxy Pxz Pyz (Pa) A/B/C (ang)    alpha/beta/gamma (deg)     Vol. (ang^3)  Rho (g/cm^3)";     
-
-      bool is_dump_virial = *(this->is_dump_virial);      
-
       // MPI Initialization
       int rank = 0;
       MPI_Comm_rank(*mpi, &rank);
@@ -70,81 +65,63 @@ namespace exaStamp
       // initialisation : remove output.csv
       if(rank!=0) { return; }
 
+      if( log_config->m_active_items.empty() )
+      {
+        *log_config = thermodynamic_dump_config_default;
+        ldbg << "log mode = "<< *log_mode << std::endl;
+        thermodynamic_log_apply_mode( *log_config, *log_mode, "dump_thermodynamic_state" );
+
+        // same duplicate-column guard as print_thermodynamic_state: only auto-append if the
+        // user's own log_mode list doesn't already name "ele"/"ite" explicitly.
+        if( total_electronic_energy.has_value()
+            && std::find(log_config->m_active_items.begin(), log_config->m_active_items.end(), ThermodynamicLogConfig::ELECTRON_E) == log_config->m_active_items.end() )
+        {
+          log_config->m_active_items.push_back( ThermodynamicLogConfig::ELECTRON_E );
+        }
+        if( ion_transfer_energy.has_value()
+            && std::find(log_config->m_active_items.begin(), log_config->m_active_items.end(), ThermodynamicLogConfig::ION_TRANSFER_E) == log_config->m_active_items.end() )
+        {
+          log_config->m_active_items.push_back( ThermodynamicLogConfig::ION_TRANSFER_E );
+        }
+
+        if( log_format.has_value() )
+        {
+          thermodynamic_log_apply_format( *log_config, *log_format );
+        }
+      }
+
+      bool is_dump_virial = *(this->is_dump_virial);
       const ThermodynamicState& sim_info = *(this->thermodynamic_state);
 
-      std::ostringstream oss;
+      double el_energy = total_electronic_energy.has_value() ? *total_electronic_energy : 0.0;
+      double ion_energy = ion_transfer_energy.has_value() ? *ion_transfer_energy : 0.0;
 
-      if( *print_header )
+      double conv_temperature, conv_energy, conv_pressure, conv_density;
+      thermodynamic_log_conversion_factors( *internal_units, conv_temperature, conv_energy, conv_pressure, conv_density );
+
+      double values[ThermodynamicLogConfig::LOG_ITEM_COUNT];
+      thermodynamic_log_fill_values( values, sim_info, *domain, *timestep, *physical_time, el_energy, ion_energy, 0.0, conv_temperature, conv_energy, conv_pressure, conv_density );
+
+      // virial columns are not part of the LogItemId column system (a separate, legacy per-9-
+      // component raw stress tensor dump) -- spliced onto the same header/data line as before.
+      std::string virial_header_suffix, virial_data_suffix;
+      if( is_dump_virial )
       {
-        oss << header;
-        if( total_electronic_energy.has_value() ) { oss << "  Elect. Energy (eV)"; }
-        if( ion_transfer_energy.has_value() ) { oss << "  Ion Transf. E. (eV)"; }
-        if( is_dump_virial ) { oss << "  S11  S12  S13  S21  S22  S23  S31  S32  S33"; }
-        oss << '\n';
-      }
-
-      double total_energy_int_unit = sim_info.total_energy();
-      if( total_electronic_energy.has_value() )
-      {
-        total_energy_int_unit += *total_electronic_energy;
-      }
-                             
-      Mat3d xform = domain->xform();
-      Vec3d a = xform * Vec3d{domain->extent().x - domain->origin().x,0.,0.} ;
-      Vec3d b = xform * Vec3d{0.,domain->extent().y - domain->origin().y,0.} ;
-      Vec3d c = xform * Vec3d{0.,0.,domain->extent().z - domain->origin().z} ;
-      double A = norm(a) ;
-      double B = norm(b) ;
-      double C = norm(c) ;
-      double ALPHA = acos(dot(b,c)/(B*C))/acos(-1.)*180. ;
-      double BETA  = acos(dot(c,a)/(B*C))/acos(-1.)*180. ;
-      double GAMMA = acos(dot(a,b)/(B*C))/acos(-1.)*180. ;
-
-      oss <<onika::format_string("%9ld % .6e %13ld  % .10e  % .10e  % .10e  % 9.12f  % 9.12f  % 9.12f  % 9.12f  % 9.12f  % 9.12f % 9.12f % 12.12f % 12.12f % 12.12f % 9.12f % 9.12f % 9.12f % 16.12f % 13.12f ",
-        *timestep,
-        *physical_time,
-        sim_info.particle_count(),
-        total_energy_int_unit                / sim_info.particle_count() * conv_energy,
-        sim_info.kinetic_energy_scal()       / sim_info.particle_count() * conv_energy,
-        sim_info.potential_energy()          / sim_info.particle_count() * conv_energy,
-        sim_info.temperature_scal()          / sim_info.particle_count() * conv_temperature,
-	sim_info.full_stress_tensor().m11                                            * conv_pressure,
-	sim_info.full_stress_tensor().m22                                            * conv_pressure,
-	sim_info.full_stress_tensor().m33                                            * conv_pressure,
-	// sim_info.pressure().x                                            * conv_pressure,
-	// sim_info.pressure().y                                            * conv_pressure,
-	// sim_info.pressure().z                                            * conv_pressure,
-	sim_info.full_stress_tensor().m12                                            * conv_pressure,
-	sim_info.full_stress_tensor().m13                                            * conv_pressure,
-	sim_info.full_stress_tensor().m23                                            * conv_pressure,
-  //       sim_info.deviator().x                                            * conv_pressure,
-  //       sim_info.deviator().y                                            * conv_pressure,
-	// sim_info.deviator().z                                            * conv_pressure,
-	A, B, C, ALPHA, BETA, GAMMA, sim_info.volume(), conv_density * sim_info.mass()/sim_info.volume()) ;
-
-      if( total_electronic_energy.has_value() )
-      {
-        oss << onika::format_string(" % .7e",(*total_electronic_energy) * conv_energy ); // total, not per-particle
-      }
-
-      if( ion_transfer_energy.has_value() )
-      {
-        oss << onika::format_string(" % .7e",(*ion_transfer_energy) * conv_energy ); // total, not per-particle
-      }
-
-      if( is_dump_virial ) {
-        oss << onika::format_string(" % .7e  % .7e  % .7e % .7e  % .7e  % .7e % .7e  % .7e  % .7e",
-          sim_info.stress_tensor().m11 * conv_pressure, 
-          sim_info.stress_tensor().m12 * conv_pressure, 
+        virial_header_suffix = "  S11  S12  S13  S21  S22  S23  S31  S32  S33";
+        virial_data_suffix = onika::format_string(" % .7e  % .7e  % .7e % .7e  % .7e  % .7e % .7e  % .7e  % .7e",
+          sim_info.stress_tensor().m11 * conv_pressure,
+          sim_info.stress_tensor().m12 * conv_pressure,
           sim_info.stress_tensor().m13 * conv_pressure,
-          sim_info.stress_tensor().m21 * conv_pressure, 
-          sim_info.stress_tensor().m22 * conv_pressure, 
+          sim_info.stress_tensor().m21 * conv_pressure,
+          sim_info.stress_tensor().m22 * conv_pressure,
           sim_info.stress_tensor().m23 * conv_pressure,
-          sim_info.stress_tensor().m31 * conv_pressure, 
-          sim_info.stress_tensor().m32 * conv_pressure, 
+          sim_info.stress_tensor().m31 * conv_pressure,
+          sim_info.stress_tensor().m32 * conv_pressure,
           sim_info.stress_tensor().m33 * conv_pressure);
       }
-      oss << "\n";
+
+      std::ostringstream oss;
+      log_config->print_log( oss, values, *print_header, 0, 0, 0.0, false, virial_header_suffix, virial_data_suffix );
 
       onika::FileAppendWriteBuffer::instance().append_to_file( *thermostate_file , oss.str(), *force_append_thermo );
 
@@ -169,8 +146,8 @@ gnuplot -e 'plot "thermodynamic_state.csv" every ::1 using 2:4' # this plots tot
 
 
   };
-    
-  // === register factories ===  
+
+  // === register factories ===
   ONIKA_AUTORUN_INIT(dump_thermodynamic_state)
   {
    OperatorNodeFactory::instance()->register_factory( "dump_thermodynamic_state", make_simple_operator<DumpThermodynamicStateNode> );
