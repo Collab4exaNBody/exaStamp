@@ -1,0 +1,67 @@
+species:
+  - Fe: { mass: 55.845 Da , z: 26 , charge: 0.0 e- }
+
+# cutoff taken from the eam/alloy file header (Fe_Olsson_CMS2009.eam.alloy: drho, Nrho, dr, Nr, cutoff=4.1615 ang)
+eam_alloy_force:
+  rcut: 4.1615 ang
+  parameters:
+    file: "lammps/Fe_Olsson_CMS2009.eam.alloy"
+
+setup_system:
+  # box is 57.4 ang / 10 = 5.74 ang -> matches LAMMPS's "ttm/grid ... 10 10 10" (one Te value per cell, no sub-division)
+  - domain:
+      cell_size: 5.74 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_xyz_file_with_xform:
+      filename: "Fe_disturbed.xyz"
+  - resize_grid_cell_values
+  - init_ttm:
+      grid_subdiv: 1
+      ti_source: "null"
+      te_source:
+        constant: 1800.0 K
+
+# LAMMPS: fix twotemp all ttm/grid 342785 1.2470e-5 0.087614 0.005365 29.5917 47.5679 58.4613 10 10 10 set 1800.0
+# (seed, C_e, rho_e, kappa_e, gamma_p, gamma_s, v_0, Nx, Ny, Nz, set Te_init)
+# No ongoing external source term in the LAMMPS case -> te_source/ti_source stay "null" here too.
+compute_force:
+  - eam_alloy_force
+  - ionic_eletronic_heat_transfer:
+      # C_e/rho_e/kappa_e/gamma_p/gamma_s/v_0 taken directly from the LAMMPS fix ttm/grid line
+      # above, with real units attached (LAMMPS metal units use eV/ang/ps/K/Da/electron
+      # throughout) so exaStamp's unit-quantity system converts them into its own internal
+      # (ang, Da, ps, K) unit system -- a bare unitless number here is taken as *already*
+      # internal-unit-valued, not eV-valued.
+      # Note: gamma_s/v_0 are wired in but never actually trigger in this test -- thermal
+      # velocities stay well under v_0=58.46 ang/ps for the full 100 steps.
+      gamma_p: 29.5917 Da/ps
+      gamma_s: 47.5679 Da/ps
+      v_0: 58.4613 ang/ps
+      Ke: 0.005365 eV/ps/ang/K
+      Ce: 1.2470e-5 eV/K
+      rho_e: 0.087614 1/ang^3
+      splat_size: 0.1 ang
+      grid_subdiv: 1
+      ti_source: "null"
+      te_source: "null"
+      # LAMMPS's fix_ttm.cpp::end_of_step always runs this stability check (it's not optional
+      # there); enabled here for the same reason, even though it doesn't actually subdivide
+      # anything for this test's dt/Ke/dx -- verified by hand (stability_criterion ~= 0.91,
+      # comfortably positive) and empirically (rerunning with this on vs off gives statistically
+      # indistinguishable trajectories, both ~2% from the real LAMMPS log).
+      substep_diffusion: true
+
+global:
+  dt: 1e-4 ps
+  # kept small enough that rcut(4.1615)+rcut_inc < 5.74 ang, so the domain
+  # snaps to a 10x10x10 grid (matching LAMMPS's independent 10x10x10 ttm/grid)
+  # instead of falling back to 9x9x9.
+  rcut_inc: 1.5 ang
+  simulation_restart_frequency: -1
+  simulation_snapshot_frequency: -1
+  simulation_analysis_frequency: -1
+  simulation_thermostate_file_frequency: 5
+  simulation_thermostate_screen_frequency: 10
+  max_iteration: 1000
+  log_mode: "stp;tmp;toe;poe;ele;ite"
