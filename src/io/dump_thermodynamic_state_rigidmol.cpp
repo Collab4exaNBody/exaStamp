@@ -38,7 +38,7 @@ namespace exaStamp
     ADD_SLOT( double             , physical_time       , INPUT );
     ADD_SLOT( bool               , print_header        , INPUT, true );
     ADD_SLOT( ThermodynamicState , thermodynamic_state , INPUT, REQUIRED);
-    ADD_SLOT( double             , electronic_energy   , INPUT, OPTIONAL );
+    ADD_SLOT( double             , total_electronic_energy   , INPUT, OPTIONAL );
     ADD_SLOT( std::string        , file                , INPUT , "thermodynamic_state.csv" );
     ADD_SLOT( bool               , force_flush_file    , INPUT , false );
     ADD_SLOT( bool               , force_append_thermo , INPUT , false );
@@ -64,14 +64,14 @@ namespace exaStamp
       if( *print_header )
       {
         oss << header;
-        if( electronic_energy.has_value() ) { oss << "  Elect. Energy"; }
+        if( total_electronic_energy.has_value() ) { oss << "  Elect. Energy"; }
         oss << '\n';
       }
 
       double total_energy_int_unit = sim_info.total_energy_rigidmol();
-      if( electronic_energy.has_value() )
+      if( total_electronic_energy.has_value() )
       {
-        total_energy_int_unit += *electronic_energy;
+        total_energy_int_unit += *total_electronic_energy;
       }
 
       oss << onika::format_string("%9ld % .6e %13ld  % .10e  % .10e  % .10e  % .10e  % 11.3f % .3e % .3e % .3e % .3e % 11.3f % 11.3f % 11.3f % 11.3f % 11.3f % 11.3f ",
@@ -94,9 +94,9 @@ namespace exaStamp
                              sim_info.rotational_temperature_y() * conv_temperature,
                              sim_info.rotational_temperature_z() * conv_temperature);
                              
-      if( electronic_energy.has_value() )
+      if( total_electronic_energy.has_value() )
       {
-        oss << onika::format_string(" % .7e",(*electronic_energy) * conv_energy / sim_info.particle_count() );
+        oss << onika::format_string(" % .7e",(*total_electronic_energy) * conv_energy / sim_info.particle_count() );
       }
       
       oss << "\n";

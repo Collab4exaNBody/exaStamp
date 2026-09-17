@@ -39,7 +39,8 @@ namespace exaStamp
     ADD_SLOT( double             , physical_time       , INPUT );
     ADD_SLOT( bool               , print_header        , INPUT, true );
     ADD_SLOT( ThermodynamicState , thermodynamic_state , INPUT, REQUIRED);
-    ADD_SLOT( double             , electronic_energy   , INPUT, OPTIONAL );
+    ADD_SLOT( double             , total_electronic_energy , INPUT, OPTIONAL );
+    ADD_SLOT( double             , ion_transfer_energy     , INPUT, OPTIONAL );
     ADD_SLOT( std::string        , thermostate_file    , INPUT , "thermodynamic_state.csv" );
     ADD_SLOT( bool               , force_flush_file    , INPUT , false );
     ADD_SLOT( bool               , force_append_thermo , INPUT , false );    
@@ -76,15 +77,16 @@ namespace exaStamp
       if( *print_header )
       {
         oss << header;
-        if( electronic_energy.has_value() ) { oss << "  Elect. Energy"; }
+        if( total_electronic_energy.has_value() ) { oss << "  Elect. Energy (eV)"; }
+        if( ion_transfer_energy.has_value() ) { oss << "  Ion Transf. E. (eV)"; }
         if( is_dump_virial ) { oss << "  S11  S12  S13  S21  S22  S23  S31  S32  S33"; }
         oss << '\n';
       }
 
       double total_energy_int_unit = sim_info.total_energy();
-      if( electronic_energy.has_value() )
+      if( total_electronic_energy.has_value() )
       {
-        total_energy_int_unit += *electronic_energy;
+        total_energy_int_unit += *total_electronic_energy;
       }
                              
       Mat3d xform = domain->xform();
@@ -120,9 +122,14 @@ namespace exaStamp
 	// sim_info.deviator().z                                            * conv_pressure,
 	A, B, C, ALPHA, BETA, GAMMA, sim_info.volume(), conv_density * sim_info.mass()/sim_info.volume()) ;
 
-      if( electronic_energy.has_value() )
+      if( total_electronic_energy.has_value() )
       {
-        oss << onika::format_string(" % .7e",(*electronic_energy) * conv_energy / sim_info.particle_count() );
+        oss << onika::format_string(" % .7e",(*total_electronic_energy) * conv_energy ); // total, not per-particle
+      }
+
+      if( ion_transfer_energy.has_value() )
+      {
+        oss << onika::format_string(" % .7e",(*ion_transfer_energy) * conv_energy ); // total, not per-particle
       }
 
       if( is_dump_virial ) {

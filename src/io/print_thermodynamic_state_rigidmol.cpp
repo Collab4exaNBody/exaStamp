@@ -45,7 +45,7 @@ namespace exaStamp
     ADD_SLOT( double             , lb_inbalance_max    , INPUT_OUTPUT );
 
     // optional physics quantities
-    ADD_SLOT( double             , electronic_energy   , INPUT, OPTIONAL );
+    ADD_SLOT( double             , total_electronic_energy   , INPUT, OPTIONAL );
 
     inline void execute () override final
     {
@@ -107,15 +107,15 @@ namespace exaStamp
       }
 
       double total_energy_int_unit = sim_info.total_energy_rigidmol();
-      if( electronic_energy.has_value() )
+      if( total_electronic_energy.has_value() )
       {
-        total_energy_int_unit += *electronic_energy;
+        total_energy_int_unit += *total_electronic_energy;
       }
 
       if( *print_header )
       {
         lout << header;
-        if( electronic_energy.has_value() ) { lout << "  Elect. Energy"; }
+        if( total_electronic_energy.has_value() ) { lout << "  Elect. Energy"; }
         lout << std::endl;
       }
 
@@ -136,9 +136,9 @@ namespace exaStamp
         sim_info.volume(),
         sim_info.mass()) ;
       
-      if( electronic_energy.has_value() )
+      if( total_electronic_energy.has_value() )
       {
-        lout << onika::format_string(" % .7e",(*electronic_energy) * conv_energy / sim_info.particle_count() );
+        lout << onika::format_string(" % .7e",(*total_electronic_energy) * conv_energy / sim_info.particle_count() );
       }
       lout << std::endl;
     }

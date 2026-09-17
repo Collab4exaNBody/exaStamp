@@ -49,7 +49,8 @@ namespace exaStamp
     ADD_SLOT( double             , lb_inbalance_max    , INPUT_OUTPUT );
 
     // optional physics quantities
-    ADD_SLOT( double             , electronic_energy   , INPUT, OPTIONAL );
+    ADD_SLOT( double             , total_electronic_energy , INPUT, OPTIONAL );
+    ADD_SLOT( double             , ion_transfer_energy     , INPUT, OPTIONAL );
 
     // NEW
     ADD_SLOT(Domain              , domain              , INPUT , OPTIONAL, DocString{"Deformation box matrix"} );
@@ -211,13 +212,29 @@ namespace exaStamp
             else { token = log_mode->substr( pos ); pos = next; }
           }
         }
+
+        // one-time setup, same as the log_mode column list above: appending this on every
+        // execute() call (as opposed to just once here) made m_active_items -- and so the
+        // printed columns -- grow by one ELECTRON_E entry every single print step.
+        if( total_electronic_energy.has_value() )
+        {
+          log_config->m_active_items.push_back( ThermodynamicLogConfig::ELECTRON_E );
+        }
+        if( ion_transfer_energy.has_value() )
+        {
+          log_config->m_active_items.push_back( ThermodynamicLogConfig::ION_TRANSFER_E );
+        }
       }
 
       double el_energy = 0.0;
-      if( electronic_energy.has_value() )
+      if( total_electronic_energy.has_value() )
       {
-        el_energy = *electronic_energy;
-        log_config->m_active_items.push_back( ThermodynamicLogConfig::ELECTRON_E );
+        el_energy = *total_electronic_energy;
+      }
+      double ion_energy = 0.0;
+      if( ion_transfer_energy.has_value() )
+      {
+        ion_energy = *ion_transfer_energy;
       }
     
       double conv_temperature = 1.e4 * onika::physics::atomicMass / onika::physics::boltzmann ;       // internal units to Kelvin
@@ -268,7 +285,8 @@ namespace exaStamp
       values[ThermodynamicLogConfig::TOTAL_E]      = total_energy_int_unit          / sim_info.particle_count() * conv_energy;
       values[ThermodynamicLogConfig::KINETIC_E]    = sim_info.kinetic_energy_scal() / sim_info.particle_count() * conv_energy;
       values[ThermodynamicLogConfig::POTENTIAL_E]  = sim_info.potential_energy()    / sim_info.particle_count() * conv_energy;
-      values[ThermodynamicLogConfig::ELECTRON_E]   = el_energy                      / sim_info.particle_count() * conv_energy;
+      values[ThermodynamicLogConfig::ELECTRON_E]   = el_energy                      * conv_energy; // total, not per-particle
+      values[ThermodynamicLogConfig::ION_TRANSFER_E] = ion_energy                   * conv_energy; // total, not per-particle
       values[ThermodynamicLogConfig::TEMPERATURE]  = sim_info.temperature_scal()    / sim_info.particle_count() * conv_temperature;
       values[ThermodynamicLogConfig::Tx]           = sim_info.temperature().x       / sim_info.particle_count() * conv_temperature;
       values[ThermodynamicLogConfig::Ty]           = sim_info.temperature().y       / sim_info.particle_count() * conv_temperature;
