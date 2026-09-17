@@ -4395,6 +4395,11 @@ void EAPOD::init4bodyarray(int *ns4, int *pb4, int *pc4, int Pa)
 double EAPOD::peratomenergyforce2_soa(const double *drx, const double *dry, const double *drz,
                                       int ti_0indexed, const int *tj_0indexed, int Nj,
                                       const int *type_map) {
+    if (Nj > Njmax) {
+        Njmax = Nj;
+        free_temp_memory();
+        allocate_temp_memory(Njmax);
+    }
     const int ti_1 = type_map[ti_0indexed];
     for (int j = 0; j < Nj; j++) {
         soa_rij[j*3+0] = drx[j];
@@ -4408,6 +4413,11 @@ double EAPOD::peratomenergyforce2_soa(const double *drx, const double *dry, cons
 
 void EAPOD::peratombase_descriptors_soa(const double *drx, const double *dry, const double *drz,
                                         const int *tj_0indexed, int Nj, const int *type_map) {
+    if (Nj > Njmax) {
+        Njmax = Nj;
+        free_temp_memory();
+        allocate_temp_memory(Njmax);
+    }
     for (int j = 0; j < Nj; j++) {
         soa_rij[j*3+0] = drx[j];
         soa_rij[j*3+1] = dry[j];
