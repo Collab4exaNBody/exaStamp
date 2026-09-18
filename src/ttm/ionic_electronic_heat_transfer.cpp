@@ -87,6 +87,17 @@ namespace exaStamp
     // f_twotemp[2]): sum over the whole grid of the Langevin coupling work, integrated over dt.
     ADD_SLOT( double         , ion_transfer_energy     , INPUT_OUTPUT , 0.0 );
 
+    // Persistent, GPU-visible (onika::memory::CudaMMVector) scratch storage for per-cell Ti,
+    // Laplacian(Te), and the Langevin coupling energy sink -- reused across MD steps instead of
+    // being freshly heap-allocated and zeroed on every execute() call.
+    ADD_SLOT( onika::memory::CudaMMVector<double> , ttm_scratch_ti               , PRIVATE );
+    ADD_SLOT( onika::memory::CudaMMVector<double> , ttm_scratch_lap_te           , PRIVATE );
+    ADD_SLOT( onika::memory::CudaMMVector<double> , ttm_scratch_energy_transfer  , PRIVATE );
+    // Se/Si source-term values, precomputed once per outer MD step (see execute(): they only
+    // depend on cell center + physical_time, neither of which changes across inner substeps).
+    ADD_SLOT( onika::memory::CudaMMVector<double> , ttm_scratch_se               , PRIVATE );
+    ADD_SLOT( onika::memory::CudaMMVector<double> , ttm_scratch_si               , PRIVATE );
+
   public:
 
     // -----------------------------------------------
@@ -161,10 +172,12 @@ namespace exaStamp
       const IJK dims = grid->dimension();
       const ssize_t gl = grid->ghost_layers();      
 
-      // Temporary storage for per cell Ti and per cell Laplacian(Te)
-      std::vector<double> tmp_storage_ti_LapTe( n_cells * n_subcells * 2 , 0.0 );
-      double* Ti = tmp_storage_ti_LapTe.data();
-      double* cell_L_Te = tmp_storage_ti_LapTe.data() + n_cells * n_subcells;
+      // Persistent scratch storage for per cell Ti and per cell Laplacian(Te) -- .assign() reuses
+      // existing capacity across calls (no realloc) instead of a fresh std::vector every step.
+      ttm_scratch_ti->assign( n_cells * n_subcells , 0.0 );
+      ttm_scratch_lap_te->assign( n_cells * n_subcells , 0.0 );
+      double* Ti = ttm_scratch_ti->data();
+      double* cell_L_Te = ttm_scratch_lap_te->data();
 
       const auto& te_source_func = * (*te_source);
       const auto& ti_source_func = * (*ti_source);
@@ -311,7 +324,8 @@ namespace exaStamp
       // particles starting at rest and never divides by a near-zero ion temperature.
       // The work done on each particle (F.v) is deposited back as a Te sink, so the electron
       // bath cools down as it heats the lattice (energy-conserving, folded into dTe below).
-      std::vector<double> cell_energy_transfer( n_cells * n_subcells , 0.0 );
+      ttm_scratch_energy_transfer->assign( n_cells * n_subcells , 0.0 );
+      double* cell_energy_transfer = ttm_scratch_energy_transfer->data();
       *ion_transfer_energy = 0.0;
       if( gamma_p_coupling != 0.0 )
       {
@@ -486,17 +500,54 @@ namespace exaStamp
         }
       }
 
+      // Precompute Se/Si once per outer MD step: (center, *physical_time) don't change across
+      // inner substeps, so re-invoking the virtual ScalarSourceTerm calls every substep (as
+      // before) was purely redundant work. This also removes the only per-subcell virtual
+      // dispatch from the substep loop below.
+      ttm_scratch_se->assign( n_cells * n_subcells , 0.0 );
+      ttm_scratch_si->assign( n_cells * n_subcells , 0.0 );
+      double* cell_Se = ttm_scratch_se->data();
+      double* cell_Si = ttm_scratch_si->data();
+#     pragma omp parallel
+      {
+        GRID_OMP_FOR_BEGIN(dims,cell_i,cell_loc, schedule(static) )
+        {
+          const Vec3d cell_origin = grid->cell_position( cell_loc );
+          for(int ck=0;ck<subdiv;ck++)
+          for(int cj=0;cj<subdiv;cj++)
+          for(int ci=0;ci<subdiv;ci++)
+          {
+            IJK sc { ci, cj, ck };
+            Vec3d scr { ci+0.5, cj+0.5, ck+0.5 };
+            const size_t idx = cell_i*n_subcells + grid_ijk_to_index( IJK{subdiv,subdiv,subdiv} , sc );
+            const Vec3d center = xform * ( cell_origin + scr*subcell_size );
+            cell_Si[idx] = ti_source_func( center, *physical_time );
+            cell_Se[idx] = te_source_func( center, *physical_time );
+          }
+        }
+        GRID_OMP_FOR_END
+      }
+
       for(long te_istep=0; te_istep<num_inner_timesteps; ++te_istep)
       {
 
       double sum_Te = 0.0;
+      // norm_dTe/entropy_Te only feed the ldbg print below (sum_Te, unlike them, is also needed
+      // unconditionally for the te_dev sanity check further down via old_sum_Te) -- skip their
+      // per-cell computation and MPI payload in release builds.
+#     ifndef NDEBUG
       double norm_dTe = 0.0;
       double entropy_Te = 0.0;
+#     endif
 
       // compute Te laplace operator
 #     pragma omp parallel
       {
+#       ifndef NDEBUG
         GRID_OMP_FOR_BEGIN(dims,cell_i,cell_loc, schedule(static) reduction(+:sum_Te,norm_dTe,entropy_Te) )
+#       else
+        GRID_OMP_FOR_BEGIN(dims,cell_i,cell_loc, schedule(static) reduction(+:sum_Te) )
+#       endif
         {
           //const IJK cell_loc = loc + gl;
           //const size_t cell_i = grid_ijk_to_index( dims , cell_loc );
@@ -537,9 +588,11 @@ namespace exaStamp
             if( ! grid->is_ghost_cell(cell_loc) )
             {
               sum_Te += Te[j];
+#             ifndef NDEBUG
               const double dTe = ( (Te_cond*cell_L_Te[j]) / Ce_rho_e ) * inner_dt;
               norm_dTe += std::fabs( dTe );
               entropy_Te += Te[j] * std::log(Te[j]) * subcell_volume ;
+#             endif
             }
           }
         }
@@ -547,7 +600,7 @@ namespace exaStamp
       }
 
       // check global absolute electronic energy variation (from dissipation)
-//#     ifndef NDEBUG
+#     ifndef NDEBUG
       {
         double tmp[3] = { sum_Te, norm_dTe, entropy_Te };
         MPI_Allreduce(MPI_IN_PLACE,tmp,3,MPI_DOUBLE,MPI_SUM,*mpi);
@@ -556,7 +609,12 @@ namespace exaStamp
         entropy_Te = tmp[2];
         ldbg <<"sum_Te="<<sum_Te <<" norm_dTe/sum_Te="<<norm_dTe/sum_Te<<" , entropy_Te="<<entropy_Te << std::endl;
       }
-//#     endif
+#     else
+      {
+        // sum_Te alone is still needed unconditionally (feeds old_sum_Te / te_dev below).
+        MPI_Allreduce(MPI_IN_PLACE,&sum_Te,1,MPI_DOUBLE,MPI_SUM,*mpi);
+      }
+#     endif
 
 
       // 3. Compute Te dissipation, Te<->Ti transfer & source terms
@@ -571,22 +629,19 @@ namespace exaStamp
         {
           //const IJK cell_loc = loc + gl;
           //const size_t cell_i = grid_ijk_to_index( dims , cell_loc );
-          const Vec3d cell_origin = grid->cell_position( cell_loc );
 
           for(int ck=0;ck<subdiv;ck++)
           for(int cj=0;cj<subdiv;cj++)
           for(int ci=0;ci<subdiv;ci++)
           {
             IJK sc { ci, cj, ck };
-            Vec3d scr { ci+0.5, cj+0.5, ck+0.5 };
             const size_t scindex = grid_ijk_to_index( IJK{subdiv,subdiv,subdiv} , sc );
             const size_t idx_ti = cell_i*n_subcells + scindex ;
             const size_t idx_te = cell_i*cell_te_data.m_stride + scindex;
 
-            // source terms
-            const Vec3d center = xform * ( cell_origin + scr*subcell_size );
-            const double Si = ti_source_func( center, *physical_time );
-            const double Se = te_source_func( center, *physical_time );
+            // source terms (precomputed once per outer MD step, above)
+            const double Si = cell_Si[idx_ti];
+            const double Se = cell_Se[idx_ti];
 
             // sum external contributions (source terms)
             sum_Se += Se;
