@@ -1,0 +1,49 @@
+species:
+  - Fe: { mass: 55.845 Da , z: 26 , charge: 0.0 e- }
+
+# cutoff taken from the eam/alloy file header (Fe_Olsson_CMS2009.eam.alloy: drho, Nrho, dr, Nr, cutoff=4.1615 ang)
+eam_alloy_force:
+  rcut: 4.1615 ang
+  parameters:
+    file: "lammps/Fe_Olsson_CMS2009.eam.alloy"
+
+setup_system:
+  # box is 57.4 ang / 10 = 5.74 ang -> matches LAMMPS's "ttm/grid ... 10 10 10" (one Te value per cell, no sub-division)
+  - domain:
+      cell_size: 5.74 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_xyz_file_with_xform:
+      filename: "Fe_disturbed.xyz"
+  - resize_grid_cell_values
+  - init_ttm:
+      grid_subdiv: 1
+      ti_source: "null"
+      te_source:
+        constant: 1800.0 K
+
+# copy_ti_te: true -- exercises ionic_eletronic_heat_transfer's Pass A (Ti kinetic deposit) in
+# isolation: writes per-cell Ti straight into the "te" grid field and returns before the
+# coupling/diffusion passes run. No other shipped regression config exercises this branch
+# (Stage 4b of the TTM GPU-port plan -- Ti is otherwise a write-only diagnostic buffer).
+compute_force:
+  - eam_alloy_force
+  - ionic_eletronic_heat_transfer:
+      splat_size: 0.1 ang
+      grid_subdiv: 1
+      ti_source: "null"
+      te_source: "null"
+      copy_ti_te: true
+
+global:
+  dt: 1e-4 ps
+  # kept small enough that rcut(4.1615)+rcut_inc < 5.74 ang, so the domain
+  # snaps to a 10x10x10 grid (matching LAMMPS's independent 10x10x10 ttm/grid)
+  # instead of falling back to 9x9x9.
+  rcut_inc: 1.5 ang
+  simulation_restart_frequency: -1
+  simulation_snapshot_frequency: -1
+  simulation_analysis_frequency: -1
+  simulation_thermostate_file_frequency: -1
+  simulation_thermostate_screen_frequency: 5
+  max_iteration: 5

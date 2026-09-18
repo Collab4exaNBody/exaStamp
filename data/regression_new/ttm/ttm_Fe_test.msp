@@ -63,5 +63,5 @@ global:
   simulation_analysis_frequency: -1
   simulation_thermostate_file_frequency: 5
   simulation_thermostate_screen_frequency: 10
-  max_iteration: 1000
+  max_iteration: 10
   log_mode: "stp;tmp;toe;poe;ele;ite"

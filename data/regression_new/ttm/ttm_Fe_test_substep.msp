@@ -1,0 +1,53 @@
+species:
+  - Fe: { mass: 55.845 Da , z: 26 , charge: 0.0 e- }
+
+# Same setup as ttm_Fe_test.msp, but with Ke deliberately scaled up 50x so the LAMMPS-style
+# explicit-diffusion stability criterion actually goes negative (stability_criterion ~= -2.6
+# instead of the ~0.91 in ttm_Fe_test.msp), forcing num_inner_timesteps > 1 (~5). No existing
+# regression config ever exercises this branch of ionic_eletronic_heat_transfer -- this one
+# exists purely to give the substep loop (and the once-per-outer-step Se/Si precompute that
+# feeds it) real regression coverage. Not intended to match the real LAMMPS trajectory.
+eam_alloy_force:
+  rcut: 4.1615 ang
+  parameters:
+    file: "lammps/Fe_Olsson_CMS2009.eam.alloy"
+
+setup_system:
+  - domain:
+      cell_size: 5.74 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_xyz_file_with_xform:
+      filename: "Fe_disturbed.xyz"
+  - resize_grid_cell_values
+  - init_ttm:
+      grid_subdiv: 1
+      ti_source: "null"
+      te_source:
+        constant: 1800.0 K
+
+compute_force:
+  - eam_alloy_force
+  - ionic_eletronic_heat_transfer:
+      gamma_p: 29.5917 Da/ps
+      gamma_s: 47.5679 Da/ps
+      v_0: 58.4613 ang/ps
+      Ke: 0.26825 eV/ps/ang/K   # 50x ttm_Fe_test.msp's Ke, to trip the stability criterion
+      Ce: 1.2470e-5 eV/K
+      rho_e: 0.087614 1/ang^3
+      splat_size: 0.1 ang
+      grid_subdiv: 1
+      ti_source: "null"
+      te_source: "null"
+      substep_diffusion: true
+
+global:
+  dt: 1e-4 ps
+  rcut_inc: 1.5 ang
+  simulation_restart_frequency: -1
+  simulation_snapshot_frequency: -1
+  simulation_analysis_frequency: -1
+  simulation_thermostate_file_frequency: 5
+  simulation_thermostate_screen_frequency: 10
+  max_iteration: 10
+  log_mode: "stp;tmp;toe;poe;ele;ite"
