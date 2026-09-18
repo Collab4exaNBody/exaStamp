@@ -39,6 +39,7 @@ under the License.
 #include "ttm_ti_deposit.h"
 #include "ttm_langevin_rng.h"
 #include "ttm_langevin_coupling.h"
+#include "ttm_laplacian.h"
 
 namespace exaStamp
 {
@@ -149,15 +150,19 @@ namespace exaStamp
         std::abort();
       }
 
+      // Ghost region only has to cover the splat radius (splat_size/2). It must NOT depend on
+      // subcell_size/cell_size: this runs during preinit_rcut_max, when domain->cell_size() is still
+      // a placeholder (e.g. 17.6 ang) and rcut_max is never lowered afterwards, so a cell-size-based
+      // value inflates the neighbor/ghost distance for the whole run (~15x slower eam_alloy_force).
+      const double splat_reach = sp_size / 2.0;
       const double rcut_max_grid = (*rcut_max) / domain->xform_min_scale();
-      if( subcell_size+sp_size/2.0 > rcut_max_grid )
+      if( splat_reach > rcut_max_grid )
       {
         ldbg << "in " << pathname() << std::endl
-             << "subcell_size+sp_size/2.0 = "<<subcell_size<<'+'<<sp_size<<"/2.0 = "<<(subcell_size+sp_size/2.0) << std::endl
-             << "is larger than" << std::endl
-             << "rcut_max/min_scale = "<< *(rcut_max) <<'/'<<domain->xform_min_scale()<<" = "<<rcut_max_grid<<std::endl
-             << "adjust rcut_max "<<rcut_max_grid<<" -> "<< (subcell_size+sp_size/2.0) * domain->xform_min_scale() <<std::endl ;
-        *rcut_max = std::max( *rcut_max , (subcell_size+sp_size/2.0) * domain->xform_min_scale() );
+             << "splat_size/2.0 = "<<splat_reach<<" is larger than rcut_max/min_scale = "
+             << *(rcut_max) <<'/'<<domain->xform_min_scale()<<" = "<<rcut_max_grid<<std::endl
+             << "adjust rcut_max "<<rcut_max_grid<<" -> "<< splat_reach * domain->xform_min_scale() <<std::endl ;
+        *rcut_max = std::max( *rcut_max , splat_reach * domain->xform_min_scale() );
       }
 
       if( grid->number_of_cells() == 0 )
@@ -307,9 +312,13 @@ namespace exaStamp
           FieldSet<field::_rx,field::_ry,field::_rz,field::_vx,field::_vy,field::_vz,field::_fx,field::_fy,field::_fz>{},
           parallel_execution_context() );
 
-        // LAMMPS fix-ttm's transfer_energy (f_twotemp[2]): total energy transferred from
-        // electrons to ions over this whole MD step -- cell_energy_transfer already holds it
-        // (fixed, computed once above), just sum it over this rank's own (non-ghost) cells.
+        // Pass C, confirmed already GPU-compatible as-is (staged plan's Stage 7): a plain
+        // host-side reduction over cell_energy_transfer, which is already GPU-visible managed
+        // memory (Stage 1) filled by Pass B's GPU kernel just above -- correct with an implicit
+        // sync, nothing to port. LAMMPS fix-ttm's transfer_energy (f_twotemp[2]): total energy
+        // transferred from electrons to ions over this whole MD step -- cell_energy_transfer
+        // already holds it (fixed, computed once above), just sum it over this rank's own
+        // (non-ghost) cells.
         double sum_ion_transfer = 0.0;
 #       pragma omp parallel
         {
@@ -325,24 +334,6 @@ namespace exaStamp
         MPI_Allreduce(MPI_IN_PLACE,&sum_ion_transfer,1,MPI_DOUBLE,MPI_SUM,*mpi);
         *ion_transfer_energy = sum_ion_transfer;
       }
-
-      // inspired from https://en.wikipedia.org/wiki/Discrete_Laplace_operator#Finite_differences
-      static constexpr double Lap27Norm = 26.0;
-      static constexpr double Lap27_compact[4] = { -88/Lap27Norm , 6/Lap27Norm, 3/Lap27Norm, 2/Lap27Norm };
-
-#     ifndef NDEBUG
-      static constexpr double Lap27 [3][3][3] = {
-         { { 2, 3, 2 } ,
-           { 3, 6, 3 } ,
-           { 2, 3, 2 } } ,
-         { { 3, 6, 3 } ,
-           { 6,-88,6 } ,
-           { 3, 6, 3 } } ,
-         { { 2, 3, 2 } ,
-           { 3, 6, 3 } ,
-           { 2, 3, 2 } }
-        };
-#     endif
 
       // Explicit-diffusion stability limit (LAMMPS fix_ttm.cpp end_of_step, isotropic grid so
       // dx=dy=dz=subcell_size): if a single step of size delta_t would violate it, subdivide
@@ -407,7 +398,24 @@ namespace exaStamp
       double entropy_Te = 0.0;
 #     endif
 
-      // compute Te laplace operator
+      // Pass D (Laplacian), GPU-portable: onika::parallel::block_parallel_for + TtmLaplacianFunctor,
+      // see ttm_laplacian.h -- replaces the old #pragma omp parallel / GRID_OMP_FOR_BEGIN stencil
+      // loop. Also fixes a real bug the old loop had: it read Te via a bare n_subcells-based index
+      // instead of cell_te_data.m_stride (the field's real per-cell stride, which only equals
+      // n_subcells when "te" is the sole field on grid_cell_values -- every other Te access in this
+      // file, e.g. Pass B/E and init_ttm.cpp, already used m_stride correctly). See ttm_laplacian.h.
+      {
+        TtmLaplacianFunctor laplacian_func = {
+          dims, subdiv, subcell_size,
+          Te, cell_te_data.m_stride,
+          cell_L_Te
+        };
+        onika::parallel::block_parallel_for( n_cells * n_subcells, laplacian_func, parallel_execution_context() );
+      }
+
+      // Diagnostic reduction over the now GPU-filled cell_L_Te / Te, kept host-side post-kernel
+      // (accepts an implicit sync -- same approach as Stage 3/7's diagnostics; managed memory makes
+      // reading back from the host correct as-is once the kernel dispatch above has returned).
 #     pragma omp parallel
       {
 #       ifndef NDEBUG
@@ -416,49 +424,21 @@ namespace exaStamp
         GRID_OMP_FOR_BEGIN(dims,cell_i,cell_loc, schedule(static) reduction(+:sum_Te) )
 #       endif
         {
-          //const IJK cell_loc = loc + gl;
-          //const size_t cell_i = grid_ijk_to_index( dims , cell_loc );
-
-          for(int ck=0;ck<subdiv;ck++)
-          for(int cj=0;cj<subdiv;cj++)
-          for(int ci=0;ci<subdiv;ci++)
+          if( ! grid->is_ghost_cell(cell_loc) )
           {
-            IJK sc { ci, cj, ck };
-            size_t j = cell_i*n_subcells +  grid_ijk_to_index( IJK{subdiv,subdiv,subdiv} , sc );
-
-            // Te discrete Laplacian operator
-            double L_Te = 0.0;
-            for(int nk=-1;nk<=1;nk++)
-            for(int nj=-1;nj<=1;nj++)
-            for(int ni=-1;ni<=1;ni++)
+            for(int ck=0;ck<subdiv;ck++)
+            for(int cj=0;cj<subdiv;cj++)
+            for(int ci=0;ci<subdiv;ci++)
             {
-              IJK nbh { ni, nj, nk };
-              IJK nbh_cell_loc;
-              IJK nbh_subcell_loc;
-              gcv_subcell_neighbor( cell_loc, sc, subdiv, nbh, nbh_cell_loc, nbh_subcell_loc );
-              if( grid->contains(nbh_cell_loc) )
-              {
-                ssize_t nbh_cell_i = grid_ijk_to_index( dims , nbh_cell_loc );
-                ssize_t nbh_subcell_i = grid_ijk_to_index( IJK{subdiv,subdiv,subdiv} , nbh_subcell_loc );
-                assert( nbh_cell_i>=0 && nbh_cell_i<n_cells );
-                assert( nbh_subcell_i>=0 && nbh_subcell_i<n_subcells );
-                size_t nbh_j = nbh_cell_i*n_subcells + nbh_subcell_i;
-
-                int lap_compact_index = std::abs(ni) + std::abs(nj) + std::abs(nk);
-                assert( Lap27_compact[lap_compact_index] == Lap27[ni+1][nj+1][nk+1]/Lap27Norm );
-//              L_Te += Te[nbh_j] * Lap27[ni+1][nj+1][nk+1] / Lap27Norm;
-                L_Te += Te[nbh_j] * Lap27_compact[lap_compact_index];
-              }
-            }
-            // normalize by h^2: raw stencil sum = h^2 * laplacian(Te) + O(h^4)
-            cell_L_Te[j] = L_Te / (subcell_size*subcell_size);
-            if( ! grid->is_ghost_cell(cell_loc) )
-            {
-              sum_Te += Te[j];
+              IJK sc { ci, cj, ck };
+              const size_t scindex = grid_ijk_to_index( IJK{subdiv,subdiv,subdiv} , sc );
+              const size_t idx_te = cell_i*cell_te_data.m_stride + scindex;
+              sum_Te += Te[idx_te];
 #             ifndef NDEBUG
+              const size_t j = cell_i*n_subcells + scindex;
               const double dTe = ( (Te_cond*cell_L_Te[j]) / Ce_rho_e ) * inner_dt;
               norm_dTe += std::fabs( dTe );
-              entropy_Te += Te[j] * std::log(Te[j]) * subcell_volume ;
+              entropy_Te += Te[idx_te] * std::log(Te[idx_te]) * subcell_volume ;
 #             endif
             }
           }
