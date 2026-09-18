@@ -1,3 +1,7 @@
+# configuration:
+#   profiling:
+#     summary: true
+  
 species:
   - Fe: { mass: 55.845 Da , z: 26 , charge: 0.0 e- }
 
@@ -61,7 +65,7 @@ global:
   simulation_restart_frequency: -1
   simulation_snapshot_frequency: -1
   simulation_analysis_frequency: -1
-  simulation_thermostate_file_frequency: 5
+  simulation_thermostate_file_frequency: 1
   simulation_thermostate_screen_frequency: 10
-  max_iteration: 10
+  max_iteration: 100
   log_mode: "stp;tmp;toe;poe;ele;ite"

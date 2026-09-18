@@ -19,9 +19,9 @@ compute         pe all pe/atom
 compute         ke all ke/atom
 
 timestep        0.0001
-thermo          1
+thermo          10
 
 thermo_style    custom step temp etotal pe f_twotemp[1] f_twotemp[2]
                 thermo_modify format float "%20.16g"
 
-run             1000
+run             100
