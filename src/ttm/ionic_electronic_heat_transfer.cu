@@ -43,6 +43,7 @@ under the License.
 #include "ttm_laplacian.h"
 #include "ttm_te_update.h"
 #include <exanb/grid_cell_particles/reduce_grid_cell_values.h>
+#include <exanb/mpi/update_ghosts.h>
 
 namespace exaStamp
 {
@@ -56,7 +57,7 @@ namespace exaStamp
   {
     ADD_SLOT( MPI_Comm       , mpi          , INPUT , MPI_COMM_WORLD );
     
-    ADD_SLOT( GridT          , grid         , INPUT , REQUIRED );
+    ADD_SLOT( GridT          , grid         , INPUT_OUTPUT );   // INPUT_OUTPUT: grid_update_ghosts() (Te ghost exchange between substeps) takes a non-const grid
     ADD_SLOT( Domain         , domain       , INPUT , REQUIRED );
     ADD_SLOT( ParticleSpecies, species      , INPUT , REQUIRED );
     ADD_SLOT( double         , rcut_max     , INPUT_OUTPUT , 0.0 );  // neighborhood distance, in grid space
@@ -110,7 +111,71 @@ namespace exaStamp
     // per-cell partial sums for the GPU reduction of Te (exanb::reduce_grid_cell_values)
     ADD_SLOT( onika::memory::CudaMMVector<double> , ttm_scratch_te_partials      , PRIVATE );
 
+    // Ghost exchange of grid_cell_values ("te") between diffusion substeps, see update_te_ghosts().
+    // Same slots as the ghost_update_* operators (exanb/mpi/update_ghosts.h).
+    using generic_real_accessor_t = std::remove_cv_t< std::remove_reference_t< decltype( std::declval<GridT>().field_accessor( field::generic_real{""} ) ) > >;
+    using generic_vec3_accessor_t = std::remove_cv_t< std::remove_reference_t< decltype( std::declval<GridT>().field_accessor( field::generic_vec3{""} ) ) > >;
+    using generic_mat3_accessor_t = std::remove_cv_t< std::remove_reference_t< decltype( std::declval<GridT>().field_accessor( field::generic_mat3{""} ) ) > >;
+    using UpdateGhostsScratch = UpdateGhostsUtils::UpdateGhostsScratchWithOptionalFields<generic_real_accessor_t,generic_vec3_accessor_t,generic_mat3_accessor_t>;
+    ADD_SLOT( GhostCommunicationScheme , ghost_comm_scheme  , INPUT_OUTPUT , OPTIONAL );
+    ADD_SLOT( UpdateGhostConfig        , update_ghost_config , INPUT , UpdateGhostConfig{} );
+    ADD_SLOT( UpdateGhostsScratch      , ghost_comm_buffers  , PRIVATE );
+
   public:
+
+    // -----------------------------------------------
+    // Refreshes the ghost cells of grid_cell_values ("te") from their owner cells (MPI subdomain
+    // boundaries and periodic images). Same code path as the ghost_update_opt operator (empty particle
+    // field set, cell values only -- UpdateGhostsNode<GridT,FieldSet<>,false,true>), callable from inside
+    // execute()'s diffusion substep loop, which the operator graph cannot interleave with.
+    // -----------------------------------------------
+    inline void update_te_ghosts()
+    {
+      using onika::cuda::make_input_array_span;
+      constexpr std::integral_constant<size_t,1> embedded_copy_size = {};
+      using GridCellValueType = typename GridCellValues::GridCellValueType;
+      using CellParticlesUpdateData = typename UpdateGhostsUtils::GhostCellParticlesUpdateData;
+      using CellsAccessorT = std::remove_cv_t< std::remove_reference_t< decltype( grid->cells_accessor() ) > >;
+
+      auto upd_config = *update_ghost_config;
+      if( upd_config.gpu_buffer_pack && upd_config.alloc_on_device == nullptr )
+      {
+        if( global_cuda_ctx()!=nullptr && global_cuda_ctx()->has_devices() && global_cuda_ctx()->global_gpu_enable() )
+        {
+          upd_config.alloc_on_device = & ( global_cuda_ctx()->m_devices[0] );
+        }
+        else
+        {
+          upd_config.gpu_buffer_pack = false;
+          upd_config.alloc_on_device = nullptr;
+        }
+      }
+
+      // no particle field, no optional field: only the per-cell grid values travel
+      auto & opt_real = ghost_comm_buffers->m_opt_real_fields; opt_real.clear();
+      auto & opt_vec3 = ghost_comm_buffers->m_opt_vec3_fields; opt_vec3.clear();
+      auto & opt_mat3 = ghost_comm_buffers->m_opt_mat3_fields; opt_mat3.clear();
+      auto update_fields = onika::make_flat_tuple( make_input_array_span(opt_real,embedded_copy_size)
+                                                 , make_input_array_span(opt_vec3,embedded_copy_size)
+                                                 , make_input_array_span(opt_mat3,embedded_copy_size) );
+      using FieldAccTupleT = std::remove_cv_t< std::remove_reference_t< decltype( update_fields ) > >;
+      using PackGhostFunctor = UpdateGhostsUtils::GhostSendPackFunctor<CellsAccessorT,GridCellValueType,CellParticlesUpdateData,FieldAccTupleT>;
+      using UnpackGhostFunctor = UpdateGhostsUtils::GhostReceiveUnpackFunctor<CellsAccessorT,GridCellValueType,CellParticlesUpdateData,false,FieldAccTupleT>;
+      using UpdateGhostsCommManager = UpdateGhostsUtils::UpdateGhostsCommManager<PackGhostFunctor,UnpackGhostFunctor>;
+
+      auto pecfunc = [self=this](auto ... args) { return self->parallel_execution_context(args ...); };
+      auto peqfunc = [self=this]() -> onika::parallel::ParallelExecutionQueue& { return self->parallel_execution_queue(); };
+
+      if( ghost_comm_buffers->m_comm_resources == nullptr )
+      {
+        ghost_comm_buffers->m_comm_resources = std::make_shared<UpdateGhostsCommManager>();
+      }
+      UpdateGhostsCommManager * ghost_scratch = static_cast<UpdateGhostsCommManager*>( ghost_comm_buffers->m_comm_resources.get() );
+
+      grid_update_ghosts( ldbg, *mpi, *ghost_comm_scheme, grid.get_pointer(), *domain, grid_cell_values.get_pointer(),
+                          * ghost_scratch, pecfunc, peqfunc, update_fields,
+                          upd_config, std::integral_constant<bool,false>{} );
+    }
 
     // -----------------------------------------------
     // -----------------------------------------------
@@ -255,6 +320,11 @@ namespace exaStamp
         lerr << "No ghost layers, can't continue" << std::endl;
         std::abort();
       }
+      // Laplacian / Te update / Te reductions only run over local (non-ghost) cells: ghost Te is
+      // refreshed from the owners once per MD step by ghost_update_r, and between diffusion substeps
+      // by update_te_ghosts()
+      const IJK local_dims = dims - 2*gl;
+      const size_t n_local_cells = size_t(local_dims.i) * size_t(local_dims.j) * size_t(local_dims.k);
             
       // 2) Te<->Te and Te<->Ti heat transfer
       //const Vec3d grid_origin = grid->grid_bounds().bmin;
@@ -331,8 +401,6 @@ namespace exaStamp
         // (per-cell partials via exanb::ReduceGridCellValuesFunctor, on a plain array with a
         // n_subcells stride, then a host combine of the tiny partials array in fixed cell order):
         // a host loop over cell_energy_transfer would migrate it to the CPU and back every MD step.
-        const IJK local_dims = dims - 2*gl;
-        const size_t n_local_cells = size_t(local_dims.i) * size_t(local_dims.j) * size_t(local_dims.k);
         ttm_scratch_te_partials->resize( n_local_cells );
         ReduceGridCellValuesFunctor<GridCellValuesSum,double> ion_sum_func = {
           cell_energy_transfer, size_t(n_subcells), dims, gl, size_t(n_subcells), 1,
@@ -411,6 +479,16 @@ namespace exaStamp
         }
       }
 
+      // Ghost Te has to be exchanged between substeps (the Laplacian of local border cells reads it), which
+      // needs the ghost communication scheme. Without it ghost Te would stay frozen after the first substep.
+      if( num_inner_timesteps > 1 && ! ghost_comm_scheme.has_value() )
+      {
+        lerr << pathname() << std::endl
+             << "substep_diffusion needs "<<num_inner_timesteps<<" inner steps but no ghost_comm_scheme is available "
+             << "to exchange the ghost electronic temperature between them" << std::endl;
+        std::abort();
+      }
+
       for(long te_istep=0; te_istep<num_inner_timesteps; ++te_istep)
       {
 
@@ -431,11 +509,11 @@ namespace exaStamp
       // file, e.g. Pass B/E and init_ttm.cpp, already used m_stride correctly). See ttm_laplacian.h.
       {
         TtmLaplacianFunctor laplacian_func = {
-          dims, subdiv, subcell_size,
+          dims, gl, subdiv, 1.0 / ( subcell_size * subcell_size ),
           Te, cell_te_data.m_stride,
           cell_L_Te
         };
-        onika::parallel::parallel_for( n_cells * n_subcells, laplacian_func, parallel_execution_context() );
+        onika::parallel::parallel_for( n_local_cells * size_t(n_subcells), laplacian_func, parallel_execution_context() );
       }
 
       // pre-update sum_Te only feeds the debug-only te_dev conservation check / ldbg below
@@ -491,20 +569,31 @@ namespace exaStamp
 #     endif
       sum_Te = 0.0;
       // Pass E (Te update), GPU-portable: onika::parallel::parallel_for + TtmTeUpdateFunctor,
-      // see ttm_te_update.h. Updates every subcell, ghost cells included (as before). The Te/Ti
+      // see ttm_te_update.h. Updates local cells only (ghost Te is exchanged between substeps). The Te/Ti
       // coupling sink in there is the FIXED per-MD-step total (cell_energy_transfer, computed once
       // above), spread over delta_t, not inner_dt.
       TtmTeUpdateFunctor te_update_func = {
-        subdiv,
+        dims, gl, subdiv,
         Te, cell_te_data.m_stride,
         cell_L_Te, cell_energy_transfer, cell_Se,
-        Te_cond, Ce_rho_e, subcell_volume, delta_t, inner_dt
+        Te_cond, 1.0 / Ce_rho_e, 1.0 / ( subcell_volume * delta_t ), inner_dt
       };
-      onika::parallel::parallel_for( n_cells * n_subcells, te_update_func, parallel_execution_context() );
+      onika::parallel::parallel_for( n_local_cells * size_t(n_subcells), te_update_func, parallel_execution_context() );
 
-      // sum_Te over local cells of the freshly updated Te: same GPU reduction as in Pass D
-      sum_Te = exanb::reduce_grid_cell_values( *grid_cell_values, "te", grid->ghost_layers(), exanb::GridCellValuesSum{},
-                                               0.0, *ttm_scratch_te_partials, parallel_execution_context() );
+      // sum_Te over local cells of the freshly updated Te: same GPU reduction as in Pass D.
+      // In release only the LAST substep's value survives (total_electronic_energy), so the earlier
+      // ones (a kernel + partials read-back + MPI_Allreduce each) are skipped. Debug builds need
+      // it every substep for the te_dev check.
+#     ifdef NDEBUG
+      const bool need_sum_Te = ( te_istep + 1 == num_inner_timesteps );
+#     else
+      const bool need_sum_Te = true;
+#     endif
+      if( need_sum_Te )
+      {
+        sum_Te = exanb::reduce_grid_cell_values( *grid_cell_values, "te", grid->ghost_layers(), exanb::GridCellValuesSum{},
+                                                 0.0, *ttm_scratch_te_partials, parallel_execution_context() );
+      }
 
       // Debug-only diagnostic reduction over the GPU-updated Te, host-side post-kernel (implicit sync).
       // sum_dTe re-evaluates te_update_func.dTe(), which doesn't read Te, so it is exactly the increment
@@ -551,14 +640,20 @@ namespace exaStamp
         // else { lout << "Te deviation Ok : "<<old_sum_Te<<" -> "<<sum_Te<<" , dev="<<te_dev<<std::endl; }
       }
 #     else
-      // sum_Te alone is still needed unconditionally (feeds total_electronic_energy below).
-      MPI_Allreduce(MPI_IN_PLACE,&sum_Te,1,MPI_DOUBLE,MPI_SUM,*mpi);
+      // sum_Te alone is still needed (feeds total_electronic_energy below), last substep only.
+      if( need_sum_Te ) { MPI_Allreduce(MPI_IN_PLACE,&sum_Te,1,MPI_DOUBLE,MPI_SUM,*mpi); }
 #     endif
-      // total electron thermal energy, LAMMPS fix-ttm's e_energy = sum(Te*Ce*rho_e*cell_volume):
-      // sum_Te above is a raw sum of temperatures, not energy -- must be weighted by the heat
-      // capacity to become one. (Harmless to omit while Ce(Te) was hardcoded to 1.0, but wrong
-      // now that Ce/rho_e are real physical inputs.)
-      *total_electronic_energy = sum_Te * subcell_volume * Ce_rho_e;
+      if( need_sum_Te )
+      {
+        // total electron thermal energy, LAMMPS fix-ttm's e_energy = sum(Te*Ce*rho_e*cell_volume):
+        // sum_Te above is a raw sum of temperatures, not energy -- must be weighted by the heat
+        // capacity to become one. (Harmless to omit while Ce(Te) was hardcoded to 1.0, but wrong
+        // now that Ce/rho_e are real physical inputs.)
+        *total_electronic_energy = sum_Te * subcell_volume * Ce_rho_e;
+      }
+
+      // ghost Te for the next substep (not needed after the last one: ghost_update_r refreshes it at the next MD step)
+      if( te_istep + 1 < num_inner_timesteps ) { update_te_ghosts(); }
 
       } // for( te_istep ... num_inner_timesteps )
     }
@@ -575,8 +670,11 @@ while ionic temperature (Ti) commes from particles kinetic energy.
    v_0, plus noise -- gaussian by default, or LAMMPS fix-ttm's own uniform noise if lammps_noise:
    true) to each particle using the local Te; the work done on particles is deposited back as a Te sink
 3. solve the heat equation on the rectilinear grid for Te (conduction Ke/(Ce*rho_e), the coupling sink, and
-   source terms); if substep_diffusion: true and a single MD step would exceed the explicit-diffusion
-   stability limit (LAMMPS fix-ttm style), this step is subdivided into several smaller inner steps
+   source terms) over local cells; if substep_diffusion: true and a single MD step would exceed the explicit-diffusion
+   stability limit (LAMMPS fix-ttm style), this step is subdivided into several smaller inner steps, with a
+   ghost exchange of Te between them (ghost Te is otherwise refreshed once per MD step by ghost_update_r)
+NOTE: the coupling also runs over ghost particles, whose velocities are only current if a ghost_update_r_v is
+run before this operator (ghost_update_r sends positions only)
 )EOF";
     }
 

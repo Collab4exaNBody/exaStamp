@@ -16,19 +16,22 @@ under the License.
 */
 #pragma once
 
+#include <exanb/core/grid_algorithm.h>
 #include <onika/cuda/cuda.h>
 #include <onika/parallel/parallel_for.h>
 
 namespace exaStamp
 {
+  using namespace exanb;
+
   // Pass E of ionic_electronic_heat_transfer: explicit Te update
   //   dTe = ( Ke*Laplacian(Te) - Te/Ti coupling sink + Se ) / (Ce*rho_e),   Te += dTe * inner_dt
-  // one flattened (cell_i, subcell_i) index per thread, dispatched over [0, n_cells*subdiv^3) with
+  // one flattened (local cell, subcell) index per thread, dispatched over [0, n_local_cells*subdiv^3) with
   // onika::parallel::parallel_for (thread-per-index), same shape as TtmLaplacianFunctor (ttm_laplacian.h).
   // Must NOT go through block_parallel_for: that runs the functor once per block with ALL threads of the
   // block on the same index, so this accumulating "Te +=" got applied 1..blockDim times per subcell.
   // Every subcell is independent (dTe reads the Laplacian computed by the previous kernel, never a
-  // neighbouring Te), so this is race-free; ghost cells are updated too, same as the old host loop.
+  // neighbouring Te), so this is race-free; only local cells are updated (ghost Te is refreshed by a ghost exchange between substeps).
   //
   // dTe() is separate from operator() and does not read Te, so the host-side diagnostic reduction
   // that runs after the kernel (sum_dTe) can call it again and get exactly the value the kernel used.
@@ -40,6 +43,8 @@ namespace exaStamp
   // grid_cell_values field with its own te_stride (see TtmLaplacianFunctor).
   struct TtmTeUpdateFunctor
   {
+    IJK grid_dims = { 0, 0, 0 }; // local dims, including ghost layers
+    ssize_t ghost_layers = 0;    // only local (non-ghost) cells are updated: ghost Te comes from a ghost exchange
     ssize_t subdiv = 0;
 
     double * __restrict__ te_ptr = nullptr;                       // "te" field, te_stride-strided (read+write)
@@ -49,25 +54,29 @@ namespace exaStamp
     const double * __restrict__ se_ptr = nullptr;                 // electronic source term, precomputed per MD step
 
     double Te_cond = 0.0;       // Ke
-    double Ce_rho_e = 1.0;
-    double subcell_volume = 1.0;
-    double delta_t = 0.0;       // full MD step (the sink is spread over it)
+    // Reciprocals precomputed on the host: this kernel is FP64-pipe bound on GPUs with a weak FP64 rate
+    // (ncu: 89% FP64 pipe, 38 DFMA/thread, almost all from 3 FP64 divisions), so no division here.
+    double inv_Ce_rho_e = 1.0;  // 1 / (Ce*rho_e)
+    double sink_scale = 1.0;    // 1 / (subcell_volume * delta_t), delta_t = full MD step (the sink is spread over it)
     double inner_dt = 0.0;      // diffusion substep
 
     ONIKA_HOST_DEVICE_FUNC inline double dTe ( size_t idx ) const
     {
-      // energy_transfer is a FIXED total for the whole outer MD step: divide by delta_t (not
+      // energy_transfer is a FIXED total for the whole outer MD step: scale by 1/(volume*delta_t) (not
       // inner_dt) to get the power density sink applied at every inner step.
-      const double coupling_sink = energy_transfer_ptr[idx] / subcell_volume / delta_t;
-      return ( Te_cond*lap_te_ptr[idx] - coupling_sink + se_ptr[idx] ) / Ce_rho_e;
+      const double coupling_sink = energy_transfer_ptr[idx] * sink_scale;
+      return ( Te_cond*lap_te_ptr[idx] - coupling_sink + se_ptr[idx] ) * inv_Ce_rho_e;
     }
 
     ONIKA_HOST_DEVICE_FUNC inline void operator () ( size_t idx ) const
     {
+      // idx enumerates local cells x subcells; the scratch buffers (lap/transfer/Se) and dTe() keep the
+      // full-grid layout (cell_i*n_subcells + subcell), ghosts included
       const size_t n_subcells = size_t(subdiv) * size_t(subdiv) * size_t(subdiv);
-      const size_t cell_i = idx / n_subcells;
+      const IJK cell_loc = grid_index_to_ijk( grid_dims - 2*ghost_layers , ssize_t(idx / n_subcells) ) + ghost_layers;
+      const size_t cell_i = size_t( grid_ijk_to_index( grid_dims, cell_loc ) );
       const size_t scindex = idx % n_subcells;
-      te_ptr[ cell_i*te_stride + scindex ] += dTe(idx) * inner_dt;
+      te_ptr[ cell_i*te_stride + scindex ] += dTe( cell_i*n_subcells + scindex ) * inner_dt;
     }
   };
 

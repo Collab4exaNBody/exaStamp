@@ -26,7 +26,7 @@ namespace exaStamp
   using namespace exanb;
 
   // Pass D of ionic_electronic_heat_transfer: 27-point discrete Laplacian of Te, one flattened
-  // (cell_i, subcell_i) index per thread, dispatched over [0, n_cells*subdiv^3) via
+  // (local cell, subcell) index per thread, dispatched over [0, n_local_cells*subdiv^3) via
   // onika::parallel::parallel_for (thread-per-index). NOT block_parallel_for: that one runs the
   // functor once per BLOCK, with every thread of the block executing the SAME index -- harmless for a
   // pure overwrite like this one, but it silently multi-applies any accumulating kernel (see
@@ -47,9 +47,12 @@ namespace exaStamp
   struct TtmLaplacianFunctor
   {
     IJK grid_dims = { 0, 0, 0 }; // local dims, including ghost layers
+    ssize_t ghost_layers = 0;    // layers skipped on each side: only local (non-ghost) cells are computed, ghost Te comes from a ghost exchange
     ssize_t subdiv = 0;
 
-    double subcell_size = 0.0;
+    // 1/subcell_size^2, precomputed on the host: an FP64 division costs ~10 DFMA-equivalents per
+    // thread, and this kernel is FP64-pipe bound on GPUs with a weak FP64 rate (ncu: 89% FP64 pipe).
+    double inv_subcell_size_sq = 0.0;
 
     const double * __restrict__ te_ptr = nullptr; // grid_cell_values "te" field, te_stride-strided
     size_t te_stride = 0;
@@ -60,9 +63,12 @@ namespace exaStamp
     {
       using namespace GridCellValuesUtils;
       const ssize_t n_subcells = subdiv * subdiv * subdiv;
-      const ssize_t cell_i = ssize_t(idx) / n_subcells;
-      const IJK sc = grid_index_to_ijk( IJK{subdiv,subdiv,subdiv} , ssize_t(idx) % n_subcells );
-      const IJK cell_loc = grid_index_to_ijk( grid_dims, cell_i );
+      // idx enumerates local cells x subcells; cell_i is the index in the full grid (ghosts included),
+      // and lap_te_ptr keeps the full-grid layout (cell_i*n_subcells + subcell)
+      const IJK cell_loc = grid_index_to_ijk( grid_dims - 2*ghost_layers , ssize_t(idx) / n_subcells ) + ghost_layers;
+      const ssize_t cell_i = grid_ijk_to_index( grid_dims, cell_loc );
+      const ssize_t sc_i = ssize_t(idx) % n_subcells;
+      const IJK sc = grid_index_to_ijk( IJK{subdiv,subdiv,subdiv} , sc_i );
 
       // inspired from https://en.wikipedia.org/wiki/Discrete_Laplace_operator#Finite_differences
       static constexpr double Lap27Norm = 26.0;
@@ -87,7 +93,7 @@ namespace exaStamp
         }
       }
       // normalize by h^2: raw stencil sum = h^2 * laplacian(Te) + O(h^4)
-      lap_te_ptr[idx] = L_Te / (subcell_size*subcell_size);
+      lap_te_ptr[ cell_i*n_subcells + sc_i ] = L_Te * inv_subcell_size_sq;
     }
   };
 
