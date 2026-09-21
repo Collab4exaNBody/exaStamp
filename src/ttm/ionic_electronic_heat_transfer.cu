@@ -16,6 +16,7 @@ under the License.
 */
 
 #include <memory>
+#include <typeinfo>
 
 #include <onika/scg/operator.h>
 #include <onika/scg/operator_slot.h>
@@ -41,6 +42,7 @@ under the License.
 #include "ttm_langevin_coupling.h"
 #include "ttm_laplacian.h"
 #include "ttm_te_update.h"
+#include <exanb/grid_cell_particles/reduce_grid_cell_values.h>
 
 namespace exaStamp
 {
@@ -105,6 +107,8 @@ namespace exaStamp
     // Per-species mass table, GPU-visible: sized to nSpecies (not a fixed MAX_PARTICLE_TYPES array
     // captured by value -- that blows past onika's GPU kernel-functor size cap, see ttm_ti_deposit.h).
     ADD_SLOT( onika::memory::CudaMMVector<double> , ttm_scratch_species_mass     , PRIVATE );
+    // per-cell partial sums for the GPU reduction of Te (exanb::reduce_grid_cell_values)
+    ADD_SLOT( onika::memory::CudaMMVector<double> , ttm_scratch_te_partials      , PRIVATE );
 
   public:
 
@@ -122,7 +126,7 @@ namespace exaStamp
       static constexpr bool has_id_field = has_id_field_t::value;
 
       static constexpr double weight_sum_epsilon = 1.e-13; if constexpr (weight_sum_epsilon==0.0){}
-      static constexpr double te_deviation_epsilon = 1.e-13;
+      [[maybe_unused]] static constexpr double te_deviation_epsilon = 1.e-13; // debug-only te_dev check
 
       const double cell_size = domain->cell_size();
       const ssize_t subdiv = *grid_subdiv;
@@ -192,19 +196,27 @@ namespace exaStamp
       const IJK dims = grid->dimension();
       const ssize_t gl = grid->ghost_layers();      
 
-      // Persistent scratch storage for per cell Ti and per cell Laplacian(Te) -- .assign() reuses
-      // existing capacity across calls (no realloc) instead of a fresh std::vector every step.
-      ttm_scratch_ti->assign( n_cells * n_subcells , 0.0 );
-      ttm_scratch_lap_te->assign( n_cells * n_subcells , 0.0 );
-      double* Ti = ttm_scratch_ti->data();
+      // Persistent scratch storage, reused across calls. NOTE for every ttm_scratch_* buffer below: they
+      // are managed (unified) memory, so any host-side read/write between two GPU kernels migrates the
+      // pages to the CPU, and the next kernel then stalls on demand-faults to get them back (a 0.1 ms
+      // kernel measured at 2-3 ms in nsys). Keep them device-only: no host assign()/loops on them.
+      const size_t n_sub_total = size_t(n_cells) * size_t(n_subcells);
+      // Laplacian(Te): every element is overwritten by TtmLaplacianFunctor each substep, no zero-fill needed.
+      ttm_scratch_lap_te->resize( n_sub_total );
       double* cell_L_Te = ttm_scratch_lap_te->data();
 
       const auto& te_source_func = * (*te_source);
+#     ifndef NDEBUG
       const auto& ti_source_func = * (*ti_source);
+#     endif
 
-      // 1. computes per cell Ti (GPU-portable: exanb::compute_cell_particles + TtmTiDepositFunctor,
-      // see ttm_ti_deposit.h -- replaces the old #pragma omp parallel / GRID_OMP_FOR_BEGIN block).
+      // 1. computes per cell Ti -- only ever consumed by the copy_ti_te shortcut just below, so it is
+      // skipped otherwise (it used to run, and cost a 9 MB host zero-fill + a kernel, every MD step).
+      // GPU-portable: exanb::compute_cell_particles + TtmTiDepositFunctor, see ttm_ti_deposit.h.
+      if( *copy_ti_te )
       {
+        ttm_scratch_ti->assign( n_sub_total , 0.0 );
+        double* Ti = ttm_scratch_ti->data();
         TtmTiDepositFunctor ti_deposit_func = {
           grid->origin(), grid->offset(), dims, subdiv,
           cell_size, subcell_size, subcell_volume, sp_size,
@@ -223,11 +235,8 @@ namespace exaStamp
             FieldSet<field::_rx,field::_ry,field::_rz,field::_vx,field::_vy,field::_vz>{},
             parallel_execution_context() );
         }
-      }
 
-      // if a simple copy Te <- Ti is requested, stop here
-      if( *copy_ti_te )
-      {
+        // a simple copy Te <- Ti is requested: stop here
         ldbg << "copy_ti_te : dims=" <<dims<< std::endl;
         for(ssize_t i=0;i<n_cells;i++)
         {
@@ -289,8 +298,11 @@ namespace exaStamp
       // particles starting at rest and never divides by a near-zero ion temperature.
       // The work done on each particle (F.v) is deposited back as a Te sink, so the electron
       // bath cools down as it heats the lattice (energy-conserving, folded into dTe below).
-      ttm_scratch_energy_transfer->assign( n_cells * n_subcells , 0.0 );
+      // zeroed on the device (accumulated into with atomics by the Langevin kernel below, read by TtmTeUpdateFunctor)
+      ttm_scratch_energy_transfer->resize( n_sub_total );
       double* cell_energy_transfer = ttm_scratch_energy_transfer->data();
+      TtmFillFunctor zero_energy_transfer = { cell_energy_transfer, 0.0 };
+      onika::parallel::parallel_for( n_sub_total, zero_energy_transfer, parallel_execution_context() );
       *ion_transfer_energy = 0.0;
       if( gamma_p_coupling != 0.0 )
       {
@@ -313,25 +325,21 @@ namespace exaStamp
           FieldSet<field::_rx,field::_ry,field::_rz,field::_vx,field::_vy,field::_vz,field::_fx,field::_fy,field::_fz>{},
           parallel_execution_context() );
 
-        // Pass C, confirmed already GPU-compatible as-is (staged plan's Stage 7): a plain
-        // host-side reduction over cell_energy_transfer, which is already GPU-visible managed
-        // memory (Stage 1) filled by Pass B's GPU kernel just above -- correct with an implicit
-        // sync, nothing to port. LAMMPS fix-ttm's transfer_energy (f_twotemp[2]): total energy
-        // transferred from electrons to ions over this whole MD step -- cell_energy_transfer
-        // already holds it (fixed, computed once above), just sum it over this rank's own
-        // (non-ghost) cells.
+        // Pass C: LAMMPS fix-ttm's transfer_energy (f_twotemp[2]): total energy transferred from
+        // electrons to ions over this whole MD step -- cell_energy_transfer already holds it (fixed,
+        // computed once above), just sum it over this rank's own (non-ghost) cells. Done on the GPU
+        // (per-cell partials via exanb::ReduceGridCellValuesFunctor, on a plain array with a
+        // n_subcells stride, then a host combine of the tiny partials array in fixed cell order):
+        // a host loop over cell_energy_transfer would migrate it to the CPU and back every MD step.
+        const IJK local_dims = dims - 2*gl;
+        const size_t n_local_cells = size_t(local_dims.i) * size_t(local_dims.j) * size_t(local_dims.k);
+        ttm_scratch_te_partials->resize( n_local_cells );
+        ReduceGridCellValuesFunctor<GridCellValuesSum,double> ion_sum_func = {
+          cell_energy_transfer, size_t(n_subcells), dims, gl, size_t(n_subcells), 1,
+          GridCellValuesSum{}, 0.0, ttm_scratch_te_partials->data() };
+        onika::parallel::parallel_for( n_local_cells, ion_sum_func, parallel_execution_context() );
         double sum_ion_transfer = 0.0;
-#       pragma omp parallel
-        {
-          GRID_OMP_FOR_BEGIN(dims,cell_i,cell_loc, schedule(static) reduction(+:sum_ion_transfer) )
-          {
-            if( ! grid->is_ghost_cell(cell_loc) )
-            {
-              for(ssize_t sc=0;sc<n_subcells;sc++) { sum_ion_transfer += cell_energy_transfer[ cell_i*n_subcells + sc ]; }
-            }
-          }
-          GRID_OMP_FOR_END
-        }
+        for(size_t i=0;i<n_local_cells;i++) { sum_ion_transfer += (*ttm_scratch_te_partials)[i]; }
         MPI_Allreduce(MPI_IN_PLACE,&sum_ion_transfer,1,MPI_DOUBLE,MPI_SUM,*mpi);
         *ion_transfer_energy = sum_ion_transfer;
       }
@@ -363,28 +371,44 @@ namespace exaStamp
       // inner substeps, so re-invoking the virtual ScalarSourceTerm calls every substep (as
       // before) was purely redundant work. This also removes the only per-subcell virtual
       // dispatch from the substep loop below.
-      ttm_scratch_se->assign( n_cells * n_subcells , 0.0 );
-      ttm_scratch_si->assign( n_cells * n_subcells , 0.0 );
+      // A "null" source (the base ScalarSourceTerm, always 0) needs no host evaluation: its buffer stays
+      // zero (only zero-filled when (re)sized) and is never touched from the host again -- writing 9 MB
+      // from the CPU every MD step migrated it and stalled the next GPU kernel.
+      // ponytail: assumes te_source doesn't switch from a real source back to "null" mid-run (stale Se).
+      const bool fill_se = typeid(te_source_func) != typeid(ScalarSourceTerm);
+      if( ttm_scratch_se->size() != n_sub_total ) { ttm_scratch_se->assign( n_sub_total , 0.0 ); }
       double* cell_Se = ttm_scratch_se->data();
+#     ifndef NDEBUG
+      // Si only feeds the debug-only sum_Si diagnostic below
+      ttm_scratch_si->assign( n_sub_total , 0.0 );
       double* cell_Si = ttm_scratch_si->data();
-#     pragma omp parallel
+      const bool need_source_loop = true;
+#     else
+      const bool need_source_loop = fill_se;
+#     endif
+      if( need_source_loop )
       {
-        GRID_OMP_FOR_BEGIN(dims,cell_i,cell_loc, schedule(static) )
+#       pragma omp parallel
         {
-          const Vec3d cell_origin = grid->cell_position( cell_loc );
-          for(int ck=0;ck<subdiv;ck++)
-          for(int cj=0;cj<subdiv;cj++)
-          for(int ci=0;ci<subdiv;ci++)
+          GRID_OMP_FOR_BEGIN(dims,cell_i,cell_loc, schedule(static) )
           {
-            IJK sc { ci, cj, ck };
-            Vec3d scr { ci+0.5, cj+0.5, ck+0.5 };
-            const size_t idx = cell_i*n_subcells + grid_ijk_to_index( IJK{subdiv,subdiv,subdiv} , sc );
-            const Vec3d center = xform * ( cell_origin + scr*subcell_size );
-            cell_Si[idx] = ti_source_func( center, *physical_time );
-            cell_Se[idx] = te_source_func( center, *physical_time );
+            const Vec3d cell_origin = grid->cell_position( cell_loc );
+            for(int ck=0;ck<subdiv;ck++)
+            for(int cj=0;cj<subdiv;cj++)
+            for(int ci=0;ci<subdiv;ci++)
+            {
+              IJK sc { ci, cj, ck };
+              Vec3d scr { ci+0.5, cj+0.5, ck+0.5 };
+              const size_t idx = cell_i*n_subcells + grid_ijk_to_index( IJK{subdiv,subdiv,subdiv} , sc );
+              const Vec3d center = xform * ( cell_origin + scr*subcell_size );
+#             ifndef NDEBUG
+              cell_Si[idx] = ti_source_func( center, *physical_time );
+#             endif
+              if( fill_se ) { cell_Se[idx] = te_source_func( center, *physical_time ); }
+            }
           }
+          GRID_OMP_FOR_END
         }
-        GRID_OMP_FOR_END
       }
 
       for(long te_istep=0; te_istep<num_inner_timesteps; ++te_istep)
@@ -414,16 +438,16 @@ namespace exaStamp
         onika::parallel::parallel_for( n_cells * n_subcells, laplacian_func, parallel_execution_context() );
       }
 
-      // Diagnostic reduction over the now GPU-filled cell_L_Te / Te, kept host-side post-kernel
-      // (accepts an implicit sync -- same approach as Stage 3/7's diagnostics; managed memory makes
-      // reading back from the host correct as-is once the kernel dispatch above has returned).
+      // pre-update sum_Te only feeds the debug-only te_dev conservation check / ldbg below
+#     ifndef NDEBUG
+      // sum_Te over local cells: GPU reduction (deterministic, per-cell partials summed in cell order).
+      sum_Te = exanb::reduce_grid_cell_values( *grid_cell_values, "te", grid->ghost_layers(), exanb::GridCellValuesSum{},
+                                               0.0, *ttm_scratch_te_partials, parallel_execution_context() );
+
+      // norm_dTe/entropy_Te: debug-only diagnostics, still host-side
 #     pragma omp parallel
       {
-#       ifndef NDEBUG
-        GRID_OMP_FOR_BEGIN(dims,cell_i,cell_loc, schedule(static) reduction(+:sum_Te,norm_dTe,entropy_Te) )
-#       else
-        GRID_OMP_FOR_BEGIN(dims,cell_i,cell_loc, schedule(static) reduction(+:sum_Te) )
-#       endif
+        GRID_OMP_FOR_BEGIN(dims,cell_i,cell_loc, schedule(static) reduction(+:norm_dTe,entropy_Te) )
         {
           if( ! grid->is_ghost_cell(cell_loc) )
           {
@@ -434,18 +458,16 @@ namespace exaStamp
               IJK sc { ci, cj, ck };
               const size_t scindex = grid_ijk_to_index( IJK{subdiv,subdiv,subdiv} , sc );
               const size_t idx_te = cell_i*cell_te_data.m_stride + scindex;
-              sum_Te += Te[idx_te];
-#             ifndef NDEBUG
               const size_t j = cell_i*n_subcells + scindex;
               const double dTe = ( (Te_cond*cell_L_Te[j]) / Ce_rho_e ) * inner_dt;
               norm_dTe += std::fabs( dTe );
               entropy_Te += Te[idx_te] * std::log(Te[idx_te]) * subcell_volume ;
-#             endif
             }
           }
         }
         GRID_OMP_FOR_END
       }
+#     endif
 
       // check global absolute electronic energy variation (from dissipation)
 #     ifndef NDEBUG
@@ -457,19 +479,16 @@ namespace exaStamp
         entropy_Te = tmp[2];
         ldbg <<"sum_Te="<<sum_Te <<" norm_dTe/sum_Te="<<norm_dTe/sum_Te<<" , entropy_Te="<<entropy_Te << std::endl;
       }
-#     else
-      {
-        // sum_Te alone is still needed unconditionally (feeds old_sum_Te / te_dev below).
-        MPI_Allreduce(MPI_IN_PLACE,&sum_Te,1,MPI_DOUBLE,MPI_SUM,*mpi);
-      }
 #     endif
 
 
       // 3. Compute Te dissipation, Te<->Ti transfer & source terms
+#     ifndef NDEBUG
       double old_sum_Te = sum_Te;
       double sum_dTe = 0.0;
       double sum_Se = 0.0;
       double sum_Si = 0.0;
+#     endif
       sum_Te = 0.0;
       // Pass E (Te update), GPU-portable: onika::parallel::parallel_for + TtmTeUpdateFunctor,
       // see ttm_te_update.h. Updates every subcell, ghost cells included (as before). The Te/Ti
@@ -483,25 +502,28 @@ namespace exaStamp
       };
       onika::parallel::parallel_for( n_cells * n_subcells, te_update_func, parallel_execution_context() );
 
-      // Diagnostic reduction over the GPU-updated Te, host-side post-kernel (implicit sync, same
-      // approach as Pass D above). sum_dTe re-evaluates te_update_func.dTe(), which doesn't read Te,
-      // so it is exactly the increment the kernel just applied. sum_Se/sum_Si run over ghost cells
-      // too, unchanged from before (only sum_Te/sum_dTe are restricted to local cells).
+      // sum_Te over local cells of the freshly updated Te: same GPU reduction as in Pass D
+      sum_Te = exanb::reduce_grid_cell_values( *grid_cell_values, "te", grid->ghost_layers(), exanb::GridCellValuesSum{},
+                                               0.0, *ttm_scratch_te_partials, parallel_execution_context() );
+
+      // Debug-only diagnostic reduction over the GPU-updated Te, host-side post-kernel (implicit sync).
+      // sum_dTe re-evaluates te_update_func.dTe(), which doesn't read Te, so it is exactly the increment
+      // the kernel just applied. sum_Se/sum_Si run over ghost cells too (only sum_dTe is restricted to
+      // local cells). Release builds skip this: it reads 4 managed buffers on the host every substep,
+      // which migrates ~36 MB device<->host per substep and stalls the next kernels on page faults.
+#     ifndef NDEBUG
 #     pragma omp parallel
       {
-        GRID_OMP_FOR_BEGIN(dims,cell_i,cell_loc, schedule(static) reduction(+:sum_Te,sum_dTe,sum_Se,sum_Si) )
+        GRID_OMP_FOR_BEGIN(dims,cell_i,cell_loc, schedule(static) reduction(+:sum_dTe,sum_Se,sum_Si) )
         {
           const bool local_cell = ! grid->is_ghost_cell(cell_loc);
           for(size_t scindex=0; scindex<size_t(n_subcells); scindex++)
           {
             const size_t idx_ti = cell_i*n_subcells + scindex ;
-            const size_t idx_te = cell_i*cell_te_data.m_stride + scindex;
-
             sum_Se += cell_Se[idx_ti];
             sum_Si += cell_Si[idx_ti];
             if( local_cell )
             {
-              sum_Te += Te[idx_te];
               sum_dTe += te_update_func.dTe(idx_ti) * inner_dt;
             }
           }
@@ -528,6 +550,10 @@ namespace exaStamp
         }
         // else { lout << "Te deviation Ok : "<<old_sum_Te<<" -> "<<sum_Te<<" , dev="<<te_dev<<std::endl; }
       }
+#     else
+      // sum_Te alone is still needed unconditionally (feeds total_electronic_energy below).
+      MPI_Allreduce(MPI_IN_PLACE,&sum_Te,1,MPI_DOUBLE,MPI_SUM,*mpi);
+#     endif
       // total electron thermal energy, LAMMPS fix-ttm's e_energy = sum(Te*Ce*rho_e*cell_volume):
       // sum_Te above is a raw sum of temperatures, not energy -- must be weighted by the heat
       // capacity to become one. (Harmless to omit while Ce(Te) was hardcoded to 1.0, but wrong

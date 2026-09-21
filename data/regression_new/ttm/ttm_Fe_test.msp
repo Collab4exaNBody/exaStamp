@@ -1,6 +1,6 @@
-# configuration:
-#   profiling:
-#     summary: true
+configuration:
+  profiling:
+    summary: true
   
 species:
   - Fe: { mass: 55.845 Da , z: 26 , charge: 0.0 e- }
@@ -50,10 +50,10 @@ compute_force:
       ti_source: "null"
       te_source: "null"
       # LAMMPS's fix_ttm.cpp::end_of_step always runs this stability check (it's not optional
-      # there); enabled here for the same reason, even though it doesn't actually subdivide
-      # anything for this test's dt/Ke/dx -- verified by hand (stability_criterion ~= 0.91,
-      # comfortably positive) and empirically (rerunning with this on vs off gives statistically
-      # indistinguishable trajectories, both ~2% from the real LAMMPS log).
+      # there); enabled here for the same reason. With grid_subdiv: 1 it doesn't subdivide
+      # anything for this dt/Ke (stability_criterion ~= 0.91), but with grid_subdiv: 8 the
+      # subcell is 8x smaller, the criterion goes negative and each MD step is split into ~5
+      # inner diffusion steps (seen in the nsys trace: 5 Laplacian + Te-update kernels per step).
       substep_diffusion: true
 
 global:

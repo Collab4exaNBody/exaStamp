@@ -70,6 +70,15 @@ namespace exaStamp
       te_ptr[ cell_i*te_stride + scindex ] += dTe(idx) * inner_dt;
     }
   };
+
+  // Device-side fill of a managed scratch buffer: a host-side std::vector::assign() would touch the
+  // pages on the CPU and force a UVM migration + kernel stall on the next GPU kernel that reads them.
+  struct TtmFillFunctor
+  {
+    double * __restrict__ ptr = nullptr;
+    double value = 0.0;
+    ONIKA_HOST_DEVICE_FUNC inline void operator () ( size_t idx ) const { ptr[idx] = value; }
+  };
 }
 
 namespace onika
@@ -78,6 +87,12 @@ namespace onika
   {
     template<>
     struct ParallelForFunctorTraits<exaStamp::TtmTeUpdateFunctor>
+    {
+      static inline constexpr bool CudaCompatible = true;
+    };
+
+    template<>
+    struct ParallelForFunctorTraits<exaStamp::TtmFillFunctor>
     {
       static inline constexpr bool CudaCompatible = true;
     };
