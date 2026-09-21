@@ -25,6 +25,8 @@ includes:
 # electron-phonon Langevin coupling / force-feedback path (untested by the
 # other two shipped regression configs, which both set gamma_p: 0.0).
 +compute_force:
+  # the Langevin coupling also runs over ghost particles: their velocities must be fresh (ghost_update_r only sends positions)
+  - ghost_update_r_v
   - ionic_eletronic_heat_transfer:
       gamma_p: 0.5
       Ke: 1.0

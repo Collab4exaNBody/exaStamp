@@ -14,7 +14,7 @@ eam_alloy_force:
 setup_system:
   # box is 57.4 ang / 10 = 5.74 ang -> matches LAMMPS's "ttm/grid ... 10 10 10" (one Te value per cell, no sub-division)
   - domain:
-      cell_size: 5.74 ang
+      cell_size: 5.7399999 ang
       periodic: [ true, true, true ]
       expandable: false
   - read_xyz_file_with_xform:
@@ -31,6 +31,8 @@ setup_system:
 # No ongoing external source term in the LAMMPS case -> te_source/ti_source stay "null" here too.
 compute_force:
   - eam_alloy_force
+  # the Langevin coupling also runs over ghost particles: their velocities must be fresh (ghost_update_r only sends positions)
+  - ghost_update_r_v
   - ionic_eletronic_heat_transfer:
       # C_e/rho_e/kappa_e/gamma_p/gamma_s/v_0 taken directly from the LAMMPS fix ttm/grid line
       # above, with real units attached (LAMMPS metal units use eV/ang/ps/K/Da/electron
@@ -67,5 +69,5 @@ global:
   simulation_analysis_frequency: -1
   simulation_thermostate_file_frequency: 1
   simulation_thermostate_screen_frequency: 10
-  max_iteration: 100
+  max_iteration: 50
   log_mode: "stp;tmp;toe;poe;ele;ite"

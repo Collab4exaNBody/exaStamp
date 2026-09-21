@@ -28,6 +28,8 @@ setup_system:
 
 compute_force:
   - eam_alloy_force
+  # the Langevin coupling also runs over ghost particles: their velocities must be fresh (ghost_update_r only sends positions)
+  - ghost_update_r_v
   - ionic_eletronic_heat_transfer:
       gamma_p: 29.5917 Da/ps
       gamma_s: 47.5679 Da/ps
