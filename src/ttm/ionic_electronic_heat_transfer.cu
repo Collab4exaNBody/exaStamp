@@ -40,6 +40,7 @@ under the License.
 #include "ttm_langevin_rng.h"
 #include "ttm_langevin_coupling.h"
 #include "ttm_laplacian.h"
+#include "ttm_te_update.h"
 
 namespace exaStamp
 {
@@ -398,7 +399,7 @@ namespace exaStamp
       double entropy_Te = 0.0;
 #     endif
 
-      // Pass D (Laplacian), GPU-portable: onika::parallel::block_parallel_for + TtmLaplacianFunctor,
+      // Pass D (Laplacian), GPU-portable: onika::parallel::parallel_for + TtmLaplacianFunctor,
       // see ttm_laplacian.h -- replaces the old #pragma omp parallel / GRID_OMP_FOR_BEGIN stencil
       // loop. Also fixes a real bug the old loop had: it read Te via a bare n_subcells-based index
       // instead of cell_te_data.m_stride (the field's real per-cell stride, which only equals
@@ -410,7 +411,7 @@ namespace exaStamp
           Te, cell_te_data.m_stride,
           cell_L_Te
         };
-        onika::parallel::block_parallel_for( n_cells * n_subcells, laplacian_func, parallel_execution_context() );
+        onika::parallel::parallel_for( n_cells * n_subcells, laplacian_func, parallel_execution_context() );
       }
 
       // Diagnostic reduction over the now GPU-filled cell_L_Te / Te, kept host-side post-kernel
@@ -470,42 +471,38 @@ namespace exaStamp
       double sum_Se = 0.0;
       double sum_Si = 0.0;
       sum_Te = 0.0;
+      // Pass E (Te update), GPU-portable: onika::parallel::parallel_for + TtmTeUpdateFunctor,
+      // see ttm_te_update.h. Updates every subcell, ghost cells included (as before). The Te/Ti
+      // coupling sink in there is the FIXED per-MD-step total (cell_energy_transfer, computed once
+      // above), spread over delta_t, not inner_dt.
+      TtmTeUpdateFunctor te_update_func = {
+        subdiv,
+        Te, cell_te_data.m_stride,
+        cell_L_Te, cell_energy_transfer, cell_Se,
+        Te_cond, Ce_rho_e, subcell_volume, delta_t, inner_dt
+      };
+      onika::parallel::parallel_for( n_cells * n_subcells, te_update_func, parallel_execution_context() );
+
+      // Diagnostic reduction over the GPU-updated Te, host-side post-kernel (implicit sync, same
+      // approach as Pass D above). sum_dTe re-evaluates te_update_func.dTe(), which doesn't read Te,
+      // so it is exactly the increment the kernel just applied. sum_Se/sum_Si run over ghost cells
+      // too, unchanged from before (only sum_Te/sum_dTe are restricted to local cells).
 #     pragma omp parallel
       {
         GRID_OMP_FOR_BEGIN(dims,cell_i,cell_loc, schedule(static) reduction(+:sum_Te,sum_dTe,sum_Se,sum_Si) )
         {
-          //const IJK cell_loc = loc + gl;
-          //const size_t cell_i = grid_ijk_to_index( dims , cell_loc );
-
-          for(int ck=0;ck<subdiv;ck++)
-          for(int cj=0;cj<subdiv;cj++)
-          for(int ci=0;ci<subdiv;ci++)
+          const bool local_cell = ! grid->is_ghost_cell(cell_loc);
+          for(size_t scindex=0; scindex<size_t(n_subcells); scindex++)
           {
-            IJK sc { ci, cj, ck };
-            const size_t scindex = grid_ijk_to_index( IJK{subdiv,subdiv,subdiv} , sc );
             const size_t idx_ti = cell_i*n_subcells + scindex ;
             const size_t idx_te = cell_i*cell_te_data.m_stride + scindex;
 
-            // source terms (precomputed once per outer MD step, above)
-            const double Si = cell_Si[idx_ti];
-            const double Se = cell_Se[idx_ti];
-
-            // sum external contributions (source terms)
-            sum_Se += Se;
-            sum_Si += Si;
-
-            // Te/Ti coupling: cell_energy_transfer holds a FIXED total energy for the whole
-            // outer MD step (computed once above, before the diffusion update); divide by
-            // delta_t (not inner_dt) to get the power density sink used at every inner step.
-            const double coupling_sink = cell_energy_transfer[idx_ti] / subcell_volume / delta_t;
-
-            // cell temperature increments
-            const double dTe = ( Te_cond*cell_L_Te[idx_ti] - coupling_sink + Se ) / Ce_rho_e;
-            Te[idx_te] += dTe * inner_dt;
-            if( ! grid->is_ghost_cell(cell_loc) )
+            sum_Se += cell_Se[idx_ti];
+            sum_Si += cell_Si[idx_ti];
+            if( local_cell )
             {
               sum_Te += Te[idx_te];
-              sum_dTe += dTe * inner_dt;
+              sum_dTe += te_update_func.dTe(idx_ti) * inner_dt;
             }
           }
         }

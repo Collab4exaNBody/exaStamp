@@ -19,17 +19,19 @@ under the License.
 #include <exanb/core/grid_algorithm.h>
 #include <exanb/grid_cell_particles/grid_cell_values_utils.h>
 #include <onika/cuda/cuda.h>
-#include <onika/parallel/block_parallel_for.h>
+#include <onika/parallel/parallel_for.h>
 
 namespace exaStamp
 {
   using namespace exanb;
 
   // Pass D of ionic_electronic_heat_transfer: 27-point discrete Laplacian of Te, one flattened
-  // (cell_i, subcell_i) index per thread (dispatched over [0, n_cells*subdiv^3) via
-  // onika::parallel::block_parallel_for -- the first pure-grid, non-particle GPU dispatch in this
-  // codebase, precedent for the dispatch *shape* only:
-  // onika/plugins/onikaParallelTutorial/parallel_for_3d_benchmark.cu). GPU-portable: only reads Te
+  // (cell_i, subcell_i) index per thread, dispatched over [0, n_cells*subdiv^3) via
+  // onika::parallel::parallel_for (thread-per-index). NOT block_parallel_for: that one runs the
+  // functor once per BLOCK, with every thread of the block executing the SAME index -- harmless for a
+  // pure overwrite like this one, but it silently multi-applies any accumulating kernel (see
+  // ttm_te_update.h). GPU opt-in trait is therefore onika::parallel::ParallelForFunctorTraits.
+  // GPU-portable: only reads Te
   // + this struct's by-value grid geometry -- uses the grid_contains/grid_index_to_ijk free
   // functions and GridCellValuesUtils::subcell_neighbor (all ONIKA_HOST_DEVICE_FUNC) instead of the
   // host-only Grid::contains/gcv_subcell_neighbor the old CPU-only loop used.
@@ -96,7 +98,7 @@ namespace onika
   namespace parallel
   {
     template<>
-    struct BlockParallelForFunctorTraits<exaStamp::TtmLaplacianFunctor>
+    struct ParallelForFunctorTraits<exaStamp::TtmLaplacianFunctor>
     {
       static inline constexpr bool CudaCompatible = true;
     };
