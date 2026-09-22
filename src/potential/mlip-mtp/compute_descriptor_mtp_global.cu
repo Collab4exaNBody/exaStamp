@@ -51,9 +51,14 @@ under the License.
 // Row layout (rows), matching the established convention (no reference-label column):
 //   size_array_rows = 1 + 3*natoms + 6
 //   row 0            -- summed one-hot species counts + summed MTP descriptor over every atom
-//   rows 1..3*natoms -- per-atom true dB_k/dR_m (self term + every neighbor interaction),
-//                       row = 1 + 3*field::id + xyz (exaStamp field::id is 0-indexed, no "-1")
-//   rows 3N+1..3N+6  -- summed r_atom . dB_atom/dR_atom, Voigt order [xx,yy,zz,yz,xz,xy]
+//   rows 1..3*natoms -- ALREADY FORCE-SIGNED per-atom aggregate (self term + every neighbor
+//                       interaction), row = 1 + 3*field::id + xyz (exaStamp field::id is 0-indexed,
+//                       no "-1") -- F_atom = +coeff . row directly, NOT -coeff . row, despite the
+//                       "dB_k/dR_m" name suggesting a raw +dE/dr. Same central+=/neighbor-=
+//                       convention as POD, independently finite-difference-verified there (see
+//                       compute_descriptor_pod_global.cu's header comment).
+//   rows 3N+1..3N+6  -- summed r_atom . (already force-signed) gradient row, Voigt order
+//                       [xx,yy,zz,yz,xz,xy]
 //
 // Real ordering requirement: must run AFTER compute_descriptor_mtp: { compute_derivative: true }
 // and BEFORE any update_opt_from_ghost call on its aggregate fields -- needs the raw, per-rank-
@@ -184,10 +189,11 @@ species (only a per-species scalar offset varies by type), so:
   columns [species_count, species_count+ncoeff)       -- the shared per-basis-function B_k columns
 
 Row 0 dotted with [species_coeffs..., linear_coeffs...] gives the total configuration energy
-directly. Rows 1..3*natoms give the true dB_k/dR_m gradient (self term + every neighbor
-interaction) at row 1+3*id+xyz (id = field::id, 0-indexed) -- only the trailing ncoeff columns are
-populated (the species columns have zero spatial gradient). Rows 3N+1..3N+6 give the virial,
-Voigt order [xx,yy,zz,yz,xz,xy], same trailing-columns-only rule.
+directly. Rows 1..3*natoms give the ALREADY FORCE-SIGNED aggregate (self term + every neighbor
+interaction) at row 1+3*id+xyz (id = field::id, 0-indexed) -- F_atom = +coeff . row directly, NOT
+-coeff . row (see this file's header comment) -- only the trailing ncoeff columns are populated
+(the species columns have zero spatial gradient). Rows 3N+1..3N+6 give the virial (same
+already-force-signed convention), Voigt order [xx,yy,zz,yz,xz,xy], same trailing-columns-only rule.
 
 Purely additive: reads compute_descriptor_mtp's existing output rather than re-running the
 descriptor+derivative pass. Must run right after compute_descriptor_mtp (compute_derivative: true)
