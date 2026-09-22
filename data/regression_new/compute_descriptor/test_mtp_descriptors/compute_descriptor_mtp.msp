@@ -1,0 +1,24 @@
+species:
+  - Cu: { mass: 63.546 Da , z: 29 , charge: 0.0 e- }
+
+init_parameters:
+  - species
+  - mtp_init:
+      parameters:
+        mtp_file: "pot.almtp"
+
+setup_system:
+  - domain:
+      cell_size: 6.6 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_xyz_file_with_xform:
+      filename: "Cu_noisy.xyz"
+      bounds_mode: FILE
+
+# Compute-only smoke test (case-1 / local-analysis shape, no global design matrix for MTP at this
+# time): verifies compute_descriptor_mtp's descriptor + derivative aggregate + ghost-fold run clean.
+# write_descriptor_mtp (the per-atom writer) was removed -- no regression script ever depended on it.
+simulation_epilog:
+  - compute_descriptor_mtp: { compute_derivative: true }
+  - update_opt_from_ghost: { opt_fields: [ "mda_.*" ] }   # required whenever compute_derivative is used on more than one rank
