@@ -37,8 +37,9 @@ namespace exaStamp
     const std::vector<int>&              m_type_map;        // exaStamp 0-indexed -> POD 1-indexed
     const size_t * const __restrict__    m_cell_particle_offset = nullptr;
     double * const __restrict__          m_descriptors = nullptr;
-    // compute_derivative only: [(m+Mdesc*k)*3+xyz] -> per-particle aggregate array, or nullptr to
-    // skip the derivative scatter entirely.
+    // compute_derivative only: [(m+Mdesc*k+Mdesc*nClusters*ti0)*3+xyz] -> per-particle aggregate
+    // array (ti0 = central atom's own species for that contribution, see operator() below), or
+    // nullptr to skip the derivative scatter entirely.
     double * const * const __restrict__  m_deriv_agg_ptrs = nullptr;
 
     template<class ComputeBufferT, class CellParticlesT>
@@ -53,9 +54,14 @@ namespace exaStamp
       const size_t p = m_cell_particle_offset[buf.cell] + buf.part;
       double * const __restrict__ out = m_descriptors + static_cast<size_t>(Mdesc) * nClusters * p;
 
+      // Central atom's own species (POD 0-indexed) -- needed unconditionally now (not just for
+      // nClusters>1's environment-descriptor call) to widen the derivative aggregate's index by
+      // species below, so a multi-species pda_* aggregate keeps each central-type's contribution
+      // in its own slot instead of collapsing them together (see mk3 below).
+      const int ti0 = m_type_map[type] - 1;
+
       if (nClusters > 1)
       {
-        const int ti0 = m_type_map[type] - 1;
         pod.peratomenvironment_descriptors(pod.pd, pod.pdd, pod.bd, pod.bdd, pod.tmpmem, ti0, jnum);
         for (int k = 0; k < nClusters; k++)
           for (int m = 0; m < Mdesc; m++)
@@ -74,6 +80,16 @@ namespace exaStamp
       // nClusters>1: apply the same product rule as PodGlobalOp (out[m,k]=pd[k]*bd[m], so its
       // derivative is bdd[m]*pd[k] + bd[m]*pdd[k]) -- pod.pd/pod.pdd were already populated above
       // by peratomenvironment_descriptors.
+      //
+      // Multi-species (nelements>1): the aggregate index is widened by Mdesc*nClusters*ti0, ti0
+      // being THIS operator() call's own central atom's type -- both the central (+=) and neighbor
+      // (-=) side of a pair land in the SAME ti0-selected slot, mirroring LAMMPS's own
+      // compute_pod_global.cpp (`k = nCoeffPerElement*(ti[0]-1) + ... `, identical central/neighbor
+      // column for a given pair). A given atom's own aggregate therefore ends up spanning MULTIPLE
+      // ti0 slots across its lifetime (its own type's slot for its `+=` self terms, plus one slot
+      // per OTHER central atom's type it was ever a neighbor of, for `-=` terms) -- this is why the
+      // consumer (compute_descriptor_pod_global.cu) reads back with a full loop over every ti0,
+      // not a single lookup by the atom's own type.
       if (m_deriv_agg_ptrs != nullptr)
       {
         for (int jj = 0; jj < jnum; jj++)
@@ -97,7 +113,7 @@ namespace exaStamp
               }
               else { vx = pod.bdd[0+base]; vy = pod.bdd[1+base]; vz = pod.bdd[2+base]; }
 
-              const int mk3 = (m + Mdesc*k)*3;
+              const int mk3 = (m + Mdesc*k + Mdesc*nClusters*ti0)*3;
               atomic_add_contribution(m_deriv_agg_ptrs[mk3+0][p],  vx);
               atomic_add_contribution(m_deriv_agg_ptrs[mk3+1][p],  vy);
               atomic_add_contribution(m_deriv_agg_ptrs[mk3+2][p],  vz);

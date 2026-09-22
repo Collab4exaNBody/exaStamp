@@ -69,9 +69,9 @@ namespace exaStamp
                DocString{"Stride of the pod_descriptors buffer = Mdesc*nClusters"} );
 
     ADD_SLOT( bool , compute_derivative , INPUT , false ,
-               DocString{"If true, also computes the compact per-atom POD descriptor-derivative aggregate: for atom a, Mdesc*nClusters*3 values ((m+Mdesc*k)*3+xyz order), the sum over every atom i that has a as a neighbor (or i==a, the self term) of d(out_[m,k] of atom i)/d(r_a). Stored as dynamically-named generic-real grid fields (see deriv_agg_field_prefix), NOT a private buffer -- run update_opt_from_ghost on them on multi-rank runs."} );
+               DocString{"If true, also computes the compact per-atom POD descriptor-derivative aggregate: for atom a, Mdesc*nClusters*3*nelements values ((m+Mdesc*k+Mdesc*nClusters*ti0)*3+xyz order, ti0 = the CENTRAL atom's own species for that contribution -- multi-species systems need one slot per species an atom was ever a neighbor of, not just its own, see pod_descriptor_op.h), the sum over every atom i that has a as a neighbor (or i==a, the self term) of d(out_[m,k] of atom i)/d(r_a). Stored as dynamically-named generic-real grid fields (see deriv_agg_field_prefix), NOT a private buffer -- run update_opt_from_ghost on them on multi-rank runs."} );
     ADD_SLOT( std::string , deriv_agg_field_prefix , INPUT , std::string("pda_") ,
-               DocString{"compute_derivative only: name prefix for the Mdesc*nClusters*3 dynamically-named generic-real grid fields ('<prefix>0'..'<prefix>{Mdesc*nClusters*3-1}') holding the derivative aggregate. KEEP THIS SHORT: dynamic field names are silently truncated to 15 characters + null (onika::soatl::FieldId's fixed char[16] m_name) -- this operator fatal_errors instead of silently colliding if prefix+max-index would overflow that limit."} );
+               DocString{"compute_derivative only: name prefix for the Mdesc*nClusters*3*nelements dynamically-named generic-real grid fields ('<prefix>0'..'<prefix>{Mdesc*nClusters*3*nelements-1}') holding the derivative aggregate. KEEP THIS SHORT: dynamic field names are silently truncated to 15 characters + null (onika::soatl::FieldId's fixed char[16] m_name) -- this operator fatal_errors instead of silently colliding if prefix+max-index would overflow that limit."} );
 
     static constexpr bool UseWeights   = false;
     static constexpr bool UseNeighbors = true;
@@ -106,7 +106,11 @@ namespace exaStamp
       if (*compute_derivative)
       {
         const int Mdesc = eapod0.Mdesc;
-        const size_t nc3 = static_cast<size_t>(Mdesc) * eapod0.nClusters * 3;
+        // Widened by nelements (multi-species): a given atom's aggregate spans one slot per
+        // possible CENTRAL-atom species it was ever involved with, not just its own -- see
+        // pod_descriptor_op.h's own comment on the mk3 index for why. Mono-species (nelements==1)
+        // is the trivial special case (factor of 1), unchanged from before.
+        const size_t nc3 = static_cast<size_t>(Mdesc) * eapod0.nClusters * 3 * eapod0.nelements;
         // onika::soatl::FieldId's dynamic-field name storage is a fixed char[16] (incl. null
         // terminator), silently strncpy-truncated -- a too-long prefix+index would alias
         // multiple components onto the same field with no error, so check instead of guessing.

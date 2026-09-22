@@ -38,18 +38,17 @@ under the License.
 // design exactly (see compute_descriptor_k2b_global.cu for the reference shape this mirrors).
 // Purely additive: the existing per-atom compute_descriptor_pod stays fully intact and usable alone.
 //
-// Restricted to nelements==1 (mono-species POD configs): PodGlobalOp's old per-pair scatter placed
-// every gradient contribution's column using the CENTRAL atom's type (ti0) for BOTH the central
-// (+=) and neighbor (-=) side of a pair -- but the per-atom pda_* aggregate this operator now reads
-// collapses central-role and neighbor-role contributions (from pairs that may have had different
-// central-atom types) into one bin per atom, with no per-contribution type tag. For nelements>1 that
-// column-placement information is genuinely lost once collapsed and cannot be recovered from pda_*
-// alone. Row 0 has no such gap (a central atom's own type is available directly at assembly time);
-// only the gradient/virial rows are affected. Same scope-limiting pattern SNAP's own
-// compute_derivative/_global mono-element restriction already establishes in this codebase -- all
-// existing POD regression assets are single-species, so this is a documented v1 restriction, not a
-// regression. Multi-species support would need the per-pair central-type tag threaded through
-// pda_*'s own storage (a bigger, separate change) if it's ever needed.
+// Multi-species (nelements>1) support: PodGlobalOp's old per-pair scatter placed every gradient
+// contribution's column using the CENTRAL atom's type (ti0) for BOTH the central (+=) and neighbor
+// (-=) side of a pair. pod_descriptor_op.h's pda_* aggregate now preserves that same information by
+// being WIDENED by nelements (one slot per possible central-atom species, see its own header
+// comment) instead of collapsing every central-role type into one bin -- so a given atom's own
+// aggregate row spans multiple ti0 slots (its own species for its central/self terms, plus one slot
+// per OTHER species it was ever a neighbor of). Row 0 (one-body + descriptor sum) only ever needs
+// the atom's OWN type (available directly at assembly time via field::type). The gradient rows,
+// read from pda_*, loop over every ti0 in [0,nelements) to recover all of an atom's contributions --
+// mono-species (nelements==1) is the trivial single-iteration special case of the same loop, not a
+// separately-maintained path.
 //
 // Row/column layout: row 0 = system-wide per-element summed descriptor vector (incl. the nl1
 // one-body atom-count term); rows 1..3*natoms = ALREADY FORCE-SIGNED gradient of row 0 w.r.t. atom
@@ -106,21 +105,15 @@ namespace exaStamp
       }
 
       auto & eapod0 = *pod_ctx->m_eapod[0];
-      if( eapod0.nelements > 1 )
-      {
-        fatal_error() << "compute_descriptor_pod_global: multi-species POD (nelements>1) is not supported -- "
-                          "the per-atom derivative aggregate (pda_*) does not preserve per-central-atom-type "
-                          "information needed for the per-element-block column layout (see this file's header comment)" << std::endl;
-      }
 
       const long Mdesc = eapod0.Mdesc;
       const long nClusters = eapod0.nClusters;
       const long nl1 = eapod0.nl1;
-      const long ncols = static_cast<long>(eapod0.nCoeffPerElement) * eapod0.nelements;
+      const long nelements = eapod0.nelements;
+      const long ncols = static_cast<long>(eapod0.nCoeffPerElement) * nelements;
       *ncoeff_all = ncols;
       const long nc = *ncoeff;   // == Mdesc*nClusters
-      const long nc3 = nc * 3;
-      const long ti0 = 0;        // nelements==1 guaranteed above -- single column block
+      const long nc3 = nc * 3 * nelements;   // widened by nelements, matches compute_descriptor_pod.cu
 
       std::vector<const double*> agg_ptr( static_cast<size_t>(nc3), nullptr );
       for( long k=0; k<nc3; k++ )
@@ -166,6 +159,10 @@ namespace exaStamp
 
           if( ! is_ghost )
           {
+            // Row 0 (one-body + descriptor sum) only ever needs THIS atom's own species -- no
+            // per-contribution type ambiguity here, unlike the gradient rows below (pod_descriptors
+            // itself was never widened, see compute_descriptor_pod.cu's own comment on why not).
+            const long ti0 = pod_ctx->type_map[ cell[field::type][pi] ] - 1;
             if( nl1 > 0 ) arr[ eapod0.nCoeffPerElement*ti0 ] += 1.0; // one-body atom-count term, row 0
             const double * const src = pod_descriptors->data() + static_cast<size_t>(nc) * p;
             for( long m=0; m<Mdesc; m++ )
@@ -176,12 +173,17 @@ namespace exaStamp
             }
           }
 
+          // Gradient rows: this atom's pda_* aggregate spans one slot per possible CENTRAL-atom
+          // species it was ever involved with (its own, for central/self terms; every OTHER species
+          // it was ever a neighbor of, for neighbor terms) -- loop every ti0 to recover all of it.
+          // Mono-species (nelements==1) is the trivial single-iteration case of this same loop.
           const long grad_row0 = 1 + 3*static_cast<long>(id);
+          for( long ti0=0; ti0<nelements; ti0++ )
           for( long m=0; m<Mdesc; m++ )
           for( long j=0; j<nClusters; j++ )
           {
             const long col = eapod0.nCoeffPerElement*ti0 + nl1 + m + j*Mdesc;
-            const long comp = (m + Mdesc*j)*3;
+            const long comp = (m + Mdesc*j + Mdesc*nClusters*ti0)*3;
             const double dx = agg_ptr[comp+0][p];
             const double dy = agg_ptr[comp+1][p];
             const double dz = agg_ptr[comp+2][p];
@@ -235,7 +237,8 @@ namespace exaStamp
 Global-array analogue of LAMMPS's compute pod/global, extended with 6 virial rows LAMMPS's own
 pod/global doesn't have (POD fitting there just doesn't use stress, not a structural limitation):
 a single, row-major (1+3*natoms+6) x ncoeff_all array (ncoeff_all = nCoeffPerElement*nelements).
-Mono-species (nelements==1) only -- see this file's header comment for why.
+Multi-species (nelements>1) supported -- see this file's header comment for the pda_* widening
+this relies on.
 
   row 0             -- system-wide per-element summed descriptor vector, including the nl1
                         one-body atom-count term. Dot this with a coefficient vector to get the
