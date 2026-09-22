@@ -1,0 +1,12 @@
+units           metal
+boundary        p p p
+
+read_data InP_small.lmp
+
+pair_style snap
+pair_coeff * * InP_coeff.txt InP_param.txt In P
+
+thermo          1
+thermo_style custom step atoms pe ke etotal temp press
+
+run 0

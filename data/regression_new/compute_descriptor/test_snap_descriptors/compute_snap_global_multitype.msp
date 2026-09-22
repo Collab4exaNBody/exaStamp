@@ -1,12 +1,13 @@
 species:
-  - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+  - W:  { mass: 183.84 Da, z: 74, charge: 0 e- }
+  - Be: { mass: 9.012182 Da, z: 4, charge: 0 e- }
 
 init_parameters:
   - species
   - snap_init:
       parameters:
-        param: "param.txt"
-        coef: "coeff.txt"
+        param: "WBe_param.txt"
+        coef: "WBe_coeff.txt"
 
 setup_system:
   - domain:
@@ -14,7 +15,7 @@ setup_system:
       periodic: [ true, true, true ]
       expandable: false
   - read_xyz_file_with_xform:
-      filename: "Ta_small.xyz"
+      filename: "WBe_small.xyz"
 
 global:
   max_iteration: 1
@@ -23,4 +24,4 @@ global:
 simulation_epilog:
   - compute_descriptor_snap: { compute_derivative: true }
   - compute_descriptor_snap_global
-  - write_descriptor_snap_global: { filename: "exastamp_snap_global_small.txt" }
+  - write_descriptor_snap_global: { filename: "exastamp_snap_global_multitype.txt" }

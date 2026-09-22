@@ -1,20 +1,21 @@
 species:
-  - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+  - In: { mass: 114.818 Da, z: 49, charge: 0 e- }
+  - P:  { mass: 30.974 Da, z: 15, charge: 0 e- }
 
 init_parameters:
   - species
   - snap_init:
       parameters:
-        param: "param.txt"
-        coef: "coeff.txt"
+        param: "InP_param.txt"
+        coef: "InP_coeff.txt"
 
 setup_system:
   - domain:
-      cell_size: 8.0 ang
+      cell_size: 15.0 ang
       periodic: [ true, true, true ]
       expandable: false
   - read_xyz_file_with_xform:
-      filename: "Ta_small.xyz"
+      filename: "InP_pair.xyz"
 
 global:
   max_iteration: 1
@@ -23,4 +24,4 @@ global:
 simulation_epilog:
   - compute_descriptor_snap: { compute_derivative: true }
   - compute_descriptor_snap_global
-  - write_descriptor_snap_global: { filename: "exastamp_snap_global_small.txt" }
+  - write_descriptor_snap_global: { filename: "exastamp_snap_pair_chemflag.txt" }

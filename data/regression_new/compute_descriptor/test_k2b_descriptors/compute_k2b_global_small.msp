@@ -18,10 +18,8 @@ setup_system:
 global:
   max_iteration: 1
   dt: 1.0e-3 ps
-  # rcut_max no longer needed here -- k2b_init sets it early (init_parameters, before setup_system)
 
 simulation_epilog:
-  - compute_descriptor_k2b:
-      compute_derivative: true
+  - compute_descriptor_k2b: { compute_derivative: true }
   - compute_descriptor_k2b_global
   - write_descriptor_k2b_global: { filename: "exastamp_k2b_global_small.txt" }
