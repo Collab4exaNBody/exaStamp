@@ -61,20 +61,30 @@ namespace exaStamp
       std::string lammps_param = onika::data_file_path( parameters->lammps_param );
       std::string lammps_coef  = onika::data_file_path( parameters->lammps_coef );
       SnapExt::snap_read_lammps( lammps_param, lammps_coef, snap_ctx->m_config, *conv_coef_units );
-      snap_ctx->m_rcut = snap_ctx->m_config.rcutfac();
-      *rcut_max = std::max( double(*rcut_max), double(snap_ctx->m_rcut) );
-      ldbg << "SNAP cutoff radius: " << snap_ctx->m_rcut << std::endl;
 
       const int nmat = snap_ctx->m_config.materials().size();
       snap_ctx->m_factor.assign( nmat, 1.0 );
       snap_ctx->m_radelem.assign( nmat, 0.0 );
       int cnt = 0;
+      double max_radelem = 0.0;
       for ( const auto& mat : snap_ctx->m_config.materials() )
       {
         snap_ctx->m_factor[cnt]  = mat.weight();
         snap_ctx->m_radelem[cnt] = mat.radelem();
+        max_radelem = std::max( max_radelem, mat.radelem() );
         cnt++;
       }
+
+      // Real per-pair SNAP cutoff is (radelem[i]+radelem[j])*rcutfac (see BispectrumOpRealT's own
+      // cutij, snap_bispectrum_op.h / real LAMMPS PairSNAP::init_one), NOT the bare rcutfac scale
+      // factor -- rcutfac alone only equals the true cutoff when every material's radelem==0.5
+      // (LAMMPS's convention for potentials with no per-element radii, true of every SNAP test
+      // asset used so far -- Ta/WBe -- but not real per-element-radius potentials like InP, where
+      // this silently produced a neighbor list too narrow to ever see a real neighbor). Worst-case
+      // pair cutoff over all i,j is 2*max_i(radelem[i]) (max_i,j(r_i+r_j) = 2*max_i(r_i)).
+      snap_ctx->m_rcut = snap_ctx->m_config.rcutfac() * 2.0 * max_radelem;
+      *rcut_max = std::max( double(*rcut_max), double(snap_ctx->m_rcut) );
+      ldbg << "SNAP cutoff radius: " << snap_ctx->m_rcut << std::endl;
 
       snap_ctx->sna = new SnapInternal::SNARealT<RealT>( new SnapInternal::Memory()
                           , snap_ctx->m_config.rfac0(), snap_ctx->m_config.twojmax(), snap_ctx->m_config.rmin0()

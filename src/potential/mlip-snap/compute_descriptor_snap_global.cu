@@ -24,6 +24,9 @@ under the License.
 #include <onika/memory/allocator.h>
 #include <onika/log.h>
 
+#include <md/snap/snap_config.h>
+#include <md/snap/snap_context.h>
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -40,10 +43,19 @@ under the License.
 // `compute_derivative: true` per-atom aggregate fields), so the existing per-atom descriptor
 // capability stays fully intact and usable on its own.
 //
+// Multi-type (ntypes>1) support: SNAP's own sda_* aggregate (compute_descriptor_snap.cu) is widened
+// by ntypes -- one ncoeff*3-wide slot per possible CENTRAL atom type, exactly LAMMPS's own
+// compute_snad_atom.cpp / snap_peratom layout. Row 0 (descriptor sum) only ever needs the atom's own
+// type (available directly at assembly time). The gradient rows, read from sda_*, loop over every
+// itype in [0,ntypes) to recover all of an atom's contributions (its own type's slot for its self
+// terms, plus one slot per OTHER type it was ever a neighbor of) -- mono-type (ntypes==1) is the
+// trivial single-iteration special case of the same loop, mirrors compute_descriptor_pod_global.cu's
+// ti0 loop and LAMMPS compute_snap.cpp's typeoffset_local/typeoffset_global split.
+//
 // Row/column layout (matches compute_snap.cpp's array, minus its trailing reference-label column --
 // this is left as a pure descriptor/gradient/virial matrix, no energy/force/virial labels):
 //   size_array_rows = 1 + 3*natoms + 6   (natoms = total atom count across the whole simulation)
-//   size_array_cols = ncoeff             (mono-type only for v1 -- see below)
+//   size_array_cols = ncoeff * ntypes
 //   row 0            -- summed bispectrum descriptor over every atom
 //   rows 1..3*natoms -- ALREADY FORCE-SIGNED per-atom aggregate (self term + every neighbor
 //                       interaction), row = 1 + 3*field::id + xyz (exaStamp field::id is 0-indexed,
@@ -77,12 +89,13 @@ namespace exaStamp
     ADD_SLOT( GridT    , grid , INPUT , REQUIRED );
     ADD_SLOT( onika::memory::CudaMMVector<double> , bispectrum , INPUT , OPTIONAL , DocString{"see compute_descriptor_snap; required"} );
     ADD_SLOT( long     , ncoeff , INPUT , OPTIONAL , DocString{"see compute_descriptor_snap; required"} );
+    ADD_SLOT( md::SnapXSContextRealT<double> , snap_ctx , INPUT , REQUIRED , DocString{"still needed for ntypes (materials().size())"} );
     ADD_SLOT( std::string , deriv_agg_field_prefix , INPUT , std::string("sda_")
             , DocString{"Must match compute_descriptor_snap's own deriv_agg_field_prefix. Must be read before update_opt_from_ghost runs on these fields -- see this file's header comment."} );
 
     ADD_SLOT( onika::memory::CudaMMVector<double> , snap_global , OUTPUT
-            , DocString{"Row-major (1+3*natoms+6) x ncoeff global design matrix (natoms = total atom count across the whole simulation, all MPI ranks). Row 0 = summed descriptor; rows 1..3*natoms = per-atom gradient (row=1+3*id+xyz); rows 3*natoms+1..+6 = virial, Voigt order [xx,yy,zz,yz,xz,xy]. Matches LAMMPS compute snap / compute mliap (descriptor sna model linear), minus their trailing reference-label column."} );
-    ADD_SLOT( long , ncoeff_all , OUTPUT , DocString{"Number of columns (= ncoeff -- mono-type only for v1)"} );
+            , DocString{"Row-major (1+3*natoms+6) x (ncoeff*ntypes) global design matrix (natoms = total atom count across the whole simulation, all MPI ranks). Row 0 = summed descriptor; rows 1..3*natoms = per-atom gradient (row=1+3*id+xyz); rows 3*natoms+1..+6 = virial, Voigt order [xx,yy,zz,yz,xz,xy]. Matches LAMMPS compute snap / compute mliap (descriptor sna model linear), minus their trailing reference-label column."} );
+    ADD_SLOT( long , ncoeff_all , OUTPUT , DocString{"Number of columns (= ncoeff * ntypes)"} );
 
   public:
     inline void execute() override final
@@ -93,8 +106,10 @@ namespace exaStamp
       }
 
       const long nc = *ncoeff;
-      *ncoeff_all = nc;
-      const long nc3 = nc * 3;
+      const long ntypes = static_cast<long>( snap_ctx->m_config.materials().size() );
+      *ncoeff_all = nc * ntypes;
+      const long ncoeff3 = nc * 3;
+      const long nc3 = ncoeff3 * ntypes; // widened by ntypes, matches compute_descriptor_snap.cu
 
       std::vector<const double*> agg_ptr( static_cast<size_t>(nc3), nullptr );
       for( long k=0; k<nc3; k++ )
@@ -109,23 +124,6 @@ namespace exaStamp
       const auto * cell_particle_offset = grid->cell_particle_offset_data();
       const size_t n_cells = grid->number_of_cells();
 
-      // mono-type only for v1 (matches compute_descriptor_snap's own compute_derivative
-      // restriction to chem_flag==false); ncols would generalize to ncoeff*ntypes with a type
-      // offset on every scatter below, once the underlying per-neighbor derivative math itself
-      // supports multi-element (see snap_compute_dbidrj.h)
-      for( size_t ci=0; ci<n_cells; ci++ )
-      {
-        const auto & cell = grid->cell(ci);
-        const size_t np = cell.size();
-        for( size_t pi=0; pi<np; pi++ )
-        {
-          if( cell[field::type][pi] != 0 )
-          {
-            fatal_error() << "compute_descriptor_snap_global: multi-type systems are not yet supported (v1 is mono-element only)" << std::endl;
-          }
-        }
-      }
-
       // local owned (non-ghost) atom count -> global total via one small Allreduce, so every
       // rank allocates the same full-size array before the main per-atom Allreduce below
       long local_owned = 0;
@@ -137,11 +135,12 @@ namespace exaStamp
       long natoms_global = 0;
       MPI_Allreduce( &local_owned, &natoms_global, 1, MPI_LONG, MPI_SUM, *mpi );
 
+      const long ncols = nc * ntypes;
       const long nrows = 1 + 3*natoms_global + 6;
       const long virial_row0 = 1 + 3*natoms_global;
 
       snap_global->clear();
-      snap_global->resize( static_cast<size_t>(nrows) * static_cast<size_t>(nc), 0.0 );
+      snap_global->resize( static_cast<size_t>(nrows) * static_cast<size_t>(ncols), 0.0 );
       double * const arr = snap_global->data();
 
       for( size_t ci=0; ci<n_cells; ci++ )
@@ -159,32 +158,43 @@ namespace exaStamp
 
           if( ! is_ghost )
           {
+            // Row 0 only ever needs THIS atom's own type -- no per-contribution type ambiguity
+            // here, unlike the gradient rows below (bispectrum itself was never widened by ntypes).
+            const long itype0 = static_cast<long>( cell[field::type][pi] );
             const double * const src = bispectrum->data() + static_cast<size_t>(nc) * p;
-            for( long k=0; k<nc; k++ ) arr[k] += src[k];
+            for( long k=0; k<nc; k++ ) arr[ nc*itype0 + k ] += src[k];
           }
 
+          // Gradient rows: this atom's sda_* aggregate spans one slot per possible CENTRAL-atom
+          // type it was ever involved with -- loop every itype to recover all of it. Mono-type
+          // (ntypes==1) is the trivial single-iteration case of this same loop.
           const long grad_row0 = 1 + 3*static_cast<long>(id);
-          for( long k=0; k<nc; k++ )
+          for( long itype=0; itype<ntypes; itype++ )
           {
-            const double dx = agg_ptr[k*3+0][p];
-            const double dy = agg_ptr[k*3+1][p];
-            const double dz = agg_ptr[k*3+2][p];
+            const long typeoffset = ncoeff3 * itype;
+            for( long k=0; k<nc; k++ )
+            {
+              const long col = nc*itype + k;
+              const double dx = agg_ptr[typeoffset+k*3+0][p];
+              const double dy = agg_ptr[typeoffset+k*3+1][p];
+              const double dz = agg_ptr[typeoffset+k*3+2][p];
 
-            arr[ (grad_row0+0)*nc + k ] += dx;
-            arr[ (grad_row0+1)*nc + k ] += dy;
-            arr[ (grad_row0+2)*nc + k ] += dz;
+              arr[ (grad_row0+0)*ncols + col ] += dx;
+              arr[ (grad_row0+1)*ncols + col ] += dy;
+              arr[ (grad_row0+2)*ncols + col ] += dz;
 
-            arr[ (virial_row0+0)*nc + k ] += dx*rx; // xx
-            arr[ (virial_row0+1)*nc + k ] += dy*ry; // yy
-            arr[ (virial_row0+2)*nc + k ] += dz*rz; // zz
-            arr[ (virial_row0+3)*nc + k ] += dz*ry; // yz
-            arr[ (virial_row0+4)*nc + k ] += dz*rx; // xz
-            arr[ (virial_row0+5)*nc + k ] += dy*rx; // xy
+              arr[ (virial_row0+0)*ncols + col ] += dx*rx; // xx
+              arr[ (virial_row0+1)*ncols + col ] += dy*ry; // yy
+              arr[ (virial_row0+2)*ncols + col ] += dz*rz; // zz
+              arr[ (virial_row0+3)*ncols + col ] += dz*ry; // yz
+              arr[ (virial_row0+4)*ncols + col ] += dz*rx; // xz
+              arr[ (virial_row0+5)*ncols + col ] += dy*rx; // xy
+            }
           }
         }
       }
 
-      MPI_Allreduce( MPI_IN_PLACE, arr, static_cast<int>(nrows*nc), MPI_DOUBLE, MPI_SUM, *mpi );
+      MPI_Allreduce( MPI_IN_PLACE, arr, static_cast<int>(nrows*ncols), MPI_DOUBLE, MPI_SUM, *mpi );
     }
 
     inline std::string documentation() const override final
@@ -192,10 +202,13 @@ namespace exaStamp
       return R"EOF(
 
 Global linear-fitting design matrix for SNAP -- analogue of LAMMPS's compute snap / compute mliap
-(descriptor sna model linear). Row-major (1+3*natoms+6) x ncoeff array:
+(descriptor sna model linear). Row-major (1+3*natoms+6) x (ncoeff*ntypes) array. Multi-type
+(ntypes>1) supported -- column block selected by type, one ncoeff-wide block per type, matching
+LAMMPS compute_snap.cpp's typeoffset_local/typeoffset_global convention:
 
-  row 0             -- summed bispectrum descriptor over every atom. Dot with a coefficient vector
-                       to get the total configuration energy.
+  row 0             -- summed bispectrum descriptor over every atom, one ncoeff-wide column block
+                       per type (column = ncoeff*itype + k). Dot with a coefficient vector to get
+                       the total configuration energy.
   rows 1..3*natoms  -- ALREADY FORCE-SIGNED aggregate (self term + every neighbor interaction) w.r.t.
                        atom m's x/y/z, at row 1+3*m+xyz (m = field::id, 0-indexed). Dot this row with
                        the same coefficient vector directly to get that atom's force component:
@@ -212,8 +225,6 @@ Purely additive: reads compute_descriptor_snap's existing output rather than re-
 bispectrum+derivative pass, so the existing per-atom descriptor capability stays intact. Must run
 right after compute_descriptor_snap (compute_derivative: true) and BEFORE any update_opt_from_ghost
 call on its aggregate fields -- this operator needs the raw, un-folded per-rank-local aggregate.
-
-Mono-element only for v1 (matches compute_descriptor_snap's own compute_derivative restriction).
 
 Usage example (snap_ctx is built once, early, by snap_init -- see snap_init.cu):
 
