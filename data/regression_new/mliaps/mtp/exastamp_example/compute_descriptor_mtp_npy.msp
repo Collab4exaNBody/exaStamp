@@ -18,10 +18,6 @@ setup_system:
 
 simulation_epilog:
   - compute_descriptor_mtp: { compute_derivative: true }
-  - write_descriptor_mtp:
-      filename: "mtp_descriptors_npy.txt"
-      format: npy
-      fields: [ id, descriptor ]
   - compute_descriptor_mtp_global
   - write_descriptor_mtp_global:
       filename: "mtp_global_npy.txt"

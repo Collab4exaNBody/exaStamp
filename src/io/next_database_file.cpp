@@ -25,11 +25,12 @@ under the License.
 #include <vector>
 
 // Cursor operator for process_files_loop's batch{loop:true} body (see
-// create_descriptor_database.msp): each iteration emits the next entry of list_file_directory's
-// file_list (as `filename`, auto-wired into read_xyz_file_with_xform), a matching per-file output
-// path re-using that file's own stem (as `output_filename`, auto-wired into write_descriptor_snap
-// -- the input file's own name IS the label, no separate file_id column/sidecar manifest needed),
-// and the loop-continue boolean `compute_desc_continue` the batch's condition: watches.
+// create_descriptor_database_<family>.msp, e.g. create_descriptor_database_snap.msp): each iteration emits the
+// next entry of list_file_directory's file_list (as `filename`, auto-wired into
+// read_xyz_file_with_xform), a matching per-file output path re-using that file's own stem (as
+// `output_filename`, auto-wired into write_descriptor_<family>_global -- the input file's own name
+// IS the label, no separate file_id column/sidecar manifest needed), and the loop-continue boolean
+// `compute_desc_continue` the batch's condition: watches.
 namespace exaStamp
 {
   using namespace exanb;
@@ -58,12 +59,13 @@ namespace exaStamp
       {
         const std::string & src = (*file_list)[*cursor];
         *filename = src;
-        // std::ofstream on a missing parent dir silently no-ops (write_descriptor_snap does not
-        // check is_open()) -- create it here so a missing desc_database doesn't silently drop output
+        // std::ofstream on a missing parent dir silently no-ops (write_descriptor_<family>_global
+        // does not check is_open()) -- create it here so a missing desc_database doesn't silently
+        // drop output
         std::filesystem::create_directories( *desc_database );
-        // no extension here: write_descriptor_snap's npy path uses `filename` as a bare prefix and
-        // appends ".npy" itself (it only strips a trailing ".txt", so passing "*.npy" here would
-        // double up into "*.npy.npy")
+        // no extension here: write_descriptor_<family>_global's npy path uses `filename` as a bare
+        // prefix and appends ".npy" itself (it only strips a trailing ".txt", so passing "*.npy"
+        // here would double up into "*.npy.npy")
         *output_filename = *desc_database + "/" + std::filesystem::path(src).stem().string();
         ++(*cursor);
         *compute_desc_continue = true;

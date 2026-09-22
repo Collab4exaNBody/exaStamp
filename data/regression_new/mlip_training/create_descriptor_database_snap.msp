@@ -1,28 +1,28 @@
 includes:
   - config_species.msp
-  
+
 species:
   - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
 
 init_parameters:
   - species
-  - pod_init:
+  - snap_init:
       parameters:
-        pod_file: "Ta_param.pod"
-        coeff_file: "Ta_coefficients.pod"
+        param: "param.txt"
+        coef: "coeff.txt"
 
 read_single_file:
   - read_xyz_file_with_xform:
       verbose: false
 
-get_desc_pod:
-  - compute_descriptor_pod: { compute_derivative: true }
-  - compute_descriptor_pod_global
+get_desc_snap:
+  - compute_descriptor_snap: { compute_derivative: true }
+  - compute_descriptor_snap_global
 
-write_desc_pod:
+write_desc_snap:
   rebind: { filename: output_filename }
   body:
-    - write_descriptor_pod_global:
+    - write_descriptor_snap_global:
         format: npy
 
 process_files_loop:
@@ -38,14 +38,14 @@ process_files_loop:
     - grid_post_processing
     - reduce_species_after_read
     - init_particles
-    - get_desc_pod
-    - write_desc_pod
+    - get_desc_snap
+    - write_desc_snap
 
 global:
   rcut_max: 6.0 ang
   rcut_inc: 1.0 ang
   xyz_database: "Ta_DB_XYZ"
-  desc_database: "Ta_Desc_POD"
+  desc_database: "Ta_Desc_SNAP"
   compute_desc_continue: true
 
 simulation:

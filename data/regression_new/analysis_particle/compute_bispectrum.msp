@@ -1,6 +1,13 @@
 species:
   - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
 
+init_parameters:
+  - species
+  - snap_init:
+      parameters:
+        param: "param.txt"
+        coef: "coeff.txt"
+
 setup_system:
   - domain:
       cell_size: 6.6 ang
@@ -17,15 +24,12 @@ setup_system:
 global:
   max_iteration: 1
   dt: 1.0e-3 ps
-  rcut_max: 4.8 ang
+  # rcut_max no longer needed here -- snap_init sets it early (init_parameters, before setup_system)
 
 compute_descriptor_snap:
   nneigh_bispectrum: 32
   closest_bispectrum: false
   neigh_margin: 0.2
-  parameters:
-    param: "param.txt"
-    coef: "coeff.txt"
 
 simulation_epilog:
   - compute_descriptor_snap

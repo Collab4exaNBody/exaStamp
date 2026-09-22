@@ -29,7 +29,7 @@ under the License.
 // real training set is organized as one subfolder per configuration category, e.g.
 // POD_DB_XYZ/Liquid/, POD_DB_XYZ/Volume_BCC/, ...), once, before a process_files_loop
 // batch{loop:true} body iterates over them via next_database_file -- see
-// create_descriptor_database.msp. Sorted by full path for reproducibility.
+// create_descriptor_database_<family>.msp. Sorted by full path for reproducibility.
 namespace exaStamp
 {
   using namespace exanb;
