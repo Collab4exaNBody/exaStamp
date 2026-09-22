@@ -17,168 +17,211 @@ under the License.
 
 #include <exanb/core/grid.h>
 #include <exanb/core/grid_fields.h>
-#include <exanb/core/domain.h>
-#include <onika/math/basic_types.h>
-#include <onika/math/basic_types_operators.h>
-#include <exanb/compute/compute_cell_particle_pairs.h>
 
 #include <onika/scg/operator.h>
 #include <onika/scg/operator_factory.h>
 #include <onika/scg/operator_slot.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <onika/log.h>
-#include <onika/cpp_utils.h>
-#include <onika/file_utils.h>
-
-#include <exanb/particle_neighbors/chunk_neighbors.h>
 
 #include <cstdint>
-#include <memory>
+#include <string>
 #include <vector>
 #include <mpi.h>
 
 #include "pod_params.h"
 #include "pod_config.h"
-#include "pod_force_op.h"    // PodComputeBuffer, CopyParticleType
-#include "pod_global_op.h"   // PodGlobalOp
 
-// Global-array descriptor+gradient+virial pass, analogous to LAMMPS's compute pod/global (plus 6
-// virial rows LAMMPS's own pod/global doesn't have -- POD fitting there just doesn't use stress,
-// not a structural limitation; added here to match compute_descriptor_snap_global's shape) -- see
-// pod_global_op.h for the descriptor+gradient algorithm and why rows are indexed by atom id-1.
+// Global linear-fitting design matrix for POD -- consumes compute_descriptor_pod's already-computed
+// output (pod_descriptors + compute_derivative: true's pda_* aggregate) instead of re-running its
+// own independent neighbor pass, matching SNAP/k2b/MTP's own compute_descriptor_<family>_global
+// design exactly (see compute_descriptor_k2b_global.cu for the reference shape this mirrors).
+// Purely additive: the existing per-atom compute_descriptor_pod stays fully intact and usable alone.
 //
-// Multi-MPI-rank capable (LAMMPS's own compute_pod_global.cpp is serial-only, but that's just
-// because it never needed to be otherwise -- nothing about the math requires it). Simpler than
-// compute_descriptor_snap_global.cu's own multi-rank handling: PodGlobalOp already "ghost-folds"
-// within a single rank by scattering directly through the flat array via atom id (a ghost's
-// neighbor-role contribution lands on the exact same row as its real owner's central-role
-// contribution, same id -- see pod_global_op.h), so each rank's local pass already produces a
-// complete PARTIAL sum for every row it touches; combining ranks is then just one MPI_Allreduce
-// over rows 0..3*natoms_global. The 6 virial rows are handled as a SEPARATE, later Allreduce
-// (not folded into the same call) specifically because they must be computed from the
-// POST-reduction gradient rows: each rank sums only over its own owned atoms (every atom is
-// owned by exactly one rank, so no double counting and nothing missed), but needs every atom's
-// COMPLETE gradient row to do that correctly -- unlike SNAP's virial pass (computed from each
-// rank's pre-reduction local aggregate via the fdotr identity, real+ghost instances each
-// contributing separately), that identity doesn't apply here since POD's ghost and real
-// instances of the same atom already share one row, not separate per-instance storage.
+// Restricted to nelements==1 (mono-species POD configs): PodGlobalOp's old per-pair scatter placed
+// every gradient contribution's column using the CENTRAL atom's type (ti0) for BOTH the central
+// (+=) and neighbor (-=) side of a pair -- but the per-atom pda_* aggregate this operator now reads
+// collapses central-role and neighbor-role contributions (from pairs that may have had different
+// central-atom types) into one bin per atom, with no per-contribution type tag. For nelements>1 that
+// column-placement information is genuinely lost once collapsed and cannot be recovered from pda_*
+// alone. Row 0 has no such gap (a central atom's own type is available directly at assembly time);
+// only the gradient/virial rows are affected. Same scope-limiting pattern SNAP's own
+// compute_derivative/_global mono-element restriction already establishes in this codebase -- all
+// existing POD regression assets are single-species, so this is a documented v1 restriction, not a
+// regression. Multi-species support would need the per-pair central-type tag threaded through
+// pda_*'s own storage (a bigger, separate change) if it's ever needed.
+//
+// Row/column layout: row 0 = system-wide per-element summed descriptor vector (incl. the nl1
+// one-body atom-count term); rows 1..3*natoms = ALREADY FORCE-SIGNED gradient of row 0 w.r.t. atom
+// id's x/y/z (F_atom = +coeff . row, not -coeff . row -- see the finite-difference-vs-energy note
+// below, this is not what the central+=/neighbor-= scatter's naming naively suggests); rows
+// 3*natoms+1..+6 = virial, Voigt order [xx,yy,zz,yz,xz,xy], same already-force-signed convention.
+// Rows 0..3*natoms match LAMMPS compute pod/global exactly (single-rank); virial rows have no
+// LAMMPS counterpart (POD fitting there doesn't use stress) but follow the same formula
+// compute_descriptor_snap_global uses.
+//
+// Force/virial sign, verified independently (2026-09-22): compute_descriptor_pod's own
+// documentation (and this operator's own gradient/virial rows, built from the exact same pda_*
+// aggregate) previously claimed "F_atom = -coeff . row" -- a finite-difference-vs-energy check
+// (perturb a small non-periodic cluster's positions/strain, central-difference row 0 against the
+// gradient/virial rows directly, independent of any LAMMPS comparison) showed this is backwards:
+// the central+=/neighbor-= scatter in pod_descriptor_op.h computes d(rij)/dr with rij=r_neighbor-
+// r_central, so by the chain rule the stored aggregate is -dE/dr (already force-signed), not
+// +dE/dr. LAMMPS's own compute pod/global apparently uses the identical convention (that's why the
+// gradient-row VALUES still matched LAMMPS exactly in compare_global.py -- a plain values-vs-LAMMPS
+// diff can't catch an overall sign both sides happen to share). Correct usage: F_atom = +coeff .
+// row[1+3*id+xyz] directly, no extra negation. See
+// data/regression_new/compute_descriptor/test_pod_descriptors/compare_global_strain_fd.py.
+//
+// Must run AFTER compute_descriptor_pod: { compute_derivative: true } and BEFORE any
+// update_opt_from_ghost call on the pda_* fields -- this operator needs the raw, per-rank-local,
+// UN-FOLDED aggregate (real and ghost slots each carry their own partial view); update_opt_from_ghost
+// folding first would corrupt both the gradient-row and virial-row accumulation here. Same ordering
+// rule as compute_descriptor_snap_global.cu/compute_descriptor_k2b_global.cu.
 namespace exaStamp
 {
-
   using namespace exanb;
 
-  template<
-    class GridT,
-    class = AssertGridHasFields< GridT, field::_type >
-    >
+  template<class GridT>
   class ComputeDescriptorPodGlobal : public OperatorNode
   {
-    ADD_SLOT( MPI_Comm                  , mpi             , INPUT , REQUIRED );
-    ADD_SLOT( double                    , rcut_max        , INPUT_OUTPUT , 0.0 );
-    ADD_SLOT( exanb::GridChunkNeighbors , chunk_neighbors , INPUT , exanb::GridChunkNeighbors{}, DocString{"neighbor list"} );
-    ADD_SLOT( bool                      , ghost           , INPUT , false );
-    ADD_SLOT( GridT                     , grid            , INPUT_OUTPUT );
-    ADD_SLOT( Domain                    , domain          , INPUT , REQUIRED );
-    ADD_SLOT( PodContext                , pod_ctx         , INPUT , REQUIRED );
+    ADD_SLOT( MPI_Comm , mpi  , INPUT , REQUIRED );
+    ADD_SLOT( GridT    , grid , INPUT , REQUIRED );
+    ADD_SLOT( PodContext , pod_ctx , INPUT , REQUIRED , DocString{"still needed for Mdesc/nClusters/nCoeffPerElement/nl1/nelements"} );
+    ADD_SLOT( onika::memory::CudaMMVector<double> , pod_descriptors , INPUT , OPTIONAL , DocString{"see compute_descriptor_pod; required"} );
+    ADD_SLOT( long     , ncoeff , INPUT , OPTIONAL , DocString{"see compute_descriptor_pod; required (= Mdesc*nClusters)"} );
+    ADD_SLOT( std::string , deriv_agg_field_prefix , INPUT , std::string("pda_")
+            , DocString{"Must match compute_descriptor_pod's own deriv_agg_field_prefix. Must be read before update_opt_from_ghost runs on these fields -- see this file's header comment."} );
 
-    ADD_SLOT( onika::memory::CudaMMVector<double>, pod_global, OUTPUT,
-               DocString{"Row-major (1+3*natoms+6) x ncoeff_all global array, natoms = TOTAL atom count across every MPI rank: row 0 = system-wide per-element summed descriptor vector (incl. one-body atom-count term); rows 1..3*natoms = gradient of row 0 w.r.t. atom (id-1)'s x/y/z; rows 3*natoms+1..+6 = virial, Voigt order [xx,yy,zz,yz,xz,xy]. Rows 0..3*natoms match LAMMPS compute pod/global exactly (single-rank); the virial rows have no LAMMPS counterpart (POD fitting there doesn't use stress) but follow the same formula compute_descriptor_snap_global uses. Identically Allreduce'd on every rank by the time this operator returns."} );
-    ADD_SLOT( long, ncoeff_all, OUTPUT,
-               DocString{"Number of columns = nCoeffPerElement*nelements"} );
-
-    static constexpr bool UseWeights   = false;
-    static constexpr bool UseNeighbors = true;
-    using ComputeBuffer = ComputePairBuffer2<UseWeights, UseNeighbors, PodComputeBuffer, CopyParticleType>;
-    static constexpr FieldSet<field::_type> compute_global_field_set{};
+    ADD_SLOT( onika::memory::CudaMMVector<double> , pod_global , OUTPUT
+            , DocString{"Row-major (1+3*natoms+6) x ncoeff_all global array, natoms = total atom count across every MPI rank. See this file's header comment for the exact row/column layout."} );
+    ADD_SLOT( long , ncoeff_all , OUTPUT , DocString{"Number of columns = nCoeffPerElement*nelements"} );
 
   public:
-
     inline void execute() override final
     {
-      assert( chunk_neighbors->number_of_cells() == grid->number_of_cells() );
-      const size_t nt = omp_get_max_threads();
-      if (nt > pod_ctx->m_eapod.size())
+      if( ! pod_descriptors.has_value() || ! ncoeff.has_value() )
       {
-        lerr << "POD: omp_get_max_threads() grew from " << pod_ctx->m_eapod.size()
-             << " to " << nt << " after init -- some threads lack an EAPOD context."
-             << " Re-run with the correct OMP_NUM_THREADS set before launch." << std::endl;
-        fatal_error() << "POD thread context size mismatch" << std::endl;
+        fatal_error() << "compute_descriptor_pod_global: pod_descriptors/ncoeff unavailable -- run compute_descriptor_pod first" << std::endl;
       }
 
-      auto& eapod0 = *pod_ctx->m_eapod[0];
+      auto & eapod0 = *pod_ctx->m_eapod[0];
+      if( eapod0.nelements > 1 )
+      {
+        fatal_error() << "compute_descriptor_pod_global: multi-species POD (nelements>1) is not supported -- "
+                          "the per-atom derivative aggregate (pda_*) does not preserve per-central-atom-type "
+                          "information needed for the per-element-block column layout (see this file's header comment)" << std::endl;
+      }
+
+      const long Mdesc = eapod0.Mdesc;
+      const long nClusters = eapod0.nClusters;
+      const long nl1 = eapod0.nl1;
       const long ncols = static_cast<long>(eapod0.nCoeffPerElement) * eapod0.nelements;
       *ncoeff_all = ncols;
+      const long nc = *ncoeff;   // == Mdesc*nClusters
+      const long nc3 = nc * 3;
+      const long ti0 = 0;        // nelements==1 guaranteed above -- single column block
 
-      // Local owned (non-ghost) atom count -> global total via one small Allreduce, so every
-      // rank sizes/id-indexes the array identically before the scatter below -- this rank must
-      // take part even if it locally owns zero cells (an empty subdomain), hence the ternary
-      // rather than an early return (which would desync the collectives below and hang).
-      const long natoms_local = ( grid->number_of_cells() == 0 ) ? 0
-                               : static_cast<long>( grid->number_of_particles() - grid->number_of_ghost_particles() );
+      std::vector<const double*> agg_ptr( static_cast<size_t>(nc3), nullptr );
+      for( long k=0; k<nc3; k++ )
+      {
+        agg_ptr[k] = grid->flat_array_data_nocreate( field::mk_generic_real( *deriv_agg_field_prefix + std::to_string(k) ) );
+        if( agg_ptr[k] == nullptr )
+        {
+          fatal_error() << "compute_descriptor_pod_global: field '"<<*deriv_agg_field_prefix<<k<<"' not found -- run compute_descriptor_pod with compute_derivative: true first" << std::endl;
+        }
+      }
+
+      const auto * cell_particle_offset = grid->cell_particle_offset_data();
+      const size_t n_cells = grid->number_of_cells();
+
+      // local owned (non-ghost) atom count -> global total via one small Allreduce, so every rank
+      // allocates the same full-size array before the main per-atom Allreduce below
+      long local_owned = 0;
+      for( size_t ci=0; ci<n_cells; ci++ )
+      {
+        if( grid->is_ghost_cell(ci) ) continue;
+        local_owned += static_cast<long>( grid->cell(ci).size() );
+      }
       long natoms_global = 0;
-      MPI_Allreduce( &natoms_local, &natoms_global, 1, MPI_LONG, MPI_SUM, *mpi );
+      MPI_Allreduce( &local_owned, &natoms_global, 1, MPI_LONG, MPI_SUM, *mpi );
 
       const long grad_rows = 1 + 3*natoms_global;
       const long virial_row0 = grad_rows;
       const long rows = grad_rows + 6;
+
       pod_global->clear();
       pod_global->resize( static_cast<size_t>(rows) * static_cast<size_t>(ncols), 0.0 );
       double * const arr = pod_global->data();
 
-      if( grid->number_of_cells() > 0 )
+      for( size_t ci=0; ci<n_cells; ci++ )
       {
-        ComputePairNullWeightIterator cp_weight{};
-        exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
-        auto global_buf = make_compute_pair_buffer<ComputeBuffer>();
-        LinearXForm cp_xform{ domain->xform() };
-        ComputePairOptionalLocks<false> cp_locks{};
+        const bool is_ghost = grid->is_ghost_cell(ci);
+        const auto & cell = grid->cell(ci);
+        const size_t np = cell.size();
+        for( size_t pi=0; pi<np; pi++ )
+        {
+          const size_t p = cell_particle_offset[ci] + pi;
+          const uint64_t id = cell[field::id][pi];
 
-        PodGlobalOp global_op{ pod_ctx->m_eapod, pod_ctx->type_map, ncols, arr };
-        compute_cell_particle_pairs(
-            *grid, *rcut_max, *ghost,
-            make_compute_pair_optional_args(nbh_it, cp_weight, cp_xform, cp_locks),
-            global_buf, global_op, compute_global_field_set,
-            parallel_execution_context());
+          if( ! is_ghost )
+          {
+            if( nl1 > 0 ) arr[ eapod0.nCoeffPerElement*ti0 ] += 1.0; // one-body atom-count term, row 0
+            const double * const src = pod_descriptors->data() + static_cast<size_t>(nc) * p;
+            for( long m=0; m<Mdesc; m++ )
+            for( long j=0; j<nClusters; j++ )
+            {
+              const long col = eapod0.nCoeffPerElement*ti0 + nl1 + m + j*Mdesc;
+              arr[ col ] += src[ m + Mdesc*j ];
+            }
+          }
+
+          const long grad_row0 = 1 + 3*static_cast<long>(id);
+          for( long m=0; m<Mdesc; m++ )
+          for( long j=0; j<nClusters; j++ )
+          {
+            const long col = eapod0.nCoeffPerElement*ti0 + nl1 + m + j*Mdesc;
+            const long comp = (m + Mdesc*j)*3;
+            const double dx = agg_ptr[comp+0][p];
+            const double dy = agg_ptr[comp+1][p];
+            const double dz = agg_ptr[comp+2][p];
+            arr[ (grad_row0+0)*ncols + col ] += dx;
+            arr[ (grad_row0+1)*ncols + col ] += dy;
+            arr[ (grad_row0+2)*ncols + col ] += dz;
+          }
+        }
       }
 
-      // Combine every rank's local partial contribution to rows 0..3*natoms_global. Each row is
-      // already "ghost-folded" within a single rank (see header comment), so this one Allreduce
-      // is all that's needed to get the complete, correct global descriptor+gradient block on
-      // every rank -- matching exactly what a single-rank run would have produced.
+      // Combine every rank's local partial contribution to rows 0..3*natoms_global.
       MPI_Allreduce( MPI_IN_PLACE, arr, static_cast<int>(grad_rows*ncols), MPI_DOUBLE, MPI_SUM, *mpi );
 
       // Virial rows: Σ r_atom . dDescriptor_atom/dr_atom, Voigt order [xx,yy,zz,yz,xz,xy] --
-      // computed from the now-COMPLETE (post-Allreduce) gradient rows above, each rank summing
-      // only over its own owned atoms (every atom is owned by exactly one rank, so no double
-      // counting and nothing missed); one more (small) Allreduce combines every rank's partial
-      // virial sum into the final answer.
-      if( grid->number_of_cells() > 0 )
+      // computed from the now-COMPLETE (post-Allreduce) gradient rows above, each rank summing only
+      // over its own owned atoms (every atom is owned by exactly one rank, so no double counting and
+      // nothing missed); one more (small) Allreduce combines every rank's partial virial sum.
+      for( size_t ci=0; ci<n_cells; ci++ )
       {
-        const size_t n_cells = grid->number_of_cells();
-        for( size_t ci=0; ci<n_cells; ci++ )
+        if( grid->is_ghost_cell(ci) ) continue;
+        const auto & cell = grid->cell(ci);
+        const size_t np = cell.size();
+        for( size_t pi=0; pi<np; pi++ )
         {
-          if( grid->is_ghost_cell(ci) ) continue;
-          const auto & cell = grid->cell(ci);
-          const size_t np = cell.size();
-          for( size_t pi=0; pi<np; pi++ )
+          const uint64_t id = cell[field::id][pi];
+          const double rx = cell[field::rx][pi];
+          const double ry = cell[field::ry][pi];
+          const double rz = cell[field::rz][pi];
+          const long grad_row0 = 1 + 3*static_cast<long>(id);
+          for( long k=0; k<ncols; k++ )
           {
-            const uint64_t id = cell[field::id][pi];
-            const double rx = cell[field::rx][pi];
-            const double ry = cell[field::ry][pi];
-            const double rz = cell[field::rz][pi];
-            const long grad_row0 = 1 + 3*static_cast<long>(id);
-            for( long k=0; k<ncols; k++ )
-            {
-              const double dx = arr[ (grad_row0+0)*ncols + k ];
-              const double dy = arr[ (grad_row0+1)*ncols + k ];
-              const double dz = arr[ (grad_row0+2)*ncols + k ];
-              arr[ (virial_row0+0)*ncols + k ] += dx*rx; // xx
-              arr[ (virial_row0+1)*ncols + k ] += dy*ry; // yy
-              arr[ (virial_row0+2)*ncols + k ] += dz*rz; // zz
-              arr[ (virial_row0+3)*ncols + k ] += dz*ry; // yz
-              arr[ (virial_row0+4)*ncols + k ] += dz*rx; // xz
-              arr[ (virial_row0+5)*ncols + k ] += dy*rx; // xy
-            }
+            const double dx = arr[ (grad_row0+0)*ncols + k ];
+            const double dy = arr[ (grad_row0+1)*ncols + k ];
+            const double dz = arr[ (grad_row0+2)*ncols + k ];
+            arr[ (virial_row0+0)*ncols + k ] += dx*rx; // xx
+            arr[ (virial_row0+1)*ncols + k ] += dy*ry; // yy
+            arr[ (virial_row0+2)*ncols + k ] += dz*rz; // zz
+            arr[ (virial_row0+3)*ncols + k ] += dz*ry; // yz
+            arr[ (virial_row0+4)*ncols + k ] += dz*rx; // xz
+            arr[ (virial_row0+5)*ncols + k ] += dy*rx; // xy
           }
         }
       }
@@ -191,32 +234,33 @@ namespace exaStamp
 
 Global-array analogue of LAMMPS's compute pod/global, extended with 6 virial rows LAMMPS's own
 pod/global doesn't have (POD fitting there just doesn't use stress, not a structural limitation):
-a single, row-major (1+3*natoms+6) x ncoeff_all array (ncoeff_all = nCoeffPerElement*nelements):
+a single, row-major (1+3*natoms+6) x ncoeff_all array (ncoeff_all = nCoeffPerElement*nelements).
+Mono-species (nelements==1) only -- see this file's header comment for why.
 
   row 0             -- system-wide per-element summed descriptor vector, including the nl1
                         one-body atom-count term. Dot this with a coefficient vector to get the
                         total configuration energy.
-  rows 1..3*natoms  -- the gradient of row 0 w.r.t. atom id's x/y/z. Dot row (1+3*id+xyz)
-                        with the same coefficient vector and negate to get that atom's force
-                        component: F = -coeff . row.
+  rows 1..3*natoms  -- ALREADY FORCE-SIGNED gradient of row 0 w.r.t. atom id's x/y/z (verified by
+                        finite difference against row 0, see this file's header comment). Dot row
+                        (1+3*id+xyz) with the same coefficient vector directly to get that atom's
+                        force component: F = +coeff . row (no extra negation).
   rows 3N+1..3N+6   -- sum over atoms of position . gradient row, Voigt order
-                        [xx,yy,zz,yz,xz,xy]. Dot with the same coefficient vector to get the
-                        virial/stress tensor component.
+                        [xx,yy,zz,yz,xz,xy], same already-force-signed convention. Dot with the
+                        same coefficient vector to get the virial/stress tensor component.
 
-This is the design-matrix structure needed to fit a linear POD potential against total energy plus
-per-atom forces plus virial (stack these rows across many training configurations, stack the
-corresponding energy/force/virial targets, solve by least squares).
-
-Multi-MPI-rank capable (unlike LAMMPS's own compute pod/global, which is serial-only). Rows are
-indexed by atom id rather than internal particle order: this makes row order directly comparable
-to LAMMPS's own output (for rows 0..3*natoms, single-rank), and makes ghost/real folding automatic
-within a rank (a ghost carries the same field::id as its real counterpart), so no
-update_opt_from_ghost step is ever needed here. Cross-rank combination is two MPI_Allreduce calls
-(rows 0..3*natoms, then the 6 virial rows) -- see this file's header comment for why they're split.
+Purely additive: reads compute_descriptor_pod's existing output (pod_descriptors + compute_derivative:
+true's pda_* aggregate) rather than re-running the descriptor+derivative pass, so the existing
+per-atom descriptor capability stays fully intact and usable on its own. Must run right after
+compute_descriptor_pod (compute_derivative: true) and BEFORE any update_opt_from_ghost call on its
+aggregate fields -- this operator needs the raw, un-folded per-rank-local aggregate.
 
 Usage example:
 
-pod_init: { parameters: { pod_file: "Ta_param.pod", coeff_file: "Ta_coefficients.pod" } }
+init_parameters:
+  - species
+  - pod_init: { parameters: { pod_file: "Ta_param.pod", coeff_file: "Ta_coefficients.pod" } }
+
+compute_descriptor_pod: { compute_derivative: true }
 compute_descriptor_pod_global
 write_descriptor_pod_global: { filename: "pod_global.txt" }
 
@@ -224,11 +268,9 @@ write_descriptor_pod_global: { filename: "pod_global.txt" }
     }
   };
 
-  template<class GridT> using ComputeDescriptorPodGlobalTmpl = ComputeDescriptorPodGlobal<GridT>;
-
   ONIKA_AUTORUN_INIT(compute_descriptor_pod_global)
   {
-    OperatorNodeFactory::instance()->register_factory("compute_descriptor_pod_global", make_grid_variant_operator<ComputeDescriptorPodGlobalTmpl>);
+    OperatorNodeFactory::instance()->register_factory("compute_descriptor_pod_global", make_grid_variant_operator<ComputeDescriptorPodGlobal>);
   }
 
 }

@@ -19,15 +19,11 @@ under the License.
 #include <onika/scg/operator_factory.h>
 #include <onika/scg/operator_slot.h>
 #include <onika/memory/allocator.h>
-#include <onika/file_utils.h>
-#include <onika/log.h>
 
-#include <fstream>
-#include <iomanip>
 #include <string>
 #include <mpi.h>
 
-#include "npy_writer.h"
+#include "../mlip-utils/include/descriptor_writer_common.h"
 
 // Plain export of compute_descriptor_pod_global's output array. compute_descriptor_pod_global is
 // multi-rank capable and already identically MPI_Allreduce'd on every rank by the time this runs,
@@ -48,35 +44,8 @@ namespace exaStamp
   public:
     inline void execute() override final
     {
-      int rank = 0;
-      MPI_Comm_rank( *mpi, &rank );
-      if( rank != 0 ) return;
-
-      if( *format != "text" && *format != "npy" )
-      {
-        fatal_error() << "write_descriptor_pod_global: unknown format '"<<*format<<"' (choices: text, npy)" << std::endl;
-      }
-
-      const long nc = *ncoeff_all;
-      const long rows = ( nc > 0 ) ? static_cast<long>(pod_global->size() / static_cast<size_t>(nc)) : 0;
-
-      if( *format == "npy" )
-      {
-        std::string prefix = *filename;
-        static constexpr const char * TXT_SUFFIX = ".txt";
-        if( prefix.size() >= 4 && prefix.compare(prefix.size()-4, 4, TXT_SUFFIX) == 0 ) prefix.resize(prefix.size()-4);
-        write_npy( onika::data_file_path(prefix+".npy"), {static_cast<size_t>(rows), static_cast<size_t>(nc)}, "<f8", pod_global->data(), sizeof(double) );
-        return;
-      }
-
-      std::ofstream fout( onika::data_file_path(*filename) );
-      fout << std::setprecision(17);
-      for( long r=0; r<rows; r++ )
-      {
-        const double * const prow = pod_global->data() + static_cast<size_t>(r)*nc;
-        for( long c=0; c<nc; c++ ) { if(c>0) fout << " "; fout << prow[c]; }
-        fout << "\n";
-      }
+      write_descriptor_global_common( "write_descriptor_pod_global", *mpi,
+          pod_global->data(), pod_global->size(), *ncoeff_all, *format, *filename );
     }
 
     inline std::string documentation() const override final
@@ -90,8 +59,8 @@ rows 3*natoms+1..+6 = virial (Voigt order) (see compute_descriptor_pod_global's 
 the exact layout and how to use it for linear-potential fitting).
 
 'format: npy' writes a single .npy v1.0 file, shape (1+3*natoms+6, ncoeff_all), directly loadable
-with numpy.load() -- no per-field splitting needed since the whole output is already one
-homogeneous 2-D array, unlike write_descriptor_pod's per-selected-field files.
+with numpy.load() -- the whole output is already one homogeneous 2-D array, no per-field splitting
+needed.
 
 Usage example:
 
