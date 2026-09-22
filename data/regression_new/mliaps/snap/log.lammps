@@ -1,0 +1,165 @@
+LAMMPS (22 Jul 2025 - Update 1)
+OMP_NUM_THREADS environment is not set. Defaulting to 1 thread.
+  using 1 OpenMP thread(s) per MPI task
+variable nsteps index 100
+units           metal
+boundary        p p p
+
+read_data InP_disturbed.lmp
+Reading data file ...
+  orthogonal box = (0 0 0) to (40 40 40)
+  1 by 1 by 1 MPI processor grid
+  reading atoms ...
+  2000 atoms
+  read_data CPU = 0.006 seconds
+
+include InP_JCPA2020.snap
+# DATE: 2020-06-01 UNITS: metal CONTRIBUTOR: Mary Alice Cusentino mcusent@sandia.gov CITATION: M.A. Cusentino, M. A. Wood, and A.P. Thompson, "Explicit Multi-element Extension of the Spectral Neighbor Analysis Potential for Chemically Complex Systems", J. Phys. Chem. A, 124 5456 (2020)
+
+# Definition of SNAP+ZBL potential.
+
+variable zblcutinner index 4
+variable zblcutouter index 4.2
+variable zblz1 index 49
+variable zblz2 index 15
+
+# Specify hybrid with SNAP and ZBL
+
+pair_style hybrid/overlay zbl ${zblcutinner} ${zblcutouter} snap
+pair_style hybrid/overlay zbl 4 ${zblcutouter} snap
+pair_style hybrid/overlay zbl 4 4.2 snap
+pair_coeff 1 1 zbl ${zblz1} ${zblz1}
+pair_coeff 1 1 zbl 49 ${zblz1}
+pair_coeff 1 1 zbl 49 49
+pair_coeff 1 2 zbl ${zblz1} ${zblz2}
+pair_coeff 1 2 zbl 49 ${zblz2}
+pair_coeff 1 2 zbl 49 15
+pair_coeff 2 2 zbl ${zblz2} ${zblz2}
+pair_coeff 2 2 zbl 15 ${zblz2}
+pair_coeff 2 2 zbl 15 15
+pair_coeff * * snap InP_JCPA2020.snapcoeff InP_JCPA2020.snapparam In P
+Reading potential file InP_JCPA2020.snapcoeff with DATE: 2020-06-01
+SNAP Element = In, Radius 3.81205, Weight 1
+SNAP Element = P, Radius 3.82945, Weight 0.929316
+Reading potential file InP_JCPA2020.snapparam with DATE: 2020-06-01
+SNAP keyword rcutfac 1.0
+SNAP keyword twojmax 6
+SNAP keyword rfac0 0.99363
+SNAP keyword rmin0 0.0
+SNAP keyword bzeroflag 1
+SNAP keyword quadraticflag 0
+SNAP keyword wselfallflag 1
+SNAP keyword chemflag 1
+SNAP keyword bnormflag 1
+
+thermo          1
+thermo_modify norm yes
+
+# Set up NVE run
+
+timestep 1.0e-4
+neighbor 1.0 bin
+neigh_modify once no every 1 delay 0 check yes
+
+fix 1 all nve
+run 50
+Neighbor list info ...
+  update: every = 1 steps, delay = 0 steps, check = yes
+  max neighbors/atom: 2000, page size: 100000
+  master list distance cutoff = 8.6589
+  ghost atom cutoff = 8.6589
+  binsize = 4.32945, bins = 10 10 10
+  2 neighbor lists, perpetual/occasional/extra = 2 0 0
+  (1) pair zbl, perpetual, half/full from (2)
+      attributes: half, newton on
+      pair build: halffull/newton
+      stencil: none
+      bin: none
+  (2) pair snap, perpetual
+      attributes: full, newton on, cut 8.6589
+      pair build: full/bin/atomonly
+      stencil: full/bin/3d
+      bin: standard
+Per MPI rank memory allocation (min/avg/max) = 11.86 | 11.86 | 11.86 Mbytes
+   Step          Temp          E_pair         E_mol          TotEng         Press     
+         0   0             -0.99491832     0             -0.99491832    -35932.018    
+         1   0.013493236   -0.99492006     0             -0.99491832    -35932.023    
+         2   0.053974091   -0.99492529     0             -0.99491832    -35932.039    
+         3   0.12144602    -0.99493401     0             -0.99491832    -35932.065    
+         4   0.21591476    -0.99494621     0             -0.99491832    -35932.101    
+         5   0.33738836    -0.99496191     0             -0.99491832    -35932.147    
+         6   0.48587717    -0.99498109     0             -0.99491832    -35932.204    
+         7   0.66139383    -0.99500377     0             -0.99491832    -35932.271    
+         8   0.8639533     -0.99502994     0             -0.99491832    -35932.348    
+         9   1.0935728     -0.9950596      0             -0.99491832    -35932.436    
+        10   1.3502719     -0.99509277     0             -0.99491832    -35932.533    
+        11   1.6340725     -0.99512943     0             -0.99491832    -35932.641    
+        12   1.9449988     -0.9951696      0             -0.99491832    -35932.759    
+        13   2.2830771     -0.99521328     0             -0.99491832    -35932.887    
+        14   2.6483363     -0.99526047     0             -0.99491832    -35933.026    
+        15   3.0408075     -0.99531118     0             -0.99491832    -35933.174    
+        16   3.4605241     -0.9953654      0             -0.99491832    -35933.332    
+        17   3.9075218     -0.99542315     0             -0.99491832    -35933.5      
+        18   4.3818387     -0.99548443     0             -0.99491832    -35933.678    
+        19   4.883515      -0.99554924     0             -0.99491832    -35933.866    
+        20   5.4125936     -0.9956176      0             -0.99491832    -35934.064    
+        21   5.9691194     -0.9956895      0             -0.99491832    -35934.271    
+        22   6.5531398     -0.99576495     0             -0.99491831    -35934.488    
+        23   7.1647044     -0.99584396     0             -0.99491831    -35934.715    
+        24   7.8038653     -0.99592654     0             -0.99491831    -35934.951    
+        25   8.4706767     -0.99601269     0             -0.99491831    -35935.196    
+        26   9.1651955     -0.99610242     0             -0.99491831    -35935.451    
+        27   9.8874806     -0.99619573     0             -0.99491831    -35935.716    
+        28   10.637593     -0.99629264     0             -0.99491831    -35935.989    
+        29   11.415598     -0.99639316     0             -0.99491831    -35936.272    
+        30   12.221559     -0.99649728     0             -0.99491831    -35936.563    
+        31   13.055547     -0.99660503     0             -0.99491831    -35936.864    
+        32   13.917632     -0.99671641     0             -0.99491831    -35937.174    
+        33   14.807887     -0.99683142     0             -0.99491831    -35937.492    
+        34   15.726387     -0.99695009     0             -0.99491831    -35937.819    
+        35   16.673211     -0.99707241     0             -0.99491831    -35938.154    
+        36   17.648439     -0.99719841     0             -0.99491831    -35938.498    
+        37   18.652154     -0.99732808     0             -0.99491831    -35938.85     
+        38   19.684441     -0.99746145     0             -0.99491831    -35939.211    
+        39   20.745386     -0.99759852     0             -0.99491831    -35939.579    
+        40   21.835082     -0.9977393      0             -0.9949183     -35939.952    
+        41   22.953619     -0.99788381     0             -0.9949183     -35940.327    
+        42   24.101092     -0.99803206     0             -0.9949183     -35940.709    
+        43   25.277598     -0.99818405     0             -0.9949183     -35941.098    
+        44   26.483238     -0.99833982     0             -0.9949183     -35941.495    
+        45   27.718113     -0.99849936     0             -0.9949183     -35941.899    
+        46   28.982327     -0.99866269     0             -0.9949183     -35942.309    
+        47   30.275988     -0.99882982     0             -0.9949183     -35942.726    
+        48   31.599205     -0.99900077     0             -0.9949183     -35943.15     
+        49   32.95209      -0.99917556     0             -0.9949183     -35943.568    
+        50   34.334757     -0.99935419     0             -0.9949183     -35943.989    
+Loop time of 35.5245 on 1 procs for 50 steps with 2000 atoms
+
+Performance: 0.012 ns/day, 1973.584 hours/ns, 1.407 timesteps/s, 2.815 katom-step/s
+100.0% CPU use with 1 MPI tasks x 1 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 35.521     | 35.521     | 35.521     |   0.0 | 99.99
+Neigh   | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0.00093471 | 0.00093471 | 0.00093471 |   0.0 |  0.00
+Output  | 0.0011545  | 0.0011545  | 0.0011545  |   0.0 |  0.00
+Modify  | 0.00087379 | 0.00087379 | 0.00087379 |   0.0 |  0.00
+Other   |            | 0.000602   |            |       |  0.00
+
+Nlocal:           2000 ave        2000 max        2000 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:           4119 ave        4119 max        4119 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:          72439 ave       72439 max       72439 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+FullNghs:       144878 ave      144878 max      144878 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 144878
+Ave neighs/atom = 72.439
+Neighbor list builds = 0
+Dangerous builds = 0
+
+Total wall time: 0:00:36

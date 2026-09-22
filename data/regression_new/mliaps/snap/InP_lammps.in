@@ -1,0 +1,20 @@
+variable nsteps index 100
+units           metal
+boundary        p p p
+
+read_data InP_disturbed.lmp
+
+include InP_JCPA2020.snap
+
+thermo          1
+thermo_modify norm yes
+
+# Set up NVE run
+
+timestep 1.0e-4
+neighbor 1.0 bin
+neigh_modify once no every 1 delay 0 check yes
+
+fix 1 all nve
+run 50
+

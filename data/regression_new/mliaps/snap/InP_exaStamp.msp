@@ -1,0 +1,65 @@
+includes:
+  - config_update_symmetric_forces.msp
+
+configuration:
+  profiling:
+    summary: true
+
+species:
+  - In: { mass: 114.818 Da , z: 49 , charge: 0.0 e- }
+  - P: { mass: 30.974 Da , z: 15 , charge: 0.0 e- }
+
+zbl_multi_force:
+  rcut: 4.2 ang
+  parameters:
+    - { type_a: In , type_b: P  , rcut: 4.2 ang , parameters: { r1: 4.0 ang , rc: 4.2 ang } }
+    - { type_a: In , type_b: In , rcut: 4.2 ang , parameters: { r1: 4.0 ang , rc: 4.2 ang } }
+    - { type_a: P  , type_b: P  , rcut: 4.2 ang , parameters: { r1: 4.0 ang , rc: 4.2 ang } }
+
+compute_force:
+  - zbl_multi_force
+  - snap_force:
+      parameters:
+        nt: 2
+        param: "InP_JCPA2020.snapparam"
+        coef:  "InP_JCPA2020.snapcoeff"
+
+grid_flavor: grid_flavor_full
+
+setup_system:
+  # - domain:
+  #     cell_size: 4.0 ang
+  #     grid_dims: [ 10, 10, 10 ]
+  #     bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 40.0 ang, 40.0 ang, 40.0 ang ] ]
+  #     xform: [ [ 1, 0, 0 ], [ 0, 1, 0 ], [ 0, 0, 1 ] ]
+  #     periodic: [ true, true, true ]
+  #     expandable: false
+  # - init_rcb_grid
+  # - lattice:
+  #     structure: BCC
+  #     types: [ In, P ]
+  #     size: [ 4.0 ang, 4.0 ang, 4.0 ang ]
+  # - gaussian_noise_r: { sigma: 0.1 ang }
+  - domain:
+      cell_size: 4.0 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_xyz_file_with_xform:
+      filename: "InP_disturbed.xyz"
+      bounds_mode: FILE
+
+numerical_scheme: verlet_nve
+
+# write_snapshot:
+#   - write_xyz:
+#       filename: "InP_disturbed.xyz"
+#       fields: [ type ]
+global:
+  max_iteration: 50
+  simulation_thermostate_screen_frequency: 1
+  simulation_thermostate_file_frequency: 1
+  simulation_snapshot_frequency: 1
+  rcut_inc: 1.0 ang
+  dt: 0.0001 ps
+  force_flush_file: true
+
