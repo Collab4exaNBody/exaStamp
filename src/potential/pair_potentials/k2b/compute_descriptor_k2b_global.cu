@@ -44,9 +44,14 @@ under the License.
 //   size_array_rows = 1 + 3*natoms + 6   (natoms = total atom count across the whole simulation)
 //   size_array_cols = ncoeff             (= n_rbf)
 //   row 0            -- summed k2b descriptor over every atom
-//   rows 1..3*natoms -- per-atom true dD_i/dR_m (self term + every neighbor interaction),
-//                       row = 1 + 3*field::id + xyz (exaStamp field::id is 0-indexed, no "-1")
-//   rows 3N+1..3N+6  -- summed r_atom . dD_atom/dR_atom, Voigt order [xx,yy,zz,yz,xz,xy]
+//   rows 1..3*natoms -- ALREADY FORCE-SIGNED per-atom aggregate (self term + every neighbor
+//                       interaction), row = 1 + 3*field::id + xyz (exaStamp field::id is 0-indexed,
+//                       no "-1") -- F_atom = +coeff . row directly, NOT -coeff . row, despite the
+//                       "dD_i/dR_m" name suggesting a raw +dE/dr. Same central+=/neighbor-=
+//                       convention as POD, independently finite-difference-verified there (see
+//                       compute_descriptor_pod_global.cu's header comment).
+//   rows 3N+1..3N+6  -- summed r_atom . (already force-signed) gradient row, Voigt order
+//                       [xx,yy,zz,yz,xz,xy]
 //
 // Real ordering requirement: must run AFTER compute_descriptor_k2b: { compute_derivative: true }
 // and BEFORE any update_opt_from_ghost call on its aggregate fields. This operator needs the raw,
@@ -167,11 +172,13 @@ Row-major (1+3*natoms+6) x ncoeff array:
 
   row 0             -- summed k2b descriptor over every atom. Dot with a coefficient vector to get
                        the total configuration energy.
-  rows 1..3*natoms  -- the true dD_i/dR_m gradient (self term + every neighbor interaction) w.r.t.
+  rows 1..3*natoms  -- ALREADY FORCE-SIGNED aggregate (self term + every neighbor interaction) w.r.t.
                        atom m's x/y/z, at row 1+3*m+xyz (m = field::id, 0-indexed). Dot this row with
-                       the same coefficient vector and negate to get that atom's force component.
-  rows 3N+1..3N+6   -- summed r_atom . dD_atom/dR_atom, Voigt order [xx,yy,zz,yz,xz,xy]. Dot with the
-                       same coefficient vector to get the virial/stress tensor component.
+                       the same coefficient vector directly to get that atom's force component:
+                       F = +coeff . row (no extra negation -- see this file's header comment).
+  rows 3N+1..3N+6   -- summed r_atom . (already force-signed) gradient row, Voigt order
+                       [xx,yy,zz,yz,xz,xy]. Dot with the same coefficient vector to get the
+                       virial/stress tensor component.
 
 No trailing reference-label column -- pure descriptor/gradient/virial matrix, labels left for
 external attachment.
