@@ -31,8 +31,6 @@ under the License.
 #include <onika/cuda/cuda_math.h>
 #include <exanb/particle_neighbors/chunk_neighbors.h>
 
-#include <md/snap/snap_params.h>
-#include <md/snap/snap_read_lammps.h>
 #include <md/snap/snap_config.h>
 #include <md/snap/snap_context.h>
 #include <md/snap/snap_compute_buffer.h>
@@ -266,11 +264,9 @@ namespace exaStamp
     template<int jm> using ROParamsMonoElem = SnapInternal::ReadOnlySnapParametersRealT<RealT,ICST<jm>,ICST<1>,false>;
 
     ADD_SLOT( MPI_Comm                 , mpi               , INPUT , REQUIRED );
-    ADD_SLOT( md::SnapParms            , parameters        , INPUT , REQUIRED , DocString{"LAMMPS-format SNAP parameter/coefficient files (param/coef), see snap_force"} );
     ADD_SLOT( double                   , rcut_max          , INPUT_OUTPUT , 0.0 );
     ADD_SLOT( exanb::GridChunkNeighbors , chunk_neighbors  , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
     ADD_SLOT( bool                     , ghost             , INPUT , false );
-    ADD_SLOT( bool                     , conv_coef_units   , INPUT , false );
     ADD_SLOT( GridT                    , grid              , INPUT_OUTPUT );
     ADD_SLOT( Domain                   , domain            , INPUT , REQUIRED );
     ADD_SLOT( long                     , timestep          , INPUT , REQUIRED );
@@ -283,7 +279,7 @@ namespace exaStamp
     ADD_SLOT( bool                     , compute_derivative, INPUT , false , DocString{"If true, also computes the per-neighbor-pair bispectrum derivative Jacobian (mono-element SNAP configs only)."} );
     ADD_SLOT( std::string              , deriv_agg_field_prefix, INPUT , std::string("sda_") , DocString{"compute_derivative only: name prefix for the ncoeff*3 dynamically-named generic-real grid fields ('<prefix>0'..'<prefix>{ncoeff*3-1}') holding the LAMMPS compute-snad/atom-equivalent aggregate. Backed by named grid fields (not a private buffer) specifically so the generic update_opt_from_ghost operator can reduce them ghost->owner across MPI ranks -- add 'update_opt_from_ghost: { opt_fields: [\"<prefix>.*\"] }' right after this operator whenever compute_derivative is used on more than one rank. KEEP THIS SHORT: dynamic field names are silently truncated to 15 characters + null (onika::soatl::FieldId's fixed char[16] m_name) -- a too-long prefix+index collides multiple components onto the same field with no error. This operator fatal_errors instead if prefix+max-index would overflow that limit."} );
 
-    ADD_SLOT( SnapContext              , snap_ctx          , PRIVATE );
+    ADD_SLOT( SnapContext              , snap_ctx          , INPUT , REQUIRED , DocString{"built once, early, by snap_init (before setup_system, so rcut_max propagates in time)"} );
     ADD_SLOT( onika::memory::CudaMMVector<RealT> , bispectrum , OUTPUT , DocString{"Flat per-particle bispectrum buffer: bispectrum[ ncoeff*(cell_particle_offset[cell]+particle) + component ], see grid->cell_particle_offset_data()"} );
     ADD_SLOT( long                     , ncoeff            , OUTPUT , DocString{"Number of bispectrum coefficients per particle (stride of the bispectrum buffer)"} );
     ADD_SLOT( onika::memory::CudaMMVector<long>    , bispectrum_deriv_offset , OUTPUT , DocString{"compute_derivative only: CSR row offset per particle (size total_particles+1); particle p's rows span [offset[p],offset[p+1]), row 0 of each particle's block is its own self/negative-sum term, rows 1..ninside are its neighbors in compacted order."} );
@@ -295,41 +291,12 @@ namespace exaStamp
     {
       assert( chunk_neighbors->number_of_cells() == grid->number_of_cells() );
 
-      if( snap_ctx->m_rcut == 0.0 )
-      {
-        std::string lammps_param = onika::data_file_path( parameters->lammps_param );
-        std::string lammps_coef = onika::data_file_path( parameters->lammps_coef );
-        ldbg << "compute_descriptor_snap: read lammps files "<<lammps_param<<" and "<<lammps_coef<<std::endl;
-        SnapExt::snap_read_lammps(lammps_param, lammps_coef, snap_ctx->m_config, *conv_coef_units );
-        snap_ctx->m_rcut = snap_ctx->m_config.rcutfac();
-      }
+      // snap_ctx (param/coef file read, per-material factor/radelem tables, SNA setup) is now built
+      // once, early, by snap_init (init_parameters, before setup_system) -- this idempotent update
+      // just keeps this operator's own rcut_max slot in sync, snap_init already set it in time.
       *rcut_max = std::max( double(*rcut_max) , double(snap_ctx->m_rcut) );
 
       if( grid->number_of_cells() == 0 ) { *ncoeff = 0; return; }
-
-      if( snap_ctx->m_factor.empty() )
-      {
-        int nmat = snap_ctx->m_config.materials().size();
-        snap_ctx->m_factor.assign( nmat, 1.0 );
-        snap_ctx->m_radelem.assign( nmat, 0.0 );
-        int cnt=0;
-        for ( const auto& mat : snap_ctx->m_config.materials() )
-        {
-          snap_ctx->m_factor[cnt] = mat.weight();
-          snap_ctx->m_radelem[cnt] = mat.radelem();
-          cnt+=1;
-        }
-      }
-
-      if( snap_ctx->sna == nullptr )
-      {
-        snap_ctx->sna = new SnapInternal::SNARealT<RealT>( new SnapInternal::Memory()
-                                          , snap_ctx->m_config.rfac0(), snap_ctx->m_config.twojmax(), snap_ctx->m_config.rmin0()
-                                          , snap_ctx->m_config.switchflag(), snap_ctx->m_config.bzeroflag(), snap_ctx->m_config.chemflag()
-                                          , snap_ctx->m_config.bnormflag(), snap_ctx->m_config.wselfallflag(), snap_ctx->m_config.nelements()
-                                          , snap_ctx->m_config.switchinnerflag() );
-        snap_ctx->sna->init();
-      }
 
       // ncoeff (bispectrum stride) comes straight from twojmax/nelements via the SNA config
       // itself (see sna.h's compute_coeff_count) -- it never depends on the coefficient file,
@@ -549,10 +516,15 @@ selected by closest_bispectrum:
 Either way, rcutfac must be generous enough to contain at least nneigh_bispectrum neighbors
 everywhere in the system; this mode does not support switchinnerflag.
 
-Usage example:
+Usage example (snap_ctx is built once, early, by snap_init -- see snap_init.cu -- add it under
+init_parameters, before setup_system, so rcut_max propagates in time for ghost/neighbor setup):
+
+init_parameters:
+  - species
+  - snap_init:
+      parameters: { param: "W.snapparam", coef: "W.snapcoeff" }
 
 compute_descriptor_snap:
-  parameters: { param: "W.snapparam", coef: "W.snapcoeff" }
   nneigh_bispectrum: 48       # optional, constant-neighbor-count mode
   closest_bispectrum: false   # optional, density-scaled estimate instead of exact sort
   compute_derivative: false   # optional, per-neighbor-pair bispectrum Jacobian (mono-element only)

@@ -45,19 +45,27 @@ under the License.
 //   size_array_rows = 1 + 3*natoms + 6   (natoms = total atom count across the whole simulation)
 //   size_array_cols = ncoeff             (mono-type only for v1 -- see below)
 //   row 0            -- summed bispectrum descriptor over every atom
-//   rows 1..3*natoms -- per-atom true dB_i/dR_m (self term + every neighbor interaction),
-//                       row = 1 + 3*field::id + xyz (exaStamp field::id is 0-indexed, no "-1")
-//   rows 3N+1..3N+6  -- summed r_atom . dB_atom/dR_atom, Voigt order [xx,yy,zz,yz,xz,xy]
-//                       (LAMMPS compute_snap.cpp's dbdotr_compute)
+//   rows 1..3*natoms -- ALREADY FORCE-SIGNED per-atom aggregate (self term + every neighbor
+//                       interaction), row = 1 + 3*field::id + xyz (exaStamp field::id is 0-indexed,
+//                       no "-1") -- F_atom = +coeff . row directly, NOT -coeff . row, despite the
+//                       "dB_i/dR_m" name suggesting a raw +dE/dr. Verified by finite-difference
+//                       against row 0 for the identical central+=/neighbor-= aggregate convention
+//                       in POD (see compute_descriptor_pod_global.cu's header comment and
+//                       data/regression_new/compute_descriptor/test_pod_descriptors/
+//                       compare_global_strain_fd.py) -- SNAP's own aggregate is built the same way
+//                       (same rij=r_neighbor-r_central convention), so the same sign applies here.
+//   rows 3N+1..3N+6  -- summed r_atom . (already force-signed) gradient row, Voigt order
+//                       [xx,yy,zz,yz,xz,xy] (LAMMPS compute_snap.cpp's dbdotr_compute)
 //
 // Real ordering requirement: must run AFTER compute_descriptor_snap: { compute_derivative: true }
 // and BEFORE any update_opt_from_ghost call on its aggregate fields. This operator needs the raw,
 // per-rank-local, UN-FOLDED aggregate (real and ghost slots each carry their own local view) --
 // exactly LAMMPS's own pre-MPI_Allreduce snap_peratom buffer, whose virial contribution
 // (dbdotr_compute) is likewise computed before LAMMPS's own final Allreduce. update_opt_from_ghost
-// folds each ghost's value into its real owner in place -- correct for the per-atom
-// write_descriptor_snap export, but it would silently corrupt both the gradient-row and virial-row
-// accumulation here if run first.
+// folds each ghost's value into its real owner in place, which would silently corrupt both the
+// gradient-row and virial-row accumulation here if run first -- no per-atom export needs the
+// folded aggregate downstream of this operator anymore (only write_descriptor_snap_global does,
+// which reads the already-Allreduce'd global array, not the raw per-atom fields).
 namespace exaStamp
 {
   using namespace exanb;
@@ -188,11 +196,13 @@ Global linear-fitting design matrix for SNAP -- analogue of LAMMPS's compute sna
 
   row 0             -- summed bispectrum descriptor over every atom. Dot with a coefficient vector
                        to get the total configuration energy.
-  rows 1..3*natoms  -- the true dB_i/dR_m gradient (self term + every neighbor interaction) w.r.t.
+  rows 1..3*natoms  -- ALREADY FORCE-SIGNED aggregate (self term + every neighbor interaction) w.r.t.
                        atom m's x/y/z, at row 1+3*m+xyz (m = field::id, 0-indexed). Dot this row with
-                       the same coefficient vector and negate to get that atom's force component.
-  rows 3N+1..3N+6   -- summed r_atom . dB_atom/dR_atom, Voigt order [xx,yy,zz,yz,xz,xy]. Dot with the
-                       same coefficient vector to get the virial/stress tensor component.
+                       the same coefficient vector directly to get that atom's force component:
+                       F = +coeff . row (no extra negation -- see this file's header comment).
+  rows 3N+1..3N+6   -- summed r_atom . (already force-signed) gradient row, Voigt order
+                       [xx,yy,zz,yz,xz,xy]. Dot with the same coefficient vector to get the
+                       virial/stress tensor component.
 
 No trailing reference-label column (unlike LAMMPS's own compute snap/mliap) -- this is a pure
 descriptor/gradient/virial matrix, labels left for external attachment, matching
@@ -205,12 +215,14 @@ call on its aggregate fields -- this operator needs the raw, un-folded per-rank-
 
 Mono-element only for v1 (matches compute_descriptor_snap's own compute_derivative restriction).
 
-Usage example:
+Usage example (snap_ctx is built once, early, by snap_init -- see snap_init.cu):
 
-compute_descriptor_snap: { compute_derivative: true, parameters: { param: "W.snapparam", coef: "W.snapcoeff" } }
+init_parameters:
+  - species
+  - snap_init: { parameters: { param: "W.snapparam", coef: "W.snapcoeff" } }
+
+compute_descriptor_snap: { compute_derivative: true }
 compute_descriptor_snap_global
-update_opt_from_ghost: { opt_fields: [ "sda_.*" ] }   # only needed if the per-atom export below also runs
-write_descriptor_snap: { fields: [ id, x, y, z, descriptor, derivative ] }   # optional, per-atom export
 write_descriptor_snap_global: { filename: "snap_global.txt" }
 
 )EOF";
