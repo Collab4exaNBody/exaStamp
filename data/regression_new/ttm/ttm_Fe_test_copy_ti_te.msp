@@ -8,9 +8,11 @@ eam_alloy_force:
     file: "lammps/Fe_Olsson_CMS2009.eam.alloy"
 
 setup_system:
-  # box is 57.4 ang / 10 = 5.74 ang -> matches LAMMPS's "ttm/grid ... 10 10 10" (one Te value per cell, no sub-division)
+  # box is 57.4 ang / 10 = 5.74 ang -> matches LAMMPS's "ttm/grid ... 10 10 10" (one Te value per cell, no sub-division).
+  # cell_size is one ulp below 5.74, not 5.74 itself: exaNBody's domain code drops to a 9x9x9 grid
+  # (cell_size 6.3778) when N*cell_size lands exactly at/above the box size -- see domain-cell-size-ulp gotcha.
   - domain:
-      cell_size: 5.74 ang
+      cell_size: 5.7399999 ang
       periodic: [ true, true, true ]
       expandable: false
   - read_xyz_file_with_xform:
@@ -37,9 +39,8 @@ compute_force:
 
 global:
   dt: 1e-4 ps
-  # kept small enough that rcut(4.1615)+rcut_inc < 5.74 ang, so the domain
-  # snaps to a 10x10x10 grid (matching LAMMPS's independent 10x10x10 ttm/grid)
-  # instead of falling back to 9x9x9.
+  # rcut_inc just needs rcut(4.1615)+rcut_inc < 5.74 ang (ghost margin fits in one cell); it is NOT
+  # what makes the grid 10x10x10 vs 9x9x9 (that's the domain cell_size above, see comment there).
   rcut_inc: 1.5 ang
   simulation_restart_frequency: -1
   simulation_snapshot_frequency: -1

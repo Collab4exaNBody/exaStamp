@@ -13,8 +13,10 @@ eam_alloy_force:
     file: "lammps/Fe_Olsson_CMS2009.eam.alloy"
 
 setup_system:
+  # cell_size one ulp below 5.74 -> real 10x10x10 grid, matching ttm_Fe_test.msp (see domain-cell-size-ulp gotcha:
+  # 5.74 itself drops to a 9x9x9 grid, cell_size 6.3778).
   - domain:
-      cell_size: 5.74 ang
+      cell_size: 5.7399999 ang
       periodic: [ true, true, true ]
       expandable: false
   - read_xyz_file_with_xform:
