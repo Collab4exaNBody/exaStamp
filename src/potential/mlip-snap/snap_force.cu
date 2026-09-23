@@ -28,10 +28,14 @@ namespace exaStamp
   template<class GridT> using SnapForceXSTmpl = md::SnapForceGenericFP64<GridT,field::_ep,field::_virial>;
 # endif
 
-  // === register factories ===  
+  // always double precision, whatever SNAP_FP32_MATH says (needed for exact parity with LAMMPS)
+  template<class GridT> using SnapForceFP64XSTmpl = md::SnapForceRealT<GridT,double,field::_ep,field::_virial>;
+
+  // === register factories ===
   ONIKA_AUTORUN_INIT(snap_force)
   {
     OperatorNodeFactory::instance()->register_factory( "snap_force" ,make_grid_variant_operator< SnapForceXSTmpl > );
+    OperatorNodeFactory::instance()->register_factory( "snap_force_fp64" ,make_grid_variant_operator< SnapForceFP64XSTmpl > );
   }
 
 }
