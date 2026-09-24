@@ -208,7 +208,7 @@ namespace exaStamp
 
       // temperature
       Vec3d temp = 2. * ( kinetic_energy - 0.5 * momentum * momentum / total_mass );
-      double temp_scale = ( conv_temperature * ( temp.x + temp.y + temp.z ) / 3. ) / total_particles;
+      double temp_scale = ( conv_temperature * ( temp.x + temp.y + temp.z ) / 3. ) / ( total_particles > 1 ? total_particles - 1. : 1. ); // COM-removed KE -> 3N-3 dof
       temp_scale = (*T) / temp_scale;
       double vel_scale = std::sqrt( temp_scale );
       Vec3d momentum_shift = momentum / total_mass;
