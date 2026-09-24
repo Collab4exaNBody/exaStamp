@@ -105,6 +105,15 @@ if(EXASTAMP_BUILD_POD)
   find_package(LAPACK REQUIRED)
 endif()
 
+# ====================================
+# === MiLaDy potential (milady-cpp) ==
+# ====================================
+option(EXASTAMP_MLIP_MILADY "Build MiLaDy potential (needs milady_lammps checkout and a host Kokkos)" OFF)
+set(EXASTAMP_MLIP_MILADY_ROOT_DIR "" CACHE PATH "milady_lammps source tree (contains exastamp/ and lib/milady-cpp)")
+if(EXASTAMP_MLIP_MILADY AND NOT EXISTS "${EXASTAMP_MLIP_MILADY_ROOT_DIR}/exastamp/CMakeLists.txt")
+  message(FATAL_ERROR "EXASTAMP_MLIP_MILADY=ON: set EXASTAMP_MLIP_MILADY_ROOT_DIR to the milady_lammps source tree")
+endif()
+
 option(USE_RSA "Add RSA Package" OFF)
 if(USE_RSA)
 	find_package(rsa_mpi REQUIRED)
@@ -117,6 +126,11 @@ endif()
 # === build application plugins and libs ===
 # ==========================================
 add_subdirectory(src)
+
+# MiLaDy plugin lives in the milady_lammps repo (needs exaStampPotential, defined above)
+if(EXASTAMP_MLIP_MILADY)
+  add_subdirectory(${EXASTAMP_MLIP_MILADY_ROOT_DIR}/exastamp ${CMAKE_BINARY_DIR}/milady)
+endif()
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/exaStamp DESTINATION include)
 
 # =================================================
