@@ -336,12 +336,12 @@ namespace exaStamp
 
       // ---- current temperature (CM-corrected) ----
       // KE' = KE - ½ M v_cm²  removes the CM contribution.
-      // Equipartition: T = 2 * KE' / (3N * kB).
+      // Equipartition: T = 2 * KE' / ((3N-3) * kB), CM removal takes 3 dof.
       // The factor 2 is explicit because kinetic_energy already has ½ folded in.
-      const Vec3d   ke_corrected = kinetic_energy - Vec3d{ 0.5 * total_mass } * v_cm * v_cm;
+      const Vec3d   ke_corrected = kinetic_energy - 0.5 * total_mass * v_cm * v_cm;
       const double  temp_current =
           ( 2.0 * conv_temperature * ( ke_corrected.x + ke_corrected.y + ke_corrected.z ) )
-          / ( 3.0 * static_cast<double>(total_particles) );
+          / ( 3.0 * ( total_particles > 1 ? total_particles - 1. : 1. ) );
 
       if( temp_current <= 0. )
       {
