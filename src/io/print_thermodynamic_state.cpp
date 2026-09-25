@@ -269,10 +269,10 @@ namespace exaStamp
       values[ThermodynamicLogConfig::KINETIC_E]    = sim_info.kinetic_energy_scal() / sim_info.particle_count() * conv_energy;
       values[ThermodynamicLogConfig::POTENTIAL_E]  = sim_info.potential_energy()    / sim_info.particle_count() * conv_energy;
       values[ThermodynamicLogConfig::ELECTRON_E]   = el_energy                      / sim_info.particle_count() * conv_energy;
-      values[ThermodynamicLogConfig::TEMPERATURE]  = sim_info.temperature_scal()    / sim_info.particle_count() * conv_temperature;
-      values[ThermodynamicLogConfig::Tx]           = sim_info.temperature().x       / sim_info.particle_count() * conv_temperature;
-      values[ThermodynamicLogConfig::Ty]           = sim_info.temperature().y       / sim_info.particle_count() * conv_temperature;
-      values[ThermodynamicLogConfig::Tz]           = sim_info.temperature().z       / sim_info.particle_count() * conv_temperature;
+      values[ThermodynamicLogConfig::TEMPERATURE]  = sim_info.temperature_scal()    / sim_info.temperature_dof_count() * conv_temperature;
+      values[ThermodynamicLogConfig::Tx]           = sim_info.temperature().x       / sim_info.temperature_dof_count() * conv_temperature;
+      values[ThermodynamicLogConfig::Ty]           = sim_info.temperature().y       / sim_info.temperature_dof_count() * conv_temperature;
+      values[ThermodynamicLogConfig::Tz]           = sim_info.temperature().z       / sim_info.temperature_dof_count() * conv_temperature;
       values[ThermodynamicLogConfig::PRESSURE]     = sim_info.pressure_scal()                                   * conv_pressure;
       values[ThermodynamicLogConfig::Px]           = sim_info.stress_tensor().m11                          * conv_pressure;
       values[ThermodynamicLogConfig::Py]           = sim_info.stress_tensor().m22                          * conv_pressure;
