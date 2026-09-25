@@ -105,7 +105,7 @@ namespace exaStamp
         total_energy_int_unit                / sim_info.particle_count() * conv_energy,
         sim_info.kinetic_energy_scal()       / sim_info.particle_count() * conv_energy,
         sim_info.potential_energy()          / sim_info.particle_count() * conv_energy,
-        sim_info.temperature_scal()          / sim_info.particle_count() * conv_temperature,
+        sim_info.temperature_scal()          / sim_info.temperature_dof_count() * conv_temperature,
 	sim_info.full_stress_tensor().m11                                            * conv_pressure,
 	sim_info.full_stress_tensor().m22                                            * conv_pressure,
 	sim_info.full_stress_tensor().m33                                            * conv_pressure,
