@@ -428,19 +428,16 @@ namespace exaStamp
           pp[field::rz] = r.z;
 
           ParticleTuple t = pp;
-          grid.cell(loc).push_back(t);
-
-          // Store velocity into the particle if requested
-          // (assumes field::vx/vy/vz exist in the grid's field set)
+          // Store velocity into the tuple before insertion: cell[idx] on a SoA cell returns a
+          // temporary copy, so writing velocities after push_back silently had no effect.
           if( *read_velocities )
           {
             const Vec3d& v = velocity_data[i];
-            auto& cell = grid.cell(loc);
-            size_t idx  = cell.size() - 1;
-            cell[idx][field::vx] = v.x;
-            cell[idx][field::vy] = v.y;
-            cell[idx][field::vz] = v.z;
+            t[field::vx] = v.x;
+            t[field::vy] = v.y;
+            t[field::vz] = v.z;
           }
+          grid.cell(loc).push_back(t);
         }
       }
 

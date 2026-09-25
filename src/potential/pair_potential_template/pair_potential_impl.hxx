@@ -94,6 +94,7 @@ namespace exaStamp
       USTAMP_POTENTIAL_PARAMS common_parameters = {};
 #     if defined(USTAMP_POTENTIAL_RIGIDMOL) || defined(USTAMP_POTENTIAL_MULTI_PARAM)
       onika::memory::CudaMMVector<PotParameters> parameters_storage;
+      std::unique_ptr<typename PotParameters::UserPotParams> user_pot_parameters; // owns user parameters viewed by parameters_storage
 #     endif
       unsigned int species_index = 0;
       bool has_weight = false;
@@ -165,10 +166,18 @@ namespace exaStamp
         // this is the default value for potential parameters that will be used when 
         compute_pair_scratch.common_parameters = common_parameters;
 
-        // compute max rcut accross pair potential parameters
+        // take ownership of decoded user parameters : device side parameter table only holds read-only views of them
         if( parameters.m_user_pot_parameters != nullptr )
         {
-          for( const auto& p : *(parameters.m_user_pot_parameters) )
+          compute_pair_scratch.user_pot_parameters.reset( parameters.m_user_pot_parameters );
+          parameters.m_user_pot_parameters = nullptr;
+        }
+        const auto * user_pot_parameters = compute_pair_scratch.user_pot_parameters.get();
+
+        // compute max rcut accross pair potential parameters
+        if( user_pot_parameters != nullptr )
+        {
+          for( const auto& p : *user_pot_parameters )
           {
             param_max_rcut = std::max( param_max_rcut , p.second.rcut );
           }
@@ -229,6 +238,7 @@ namespace exaStamp
             compute_pair_scratch.parameters_storage[0].m_user_pot_parameters = nullptr;
             compute_pair_scratch.cp_force.p = compute_pair_scratch.parameters_storage.data();
             auto & pot_params = compute_pair_scratch.parameters_storage[0];
+            const auto * user_pot_parameters = compute_pair_scratch.user_pot_parameters.get();
 #           endif
 
             // special check for optimizations :
@@ -282,7 +292,7 @@ namespace exaStamp
               fatal_error() << "Too many atom types for singlemat rigid molecule implementation. Increase MAX_TYPE_PAIR_IDS"<<std::endl;
             }
  
-            ldbg << "n_type_pairs = "<<n_type_pairs<<" , m_user_pot_parameters="<< (void*)parameters.m_user_pot_parameters <<std::endl;
+            ldbg << "n_type_pairs = "<<n_type_pairs<<" , m_user_pot_parameters="<< (void*)user_pot_parameters <<std::endl;
             pot_params.m_nb_pair_params = n_type_pairs;
             for(unsigned int pair_id=0;pair_id<n_type_pairs;pair_id++)
             {
@@ -300,14 +310,14 @@ namespace exaStamp
               pot_params.m_pair_params[pair_id].ecut = 0.0;
               
               bool pair_pot_params_found = false;
-              if( parameters.m_user_pot_parameters != nullptr )
+              if( user_pot_parameters != nullptr )
               {
-                auto it = parameters.m_user_pot_parameters->find( std::make_pair( species.at(type_a).name() , species.at(type_b).name() ) );
-                if( it == parameters.m_user_pot_parameters->end() )
+                auto it = user_pot_parameters->find( std::make_pair( species.at(type_a).name() , species.at(type_b).name() ) );
+                if( it == user_pot_parameters->end() )
                 {
-                  it = parameters.m_user_pot_parameters->find( std::make_pair( species.at(type_b).name() , species.at(type_a).name() ) );
+                  it = user_pot_parameters->find( std::make_pair( species.at(type_b).name() , species.at(type_a).name() ) );
                 }
-                if( it != parameters.m_user_pot_parameters->end() )
+                if( it != user_pot_parameters->end() )
                 {
                   pair_pot_params_found = true;
                   pot_params.m_pair_params[pair_id].p = it->second.p;
@@ -317,14 +327,13 @@ namespace exaStamp
               }
               if( ! pair_pot_params_found )
               {
-                ldbg << "NO parameter found for pair "<<species.at(type_a).name() <<"/"<< species.at(type_b).name()<<" , pair_id="<<pair_id<<" , rcut="<<pot_params.m_pair_params[pair_id].rcut<<" , parameters.m_user_pot_parameters="<<(const void*)parameters.m_user_pot_parameters <<std::endl;
+                ldbg << "NO parameter found for pair "<<species.at(type_a).name() <<"/"<< species.at(type_b).name()<<" , pair_id="<<pair_id<<" , rcut="<<pot_params.m_pair_params[pair_id].rcut<<" , user_pot_parameters="<<(const void*)user_pot_parameters <<std::endl;
               }
 
               pot_params.m_pair_params[pair_id].ecut = energy_cutoff( pot_params.m_pair_params[pair_id].p , pot_params.m_pair_params[pair_id].pair_params , pot_params.m_pair_params[pair_id].rcut ); ;
             }
             
-            //if( parameters.m_user_pot_parameters != nullptr ) delete parameters.m_user_pot_parameters;
-            parameters.m_user_pot_parameters = nullptr;
+
             
             
             // reduce number of parameters if possible
