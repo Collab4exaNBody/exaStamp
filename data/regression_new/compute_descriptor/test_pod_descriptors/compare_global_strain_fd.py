@@ -40,7 +40,7 @@ import subprocess
 import sys
 import numpy as np
 
-EXASTAMP = "/home/lafourcadep/local/exaStampGPU/bin/exaStamp"
+EXASTAMP = "/local_home/lafourcadep/local/exaStamp/bin/exaStamp"
 EPS = 1.0e-6
 BOX = 30.0
 

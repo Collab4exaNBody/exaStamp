@@ -17,6 +17,7 @@ under the License.
 
 #include <exanb/core/grid.h>
 #include <exanb/core/grid_fields.h>
+#include <exanb/core/domain.h>
 
 #include <onika/scg/operator.h>
 #include <onika/scg/operator_factory.h>
@@ -86,6 +87,7 @@ namespace exaStamp
   {
     ADD_SLOT( MPI_Comm , mpi  , INPUT , REQUIRED );
     ADD_SLOT( GridT    , grid , INPUT , REQUIRED );
+    ADD_SLOT( Domain   , domain , INPUT , REQUIRED );
     ADD_SLOT( PodContext , pod_ctx , INPUT , REQUIRED , DocString{"still needed for Mdesc/nClusters/nCoeffPerElement/nl1/nelements"} );
     ADD_SLOT( onika::memory::CudaMMVector<double> , pod_descriptors , INPUT , OPTIONAL , DocString{"see compute_descriptor_pod; required"} );
     ADD_SLOT( long     , ncoeff , INPUT , OPTIONAL , DocString{"see compute_descriptor_pod; required (= Mdesc*nClusters)"} );
@@ -146,6 +148,7 @@ namespace exaStamp
       pod_global->clear();
       pod_global->resize( static_cast<size_t>(rows) * static_cast<size_t>(ncols), 0.0 );
       double * const arr = pod_global->data();
+      const Mat3d xform = domain->xform();
 
       for( size_t ci=0; ci<n_cells; ci++ )
       {
@@ -173,10 +176,24 @@ namespace exaStamp
             }
           }
 
+          // Real-frame position of THIS slot (owned atom or ghost image): the pda_* gradients were
+          // computed on xform-applied pair vectors, so the positions must be in the same frame.
+          const Vec3d r = xform * Vec3d{ cell[field::rx][pi], cell[field::ry][pi], cell[field::rz][pi] };
+
           // Gradient rows: this atom's pda_* aggregate spans one slot per possible CENTRAL-atom
           // species it was ever involved with (its own, for central/self terms; every OTHER species
           // it was ever a neighbor of, for neighbor terms) -- loop every ti0 to recover all of it.
           // Mono-species (nelements==1) is the trivial single-iteration case of this same loop.
+          //
+          // Virial rows: Σ over every slot (owned AND ghost) of r_slot . pda_slot, accumulated here
+          // per slot, BEFORE the id-collapse. A ghost slot holds the neighbor-side (-=) terms of the
+          // pairs that reached that periodic image, so it must be weighted by the IMAGE's position,
+          // not by its owner's. Collapsing by id first and multiplying by the owned atom's position
+          // (the previous implementation) is only correct without periodic images -- it silently
+          // drops the box-vector term of every boundary-crossing pair. Each pair is computed once
+          // (central = an owned atom on exactly one rank) and scattered into that rank's slots, so
+          // summing every rank's slots then Allreducing counts every pair exactly once, and the sum
+          // is origin-independent (central += / neighbor -= makes Σ_slots pda == 0 per column).
           const long grad_row0 = 1 + 3*static_cast<long>(id);
           for( long ti0=0; ti0<nelements; ti0++ )
           for( long m=0; m<Mdesc; m++ )
@@ -190,44 +207,19 @@ namespace exaStamp
             arr[ (grad_row0+0)*ncols + col ] += dx;
             arr[ (grad_row0+1)*ncols + col ] += dy;
             arr[ (grad_row0+2)*ncols + col ] += dz;
+
+            arr[ (virial_row0+0)*ncols + col ] += dx*r.x; // xx
+            arr[ (virial_row0+1)*ncols + col ] += dy*r.y; // yy
+            arr[ (virial_row0+2)*ncols + col ] += dz*r.z; // zz
+            arr[ (virial_row0+3)*ncols + col ] += dz*r.y; // yz
+            arr[ (virial_row0+4)*ncols + col ] += dz*r.x; // xz
+            arr[ (virial_row0+5)*ncols + col ] += dy*r.x; // xy
           }
         }
       }
 
-      // Combine every rank's local partial contribution to rows 0..3*natoms_global.
-      MPI_Allreduce( MPI_IN_PLACE, arr, static_cast<int>(grad_rows*ncols), MPI_DOUBLE, MPI_SUM, *mpi );
-
-      // Virial rows: Σ r_atom . dDescriptor_atom/dr_atom, Voigt order [xx,yy,zz,yz,xz,xy] --
-      // computed from the now-COMPLETE (post-Allreduce) gradient rows above, each rank summing only
-      // over its own owned atoms (every atom is owned by exactly one rank, so no double counting and
-      // nothing missed); one more (small) Allreduce combines every rank's partial virial sum.
-      for( size_t ci=0; ci<n_cells; ci++ )
-      {
-        if( grid->is_ghost_cell(ci) ) continue;
-        const auto & cell = grid->cell(ci);
-        const size_t np = cell.size();
-        for( size_t pi=0; pi<np; pi++ )
-        {
-          const uint64_t id = cell[field::id][pi];
-          const double rx = cell[field::rx][pi];
-          const double ry = cell[field::ry][pi];
-          const double rz = cell[field::rz][pi];
-          const long grad_row0 = 1 + 3*static_cast<long>(id);
-          for( long k=0; k<ncols; k++ )
-          {
-            const double dx = arr[ (grad_row0+0)*ncols + k ];
-            const double dy = arr[ (grad_row0+1)*ncols + k ];
-            const double dz = arr[ (grad_row0+2)*ncols + k ];
-            arr[ (virial_row0+0)*ncols + k ] += dx*rx; // xx
-            arr[ (virial_row0+1)*ncols + k ] += dy*ry; // yy
-            arr[ (virial_row0+2)*ncols + k ] += dz*rz; // zz
-            arr[ (virial_row0+3)*ncols + k ] += dz*ry; // yz
-            arr[ (virial_row0+4)*ncols + k ] += dz*rx; // xz
-            arr[ (virial_row0+5)*ncols + k ] += dy*rx; // xy
-          }
-        }
-      }
-      MPI_Allreduce( MPI_IN_PLACE, arr + static_cast<size_t>(virial_row0)*ncols, static_cast<int>(6*ncols), MPI_DOUBLE, MPI_SUM, *mpi );
+      // Combine every rank's local partial contribution to all rows (descriptor, gradient, virial).
+      MPI_Allreduce( MPI_IN_PLACE, arr, static_cast<int>(rows*ncols), MPI_DOUBLE, MPI_SUM, *mpi );
     }
 
     inline std::string documentation() const override final
@@ -247,7 +239,8 @@ this relies on.
                         finite difference against row 0, see this file's header comment). Dot row
                         (1+3*id+xyz) with the same coefficient vector directly to get that atom's
                         force component: F = +coeff . row (no extra negation).
-  rows 3N+1..3N+6   -- sum over atoms of position . gradient row, Voigt order
+  rows 3N+1..3N+6   -- sum over every local and ghost (periodic image) particle slot of
+                        position . that slot's own gradient contribution, Voigt order
                         [xx,yy,zz,yz,xz,xy], same already-force-signed convention. Dot with the
                         same coefficient vector to get the virial/stress tensor component.
 
