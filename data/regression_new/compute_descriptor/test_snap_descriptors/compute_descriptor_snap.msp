@@ -1,0 +1,42 @@
+species:
+  - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+
+init_parameters:
+  - species
+  - snap_init:
+      parameters:
+        param: "param.txt"
+        coef: "coeff.txt"
+
+setup_system:
+  - domain:
+      cell_size: 6.0 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_xyz_file_with_xform:
+      filename: "tantalum_noisy.xyz"
+
+global:
+  max_iteration: 1
+  dt: 1.0e-3 ps
+  # rcut_max no longer needed here -- snap_init sets it early (init_parameters, before setup_system)
+
+# Compute-only smoke test (case-1 / classification shape): verifies compute_descriptor_snap's
+# descriptor + derivative aggregate + ghost-fold all run clean, same role as
+# compute_slcsa.msp/compute_bispectrum.msp (analysis_particle/), which also never write the
+# descriptor to a file -- they consume it directly in-graph. The per-atom writer/dumper operators
+# that used to run here (dump_descriptor_snap, dump_descriptor_snap_aggregate, write_descriptor_snap)
+# were removed; only write_descriptor_snap_global (see compute_snap_global_small.msp) is needed now.
+compute_descriptor_snap:
+  compute_derivative: true
+
+update_opt_from_ghost:
+  opt_fields: [ "sda_.*" ]
+
+simulation_epilog:
+  - compute_descriptor_snap
+  - update_opt_from_ghost   # required whenever compute_derivative is used on more than one rank
+  - print_test:
+      rebind: { value: ncoeff }
+      body:
+        - print_int: { prefix: "ncoeff=", suffix: "\n" }

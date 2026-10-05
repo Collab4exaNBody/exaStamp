@@ -1,0 +1,27 @@
+species:
+  - W:  { mass: 183.84 Da, z: 74, charge: 0 e- }
+  - Be: { mass: 9.012182 Da, z: 4, charge: 0 e- }
+
+init_parameters:
+  - species
+  - snap_init:
+      parameters:
+        param: "WBe_param.txt"
+        coef: "WBe_coeff.txt"
+
+setup_system:
+  - domain:
+      cell_size: 8.0 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_xyz_file_with_xform:
+      filename: "WBe_small.xyz"
+
+global:
+  max_iteration: 1
+  dt: 1.0e-3 ps
+
+simulation_epilog:
+  - compute_descriptor_snap: { compute_derivative: true }
+  - compute_descriptor_snap_global
+  - write_descriptor_snap_global: { filename: "exastamp_snap_global_multitype.txt" }

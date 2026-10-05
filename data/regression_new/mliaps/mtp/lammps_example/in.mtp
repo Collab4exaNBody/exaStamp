@@ -1,0 +1,17 @@
+units metal
+dimension       3
+boundary        p p p
+atom_style      atomic
+
+read_data   Cu_noisy.lmp
+replicate   6 6 6
+  
+pair_style mtp pot.almtp
+pair_coeff      * *
+
+thermo          1
+thermo_style custom step pe ke etotal temp pxx pyy pzz pxy pxz pyz
+
+fix 1 all nve
+  
+run 100
