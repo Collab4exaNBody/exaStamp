@@ -25,6 +25,7 @@ under the License.
 #include <exaStamp/potential_factory/pair_potential.h>
 #include <onika/physics/constants.h>
 #include <exaStamp/unit_system.h>
+#include <exaStamp/coulomb_constant.h>
 
 #include <onika/cuda/cuda.h>
 
@@ -41,7 +42,7 @@ namespace exaStamp
 
   ONIKA_HOST_DEVICE_FUNC inline void coul_cut_energy(const CoulCutParms& p, const PairPotentialMinimalParameters& p_pair, double r, double& e, double& de)
   {
-    static constexpr double qqr2e = EXASTAMP_CONST_QUANTITY( 14.399645 * eV * ang / (ec^2) ) ; // units = eV.ang/e-^2 from LAMMPS
+    constexpr double qqr2e = COULOMB_CONSTANT; // eV.ang/e-^2 from LAMMPS, internal units
 
     assert( r > 0. );
 

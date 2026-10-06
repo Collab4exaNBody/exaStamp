@@ -25,6 +25,7 @@ under the License.
 #include <onika/math/basic_types_yaml.h>
 #include <onika/log.h>
 #include <exaStamp/unit_system.h>
+#include <exaStamp/coulomb_constant.h>
 #include <cmath>
 #include <algorithm>
 
@@ -40,8 +41,8 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
 
   namespace ewald_constants
   {
-    // Coulomb constant 1/(4.pi.epsilon0), same value as LAMMPS metal units (qqr2e = 14.399645 eV.ang/e-^2), in internal units
-    static constexpr double qqr2e = EXASTAMP_CONST_QUANTITY( 14.399645 * eV * ang / (ec^2) );
+    // Coulomb constant 1/(4.pi.epsilon0) in internal units (LAMMPS metal units value, see exaStamp/coulomb_constant.h)
+    static constexpr double qqr2e = COULOMB_CONSTANT;
     static constexpr double fpe0 = 1.0 / qqr2e;                 // 4.pi.epsilon0
     static constexpr double epsilonZero = fpe0 / ( 4.0 * M_PI ); // epsilon0
 
@@ -180,7 +181,7 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
     if(p.g_ewald <= 0.)
     {
       double g = accuracy_relative*sqrt(natoms*radius*xL*yL*zL) / (2.0*qsq);
-      const double accuracy_abs = accuracy_relative * 14.399645; // eV/ang, as in LAMMPS metal units
+      const double accuracy_abs = accuracy_relative * COULOMB_CONSTANT_EV_ANG; // eV/ang, as in LAMMPS metal units
       if (g >= 1.0) g = (1.35 - 0.15*std::log(accuracy_abs))/radius;
       else g = sqrt(-std::log(g)) / radius;
       p.g_ewald = g;

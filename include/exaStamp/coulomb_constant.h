@@ -18,19 +18,13 @@ under the License.
 
 #pragma once
 
-// Per atom charge front-end of the Wolf potential. The kernel is defined once, in the coul_wolf_pair pair potential.
-#include <exaStamp/potential/pair_potentials/coul_wolf_pair/coul_wolf_pair.h>
+#include <exaStamp/unit_system.h>
 
 namespace exaStamp
 {
-  using WolfParameters = CoulWolfParms;
-
-  struct WolfKernel
-  {
-    WolfParameters m_params;
-    WolfKernel() = default;
-    inline WolfKernel(const WolfParameters& p) : m_params(p) {}
-    ONIKA_HOST_DEVICE_FUNC inline void operator () (double c, double r, double& e, double& de) const { coul_wolf_kernel( m_params, c, r, e, de ); }
-    ONIKA_HOST_DEVICE_FUNC inline double self_energy(double q) const { return coul_wolf_self_energy( m_params, q ); }
-  };
+  // Coulomb constant 1/(4.pi.epsilon0), same value as LAMMPS metal units (force->qqr2e), so that coulombic
+  // potentials (ewald, wolf, dsf, coul_cut) give the same results as LAMMPS.
+  // Note : the reaction field potentials use onika::physics::epsilonZero instead (14.3996454784 eV.ang/e-^2).
+  static constexpr double COULOMB_CONSTANT_EV_ANG = 14.399645; // eV.ang/e-^2
+  static constexpr double COULOMB_CONSTANT = EXASTAMP_CONST_QUANTITY( COULOMB_CONSTANT_EV_ANG * eV * ang / (ec^2) ); // internal units
 }

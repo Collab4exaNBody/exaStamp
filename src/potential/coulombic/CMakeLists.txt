@@ -16,5 +16,10 @@
 #
 
 set(exaStampCoulombic_LINK_LIBRARIES exaStampCompute exaStampPotential exanbParticleNeighbors)
+# pair kernels are header only and defined once, next to the pair potentials using them
+set(exaStampCoulombic_INCLUDE_DIRS
+  ${CMAKE_CURRENT_SOURCE_DIR}/../pair_potentials/coul_wolf_pair/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../pair_potentials/coul_dsf/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../reaction_field/include)
 onika_add_plugin(exaStampCoulombic ${CMAKE_CURRENT_SOURCE_DIR})
 

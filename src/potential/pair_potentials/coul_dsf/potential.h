@@ -18,19 +18,12 @@ under the License.
 
 #pragma once
 
-// Per atom charge front-end of the Wolf potential. The kernel is defined once, in the coul_wolf_pair pair potential.
-#include <exaStamp/potential/pair_potentials/coul_wolf_pair/coul_wolf_pair.h>
+#include <exaStamp/potential/pair_potentials/coul_dsf/coul_dsf.h>
 
-namespace exaStamp
-{
-  using WolfParameters = CoulWolfParms;
+#define USTAMP_POTENTIAL_NAME     coul_dsf
+#define USTAMP_POTENTIAL_PARAMS   CoulDsfParms
+#define USTAMP_POTENTIAL_COMPUTE  coul_dsf_pair_energy
 
-  struct WolfKernel
-  {
-    WolfParameters m_params;
-    WolfKernel() = default;
-    inline WolfKernel(const WolfParameters& p) : m_params(p) {}
-    ONIKA_HOST_DEVICE_FUNC inline void operator () (double c, double r, double& e, double& de) const { coul_wolf_kernel( m_params, c, r, e, de ); }
-    ONIKA_HOST_DEVICE_FUNC inline double self_energy(double q) const { return coul_wolf_self_energy( m_params, q ); }
-  };
-}
+#define USTAMP_POTENTIAL_PAIR_PARAMS_EXTRACT(p) char(0) // PairPotentialParameters not used in computation
+
+//#define USTAMP_POTENTIAL_ENABLE_CUDA 1
