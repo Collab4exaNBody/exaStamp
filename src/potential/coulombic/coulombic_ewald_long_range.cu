@@ -36,17 +36,26 @@ under the License.
 #include <exanb/core/parallel_grid_algorithm.h>
 #include <onika/cuda/cuda.h>
 #include <exanb/core/xform.h>
+#include <onika/flat_tuple.h>
 #include <mpi.h>
 
 namespace exaStamp
 {
-  using ewald_constants::fpe0;
-  using ewald_constants::epsilonZero;  
+inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugin (plugins are loaded RTLD_GLOBAL)
+{
   using namespace exanb;
 
   using onika::memory::DEFAULT_ALIGNMENT;
-  
-  template<class XFormT>
+
+  template<bool PerAtomCharge, class ChargeOrTypeT>
+  ONIKA_HOST_DEVICE_FUNC static inline double ewald_particle_charge( const ParticleSpecie* __restrict__ species, ChargeOrTypeT ct )
+  {
+    if constexpr ( PerAtomCharge ) return ct;
+    else return species[ct].m_charge;
+  }
+
+  // structure factor S(k) = sum_i q_i exp(i k.r_i)
+  template<class XFormT, bool PerAtomCharge>
   struct EwaldLongRangeRhoComputeFunc
   {
     const XFormT xform;
@@ -54,10 +63,11 @@ namespace exaStamp
     ReadOnlyEwaldParameters p;
     Complexd* __restrict__ m_ewald_rho = nullptr;
     
+    template<class ChargeOrTypeT>
     ONIKA_HOST_DEVICE_FUNC
-    inline void operator () ( double rx, double ry, double rz, unsigned int type ) const
+    inline void operator () ( double rx, double ry, double rz, ChargeOrTypeT ct ) const
     {
-      const double q = m_species[type].m_charge;
+      const double q = ewald_particle_charge<PerAtomCharge>( m_species , ct );
       const Vec3d r = xform.transformCoord( Vec3d{rx,ry,rz} );
       const unsigned int nk = p.nknz;
       for(unsigned int k=0;k<nk;k++)
@@ -72,23 +82,23 @@ namespace exaStamp
     }
   };
 
-  template<class XFormT>
+  // reciprocal forces, and optionaly per particle energy (reciprocal + self + background) and reciprocal virial.
+  // per particle energy  : e_i = q_i sum_k Gc Re( conj(S(k)) exp(i k.r_i) ) , sums up to sum_k Gc |S(k)|^2
+  // per particle virial  : W_i = e_i,k ( I - Gv G (x) G ) summed over k (same as LAMMPS Ewald per atom virial)
+  template<class XFormT, bool PerAtomCharge, bool ComputeEnergy, bool ComputeVirial>
   struct EwaldLongRangeForceComputeFunc
   {
     const XFormT xform;
     const ParticleSpecie* __restrict__ m_species = nullptr;
     ReadOnlyEwaldParameters p;
     const Complexd* __restrict__ m_ewald_rho = nullptr;
-    
+
     ONIKA_HOST_DEVICE_FUNC
-    inline void operator () ( double & fx, double & fy, double & fz, double rx, double ry, double rz, unsigned int type  ) const
+    inline void compute ( double q, double rx, double ry, double rz, Vec3d& f, double& ep, Mat3d& vir ) const
     {
-      const double q = 2. * m_species[type].m_charge;
       const Vec3d r = xform.transformCoord( Vec3d{rx,ry,rz} );
       const unsigned int nk = p.nknz;
-      double lfx = 0.0;
-      double lfy = 0.0;
-      double lfz = 0.0;
+      const double q2 = 2. * q;
       for(unsigned int k=0;k<nk;k++)
       {
         const EwaldCoeffs& gdata = p.Gdata[k];
@@ -97,54 +107,88 @@ namespace exaStamp
         sincos(ps,&s,&c);
         const double rr = m_ewald_rho[k].r;
         const double ri = m_ewald_rho[k].i;
-        const double al = q * gdata.Gc * ( rr * s - ri * c );
-        lfx += al * gdata.Gx;
-        lfy += al * gdata.Gy;
-        lfz += al * gdata.Gz;
+        const double al = q2 * gdata.Gc * ( rr * s - ri * c );
+        f.x += al * gdata.Gx;
+        f.y += al * gdata.Gy;
+        f.z += al * gdata.Gz;
+        if constexpr ( ComputeEnergy )
+        {
+          const double ek = q * gdata.Gc * ( rr * c + ri * s );
+          ep += ek;
+          if constexpr ( ComputeVirial )
+          {
+            const double w = ek * gdata.Gv;
+            vir.m11 += ek - w * gdata.Gx * gdata.Gx;
+            vir.m22 += ek - w * gdata.Gy * gdata.Gy;
+            vir.m33 += ek - w * gdata.Gz * gdata.Gz;
+            const double vxy = - w * gdata.Gx * gdata.Gy;
+            const double vxz = - w * gdata.Gx * gdata.Gz;
+            const double vyz = - w * gdata.Gy * gdata.Gz;
+            vir.m12 += vxy; vir.m21 += vxy;
+            vir.m13 += vxz; vir.m31 += vxz;
+            vir.m23 += vyz; vir.m32 += vyz;
+          }
+        }
       }
-      fx += lfx;
-      fy += lfy;
-      fz += lfz;
+      if constexpr ( ComputeEnergy )
+      {
+        ep += ewald_self_energy( p , q );
+      }
     }
-  };
 
-  struct EwaldSelfForceComputeFunc
-  {
-    const ParticleSpecie* __restrict__ m_species = nullptr;
-    ReadOnlyEwaldParameters p;
-    
+    template<class ChargeOrTypeT>
     ONIKA_HOST_DEVICE_FUNC
-    inline void operator () ( double & ep, unsigned int type  ) const
+    inline void operator () ( double & fx, double & fy, double & fz, double rx, double ry, double rz, ChargeOrTypeT ct ) const
     {
-      const double q = m_species[type].m_charge;
-      ep -= 1. / fpe0 * p.g_ewald / std::sqrt(M_PI) * q * q;
+      static_assert( ! ComputeEnergy && ! ComputeVirial );
+      Vec3d f = {0.,0.,0.}; double ep = 0.0; Mat3d vir;
+      compute( ewald_particle_charge<PerAtomCharge>( m_species , ct ) , rx, ry, rz, f, ep, vir );
+      fx += f.x; fy += f.y; fz += f.z;
+    }
+
+    template<class ChargeOrTypeT>
+    ONIKA_HOST_DEVICE_FUNC
+    inline void operator () ( double & fx, double & fy, double & fz, double & ep, double rx, double ry, double rz, ChargeOrTypeT ct ) const
+    {
+      static_assert( ComputeEnergy && ! ComputeVirial );
+      Vec3d f = {0.,0.,0.}; double e = 0.0; Mat3d vir;
+      compute( ewald_particle_charge<PerAtomCharge>( m_species , ct ) , rx, ry, rz, f, e, vir );
+      fx += f.x; fy += f.y; fz += f.z; ep += e;
+    }
+
+    template<class ChargeOrTypeT>
+    ONIKA_HOST_DEVICE_FUNC
+    inline void operator () ( double & fx, double & fy, double & fz, double & ep, Mat3d & virial, double rx, double ry, double rz, ChargeOrTypeT ct ) const
+    {
+      static_assert( ComputeEnergy && ComputeVirial );
+      Vec3d f = {0.,0.,0.}; double e = 0.0; Mat3d vir = {0.,0.,0.,0.,0.,0.,0.,0.,0.};
+      compute( ewald_particle_charge<PerAtomCharge>( m_species , ct ) , rx, ry, rz, f, e, vir );
+      fx += f.x; fy += f.y; fz += f.z; ep += e; virial += vir;
     }
   };
   
+}
 }
 
 namespace exanb
 {
-  template<class XFormT> struct ComputeCellParticlesTraits< exaStamp::EwaldLongRangeRhoComputeFunc<XFormT> >
+  template<class XFormT, bool PerAtomCharge> struct ComputeCellParticlesTraits< exaStamp::EwaldLongRangeRhoComputeFunc<XFormT,PerAtomCharge> >
   {
     static inline constexpr bool RequiresBlockSynchronousCall = false;
     static inline constexpr bool CudaCompatible = true;
   };
 
-  template<class XFormT> struct ComputeCellParticlesTraits< exaStamp::EwaldLongRangeForceComputeFunc<XFormT> >
+  template<class XFormT, bool PerAtomCharge, bool ComputeEnergy, bool ComputeVirial>
+  struct ComputeCellParticlesTraits< exaStamp::EwaldLongRangeForceComputeFunc<XFormT,PerAtomCharge,ComputeEnergy,ComputeVirial> >
   {
     static inline constexpr bool RequiresBlockSynchronousCall = false;
     static inline constexpr bool CudaCompatible = true;
   };
-  
-  template<> struct ComputeCellParticlesTraits< exaStamp::EwaldSelfForceComputeFunc >
-  {
-    static inline constexpr bool RequiresBlockSynchronousCall = false;
-    static inline constexpr bool CudaCompatible = true;
-  };  
 }
 
 namespace exaStamp
+{
+inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugin (plugins are loaded RTLD_GLOBAL)
 {
   using namespace exanb;
 
@@ -161,23 +205,14 @@ namespace exaStamp
     ADD_SLOT( double     , rcut_max     , INPUT_OUTPUT , 0.0 );
     ADD_SLOT( EwaldRho   , ewald_rho    , INPUT_OUTPUT , EwaldRho{} );
     ADD_SLOT( ParticleSpecies  , species           , INPUT , REQUIRED );
+    ADD_SLOT( bool       , per_atom_charge , INPUT , true , DocString{"read charges from per particle charge field instead of species charges"} );
     ADD_SLOT( MPI_Comm   , mpi          , INPUT );
     ADD_SLOT( bool       , trigger_thermo_state    , INPUT , OPTIONAL );
-    ADD_SLOT( double     , potential_energy_shift  , OUTPUT );
-
-    using ewald_rho_field_set_t = FieldSet<field::_rx,field::_ry,field::_rz,field::_type>;
-    using ewald_force_field_set_t = FieldSet<field::_fx,field::_fy,field::_fz,field::_rx,field::_ry,field::_rz,field::_type>;
-    using ewald_self_force_field_set_t = FieldSet<field::_ep,field::_type>;    
-    
-    static constexpr ewald_rho_field_set_t ewald_rho_field_set = {};
-    static constexpr ewald_force_field_set_t ewald_force_field_set = {};
-    static constexpr ewald_self_force_field_set_t ewald_self_force_field_set = {};
 
   public:
     // Operator execution
     inline void execute () override final
     {
-
       bool log_energy = false;
       if( trigger_thermo_state.has_value() )
       {
@@ -188,10 +223,6 @@ namespace exaStamp
         ldbg << "trigger_thermo_state missing " << std::endl;
       }
       
-      ldbg<<"------------------------------"<<std::endl<<std::flush;
-      ldbg<<"Beginning of long range energy"<<std::endl<<std::flush;
-      ldbg<<"------------------------------"<<std::endl<<std::flush;
-
       if( ! ewald_config.has_value() )
       {
         ldbg << "ewald_config not set, skip ewal_long_range computation" << std::endl;
@@ -202,43 +233,73 @@ namespace exaStamp
       
       if( grid->number_of_cells() == 0 ) return;
 
-      // Recupération du nombre de point k
-      const size_t nk = ewald_config->nknz;
+      // k vectors depend on the box, refuse to compute with stale ones
+      const Vec3d domainSize = domain->xform() * domain->bounds_size();
+      if( domainSize != ewald_config->box )
+      {
+        fatal_error() << "coulombic_ewald_long_range : domain size "<<domainSize<<" differs from the one used to build k vectors "
+                      << ewald_config->box << ". Call coulombic_ewald_init before force computation when the box changes." << std::endl;
+      }
 
+      const size_t nk = ewald_config->nknz;
       if (ewald_rho->rho.size() < nk) {
         ewald_rho->rho.resize(nk);
       }
       ewald_rho->nk = nk;
       
-      Mat3d xform = domain->xform();
-      ONIKA_CU_CHECK_ERRORS( ONIKA_CU_MEMSET( ewald_rho->rho.data(), 0, sizeof(Complexd)*nk, global_cuda_ctx()->getThreadStream(0) ) );
-      
-      EwaldLongRangeRhoComputeFunc<LinearXForm> rho_func = { {xform} , species->data() , *ewald_config , ewald_rho->rho.data() };
-      compute_cell_particles( *grid , false , rho_func , ewald_rho_field_set , parallel_execution_context() );
-      static_assert( sizeof(Complexd) == 2*sizeof(double) );
-      MPI_Allreduce(MPI_IN_PLACE, (double*) ewald_rho->rho.data(),nk*2,MPI_DOUBLE,MPI_SUM,*mpi);
-
-      EwaldLongRangeForceComputeFunc<LinearXForm> force_func = { {xform} , species->data() , *ewald_config , ewald_rho->rho.data() };
-      compute_cell_particles( *grid , false , force_func , ewald_force_field_set , parallel_execution_context() );
-
-      // Self energy + reciprocal energy are computed only and if only trigger_thermo_state = true
-      if ( log_energy ) {
-        *potential_energy_shift = 0.;
-        EwaldSelfForceComputeFunc self_func = { species->data() , *ewald_config };
-        compute_cell_particles( *grid , false , self_func , ewald_self_force_field_set , parallel_execution_context() );
-        const size_t nk = ewald_rho->nk;
-        double re = 0.;
-  #     pragma omp parallel for schedule(static) reduction(+:re)
-        for (size_t k=0; k<nk; ++k)
-          {
-            re +=  ewald_config->Gdata[k].Gc * complex_norm( ewald_rho->rho[k] ); // (totalRho_r[k]*totalRho_r[k] + totalRho_i[k]*totalRho_i[k]);
-          }
-        *potential_energy_shift += re;
+      const Mat3d xform = domain->xform();
+      const ReadOnlyEwaldParameters ro_params = *ewald_config;
+      const bool gpu_available = ( global_cuda_ctx() != nullptr ) && global_cuda_ctx()->has_devices();
+      if( gpu_available )
+      {
+        ONIKA_CU_CHECK_ERRORS( ONIKA_CU_MEMSET( ewald_rho->rho.data(), 0, sizeof(Complexd)*nk, global_cuda_ctx()->getThreadStream(0) ) );
       }
-      
-      ldbg<<"------------------------"<<std::endl<<std::flush;
-      ldbg<<"End of long range energy"<<std::endl<<std::flush;
-      ldbg<<"------------------------"<<std::endl<<std::flush;
+      else
+      {
+        for(size_t k=0;k<nk;k++) ewald_rho->rho[k] = Complexd{ 0.0 , 0.0 };
+      }
+
+      auto rx = grid->field_accessor( field::rx );
+      auto ry = grid->field_accessor( field::ry );
+      auto rz = grid->field_accessor( field::rz );
+      auto fx = grid->field_accessor( field::fx );
+      auto fy = grid->field_accessor( field::fy );
+      auto fz = grid->field_accessor( field::fz );
+      auto ep = grid->field_accessor( field::ep );
+      auto virial = grid->field_accessor( field::virial );
+
+      auto compute_with_charges = [&]( auto per_atom_charge_tag , auto charge_or_type )
+      {
+        static constexpr bool PerAtomCharge = decltype(per_atom_charge_tag)::value;
+
+        EwaldLongRangeRhoComputeFunc<LinearXForm,PerAtomCharge> rho_func = { {xform} , species->data() , ro_params , ewald_rho->rho.data() };
+        compute_cell_particles( *grid , false , rho_func , onika::make_flat_tuple(rx,ry,rz,charge_or_type) , parallel_execution_context() );
+        static_assert( sizeof(Complexd) == 2*sizeof(double) );
+        MPI_Allreduce(MPI_IN_PLACE, (double*) ewald_rho->rho.data(),nk*2,MPI_DOUBLE,MPI_SUM,*mpi);
+
+        if( log_energy )
+        {
+          EwaldLongRangeForceComputeFunc<LinearXForm,PerAtomCharge,true,true> force_func = { {xform} , species->data() , ro_params , ewald_rho->rho.data() };
+          compute_cell_particles( *grid , false , force_func , onika::make_flat_tuple(fx,fy,fz,ep,virial,rx,ry,rz,charge_or_type) , parallel_execution_context() );
+        }
+        else
+        {
+          EwaldLongRangeForceComputeFunc<LinearXForm,PerAtomCharge,false,false> force_func = { {xform} , species->data() , ro_params , ewald_rho->rho.data() };
+          compute_cell_particles( *grid , false , force_func , onika::make_flat_tuple(fx,fy,fz,rx,ry,rz,charge_or_type) , parallel_execution_context() );
+        }
+      };
+
+      if( *per_atom_charge ) compute_with_charges( std::true_type{}  , grid->field_accessor( field::charge ) );
+      else                   compute_with_charges( std::false_type{} , grid->field_accessor( field::type ) );
+    }
+
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+Reciprocal space part of the Ewald summation (direct sum over k vectors built by coulombic_ewald_init).
+Computes forces, and when trigger_thermo_state is true, per particle energy (reciprocal + self + neutralizing background)
+and per particle reciprocal virial.
+)EOF";
     }
 
   };
@@ -252,5 +313,4 @@ namespace exaStamp
   }
 
 }
-
-
+}
