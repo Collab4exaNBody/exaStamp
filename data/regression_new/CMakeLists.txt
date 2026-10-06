@@ -68,6 +68,10 @@ AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/particle_regions")
 # Layout: potentials/pair/<testcase>/<variant>.msp
 AddRegressionTestSimple("${CMAKE_CURRENT_SOURCE_DIR}/potentials/pair")
 
+# Regression tests for coulombic operators (wolf, dsf, rf, ewald), run-only on 768 atoms of UO2
+# Layout: potentials/coulombic/<variant>.msp ; lammps_validation/ (accuracy vs LAMMPS, run by hand) is not registered
+AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/potentials/coulombic")
+
 # Regression tests for eam potentials
 # Layout: potentials/eam/<testcase>/<variant>.msp
 AddRegressionTestSimple("${CMAKE_CURRENT_SOURCE_DIR}/potentials/eam")

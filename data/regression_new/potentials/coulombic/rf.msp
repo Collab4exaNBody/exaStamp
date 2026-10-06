@@ -1,0 +1,30 @@
+# Reaction field (coulombic_rf)
+# Coulomb-only, 768 atoms of disturbed UO2 (UO2_small.xyz). Accuracy vs LAMMPS is checked in lammps_validation/.
+
+species:
+  - O: { mass: 15.999000 Da , z: 8 , charge: -1.1104 e- }
+  - U: { mass: 238.02891 Da , z: 92 , charge: 2.2208 e- }
+
+coulombic_rf:
+  parameters: { epsilon: 100.0 , rc: 8.0 ang }
+
+compute_force:
+  - coulombic_rf
+
+setup_system:
+  - domain:
+      cell_size: 5.4 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_xyz_file_with_xform:
+      filename: UO2_small.xyz
+      pbc_adjust_xform: true
+  - copy_charge_specy_to_particle
+
+global:
+  max_iteration: 10
+  simulation_thermostate_screen_frequency: 1
+  simulation_thermostate_file_frequency: -1
+  simulation_snapshot_frequency: -1
+  rcut_inc: 1.0 ang
+  dt: 0.001 ps

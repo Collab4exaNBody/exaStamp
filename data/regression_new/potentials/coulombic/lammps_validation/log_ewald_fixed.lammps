@@ -1,0 +1,125 @@
+LAMMPS (4 Jul 2026)
+  using 1 OpenMP thread(s) per MPI task
+# Coulomb-only ground truth on disturbed UO2 (12000 atoms), LAMMPS metal units.
+# Usage: lmp -in in.coul -var case <wolf|dsf|ewald_auto|ewald_fixed>
+units        metal
+dimension    3
+boundary     p p p
+atom_style   charge
+atom_modify  map array
+
+read_data    UO2_disturbed_charge.lmp
+Reading data file ...
+  triclinic box = (0 0 0) to (54.5 54.5 54.5) with tilt (0 0 0)
+  1 by 1 by 1 MPI processor grid
+  reading atoms ...
+  12000 atoms
+  read_data CPU = 0.053 seconds
+
+group  U type 1
+4000 atoms in group U
+set group U charge 2.2208
+Setting atom values ...
+  4000 settings made for charge
+group  O type 2
+8000 atoms in group O
+set group O charge -1.1104
+Setting atom values ...
+  8000 settings made for charge
+
+if "${case} == wolf" then   "pair_style coul/wolf 0.2 10.0"   "pair_coeff * *"
+if "${case} == dsf" then   "pair_style coul/dsf 0.2 10.0"   "pair_coeff * *"
+if "${case} == ewald_auto" then   "pair_style coul/long 10.0"   "pair_coeff * *"   "kspace_style ewald 1.0e-5"
+if "${case} == ewald_fixed" then   "pair_style coul/long 10.0"   "pair_coeff * *"   "kspace_style ewald 1.0e-5"   "kspace_modify gewald 0.3 kmax/ewald 8 8 8"
+pair_style coul/long 10.0
+pair_coeff * *
+kspace_style ewald 1.0e-5
+kspace_modify gewald 0.3 kmax/ewald 8 8 8
+Updated KSpace settings:
+  KSpace computation is turned:    ON
+  Use MPI collective operations:   OFF
+  Use MPI non-blocking operations: OFF
+  Gewald manually set to:          0.3
+
+# no tables: real-space part uses the A&S erfc polynomial, same as coulombic/ewald.h
+if "${case} == ewald_auto || ${case} == ewald_fixed" then "pair_modify table 0"
+pair_modify table 0
+
+compute pe all pe/atom
+compute st all stress/atom NULL virial
+
+neighbor     1.0 bin
+neigh_modify delay 0 every 1 check yes
+
+thermo_style custom step pe ke etotal press pxx pyy pzz pxy pxz pyz
+thermo_modify format float %.12e
+thermo       1
+
+dump d all custom 10 dump_${case}.*.txt id type x y z fx fy fz c_pe c_st[1] c_st[2] c_st[3] c_st[4] c_st[5] c_st[6]
+dump d all custom 10 dump_ewald_fixed.*.txt id type x y z fx fy fz c_pe c_st[1] c_st[2] c_st[3] c_st[4] c_st[5] c_st[6]
+dump_modify d sort id format float %.15e
+
+timestep     0.001
+fix 1 all nve
+run 10
+Ewald initialization ...
+  using polynomial approximation for long-range coulomb
+  G vector (1/distance) = 0.3
+  estimated absolute RMS force accuracy = 0.80421945
+  estimated relative force accuracy = 0.05584995
+  KSpace vectors: actual max1d max3d = 1054 8 2456
+                  kxmax kymax kzmax  = 8 8 8
+Generated 0 of 1 mixed pair_coeff terms from geometric mixing rule
+Neighbor list info ...
+  update: every = 1 steps, delay = 0 steps, check = yes
+  max neighbors/atom: 2000, page size: 100000
+  master list distance cutoff = 11
+  ghost atom cutoff = 11
+  binsize = 5.5, bins = 10 10 10
+  1 neighbor lists, perpetual/occasional/extra = 1 0 0
+  (1) pair coul/long, perpetual
+      attributes: half, newton on
+      pair build: half/bin/atomonly/newton/tri
+      stencil: half/bin/3d/tri
+      bin: standard
+Per MPI rank memory allocation (min/avg/max) = 60.7 | 60.7 | 60.7 Mbytes
+   Step         PotEng         KinEng         TotEng         Press           Pxx            Pyy            Pzz            Pxy            Pxz            Pyz      
+         0  -1.516454930485e+05 0.000000000000e+00 -1.516454930485e+05 -5.005675505767e+05 -5.005591104041e+05 -5.005879275575e+05 -5.005556137686e+05 -2.002850502761e+02 1.812564315633e+02 -3.042276626959e+01
+         1  -1.516461472570e+05 6.540020158716e-01 -1.516454932550e+05 -5.005656206921e+05 -5.005570877199e+05 -5.005858700587e+05 -5.005539042976e+05 -1.999868241882e+02 1.811997661423e+02 -3.044024200363e+01
+         2  -1.516481065785e+05 2.612710623661e+00 -1.516454938679e+05 -5.005598381165e+05 -5.005510243119e+05 -5.005797052322e+05 -5.005487848052e+05 -1.990950986777e+02 1.810319568676e+02 -3.049496415030e+01
+         3  -1.516513612043e+05 5.866336219306e+00 -1.516454948680e+05 -5.005502237987e+05 -5.005409338435e+05 -5.005694557795e+05 -5.005402817732e+05 -1.976187051864e+02 1.807595620763e+02 -3.059379137431e+01
+         4  -1.516558951278e+05 1.039890403704e+01 -1.516454962238e+05 -5.005368117031e+05 -5.005268381871e+05 -5.005551585152e+05 -5.005284384071e+05 -1.955722738174e+02 1.803935033728e+02 -3.074806867589e+01
+         5  -1.516616866533e+05 1.618876205474e+01 -1.516454978912e+05 -5.005196473936e+05 -5.005087660850e+05 -5.005368628457e+05 -5.005133132500e+05 -1.929761015517e+02 1.799490513734e+02 -3.097350213590e+01
+         6  -1.516687090989e+05 2.320928431589e+01 -1.516454998146e+05 -5.004987860719e+05 -5.004867512916e+05 -5.005146286633e+05 -5.004949782608e+05 -1.898559708566e+02 1.794458042481e+02 -3.128999121496e+01
+         7  -1.516769316895e+05 3.142976230822e+01 -1.516455019272e+05 -5.004742900887e+05 -5.004608302168e+05 -5.004885236748e+05 -5.004735163746e+05 -1.862429218838e+02 1.789076575545e+02 -3.172142607568e+01
+         8  -1.516863206270e+05 4.081647547539e+01 -1.516455041516e+05 -5.004462259497e+05 -5.004310390899e+05 -5.004586201922e+05 -5.004490185670e+05 -1.821729820139e+02 1.783627634984e+02 -3.229545936172e+01
+         9  -1.516968403311e+05 5.133393076256e+01 -1.516455064004e+05 -5.004146608425e+05 -5.003974106673e+05 -5.004249914138e+05 -5.004215804465e+05 -1.776868574101e+02 1.778434777250e+02 -3.304326339031e+01
+        10  -1.517084548375e+05 6.294626037551e+01 -1.516455085771e+05 -5.003796587110e+05 -5.003599705096e+05 -5.003877072258e+05 -5.003912983976e+05 -1.728295916164e+02 1.773862912348e+02 -3.399928527236e+01
+Loop time of 2.51242 on 1 procs for 10 steps with 12000 atoms
+
+Performance: 0.344 ns/day, 69.789 hours/ns, 3.980 timesteps/s, 47.763 katom-step/s
+97.5% CPU use with 1 MPI tasks x 1 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 0.75541    | 0.75541    | 0.75541    |   0.0 | 30.07
+Kspace  | 1.6807     | 1.6807     | 1.6807     |   0.0 | 66.89
+Neigh   | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0.0024235  | 0.0024235  | 0.0024235  |   0.0 |  0.10
+Output  | 0.071045   | 0.071045   | 0.071045   |   0.0 |  2.83
+Modify  | 0.0016582  | 0.0016582  | 0.0016582  |   0.0 |  0.07
+Other   |            | 0.001226   |            |       |  0.05
+
+Nlocal:          12000 ave       12000 max       12000 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:          22147 ave       22147 max       22147 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    2.42368e+06 ave 2.42368e+06 max 2.42368e+06 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 2423676
+Ave neighs/atom = 201.973
+Neighbor list builds = 0
+Dangerous builds = 0
+Total wall time: 0:00:03

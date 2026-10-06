@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+"""Validation of the coulombic operators (wolf, dsf, ewald) against LAMMPS, on 12000 atoms of disturbed UO2.
+
+Reference (LAMMPS with KSPACE, metal units), already stored here as log_<case>.lammps and dump_<case>.10.txt :
+    lmp -in in.coul -var case <wolf|dsf|ewald_auto|ewald_fixed>
+exaStamp runs (from this folder, 1 thread is enough) :
+    exaStamp exastamp_<case>.msp                 # e.g. exastamp_wolf.msp, exastamp_ewald_fixed+sym.msp
+    mpirun -np 2 exaStamp exastamp_<case>.msp    # MPI check, same files
+Comparison (needs numpy) :
+    python compare.py <case> [<case> ...]       # e.g. wolf dsf ewald_auto ewald_fixed wolf+sym
+
+  - thermo : potential energy (eV) and pressure tensor (bar) at every step 0..10
+  - step 10: per-atom positions, forces (eV/ang) and energies (eV), matched by id (exaStamp id + 1 = LAMMPS id)
+Variants <case>+<tag> are compared with the LAMMPS run of <case>.
+Expected (2026-10) : |dPE| ~1e-5 eV (csv precision), dP ~9e-8 relative (LAMMPS nktv2p constant), dx ~3e-9 ang,
+dF ~3e-8 eV/ang, dE_atom ~3e-8 eV : differences are at output precision.
+"""
+import sys
+import numpy as np
+
+EV_INTERNAL = 1.602176634e-19 / (1.66053906892e-27 * 1e-20 / 1e-24)  # eV in exaStamp internal energy units
+PA_PER_BAR = 1.0e5
+
+
+def lammps_thermo(case):
+    rows, on = [], False
+    for line in open(f"log_{case}.lammps"):
+        w = line.split()
+        if w[:2] == ["Step", "PotEng"]:
+            on = True
+            continue
+        if on:
+            if not w or not w[0].isdigit():
+                break
+            rows.append([float(x) for x in w])
+    a = np.array(rows)
+    # step pe ke etotal press pxx pyy pzz pxy pxz pyz
+    return {int(r[0]): (r[1], r[5:11]) for r in a}
+
+
+def exastamp_thermo(case):
+    out = {}
+    for line in open(f"thermo_exastamp_{case}.csv"):
+        if line.startswith("#"):
+            continue
+        w = line.split()
+        n = float(w[2])
+        out[int(w[0])] = (float(w[5]) * n, np.array([float(x) for x in w[7:13]]) / PA_PER_BAR)
+    return out
+
+
+def lammps_dump(fname):
+    lines = open(fname).read().splitlines()
+    i = lines.index(next(l for l in lines if l.startswith("ITEM: ATOMS")))
+    cols = lines[i].split()[2:]
+    a = np.array([[float(x) for x in l.split()] for l in lines[i + 1:]])
+    a = a[np.argsort(a[:, cols.index("id")])]
+    get = lambda *k: a[:, [cols.index(c) for c in k]]
+    return get("x", "y", "z"), get("fx", "fy", "fz"), get("c_pe")[:, 0]
+
+
+def exastamp_xyz(fname):
+    lines = open(fname).read().splitlines()
+    props = next(t for t in lines[1].split() if t.startswith("Properties=")).split("=")[1].split(":")
+    # name:type:count triplets -> column offsets
+    off, cols = 0, {}
+    for k in range(0, len(props), 3):
+        cols[props[k]] = (off, int(props[k + 2]))
+        off += int(props[k + 2])
+    rows = [l.split() for l in lines[2:]]
+    num = lambda name: np.array([[float(r[cols[name][0] + j]) for j in range(cols[name][1])] for r in rows])
+    ids = num("id")[:, 0].astype(int)
+    o = np.argsort(ids)
+    return ids[o], num("pos")[o], num("force")[o], num("ep")[o, 0], num("type")[o, 0].astype(int)
+
+
+def compare(case):
+    print(f"===== {case} =====")
+    base = case.split("+")[0]  # variants (e.g. wolf+sym) compare with the LAMMPS run of their base case
+    lt, et = lammps_thermo(base), exastamp_thermo(case)
+    worst_e, worst_p = 0.0, 0.0
+    for s in sorted(set(lt) & set(et)):
+        de = abs(et[s][0] - lt[s][0])
+        dp = np.max(np.abs(et[s][1] - lt[s][1]) / np.maximum(np.abs(lt[s][1]), 1.0))
+        worst_e, worst_p = max(worst_e, de), max(worst_p, dp)
+        if s in (0, 10):
+            print(f"step {s:2d}: PE exaStamp={et[s][0]:.10e} LAMMPS={lt[s][0]:.10e} |dE|={de:.3e} eV ; "
+                  f"max rel dP={dp:.3e} (Pxx {et[s][1][0]:.6e} vs {lt[s][1][0]:.6e} bar)")
+    print(f"steps 0..10 : max |dPE| = {worst_e:.3e} eV , max rel dP = {worst_p:.3e}")
+
+    lx, lf, le = lammps_dump(f"dump_{base}.10.txt")
+    ids, ex, ef, ee, et = exastamp_xyz(f"exastamp_{case}_000000010.xyz")
+    assert np.array_equal(ids + 1, np.arange(1, len(lx) + 1)), "id mismatch"
+    L = 54.5
+    dx = ex - lx
+    dx -= L * np.round(dx / L)
+    # at snapshot time the force field holds accelerations (F/m, internal units) : F[eV/ang] = a * m / EV_INTERNAL
+    mass = np.array([15.999, 238.02891])[et]  # species order O, U
+    fscale = (mass / EV_INTERNAL)[:, None]
+    escale = 1.0 if np.max(np.abs(ee)) < 100 * np.max(np.abs(le)) else 1.0 / EV_INTERNAL
+    df = np.abs(ef * fscale - lf)
+    print(f"step 10: max|dx| = {np.max(np.abs(dx)):.3e} ang , max|dF| = {np.max(df):.3e} eV/ang (max|F| {np.max(np.abs(lf)):.3e})"
+          f" , max|dE_atom| = {np.max(np.abs(ee * escale - le)):.3e} eV"
+          )
+
+
+for c in sys.argv[1:]:
+    compare(c)

@@ -1,0 +1,109 @@
+LAMMPS (4 Jul 2026)
+  using 1 OpenMP thread(s) per MPI task
+# Coulomb-only ground truth on disturbed UO2 (12000 atoms), LAMMPS metal units.
+# Usage: lmp -in in.coul -var case <wolf|dsf|ewald_auto|ewald_fixed>
+units        metal
+dimension    3
+boundary     p p p
+atom_style   charge
+atom_modify  map array
+
+read_data    UO2_disturbed_charge.lmp
+Reading data file ...
+  triclinic box = (0 0 0) to (54.5 54.5 54.5) with tilt (0 0 0)
+  1 by 1 by 1 MPI processor grid
+  reading atoms ...
+  12000 atoms
+  read_data CPU = 0.053 seconds
+
+group  U type 1
+4000 atoms in group U
+set group U charge 2.2208
+Setting atom values ...
+  4000 settings made for charge
+group  O type 2
+8000 atoms in group O
+set group O charge -1.1104
+Setting atom values ...
+  8000 settings made for charge
+
+if "${case} == wolf" then   "pair_style coul/wolf 0.2 10.0"   "pair_coeff * *"
+if "${case} == dsf" then   "pair_style coul/dsf 0.2 10.0"   "pair_coeff * *"
+pair_style coul/dsf 0.2 10.0
+pair_coeff * *
+if "${case} == ewald_auto" then   "pair_style coul/long 10.0"   "pair_coeff * *"   "kspace_style ewald 1.0e-5"
+if "${case} == ewald_fixed" then   "pair_style coul/long 10.0"   "pair_coeff * *"   "kspace_style ewald 1.0e-5"   "kspace_modify gewald 0.3 kmax/ewald 8 8 8"
+
+# no tables: real-space part uses the A&S erfc polynomial, same as coulombic/ewald.h
+if "${case} == ewald_auto || ${case} == ewald_fixed" then "pair_modify table 0"
+
+compute pe all pe/atom
+compute st all stress/atom NULL virial
+
+neighbor     1.0 bin
+neigh_modify delay 0 every 1 check yes
+
+thermo_style custom step pe ke etotal press pxx pyy pzz pxy pxz pyz
+thermo_modify format float %.12e
+thermo       1
+
+dump d all custom 10 dump_${case}.*.txt id type x y z fx fy fz c_pe c_st[1] c_st[2] c_st[3] c_st[4] c_st[5] c_st[6]
+dump d all custom 10 dump_dsf.*.txt id type x y z fx fy fz c_pe c_st[1] c_st[2] c_st[3] c_st[4] c_st[5] c_st[6]
+dump_modify d sort id format float %.15e
+
+timestep     0.001
+fix 1 all nve
+run 10
+Generated 0 of 1 mixed pair_coeff terms from geometric mixing rule
+Neighbor list info ...
+  update: every = 1 steps, delay = 0 steps, check = yes
+  max neighbors/atom: 2000, page size: 100000
+  master list distance cutoff = 11
+  ghost atom cutoff = 11
+  binsize = 5.5, bins = 10 10 10
+  1 neighbor lists, perpetual/occasional/extra = 1 0 0
+  (1) pair coul/dsf, perpetual
+      attributes: half, newton on
+      pair build: half/bin/atomonly/newton/tri
+      stencil: half/bin/3d/tri
+      bin: standard
+Per MPI rank memory allocation (min/avg/max) = 21.04 | 21.04 | 21.04 Mbytes
+   Step         PotEng         KinEng         TotEng         Press           Pxx            Pyy            Pzz            Pxy            Pxz            Pyz      
+         0  -1.517320990054e+05 0.000000000000e+00 -1.517320990054e+05 -5.032976407727e+05 -5.032920110694e+05 -5.033157969495e+05 -5.032851142992e+05 -1.995742566820e+02 1.854750825590e+02 -3.021474953151e+01
+         1  -1.517327430349e+05 6.438424460668e-01 -1.517320991924e+05 -5.032956675693e+05 -5.032899131353e+05 -5.033137149179e+05 -5.032833746545e+05 -1.993035197770e+02 1.853948656887e+02 -3.023407639662e+01
+         2  -1.517346721449e+05 2.572397283969e+00 -1.517320997476e+05 -5.032897554983e+05 -5.032836246626e+05 -5.033074768051e+05 -5.032781650273e+05 -1.984933632873e+02 1.851569375114e+02 -3.029445799193e+01
+         3  -1.517378774962e+05 5.776843217848e+00 -1.517321006529e+05 -5.032799268983e+05 -5.032731613705e+05 -5.032971062618e+05 -5.032695130627e+05 -1.971499337073e+02 1.847694533213e+02 -3.040307675553e+01
+         4  -1.517423446763e+05 1.024279778683e+01 -1.517321018785e+05 -5.032662180718e+05 -5.032585485640e+05 -5.032826417266e+05 -5.032574639248e+05 -1.952834215096e+02 1.842459653562e+02 -3.057183587643e+01
+         5  -1.517480541767e+05 1.595079351054e+01 -1.517321033832e+05 -5.032486779019e+05 -5.032398198017e+05 -5.032641349670e+05 -5.032420789370e+05 -1.929079815507e+02 1.836053627711e+02 -3.081726098688e+01
+         6  -1.517549820522e+05 2.287693784141e+01 -1.517321051143e+05 -5.032273659333e+05 -5.032170150487e+05 -5.032416490545e+05 -5.032234336966e+05 -1.900416236313e+02 1.828717871407e+02 -3.116036872794e+01
+         7  -1.517631007596e+05 3.099375062835e+01 -1.517321070089e+05 -5.032023499337e+05 -5.031901783300e+05 -5.032152557942e+05 -5.032016156769e+05 -1.867060749761e+02 1.820745232503e+02 -3.162650808745e+01
+         8  -1.517723801653e+05 4.027117149673e+01 -1.517321089938e+05 -5.031737029569e+05 -5.031593549050e+05 -5.031850326277e+05 -5.031767213381e+05 -1.829266170219e+02 1.812478648230e+02 -3.224518193232e+01
+         9  -1.517827887148e+05 5.067772860851e+01 -1.517321109862e+05 -5.031414999274e+05 -5.031245879838e+05 -5.031510590343e+05 -5.031488527641e+05 -1.787318991305e+02 1.804309546112e+02 -3.304985782167e+01
+        10  -1.517942947541e+05 6.218185974785e+01 -1.517321128944e+05 -5.031058137710e+05 -5.030859150077e+05 -5.031134124561e+05 -5.031181138493e+05 -1.741537323508e+02 1.796675988126e+02 -3.407777791191e+01
+Loop time of 0.771601 on 1 procs for 10 steps with 12000 atoms
+
+Performance: 1.120 ns/day, 21.433 hours/ns, 12.960 timesteps/s, 155.521 katom-step/s
+99.4% CPU use with 1 MPI tasks x 1 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 0.70161    | 0.70161    | 0.70161    |   0.0 | 90.93
+Neigh   | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0.0015412  | 0.0015412  | 0.0015412  |   0.0 |  0.20
+Output  | 0.06592    | 0.06592    | 0.06592    |   0.0 |  8.54
+Modify  | 0.0014701  | 0.0014701  | 0.0014701  |   0.0 |  0.19
+Other   |            | 0.001063   |            |       |  0.14
+
+Nlocal:          12000 ave       12000 max       12000 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:          22147 ave       22147 max       22147 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    2.42368e+06 ave 2.42368e+06 max 2.42368e+06 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 2423676
+Ave neighs/atom = 201.973
+Neighbor list builds = 0
+Dangerous builds = 0
+Total wall time: 0:00:01
