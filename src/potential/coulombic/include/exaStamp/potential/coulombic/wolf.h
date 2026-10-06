@@ -63,6 +63,23 @@ namespace exaStamp
     de = EXASTAMP_QUANTITY( fpair * eV / ang );
     
   }
+
+  // self energy of a particle with charge q (LAMMPS pair coul/wolf e_self)
+  ONIKA_HOST_DEVICE_FUNC
+  inline double wolf_self_energy(const WolfParameters& p, double q)
+  {
+    const double e_self = -( p.e_shift / 2.0 + p.alpha / sqrt(M_PI) ) * q * q * p.qqrd2e;
+    return EXASTAMP_QUANTITY( e_self * eV );
+  }
+
+  struct WolfKernel
+  {
+    WolfParameters m_params;
+    WolfKernel() = default;
+    inline WolfKernel(const WolfParameters& p) : m_params(p) {}
+    ONIKA_HOST_DEVICE_FUNC inline void operator () (double c, double r, double& e, double& de) const { wolf_compute_energy( m_params, c, r, e, de ); }
+    ONIKA_HOST_DEVICE_FUNC inline double self_energy(double q) const { return wolf_self_energy( m_params, q ); }
+  };
 }
 
 // Yaml conversion operators, allows to read potential parameters from config file

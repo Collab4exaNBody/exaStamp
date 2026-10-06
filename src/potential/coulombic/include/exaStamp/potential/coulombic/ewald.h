@@ -15,20 +15,24 @@ specific language governing permissions and limitations
 under the License.
 */
 
+
 #pragma once
 
 #include <yaml-cpp/yaml.h>
 #include <onika/physics/units.h>
-#include <onika/physics/units.h>
 #include <onika/memory/allocator.h>
 #include <onika/math/basic_types.h>
 #include <onika/math/basic_types_yaml.h>
+#include <onika/log.h>
+#include <exaStamp/unit_system.h>
 #include <cmath>
+#include <algorithm>
 
 #include <onika/cuda/cuda.h>
-#include <onika/cuda/ro_shallow_copy.h>
 
 namespace exaStamp
+{
+inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugin (plugins are loaded RTLD_GLOBAL)
 {
   using namespace exanb;
 
@@ -36,8 +40,18 @@ namespace exaStamp
 
   namespace ewald_constants
   {
-    static constexpr double epsilonZero = 0x1.337f14f782bb5p-21; //0x1.2c4a1a79b5aafp-11 * 0.001;
-    static constexpr double fpe0 = 0x1.e303a50b0d1ap-18; // 0x1.d7b18f2ccacb6p-8 * 0.001 ;
+    // Coulomb constant 1/(4.pi.epsilon0), same value as LAMMPS metal units (qqr2e = 14.399645 eV.ang/e-^2), in internal units
+    static constexpr double qqr2e = EXASTAMP_CONST_QUANTITY( 14.399645 * eV * ang / (ec^2) );
+    static constexpr double fpe0 = 1.0 / qqr2e;                 // 4.pi.epsilon0
+    static constexpr double epsilonZero = fpe0 / ( 4.0 * M_PI ); // epsilon0
+
+    // Abramowitz & Stegun approximation of erfc(x) (same as LAMMPS pair coul/long without tables)
+    static constexpr double EWALD_P = 0.3275911;
+    static constexpr double A1 = 0.254829592;
+    static constexpr double A2 = -0.284496736;
+    static constexpr double A3 = 1.421413741;
+    static constexpr double A4 = -1.453152027;
+    static constexpr double A5 = 1.061405429;
   }
 
   struct EwaldRho
@@ -51,20 +65,12 @@ namespace exaStamp
     double Gx;
     double Gy;
     double Gz;
-    double Gc;
+    double Gc; // 2.pi/(4.pi.epsilon0.V) exp(-G^2/(4g^2))/G^2
+    double Gv; // 2.(1+G^2/(4g^2))/G^2 , used for reciprocal virial
   };
   
   struct alignas(DEFAULT_ALIGNMENT) EwaldParameters
   {
-    // Approximation of erfc() function
-    double EWALD_F = 1.12837917;
-    double EWALD_P = 0.3275911;
-    double A1 = 0.254829592;
-    double A2 = -0.284496736;
-    double A3 = 1.421413741;
-    double A4 = -1.453152027;
-    double A5 = 1.061405429;
-    
     double g_ewald = 0.0;
     double radius = 0.0; 
     double accuracy_relative = 0.0;
@@ -77,22 +83,27 @@ namespace exaStamp
     ssize_t nknz = 0;
 
     double gm = 0.0;
-    double gm_sr = 0.0; // the gm used in short range computation
+    double gm_sr = 0.0; // 1/(4.pi.epsilon0), used in short range computation
     double qqr2e = 0.0;
-    double bt_sr = 0.0; // the bt value used in short range computation
+    double bt_sr = 0.0; // 2.g/sqrt(pi), used in short range computation
+    double qsum = 0.0;  // total charge, for neutralizing background energy
     
     double volume = 0.0;
+    Vec3d box = { 0.0 , 0.0 , 0.0 }; // box size used to build k vectors
     Vec3d unitk = { 0.0 , 0.0 , 0.0 };
     
     onika::memory::CudaMMVector<EwaldCoeffs> Gdata;
   };
 
+  // trivially copyable view of EwaldParameters, suitable for GPU functors
   struct ReadOnlyEwaldParameters
   {
     double g_ewald = 0.0;
     ssize_t nknz = 0;
-    double gm_sr = 0.0; // the gm used in short range computation
-    double bt_sr = 0.0; // the bt value used in short range computation
+    double gm_sr = 0.0;
+    double bt_sr = 0.0;
+    double qsum = 0.0;
+    double volume = 0.0;
     
     const EwaldCoeffs* __restrict__ Gdata = nullptr;
     
@@ -107,63 +118,77 @@ namespace exaStamp
       , nknz( p.nknz )
       , gm_sr( p.gm_sr )
       , bt_sr( p.bt_sr )
+      , qsum( p.qsum )
+      , volume( p.volume )
       , Gdata( p.Gdata.data() )
     {}
   };
 
+  // real space part : e = qi.qj/(4.pi.epsilon0) erfc(g.r)/r , de = de/dr
   template<class EwaldParametersT>
   ONIKA_HOST_DEVICE_FUNC static inline void ewald_compute_energy(const EwaldParametersT& p, double c, double r, double& e, double& de)
   {
+    using namespace ewald_constants;
     const double cf = p.gm_sr * c;
     const double grij = p.g_ewald * r;
     const double expm2 = exp(-grij * grij);
-    const double t = 1.0 / (1.0 + p.EWALD_P * grij);
-    const double erfc = t * (p.A1 + t * (p.A2 + t * (p.A3 + t * (p.A4 + t * p.A5)))) * expm2;
+    const double t = 1.0 / (1.0 + EWALD_P * grij);
+    const double erfc = t * (A1 + t * (A2 + t * (A3 + t * (A4 + t * A5)))) * expm2;
     e = cf * erfc / r;
     de = - (cf * p.bt_sr * expm2 + e) / r;
   }
 
-  inline double ewald_error_accuracy(double g_ewald, int km, double length, uint64_t natoms, double q2){
+  // self energy + neutralizing background energy of one particle with charge q
+  template<class EwaldParametersT>
+  ONIKA_HOST_DEVICE_FUNC static inline double ewald_self_energy(const EwaldParametersT& p, double q)
+  {
+    using namespace ewald_constants;
+    return - qqr2e * ( p.g_ewald / sqrt(M_PI) * q * q + 0.5 * M_PI * q * p.qsum / ( p.g_ewald * p.g_ewald * p.volume ) );
+  }
+
+  // rms force error estimate of the reciprocal part (same as LAMMPS Ewald::rms), q2 = sum of squared charges
+  inline double ewald_error_accuracy(double g_ewald, int km, double length, uint64_t natoms, double q2)
+  {
     if (natoms == 0) natoms = 1;
     double value = 2.0*q2*g_ewald/length * sqrt(1.0/(M_PI*km*natoms)) * std::exp(-M_PI*M_PI*km*km/(g_ewald*g_ewald*length*length));
     return value;
   }
   
-  inline void ewald_init_parameters(double g_ewald, double radius, double accuracy_relative, unsigned int in_kmax, const Vec3d& domainSize, const uint64_t natoms, double qsq, double qsum, EwaldParameters& p , ::exanb::LogStreamWrapper& ldbg )
+  inline void ewald_init_parameters(double g_ewald, double radius, double accuracy_relative, long in_kmax, const Vec3d& domainSize, const uint64_t natoms, double qsq, double qsum, EwaldParameters& p , ::exanb::LogStreamWrapper& ldbg )
   {
-    
     using ewald_constants::fpe0;
-    using ewald_constants::epsilonZero;
     
     p.g_ewald = g_ewald;
     p.radius = radius;
     p.accuracy_relative = accuracy_relative;
-    double accuracy = accuracy_relative;
+    p.qsum = qsum;
     p.kmax = in_kmax;
-
+    p.kxmax = p.kymax = p.kzmax = 0;
+    p.box = domainSize;
     p.volume = domainSize.x * domainSize.y * domainSize.z ;
 
-    double xL = domainSize.x;
-    double yL = domainSize.y;
-    double zL = domainSize.z;
+    const double xL = domainSize.x;
+    const double yL = domainSize.y;
+    const double zL = domainSize.z;
     
     if( p.volume == 0.0 ) return;
 
     // ------------------------------------------------------------------- //
-    // 1st step : g_ewald calculation
+    // 1st step : g_ewald calculation (LAMMPS Ewald::init). accuracy_relative is relative to the
+    // force between two unit charges at 1 ang ; it cancels out with qsq except in the log() branch below
+    const double accuracy = accuracy_relative;
     if(p.g_ewald <= 0.)
     {
-      double g_ewald = 0.0;
-      g_ewald = accuracy_relative*sqrt(natoms*radius*xL*yL*zL) / (2.0*qsq);
-      if (g_ewald >= 1.0) g_ewald = (1.35 - 0.15*std::log(accuracy))/radius;
-      else g_ewald = sqrt(-std::log(g_ewald)) / radius;
-      p.g_ewald = g_ewald;
+      double g = accuracy_relative*sqrt(natoms*radius*xL*yL*zL) / (2.0*qsq);
+      const double accuracy_abs = accuracy_relative * 14.399645; // eV/ang, as in LAMMPS metal units
+      if (g >= 1.0) g = (1.35 - 0.15*std::log(accuracy_abs))/radius;
+      else g = sqrt(-std::log(g)) / radius;
+      p.g_ewald = g;
     }
     
-    if(p.g_ewald == 0.)
+    if( ! ( p.g_ewald > 0. ) )
     {
-        lerr<<"######## ERROR in ewald_init_parameters : g_ewald ="<<p.g_ewald<<" - Decrease accuracy_relative of Ewald method"<<std::endl<<std::flush;
-        std::abort();
+      ::onika::fatal_error() << "ewald_init_parameters : g_ewald=" << p.g_ewald << " - Decrease accuracy_relative of Ewald method" << std::endl;
     }
     // ------------------------------------------------------------------- //
 
@@ -171,87 +196,53 @@ namespace exaStamp
     // 2nd step : kmax calculation
     if(p.kmax <= 0)
     {
-        if(p.g_ewald == 0.)
-        {
-          lerr<<"######## ERROR in ewald_init_parameters : g_ewald ="<<p.g_ewald<<" in kmax calculation"<<std::endl<<std::flush;
-          std::abort();
-        }
-        
-        double err;
-        int kmax = 0;
-        int kxmax = 1;
-        int kymax = 1;
-        int kzmax = 1;
-
-        err = ewald_error_accuracy(p.g_ewald,kxmax,xL,natoms,qsq);
-        while (err > accuracy) {
-          kxmax++;
-          err = ewald_error_accuracy(p.g_ewald,kxmax,xL,natoms,qsq);
-        }
-      
-        err = ewald_error_accuracy(p.g_ewald,kymax,yL,natoms,qsq);
-        while (err > accuracy) {
-          kymax++;
-          err = ewald_error_accuracy(p.g_ewald,kymax,yL,natoms,qsq);
-        }
-      
-        err = ewald_error_accuracy(p.g_ewald,kzmax,zL,natoms,qsq);
-        while (err > accuracy) {
-          kzmax++;
-          err = ewald_error_accuracy(p.g_ewald,kzmax,zL,natoms,qsq);
-        }
-      
-        kmax = std::max(kxmax,kymax);
-        kmax = std::max(kmax,kzmax);
-        p.kmax = kmax;
-        p.kxmax = kxmax;
-        p.kymax = kymax;
-        p.kzmax = kzmax;
+      p.kxmax = 1;
+      while( ewald_error_accuracy(p.g_ewald,p.kxmax,xL,natoms,qsq) > accuracy ) ++ p.kxmax;
+      p.kymax = 1;
+      while( ewald_error_accuracy(p.g_ewald,p.kymax,yL,natoms,qsq) > accuracy ) ++ p.kymax;
+      p.kzmax = 1;
+      while( ewald_error_accuracy(p.g_ewald,p.kzmax,zL,natoms,qsq) > accuracy ) ++ p.kzmax;
+      p.kmax = std::max( p.kxmax , std::max( p.kymax , p.kzmax ) );
+    }
+    else
+    {
+      // user defined kmax, same in all directions (LAMMPS kmax/ewald kmax kmax kmax)
+      p.kxmax = p.kymax = p.kzmax = p.kmax;
     }
     
     if(p.kmax < 2)
-      {
-        lout<<"######## ERROR in ewald_init_parameters : kmax ="<<p.kmax<<" - Decrease epsilon of Ewald method"<<std::endl;
-        std::abort();
-      }
+    {
+      ::onika::fatal_error() << "ewald_init_parameters : kmax=" << p.kmax << " - Decrease accuracy_relative of Ewald method" << std::endl;
+    }
     // ------------------------------------------------------------------- //
 
     p.unitk = Vec3d{ 2.*M_PI/xL , 2.*M_PI/yL , 2.*M_PI/zL };
-    double GnMax_x = (p.unitk).x * (p.unitk).x * p.kxmax * p.kxmax;
-    double GnMax_y = (p.unitk).y * (p.unitk).y * p.kymax * p.kymax;
-    double GnMax_z = (p.unitk).z * (p.unitk).z * p.kzmax * p.kzmax;
-    double GnMax = std::max(GnMax_x , GnMax_y);
-    GnMax = std::max(GnMax , GnMax_z);
+    const double GnMax_x = p.unitk.x * p.unitk.x * p.kxmax * p.kxmax;
+    const double GnMax_y = p.unitk.y * p.unitk.y * p.kymax * p.kymax;
+    const double GnMax_z = p.unitk.z * p.unitk.z * p.kzmax * p.kzmax;
+    // 1.00001 margin as in LAMMPS, so that k vectors exactly on the sphere are not lost to rounding
+    const double GnMax = std::max( GnMax_x , std::max( GnMax_y , GnMax_z ) ) * 1.00001;
     
-    p.nk = (2 * p.kmax + 1) * (2 * p.kmax + 1) * (2 * p.kmax + 1) - 1;
+    p.nk = (2 * p.kxmax + 1) * (2 * p.kymax + 1) * (2 * p.kzmax + 1) - 1;
     p.Gdata.resize( p.nk );
 
-    double bt = 2. * M_PI / fpe0 / p.volume;
+    const double bt = 2. * M_PI / fpe0 / p.volume;
     p.bt_sr = 2. * p.g_ewald / std::sqrt(M_PI);
     p.gm = 1. / (4. * p.g_ewald * p.g_ewald);
-    p.gm_sr = 0.25 / M_PI / epsilonZero;
-    p.qqr2e = 0.25 / M_PI / epsilonZero;
+    p.gm_sr = ewald_constants::qqr2e;
+    p.qqr2e = ewald_constants::qqr2e;
 
-    // note : this triple-loop is parallelizable
-    const ssize_t kxmin = - static_cast<ssize_t>(p.kxmax);
-    const ssize_t kxmax =   static_cast<ssize_t>(p.kxmax);
-    const ssize_t kymin = - static_cast<ssize_t>(p.kymax);
-    const ssize_t kymax =   static_cast<ssize_t>(p.kymax);
-    const ssize_t kzmin = - static_cast<ssize_t>(p.kzmax);
-    const ssize_t kzmax =   static_cast<ssize_t>(p.kzmax);
-    
     size_t kk = 0;
     double gcmin = 1e30;
     double gcmax = 0.0;
 
-    for (ssize_t kx=kxmin; kx<=kxmax; ++kx )
+    for (ssize_t kx=-p.kxmax; kx<=p.kxmax; ++kx )
     {
-      for (ssize_t ky=kymin; ky<=kymax; ++ky)
+      for (ssize_t ky=-p.kymax; ky<=p.kymax; ++ky)
       {
-        for (ssize_t kz=kzmin; kz<=kzmax; ++kz)
+        for (ssize_t kz=-p.kzmax; kz<=p.kzmax; ++kz)
         {
-	        const ssize_t nk = kx*kx + ky*ky + kz*kz;
-	        if( nk > 0 )
+          if( kx*kx + ky*ky + kz*kz > 0 )
           {
             const Vec3d G_kk = { kx * p.unitk.x, ky * p.unitk.y, kz * p.unitk.z };
             const double Gn_kk = norm2(G_kk);
@@ -259,11 +250,11 @@ namespace exaStamp
             {
               assert( kk < static_cast<size_t>(p.nk) );
               double Gc_kk = std::exp(-p.gm * Gn_kk ) / Gn_kk;
-              if(Gc_kk<gcmin) gcmin=Gc_kk;
-              if(Gc_kk>gcmax) gcmax=Gc_kk;
-              ldbg<<"G^2="<<Gn_kk<<" exp(-G^2/(4 g_ewald^2)/G^2)="<<Gc_kk<<std::endl<<std::flush;
+              gcmin = std::min( gcmin , Gc_kk );
+              gcmax = std::max( gcmax , Gc_kk );
               Gc_kk *= bt;
-              p.Gdata[kk] = EwaldCoeffs{ G_kk.x , G_kk.y , G_kk.z , Gc_kk };
+              const double Gv_kk = 2.0 * ( 1.0 + Gn_kk * p.gm ) / Gn_kk;
+              p.Gdata[kk] = EwaldCoeffs{ G_kk.x , G_kk.y , G_kk.z , Gc_kk , Gv_kk };
               ++kk;
             }
           }
@@ -271,23 +262,24 @@ namespace exaStamp
       }
     }
 
-    ldbg<<"   exp(-G^2/4g_ewald^2)/G^2 : minimum value :"<<gcmin<<std::endl<<std::flush;
-    ldbg<<"                          : maximum value :"<<gcmax<<std::endl<<std::flush;
+    ldbg<<"   exp(-G^2/4g_ewald^2)/G^2 : minimum value :"<<gcmin<<std::endl;
+    ldbg<<"                            : maximum value :"<<gcmax<<std::endl;
 
     // number of non zero values
     p.nknz = kk;    
-    ldbg << "   number of k points="<< p.nknz       <<std::endl<<std::flush;
+    ldbg << "   number of k points="<< p.nknz <<std::endl;
 
     // adjust coeffs size
     p.Gdata.resize( p.nknz );
     p.Gdata.shrink_to_fit();
   }
 
-  inline void ewald_init_parameters(double g_ewald, double radius, double accuracy_relative, unsigned int in_kmax, const Vec3d& domainSize, const uint64_t natoms, double qsq, double qsum, EwaldParameters& p )
+  inline void ewald_init_parameters(double g_ewald, double radius, double accuracy_relative, long in_kmax, const Vec3d& domainSize, const uint64_t natoms, double qsq, double qsum, EwaldParameters& p )
   {
     ewald_init_parameters(g_ewald,radius,accuracy_relative,in_kmax,domainSize,natoms,qsq,qsum,p , ::exanb::ldbg<<"" );
   }
 
+}
 }
 
 // Yaml conversion operators, allows to read potential parameters from config file
@@ -314,7 +306,7 @@ namespace YAML
         g_ewald,
         node["radius"].as<Quantity>().convert(),
         node["accuracy_relative"].as<Quantity>().convert(),
-        node["kmax"].as<long>(), domSize, 1, 1.,1.,v);
+        node["kmax"].as<long>(), domSize, 1, 1.,0.,v);
       return true;
     }
   };

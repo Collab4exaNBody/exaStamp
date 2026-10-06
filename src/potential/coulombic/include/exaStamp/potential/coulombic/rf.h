@@ -50,6 +50,14 @@ namespace exaStamp
     de = ( -p_rc.RF0/r2 + 2.*p_rc.RF1 * r ) * c;
   }
 
+  struct ReactionFieldKernel
+  {
+    ReactionFieldParameters m_params;
+    ReactionFieldKernel() = default;
+    inline ReactionFieldKernel(const ReactionFieldParameters& p) : m_params(p) {}
+    ONIKA_HOST_DEVICE_FUNC inline void operator () (double c, double r, double& e, double& de) const { rf_compute_energy( m_params, c, r, e, de ); }
+  };
+
   inline void init_rf(ReactionFieldParameters& v, double rc, double epsilon)
   {
     static constexpr double Epsilon0 = EXASTAMP_CONST_QUANTITY( onika::physics::epsilonZero * ( C^2 ) * ( s^2 ) / ( m^3 ) / ( kg^1 ) );

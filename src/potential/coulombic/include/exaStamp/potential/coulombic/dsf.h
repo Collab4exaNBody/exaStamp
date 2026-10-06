@@ -24,14 +24,6 @@ under the License.
 #include <onika/cuda/cuda.h>
 #include <exaStamp/unit_system.h>
 
-#define EWALD_F 1.12837917
-#define EWALD_P 0.3275911
-#define A1 0.254829592
-#define A2 -0.284496736
-#define A3 1.421413741
-#define A4 -1.453152027
-#define A5 1.061405429
-
 namespace exaStamp
 {
   using namespace exanb;
@@ -49,33 +41,49 @@ namespace exaStamp
     
   };
   
+  // LAMMPS pair coul/dsf : erfc(alpha.r) from Abramowitz & Stegun approximation, shifts computed once with exact erfc
   ONIKA_HOST_DEVICE_FUNC
   inline void dsf_compute_energy(const DsfParameters& p, double c, double r, double& e, double& de)
   {
     assert( r > 0. );
-    double MY_PIS = sqrt(M_PI);
-    double rsq = r*r;
-    double cut_coul = p.rc;
-    double cut_coulsq = cut_coul * cut_coul;    
+    constexpr double EWALD_P = 0.3275911;
+    constexpr double A1 = 0.254829592;
+    constexpr double A2 = -0.284496736;
+    constexpr double A3 = 1.421413741;
+    constexpr double A4 = -1.453152027;
+    constexpr double A5 = 1.061405429;
+    const double MY_PIS = sqrt(M_PI);
+    const double rsq = r*r;
 
-    double erfcc = erfc(p.alpha * cut_coul);
-    double erfcd = exp(-p.alpha * p.alpha * cut_coul * cut_coul);
-    double f_shift = -(erfcc / cut_coulsq + 2.0 / MY_PIS * p.alpha * erfcd / cut_coul);
-    double e_shift = erfcc / cut_coul - f_shift * cut_coul;
+    const double prefactor = p.qqrd2e * c / r;
+    const double erfcd = exp(-p.alpha * p.alpha * rsq);
+    const double t = 1.0 / (1.0 + EWALD_P * p.alpha * r);
+    const double erfcc = t * (A1 + t * (A2 + t * (A3 + t * (A4 + t * A5)))) * erfcd;
 
-    double prefactor = p.qqrd2e * c / r;
-    erfcd = exp(-p.alpha * p.alpha * rsq);
-    double t = 1.0 / (1.0 + EWALD_P * p.alpha * r);
-    erfcc = t * (A1 + t * (A2 + t * (A3 + t * (A4 + t * A5)))) * erfcd;
-
-    double forcecoul = prefactor * (erfcc / r + 2.0 * p.alpha / MY_PIS * erfcd + r * f_shift) * r;
-    double fpair = -forcecoul / r;
-    double ecoul = prefactor * (erfcc - r * e_shift - rsq * f_shift);
+    const double forcecoul = prefactor * (erfcc / r + 2.0 * p.alpha / MY_PIS * erfcd + r * p.f_shift) * r;
+    const double fpair = -forcecoul / r;
+    const double ecoul = prefactor * (erfcc - r * p.e_shift - rsq * p.f_shift);
     
     e = EXASTAMP_QUANTITY( ecoul * eV );
     de = EXASTAMP_QUANTITY( fpair * eV / ang );
-    
   }
+
+  // self energy of a particle with charge q (LAMMPS pair coul/dsf e_self)
+  ONIKA_HOST_DEVICE_FUNC
+  inline double dsf_self_energy(const DsfParameters& p, double q)
+  {
+    const double e_self = -( p.e_shift / 2.0 + p.alpha / sqrt(M_PI) ) * q * q * p.qqrd2e;
+    return EXASTAMP_QUANTITY( e_self * eV );
+  }
+
+  struct DsfKernel
+  {
+    DsfParameters m_params;
+    DsfKernel() = default;
+    inline DsfKernel(const DsfParameters& p) : m_params(p) {}
+    ONIKA_HOST_DEVICE_FUNC inline void operator () (double c, double r, double& e, double& de) const { dsf_compute_energy( m_params, c, r, e, de ); }
+    ONIKA_HOST_DEVICE_FUNC inline double self_energy(double q) const { return dsf_self_energy( m_params, q ); }
+  };
 }
 
 // Yaml conversion operators, allows to read potential parameters from config file
