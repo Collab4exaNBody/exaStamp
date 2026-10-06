@@ -1,5 +1,5 @@
 # Wolf, symmetric pair computation (use_symmetry)
-# Coulomb-only, 768 atoms of disturbed UO2 (UO2_small.xyz). Accuracy vs LAMMPS is checked in lammps_validation/.
+# Coulomb-only, 768 atoms of disturbed fluorite UO2 (generated). Accuracy vs LAMMPS is checked in lammps_validation/.
 
 species:
   - O: { mass: 15.999000 Da , z: 8 , charge: -1.1104 e- }
@@ -18,12 +18,24 @@ compute_force:
 
 setup_system:
   - domain:
-      cell_size: 5.4 ang
+      cell_size: 5.45 ang
+      grid_dims: [ 4, 4, 4 ]
+      bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 21.8 ang, 21.8 ang, 21.8 ang ] ]
+      xform: [ [ 1, 0, 0 ], [ 0, 1, 0 ], [ 0, 0, 1 ] ]
       periodic: [ true, true, true ]
       expandable: false
-  - read_xyz_file_with_xform:
-      filename: UO2_small.xyz
-      pbc_adjust_xform: true
+  - init_rcb_grid
+  - lattice: # fluorite UO2, 4x4x4 unit cells
+      structure: CUSTOM
+      types: [ U, U, U, U, O, O, O, O, O, O, O, O ]
+      positions:
+        [
+          [ 0.0, 0.0, 0.0 ], [ 0.0, 0.5, 0.5 ], [ 0.5, 0.0, 0.5 ], [ 0.5, 0.5, 0.0 ],
+          [ 0.25, 0.25, 0.25 ], [ 0.25, 0.25, 0.75 ], [ 0.25, 0.75, 0.25 ], [ 0.25, 0.75, 0.75 ],
+          [ 0.75, 0.25, 0.25 ], [ 0.75, 0.25, 0.75 ], [ 0.75, 0.75, 0.25 ], [ 0.75, 0.75, 0.75 ],
+        ]
+      size: [ 5.45 ang, 5.45 ang, 5.45 ang ]
+  - gaussian_noise_r: { sigma: 0.05 ang }
   - copy_charge_specy_to_particle
 
 global:

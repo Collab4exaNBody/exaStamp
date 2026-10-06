@@ -14,6 +14,9 @@ Comparison (needs numpy) :
 Variants <case>+<tag> are compared with the LAMMPS run of <case>.
 Expected (2026-10) : |dPE| ~1e-5 eV (csv precision), dP ~9e-8 relative (LAMMPS nktv2p constant), dx ~3e-9 ang,
 dF ~3e-8 eV/ang, dE_atom ~3e-8 eV : differences are at output precision.
+Variants +pair use the pair potential template front-ends (coul_wolf_pair, coul_dsf) with species charges. For dsf+pair,
+energies differ by 3.74e-2 eV in total (8e-6 eV per atom) : the template subtracts e(rcut) per pair, which is not exactly
+0 for DSF (A&S erfc) ; forces are identical.
 """
 import sys
 import numpy as np
