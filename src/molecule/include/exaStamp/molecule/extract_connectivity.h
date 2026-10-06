@@ -76,7 +76,7 @@ namespace exaStamp
         // IMPROPERS CASE ---------------------------------------------------------------
         if(neigh[2]!=std::numeric_limits<uint64_t>::max())
         {
-          impropers.emplace_back(std::array<uint64_t,4> {p_id, neigh[0], neigh[1], neigh[2]});
+          impropers.emplace_back( ChemicalImproper{ p_id, neigh[0], neigh[1], neigh[2] } );
         }
         
         if(neigh[3]!=std::numeric_limits<uint64_t>::max())
@@ -106,8 +106,8 @@ namespace exaStamp
           // here, we sort id to suppress duplicate in bonds after
           // why ? because bond (1,2) involved bond (2,1)
           // so we keep only (1,2)
-          if(p_id<id_a) bonds.emplace_back(std::array<uint64_t,2>{p_id, id_a});
-          else          bonds.emplace_back(std::array<uint64_t,2>{id_a, p_id});
+          if(p_id<id_a) bonds.emplace_back( ChemicalBond{p_id, id_a} );
+          else          bonds.emplace_back( ChemicalBond{id_a, p_id} );
           // ------------------------------------------------------------------------------
 
 
@@ -122,8 +122,8 @@ namespace exaStamp
             if(id_z==std::numeric_limits<uint64_t>::max()) break;
             if( (id_z != id_a) && (id_map_ghosts.find(id_z) != id_map_ghosts.end()) && (id_map_ghosts.find(id_a) != id_map_ghosts.end()) )
             {
-              if(id_z<id_a) angles.emplace_back(std::array<uint64_t,3>{id_z,p_id,id_a});
-              else          angles.emplace_back(std::array<uint64_t,3>{id_a,p_id,id_z});
+              if(id_z<id_a) angles.emplace_back( ChemicalAngle{id_z,p_id,id_a} );
+              else          angles.emplace_back( ChemicalAngle{id_a,p_id,id_z} );
             }
           }
           //-------------------------------------------------------------------------
@@ -145,7 +145,7 @@ namespace exaStamp
             auto neigh_a = cells[cell_a][field::cmol][pos_a];
             if(neigh_a[2]!=std::numeric_limits<uint64_t>::max())
             {
-              impropers.emplace_back(std::array<uint64_t,4> {id_a, neigh_a[0], neigh_a[1], neigh_a[2]});
+              impropers.emplace_back( ChemicalImproper{id_a, neigh_a[0], neigh_a[1], neigh_a[2]} );
             }
             if(neigh_a[3]!=std::numeric_limits<uint64_t>::max())
             {
@@ -177,8 +177,8 @@ namespace exaStamp
             assert(p_id!=id_b);
             
             // we order the atoms in order to suppress duplicate after
-            if(p_id<id_b)      angles.emplace_back(std::array<uint64_t,3>{p_id,id_a,id_b});
-            else if(p_id>id_b) angles.emplace_back(std::array<uint64_t,3>{id_b,id_a,p_id});
+            if(p_id<id_b)      angles.emplace_back( ChemicalAngle{p_id,id_a,id_b} );
+            else if(p_id>id_b) angles.emplace_back( ChemicalAngle{id_b,id_a,p_id} );
 
             // get information for third order neighbours
             if(id_map.find(id_b) != id_map.end())                    decode_cell_particle(id_map.at(id_b), cell_b, pos_b);
@@ -202,8 +202,8 @@ namespace exaStamp
               assert(id_z!=id_b);
               if( (id_z != id_a) && (id_map_ghosts.find(id_z) != id_map_ghosts.end()) && (id_map_ghosts.find(id_b) != id_map_ghosts.end()) )
               {
-                if(id_z<id_b) torsions.emplace_back(std::array<uint64_t,4> {id_z, p_id, id_a, id_b});
-                if(id_z>id_b) torsions.emplace_back(std::array<uint64_t,4> {id_b, id_a, p_id, id_z});
+                if(id_z<id_b) torsions.emplace_back( ChemicalTorsion {id_z, p_id, id_a, id_b} );
+                if(id_z>id_b) torsions.emplace_back( ChemicalTorsion {id_b, id_a, p_id, id_z} );
               }
             }
             //-------------------------------------------------------------------------
@@ -221,8 +221,8 @@ namespace exaStamp
               assert(id_c!=id_a);
               
               // we order the atoms to suppress duplicate after
-              if(p_id<id_c) torsions.emplace_back(std::array<uint64_t,4> {p_id, id_a, id_b, id_c});
-              if(p_id>id_c) torsions.emplace_back(std::array<uint64_t,4> {id_c, id_b, id_a, p_id});
+              if(p_id<id_c) torsions.emplace_back( ChemicalTorsion {p_id, id_a, id_b, id_c} );
+              if(p_id>id_c) torsions.emplace_back( ChemicalTorsion {id_c, id_b, id_a, p_id} );
             }
 
           }
@@ -232,32 +232,32 @@ namespace exaStamp
     }
 
     {
-      std::unordered_set< std::array<uint64_t,2> > s;
-      for( std::array<uint64_t,2> i : bonds) { s.insert(i); }
+      std::unordered_set< ChemicalBond > s;
+      for( ChemicalBond i : bonds) { s.insert(i); }
       lout << "bonds(L): "<<s.size()<<std::endl;
       bonds.assign( s.begin(), s.end() );
       std::sort( bonds.begin(), bonds.end() );
     }
     
     {
-      std::unordered_set< std::array<uint64_t,3> > s;
-      for( std::array<uint64_t,3> i : angles) { s.insert(i); }
+      std::unordered_set< ChemicalAngle > s;
+      for( ChemicalAngle i : angles) { s.insert(i); }
       angles.assign( s.begin(), s.end() );
       std::sort( angles.begin(), angles.end() );
       lout << "angles(L): "<<s.size()<<std::endl;
     }
     
     {
-      std::unordered_set< std::array<uint64_t,4> > s;
-      for( std::array<uint64_t,4> i : torsions) { s.insert(i); }
+      std::unordered_set< ChemicalTorsion > s;
+      for( ChemicalTorsion i : torsions) { s.insert(i); }
       torsions.assign( s.begin(), s.end() );
       std::sort( torsions.begin(), torsions.end() );
       lout << "torsions(L): "<<s.size()<<std::endl;
     }
     
     {
-      std::unordered_set< std::array<uint64_t,4> > s;
-      for( std::array<uint64_t,4> i : impropers) { s.insert(i); }
+      std::unordered_set< ChemicalImproper > s;
+      for( ChemicalImproper i : impropers) { s.insert(i); }
       impropers.assign( s.begin(), s.end() );
       std::sort( impropers.begin(), impropers.end() );
       lout << "impropers(L): "<<s.size()<<std::endl;

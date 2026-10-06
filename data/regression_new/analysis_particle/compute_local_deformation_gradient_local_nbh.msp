@@ -1,0 +1,100 @@
+species:
+  - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+
+eam_alloy_force:
+  rcut: 5.30 ang
+  parameters:
+    file: "Ta1_Ravelo_2013.eam.alloy"
+
+compute_force: eam_alloy_force
+
+setup_system:
+  - domain:
+      cell_size: 6.6 ang
+      grid_dims: [ 10, 10, 10 ]
+      bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 66. ang, 66. ang, 66. ang ] ]
+      xform: [ [ 1, 0, 0 ], [ 0, 1, 0 ], [ 0, 0, 1 ] ]
+      periodic: [ true, true, true ]
+      expandable: false
+  - init_rcb_grid
+  - lattice:
+      structure: BCC
+      types: [ Ta, Ta ]
+      size: [ 3.3 ang, 3.3 ang, 3.3 ang ]
+  - gaussian_noise_v: { sigma: 200. m/s }
+  
+global:
+  max_iteration: 100
+  simulation_thermostate_screen_frequency: 10
+  simulation_thermostate_file_frequency: -1
+  simulation_snapshot_frequency: 10
+  rcut_inc: 1.0 ang
+  dt: 5.0e-3 ps
+  deterministic_noise: true 
+  # --- what this file demonstrates, compared to compute_local_deformation_gradient.msp ---
+  #
+  # That file seeds the *shared* rcut_max (global.rcut_max) to the analysis' cutoff.
+  # rcut_max feeds nbh_dist's single (rcut_max+rcut_inc) computation, which drives BOTH:
+  #   - nbh_dist/nbh_dist_lab   : the chunk_neighbors pair-list radius used every step
+  #                               by compute_force (via update_particle_neighbors)
+  #   - ghost_dist/ghost_dist_max : the MPI ghost-particle communication reach, set on
+  #                               the grid itself (grid.set_max_neighbor_distance, in
+  #                               migrate_cell_particles.h) and inherited by copy_grid
+  # Seeding rcut_max therefore also inflates the main per-step neighbor list to the
+  # analysis' (larger) cutoff, even on the 9 out of 10 steps where no snapshot is taken.
+  #
+  # ghost_dist_max is a *separate* accumulator from rcut_max inside nbh_dist.cpp
+  # (exanb/src/particle_neighbors/nbh_dist.cpp:69 : *ghost_dist_max = max(*ghost_dist_max,*rcut_max)).
+  # Seeding ghost_dist_max directly instead of rcut_max widens only the ghost
+  # communication reach (so grid_copy still has real neighbor data out to the
+  # analysis' cutoff), while leaving rcut_max - and so the main per-step
+  # chunk_neighbors list used by compute_force - driven purely by the potential's
+  # own (smaller) cutoff.
+  ghost_dist_max: &defgrad_rcut 6.0 ang
+
+  # Defaults for the analysis-only, on-demand neighbor list built below. Kept as
+  # separate names (local_*) so this build never reads or writes the main
+  # simulation's rcut_max/nbh_dist/ghost_dist/amr/chunk_neighbors slots.
+  local_rcut_max: *defgrad_rcut
+  local_rcut_inc: 0.0 ang # rebuilt fresh every time, no verlet-skin margin needed
+
+init_epilog:
+  - backup_r_lt
+
+write_snapshot:
+  - copy_grid
+  - restore_ghost_r0:
+      rebind: { grid: grid_copy }
+      body:
+        - backup_r_lt_move_data
+        - restore_r_lt
+        - ghost_update_r
+
+  # --- on-demand, locally-scoped neighbor list, built only when a snapshot triggers ---
+  - local_nbh_dist:
+      rebind: { rcut_max: local_rcut_max, rcut_inc: local_rcut_inc,
+                ghost_dist_max: local_ghost_dist_max, bond_max_dist: local_bond_max_dist,
+                bond_max_stretch: local_bond_max_stretch, nbh_dist_lab: local_nbh_dist_lab,
+                nbh_dist: local_nbh_dist, ghost_dist: local_ghost_dist,
+                max_displ: local_max_displ, max_displ_lab: local_max_displ_lab }
+      body:
+        - nbh_dist
+  - local_chunk_neighbors:
+      rebind: { grid: grid_copy, amr: local_amr, amr_grid_pairs: local_amr_grid_pairs,
+                nbh_dist: local_nbh_dist, nbh_dist_lab: local_nbh_dist_lab,
+                chunk_neighbors: local_chunk_neighbors }
+      body:
+        - rebuild_amr
+        - amr_grid_pairs
+        - chunk_neighbors:
+            config: { chunk_size: 1 }
+
+  - compute_F:
+      rebind: { grid_t0: grid_copy, chunk_neighbors: local_chunk_neighbors, rcut_max: local_rcut_max }
+      body:
+        - compute_deformation_gradient_tensor:
+            rcut: *defgrad_rcut
+            weight_function: [ 1.0 , 0.0 , 0.0 ] # => 1 + 0.0 r - 0.01 r^2, r being the reference-frame neighbor distance
+            defgrad_field: defgrad
+  - timestep_file: "xyz/current_config_bis_%09d.xyz"
+  - write_xyz: { fields: [ id, type, defgrad ] }

@@ -47,6 +47,8 @@ namespace exaStamp
     ADD_SLOT( GridT     , grid      , INPUT , REQUIRED );
     ADD_SLOT( long      , samples   , INPUT , 1000 );
     ADD_SLOT( bool      , ghost     , INPUT , false );
+    ADD_SLOT( ValueType , hist_min  , INPUT , OPTIONAL , DocString{"if set together with hist_max, clamps the histogram interval instead of computing it from the data"} );
+    ADD_SLOT( ValueType , hist_max  , INPUT , OPTIONAL , DocString{"if set together with hist_min, clamps the histogram interval instead of computing it from the data"} );
     ADD_SLOT( Histogram<> , histogram , OUTPUT );
 
     inline void execute () override final
@@ -64,44 +66,59 @@ namespace exaStamp
       ssize_t gl = grid->ghost_layers();
       if( *ghost ) { gl = 0; }
 
-      // min max computation
-      ValueType min_val = std::numeric_limits<ValueType>::max();
-      ValueType max_val = std::numeric_limits<ValueType>::lowest();
+      // min max computation, unless a clamp interval was provided
+      ValueType min_val;
+      ValueType max_val;
 
-#     pragma omp parallel
+      if( hist_min.has_value() && hist_max.has_value() )
       {
-        ValueType local_min_val = std::numeric_limits<ValueType>::max();
-        ValueType local_max_val = std::numeric_limits<ValueType>::lowest();
-        
-        GRID_OMP_FOR_BEGIN(dims-2*gl,_,loc /*, reduction(min:min_val) reduction(max:max_val) */ )
+        min_val = *hist_min;
+        max_val = *hist_max;
+      }
+      else
+      {
+        min_val = std::numeric_limits<ValueType>::max();
+        max_val = std::numeric_limits<ValueType>::lowest();
+
+#       pragma omp parallel
         {
-          size_t i = grid_ijk_to_index( dims , loc + gl );
-          size_t n = cells[i].size();          
-          const ValueType * __restrict__ value_ptr = cells[i][hist_field];
+          ValueType local_min_val = std::numeric_limits<ValueType>::max();
+          ValueType local_max_val = std::numeric_limits<ValueType>::lowest();
+
+          GRID_OMP_FOR_BEGIN(dims-2*gl,_,loc /*, reduction(min:min_val) reduction(max:max_val) */ )
+          {
+            size_t i = grid_ijk_to_index( dims , loc + gl );
+            size_t n = cells[i].size();
+            const ValueType * __restrict__ value_ptr = cells[i][hist_field];
 
 //#         pragma omp simd reduction(min:min_val) reduction(max:max_val)
-          for(size_t j=0;j<n;j++)
+            for(size_t j=0;j<n;j++)
+            {
+              ValueType x = value_ptr[j];
+              local_min_val = std::min( local_min_val , x );
+              local_max_val = std::max( local_max_val , x );
+            }
+          }
+          GRID_OMP_FOR_END
+#         pragma omp critical
           {
-            ValueType x = value_ptr[j];
-            local_min_val = std::min( local_min_val , x );
-            local_max_val = std::max( local_max_val , x );
+            min_val = std::min( local_min_val , min_val );
+            max_val = std::max( local_max_val , max_val );
           }
         }
-        GRID_OMP_FOR_END
-#       pragma omp critical
-        {
-          min_val = std::min( local_min_val , min_val );
-          max_val = std::max( local_max_val , max_val );
-        }
-      }
 
-      // MPI min/max
-      if( nprocs > 1 )
-      {
-        ValueType tmp[2] = { -min_val , max_val };
-        MPI_Allreduce(MPI_IN_PLACE,tmp,2, onika::mpi::mpi_datatype<ValueType>() ,MPI_MAX,comm);
-        min_val = - tmp[0];
-        max_val = tmp[1];
+        // MPI min/max
+        if( nprocs > 1 )
+        {
+          ValueType tmp[2] = { -min_val , max_val };
+          MPI_Allreduce(MPI_IN_PLACE,tmp,2, onika::mpi::mpi_datatype<ValueType>() ,MPI_MAX,comm);
+          min_val = - tmp[0];
+          max_val = tmp[1];
+        }
+
+        // a single bound may be provided while the other is auto-computed
+        if( hist_min.has_value() ) { min_val = *hist_min; }
+        if( hist_max.has_value() ) { max_val = *hist_max; }
       }
 
       // std::cout << "min="<<min_val<<", max="<<max_val<<std::endl;
@@ -172,8 +189,17 @@ namespace exaStamp
   };
 
   template<typename GridT> using HistogramEnergy = HistogramOperator<GridT,field::_ep>;
+  
   template<typename GridT> using HistogramCharge = HistogramOperator<GridT,field::_charge>;
+  
   template<typename GridT> using HistogramVx = HistogramOperator<GridT,field::_vx>;
+  template<typename GridT> using HistogramVy = HistogramOperator<GridT,field::_vy>;
+  template<typename GridT> using HistogramVz = HistogramOperator<GridT,field::_vz>;
+  
+  template<typename GridT> using HistogramFx = HistogramOperator<GridT,field::_fx>;
+  template<typename GridT> using HistogramFy = HistogramOperator<GridT,field::_fy>;
+  template<typename GridT> using HistogramFz = HistogramOperator<GridT,field::_fz>;
+  
   template<typename GridT> using HistogramRx = HistogramOperator<GridT,field::_rx>;
   template<typename GridT> using HistogramRy = HistogramOperator<GridT,field::_ry>;
   template<typename GridT> using HistogramRz = HistogramOperator<GridT,field::_rz>;
@@ -182,8 +208,17 @@ namespace exaStamp
   ONIKA_AUTORUN_INIT(histogram)
   {
    OperatorNodeFactory::instance()->register_factory( "histogram_energy" , make_grid_variant_operator< HistogramEnergy > );
+   
    OperatorNodeFactory::instance()->register_factory( "histogram_charge" , make_grid_variant_operator< HistogramCharge > );
+   
    OperatorNodeFactory::instance()->register_factory( "histogram_vx" , make_grid_variant_operator< HistogramVx > );
+   OperatorNodeFactory::instance()->register_factory( "histogram_vy" , make_grid_variant_operator< HistogramVy > );
+   OperatorNodeFactory::instance()->register_factory( "histogram_vz" , make_grid_variant_operator< HistogramVz > );
+   
+   OperatorNodeFactory::instance()->register_factory( "histogram_fx" , make_grid_variant_operator< HistogramFx > );
+   OperatorNodeFactory::instance()->register_factory( "histogram_fy" , make_grid_variant_operator< HistogramFy > );
+   OperatorNodeFactory::instance()->register_factory( "histogram_fz" , make_grid_variant_operator< HistogramFz > );
+   
    OperatorNodeFactory::instance()->register_factory( "histogram_rx" , make_grid_variant_operator< HistogramRx > );
    OperatorNodeFactory::instance()->register_factory( "histogram_ry" , make_grid_variant_operator< HistogramRy > );
    OperatorNodeFactory::instance()->register_factory( "histogram_rz" , make_grid_variant_operator< HistogramRz > );
