@@ -160,6 +160,33 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
         && a.m31==b.m31 && a.m32==b.m32 && a.m33==b.m33;
   }
 
+  // restricted triclinic parameters of a cell matrix H (columns = cell vectors), as LAMMPS lx,ly,lz,xy,xz,yz.
+  // they are rotation invariant ; for a diagonal H, lx,ly,lz are the diagonal and tilts are 0.
+  struct RestrictedCell
+  {
+    double lx = 0.0, ly = 0.0, lz = 0.0;
+    double xy = 0.0, xz = 0.0, yz = 0.0;
+  };
+
+  inline RestrictedCell restricted_cell( const Mat3d& H )
+  {
+    RestrictedCell rc = { H.m11 , H.m22 , H.m33 , 0.0 , 0.0 , 0.0 };
+    if( ! is_diagonal( H ) )
+    {
+      const Vec3d a = { H.m11, H.m21, H.m31 };
+      const Vec3d b = { H.m12, H.m22, H.m32 };
+      const Vec3d c = { H.m13, H.m23, H.m33 };
+      rc.lx = norm( a );
+      const Vec3d ahat = a / rc.lx;
+      rc.xy = dot( b , ahat );
+      rc.ly = sqrt( norm2(b) - rc.xy*rc.xy );
+      rc.xz = dot( c , ahat );
+      rc.yz = ( dot(b,c) - rc.xy*rc.xz ) / rc.ly;
+      rc.lz = sqrt( norm2(c) - rc.xz*rc.xz - rc.yz*rc.yz );
+    }
+    return rc;
+  }
+
   // rms force error estimate of the reciprocal part (same as LAMMPS Ewald::rms), q2 = sum of squared charges
   inline double ewald_error_accuracy(double g_ewald, int km, double length, uint64_t natoms, double q2)
   {
@@ -176,21 +203,9 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
     using ewald_constants::fpe0;
     
     const bool orthogonal = is_diagonal( H );
-    double xL = H.m11, yL = H.m22, zL = H.m33; // lx, ly, lz
-    double xy = 0.0, xz = 0.0, yz = 0.0;
-    if( ! orthogonal )
-    {
-      const Vec3d a = { H.m11, H.m21, H.m31 };
-      const Vec3d b = { H.m12, H.m22, H.m32 };
-      const Vec3d c = { H.m13, H.m23, H.m33 };
-      xL = norm( a );
-      const Vec3d ahat = a / xL;
-      xy = dot( b , ahat );
-      yL = sqrt( norm2(b) - xy*xy );
-      xz = dot( c , ahat );
-      yz = ( dot(b,c) - xy*xz ) / yL;
-      zL = sqrt( norm2(c) - xz*xz - yz*yz );
-    }
+    const RestrictedCell rc = restricted_cell( H );
+    const double xL = rc.lx, yL = rc.ly, zL = rc.lz;
+    const double xy = rc.xy, xz = rc.xz, yz = rc.yz;
 
     p.g_ewald = g_ewald;
     p.radius = radius;
