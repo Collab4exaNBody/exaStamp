@@ -27,6 +27,7 @@ under the License.
 #include <exaStamp/potential/coulombic/pppm.h>
 #include <mpi.h>
 #include <vector>
+#include <string>
 
 namespace exaStamp
 {
@@ -42,6 +43,7 @@ inline namespace coulombic_ewald
     ADD_SLOT( double            , radius            , INPUT , REQUIRED , DocString{"real space cutoff"} );
     ADD_SLOT( std::vector<long> , mesh              , INPUT , std::vector<long>{0,0,0} , DocString{"mesh points in each direction, 0 0 0 = automatic"} );
     ADD_SLOT( long              , order             , INPUT , 5 , DocString{"charge assignment order, 2 to 7"} );
+    ADD_SLOT( std::string       , diff              , INPUT , std::string("ik") , DocString{"differentiation : ik (3 inverse FFTs) or ad (analytic, 1 inverse FFT, orthogonal cells only)"} );
     ADD_SLOT( Domain            , domain            , INPUT , OPTIONAL );
     ADD_SLOT( double            , sum_square_charge , INPUT );
     ADD_SLOT( double            , sum_charge        , INPUT );
@@ -64,6 +66,11 @@ inline namespace coulombic_ewald
         fatal_error() << "coulombic_pppm_init : mesh must have 3 values" << std::endl;
       }
       const long mesh_user[3] = { (*mesh)[0] , (*mesh)[1] , (*mesh)[2] };
+      if( *diff != "ik" && *diff != "ad" )
+      {
+        fatal_error() << "coulombic_pppm_init : diff must be ik or ad, got '"<< *diff <<"'" << std::endl;
+      }
+      const bool diff_ad = ( *diff == "ad" );
 
       if( domain.has_value() )
       {
@@ -80,6 +87,7 @@ inline namespace coulombic_ewald
           || *radius != p.radius
           || *accuracy_relative != p.accuracy_relative
           || *order != p.order
+          || diff_ad != p.diff_ad
           || mesh_user[0] != p.mesh_user[0] || mesh_user[1] != p.mesh_user[1] || mesh_user[2] != p.mesh_user[2] );
 
         // cell change only (NPT, deformation) : keep mesh and g_ewald, update volume dependent quantities (LAMMPS PPPM::setup)
@@ -97,7 +105,7 @@ inline namespace coulombic_ewald
           }
 
           const bool first_init = ( p.volume == 0.0 );
-          pppm_init_parameters( *g_ewald , *radius , *accuracy_relative , *order , mesh_user , cell , *natoms , *sum_square_charge , *sum_charge , p );
+          pppm_init_parameters( *g_ewald , *radius , *accuracy_relative , *order , mesh_user , diff_ad , cell , *natoms , *sum_square_charge , *sum_charge , p );
 
           if( rank == 0 && first_init )
           {
@@ -107,6 +115,7 @@ inline namespace coulombic_ewald
             lout << "radius  = "<< p.radius << std::endl;
             lout << "mesh    = "<< p.nx <<" "<< p.ny <<" "<< p.nz << std::endl;
             lout << "order   = "<< p.order << std::endl;
+            lout << "diff    = "<< ( p.diff_ad ? "ad" : "ik" ) << std::endl;
             lout << "accuracy_relative  = "<< p.accuracy_relative << std::endl;
             lout << "estimated accuracy = "<< p.estimated_accuracy << " eV/ang (relative "<< p.estimated_accuracy / COULOMB_CONSTANT_EV_ANG <<")" << std::endl;
             lout << "qsum    = "<< p.qsum << std::endl;
@@ -150,7 +159,7 @@ inline namespace coulombic_ewald
     {
       return R"EOF(
 Initializes PPPM long range coulomb (coulombic_pppm), same algorithm and parameter choice as LAMMPS kspace_style pppm
-(ik differentiation). Works on orthogonal and triclinic periodic cells. Also fills ewald_config with the real space
+(ik or ad differentiation). Works on orthogonal and triclinic periodic cells (ad : orthogonal only, as LAMMPS). Also fills ewald_config with the real space
 parameters (g_ewald, radius) used by coulombic_ewald_short_range. Needs sum_square_charge, sum_charge and natoms
 (sum_charges operator). When only the cell changes, mesh and g_ewald are kept and the influence function is rebuilt.
 )EOF";

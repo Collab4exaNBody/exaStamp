@@ -29,6 +29,7 @@ under the License.
 #include <onika/log.h>
 #include <cmath>
 #include <cstdint>
+#include <vector>
 
 namespace exaStamp
 {
@@ -54,6 +55,7 @@ inline namespace coulombic_ewald
     double radius = 0.0;
     long order = 5;
     long mesh_user[3] = { 0, 0, 0 }; // 0 = automatic
+    bool diff_ad = false;            // LAMMPS kspace_modify diff ad (analytic differentiation), otherwise diff ik
 
     // derived
     double g_ewald = 0.0;
@@ -64,9 +66,11 @@ inline namespace coulombic_ewald
     double qsqsum = 0.0;
     double estimated_accuracy = 0.0; // absolute rms force error estimate, eV/ang
 
-    // charge assignment polynomial coefficients rho_coeff[l][k-nlower] and influence function denominator expansion
+    // charge assignment polynomial coefficients rho_coeff[l][k-nlower] and influence function denominator expansion.
+    // ad uses their derivative, LAMMPS drho_coeff[l-1][k] = l * rho_coeff[l][k] (see pppm_stencil_derivative)
     double rho_coeff[pppm_constants::MAXORDER][pppm_constants::MAXORDER] = {};
     double gf_b[pppm_constants::MAXORDER] = {};
+    double sf_coeff[6] = {}; // ad : self force correction coefficients (LAMMPS sf_coeff)
 
     // per mesh point (x fastest) : influence function, k vectors (actual frame).
     // virial coefficients (LAMMPS vg) are computed from k when needed, see pppm_virial_coeffs
@@ -133,6 +137,68 @@ inline namespace coulombic_ewald
     double q2 = 0.0;         // sum q^2 * qqr2e
     double natoms = 1.0;
     double h_x = 0.0, h_y = 0.0, h_z = 0.0;
+    bool diff_ad = false;
+    int nx = 0, ny = 0, nz = 0; // mesh, used by the ad error estimate
+
+    // LAMMPS PPPM::compute_qopt (ad differentiation, orthogonal cell). qopt is a difference of nearly equal sums and
+    // g_ewald comes from a finite difference derivative of it : terms are computed in parallel but summed in the LAMMPS
+    // order, with the same operation order, so that g_ewald matches LAMMPS.
+    inline double compute_qopt() const
+    {
+      static constexpr double MY_4PI = 4.0*M_PI;
+      const double xprd = c.lx, yprd = c.ly, zprd = c.lz;
+      const double unitkx = 2.0*M_PI/xprd, unitky = 2.0*M_PI/yprd, unitkz = 2.0*M_PI/zprd;
+      const int twoorder = 2*order;
+      const int64_t nxy = int64_t(nx) * ny;
+      const int64_t ngrid = nxy * nz;
+      std::vector<double> terms( ngrid , 0.0 );
+#     pragma omp parallel for schedule(static)
+      for( int64_t i = 0 ; i < ngrid ; i++ )
+      {
+        const int k = i % nx;
+        const int l = (i/nx) % ny;
+        const int m = i / nxy;
+        const int kper = k - nx*(2*k/nx);
+        const int lper = l - ny*(2*l/ny);
+        const int mper = m - nz*(2*m/nz);
+        const double sqk = (unitkx*kper)*(unitkx*kper) + (unitky*lper)*(unitky*lper) + (unitkz*mper)*(unitkz*mper);
+        if( sqk == 0.0 ) continue;
+        double sum1 = 0.0, sum2 = 0.0, sum3 = 0.0, sum4 = 0.0;
+        for( int ax = -2 ; ax <= 2 ; ax++ )
+        {
+          double qx = unitkx*(kper+nx*ax);
+          const double sx = std::exp(-0.25*(qx/g_ewald)*(qx/g_ewald));
+          const double wx = pppm_powsinxx( 0.5*qx*xprd/nx , twoorder );
+          qx *= qx;
+          for( int ay = -2 ; ay <= 2 ; ay++ )
+          {
+            double qy = unitky*(lper+ny*ay);
+            const double sy = std::exp(-0.25*(qy/g_ewald)*(qy/g_ewald));
+            const double wy = pppm_powsinxx( 0.5*qy*yprd/ny , twoorder );
+            qy *= qy;
+            for( int az = -2 ; az <= 2 ; az++ )
+            {
+              double qz = unitkz*(mper+nz*az);
+              const double sz = std::exp(-0.25*(qz/g_ewald)*(qz/g_ewald));
+              const double wz = pppm_powsinxx( 0.5*qz*zprd/nz , twoorder );
+              qz *= qz;
+              const double dot2 = qx+qy+qz;
+              const double u1 = sx*sy*sz;
+              const double u2 = wx*wy*wz;
+              sum1 += u1*u1/dot2*MY_4PI*MY_4PI;
+              sum2 += u1*u2*MY_4PI;
+              sum3 += u2;
+              sum4 += dot2*u2;
+            }
+          }
+        }
+        sum2 *= sum2;
+        terms[i] = sum1 - sum2/(sum3*sum4);
+      }
+      double qopt = 0.0;
+      for( int64_t i = 0 ; i < ngrid ; i++ ) qopt += terms[i];
+      return qopt;
+    }
 
     inline double estimate_ik_error( double h, double prd ) const
     {
@@ -153,6 +219,7 @@ inline namespace coulombic_ewald
 
     inline double df_kspace() const
     {
+      if( diff_ad ) return std::sqrt( compute_qopt()/natoms ) * q2 / ( c.lx*c.ly*c.lz );
       const double lprx = estimate_ik_error( h_x , c.lx );
       const double lpry = estimate_ik_error( h_y , c.ly );
       const double lprz = estimate_ik_error( h_z , c.lz );
@@ -194,7 +261,7 @@ inline namespace coulombic_ewald
     }
   };
 
-  // LAMMPS PPPM::set_grid_global (ik differentiation, no slab) : chooses nx,ny,nz when not user defined, sets h_x,h_y,h_z
+  // LAMMPS PPPM::set_grid_global (ik or ad differentiation, no slab) : chooses nx,ny,nz when not user defined, sets h_x,h_y,h_z
   inline void pppm_set_grid_global( PPPMEstimator& e, bool triclinic, const long mesh_user[3], int& nx, int& ny, int& nz, double accuracy )
   {
     const double xprd = e.c.lx, yprd = e.c.ly, zprd = e.c.lz;
@@ -202,6 +269,25 @@ inline namespace coulombic_ewald
     if( gridflag )
     {
       nx = mesh_user[0]; ny = mesh_user[1]; nz = mesh_user[2];
+    }
+    else if( e.diff_ad )
+    {
+      // LAMMPS : shrink the spacing until the qopt error estimate meets the accuracy (orthogonal cells only)
+      double h = 4.0/e.g_ewald;
+      int count = 0;
+      while( true )
+      {
+        nx = static_cast<int>( xprd/h ); ny = static_cast<int>( yprd/h ); nz = static_cast<int>( zprd/h );
+        if( nx <= 1 ) nx = 2;
+        if( ny <= 1 ) ny = 2;
+        if( nz <= 1 ) nz = 2;
+        e.nx = nx; e.ny = ny; e.nz = nz;
+        const double df = e.df_kspace();
+        count++;
+        if( df <= accuracy ) break;
+        if( count > 500 ) ::onika::fatal_error() << "PPPM : could not compute grid size" << std::endl;
+        h *= 0.95;
+      }
     }
     else
     {
@@ -232,6 +318,7 @@ inline namespace coulombic_ewald
     while( ! pppm_factorable(nx) ) nx++;
     while( ! pppm_factorable(ny) ) ny++;
     while( ! pppm_factorable(nz) ) nz++;
+    e.nx = nx; e.ny = ny; e.nz = nz;
 
     if( ! triclinic )
     {
@@ -319,6 +406,86 @@ inline namespace coulombic_ewald
                   Hinv.m13*v0 + Hinv.m23*v1 + Hinv.m33*v2 };
   }
 
+  // LAMMPS PPPM::setup + compute_sf_precoeff + compute_gf_ad (ad differentiation, orthogonal cell only)
+  inline void pppm_setup_ad( PPPMParameters& p, const RestrictedCell& c )
+  {
+    const int nx = p.nx, ny = p.ny, nz = p.nz;
+    const double xprd = c.lx, yprd = c.ly, zprd = c.lz;
+    const double unitkx = 2.0*M_PI/xprd, unitky = 2.0*M_PI/yprd, unitkz = 2.0*M_PI/zprd;
+    const double g = p.g_ewald;
+    const int order = p.order;
+    const int twoorder = 2*order;
+    double sf0 = 0.0, sf1 = 0.0, sf2 = 0.0, sf3 = 0.0, sf4 = 0.0, sf5 = 0.0;
+
+#   pragma omp parallel for schedule(static) reduction(+:sf0,sf1,sf2,sf3,sf4,sf5)
+    for( int m = 0 ; m < nz ; m++ )
+    {
+      const int mper = m - nz*(2*m/nz);
+      const double qz = unitkz*mper;
+      const double snz = std::pow( std::sin(0.5*qz*zprd/nz) , 2 );
+      const double sz = std::exp(-0.25*(qz/g)*(qz/g));
+      const double wz = pppm_powsinxx( 0.5*qz*zprd/nz , twoorder );
+      for( int l = 0 ; l < ny ; l++ )
+      {
+        const int lper = l - ny*(2*l/ny);
+        const double qy = unitky*lper;
+        const double sny = std::pow( std::sin(0.5*qy*yprd/ny) , 2 );
+        const double sy = std::exp(-0.25*(qy/g)*(qy/g));
+        const double wy = pppm_powsinxx( 0.5*qy*yprd/ny , twoorder );
+        for( int k = 0 ; k < nx ; k++ )
+        {
+          const size_t n = ( size_t(m)*ny + l ) * nx + k;
+          const int kper = k - nx*(2*k/nx);
+          const double qx = unitkx*kper;
+          const double snx = std::pow( std::sin(0.5*qx*xprd/nx) , 2 );
+          const double sx = std::exp(-0.25*(qx/g)*(qx/g));
+          const double wx = pppm_powsinxx( 0.5*qx*xprd/nx , twoorder );
+          p.fkx[n] = qx; p.fky[n] = qy; p.fkz[n] = qz;
+          const double sqk = qx*qx + qy*qy + qz*qz;
+          if( sqk == 0.0 ) { p.greensfn[n] = 0.0; continue; }
+          const double numerator = (4.0*M_PI)/sqk;
+          const double gf = numerator*sx*sy*sz*wx*wy*wz/pppm_gf_denom( p , snx , sny , snz );
+          p.greensfn[n] = gf;
+
+          // self force pre-coefficients of this mesh point (LAMMPS compute_sf_precoeff)
+          double wx0[5], wy0[5], wz0[5], wx1[5], wy1[5], wz1[5], wx2[5], wy2[5], wz2[5];
+          for( int i = 0 ; i < 5 ; i++ )
+          {
+            wx0[i] = pppm_powsinxx( 0.5*(2.0*M_PI)*(kper+nx*(i-2))/nx , order );
+            wx1[i] = pppm_powsinxx( 0.5*(2.0*M_PI)*(kper+nx*(i-1))/nx , order );
+            wx2[i] = pppm_powsinxx( 0.5*(2.0*M_PI)*(kper+nx*i)/nx , order );
+            wy0[i] = pppm_powsinxx( 0.5*(2.0*M_PI)*(lper+ny*(i-2))/ny , order );
+            wy1[i] = pppm_powsinxx( 0.5*(2.0*M_PI)*(lper+ny*(i-1))/ny , order );
+            wy2[i] = pppm_powsinxx( 0.5*(2.0*M_PI)*(lper+ny*i)/ny , order );
+            wz0[i] = pppm_powsinxx( 0.5*(2.0*M_PI)*(mper+nz*(i-2))/nz , order );
+            wz1[i] = pppm_powsinxx( 0.5*(2.0*M_PI)*(mper+nz*(i-1))/nz , order );
+            wz2[i] = pppm_powsinxx( 0.5*(2.0*M_PI)*(mper+nz*i)/nz , order );
+          }
+          double s1 = 0.0, s2 = 0.0, s3 = 0.0, s4 = 0.0, s5 = 0.0, s6 = 0.0;
+          for( int ax = 0 ; ax < 5 ; ax++ )
+            for( int ay = 0 ; ay < 5 ; ay++ )
+              for( int az = 0 ; az < 5 ; az++ )
+              {
+                const double u0 = wx0[ax]*wy0[ay]*wz0[az];
+                s1 += u0 * wx1[ax]*wy0[ay]*wz0[az];
+                s2 += u0 * wx2[ax]*wy0[ay]*wz0[az];
+                s3 += u0 * wx0[ax]*wy1[ay]*wz0[az];
+                s4 += u0 * wx0[ax]*wy2[ay]*wz0[az];
+                s5 += u0 * wx0[ax]*wy0[ay]*wz1[az];
+                s6 += u0 * wx0[ax]*wy0[ay]*wz2[az];
+              }
+          sf0 += s1*gf; sf1 += s2*gf; sf2 += s3*gf; sf3 += s4*gf; sf4 += s5*gf; sf5 += s6*gf;
+        }
+      }
+    }
+
+    const double pre = M_PI / p.volume;
+    const double prex = pre * nx / xprd, prey = pre * ny / yprd, prez = pre * nz / zprd;
+    p.sf_coeff[0] = sf0 * prex; p.sf_coeff[1] = sf1 * prex * 2;
+    p.sf_coeff[2] = sf2 * prey; p.sf_coeff[3] = sf3 * prey * 2;
+    p.sf_coeff[4] = sf4 * prez; p.sf_coeff[5] = sf5 * prez * 2;
+  }
+
   // LAMMPS PPPM::setup_triclinic + compute_gf_ik_triclinic (the orthogonal formulas are the same algebra) :
   // volume dependent quantities, called at init and whenever the cell changes (mesh and g_ewald are kept)
   inline void pppm_setup( PPPMParameters& p, const Mat3d& H )
@@ -335,6 +502,13 @@ inline namespace coulombic_ewald
 
     p.greensfn.resize( nfft );
     p.fkx.resize( nfft ); p.fky.resize( nfft ); p.fkz.resize( nfft );
+
+    if( p.diff_ad )
+    {
+      if( ! is_diagonal( H ) ) ::onika::fatal_error() << "PPPM : diff ad requires an orthogonal cell (as in LAMMPS)" << std::endl;
+      pppm_setup_ad( p , c );
+      return;
+    }
 
     double tmp[3] = { (g/(M_PI*nx)) * std::pow(-std::log(EPS_HOC),0.25) ,
                       (g/(M_PI*ny)) * std::pow(-std::log(EPS_HOC),0.25) ,
@@ -401,9 +575,9 @@ inline namespace coulombic_ewald
     }
   }
 
-  // LAMMPS PPPM::init (ik, no slab, no tip4p) followed by setup.
+  // LAMMPS PPPM::init (ik or ad, no slab, no tip4p) followed by setup.
   // qsqsum = sum of q^2, qsum = sum of q (elementary charges). Estimates use LAMMPS metal units (eV, ang).
-  inline void pppm_init_parameters( double g_ewald, double radius, double accuracy_relative, long order, const long mesh[3],
+  inline void pppm_init_parameters( double g_ewald, double radius, double accuracy_relative, long order, const long mesh[3], bool diff_ad,
                                     const Mat3d& H, uint64_t natoms, double qsqsum, double qsum, PPPMParameters& p )
   {
     if( order < 2 || order > pppm_constants::MAXORDER )
@@ -415,12 +589,15 @@ inline namespace coulombic_ewald
     p.g_ewald_user = g_ewald;
     p.radius = radius;
     p.order = order;
+    p.diff_ad = diff_ad;
     for( int i = 0 ; i < 3 ; i++ ) p.mesh_user[i] = mesh[i];
     p.qsum = qsum;
     p.qsqsum = qsqsum;
 
     const bool triclinic = ! is_diagonal( H );
+    if( diff_ad && triclinic ) ::onika::fatal_error() << "PPPM : diff ad requires an orthogonal cell (as in LAMMPS)" << std::endl;
     PPPMEstimator e;
+    e.diff_ad = diff_ad;
     e.c = restricted_cell( H );
     e.order = order;
     e.cutoff = radius;
@@ -495,6 +672,12 @@ inline namespace coulombic_ewald
     Vec3d bmin = {0.,0.,0.};
     Vec3d delinv = {0.,0.,0.}; // mesh points per grid-space length unit, along each fractional axis
     double rho_coeff[pppm_constants::MAXORDER][pppm_constants::MAXORDER] = {};
+    // ad differentiation (orthogonal cell) : mesh points per length unit (LAMMPS hx_inv...),
+    // diagonal of xform (real position = xf * grid position) and self force coefficients
+    bool diff_ad = false;
+    Vec3d hinv = {0.,0.,0.};
+    Vec3d xf = {1.,1.,1.};
+    double sf_coeff[6] = {};
 
     ReadOnlyPPPMParameters() = default;
     inline ReadOnlyPPPMParameters( const PPPMParameters& p, const Vec3d& bounds_min, const Vec3d& bounds_size )
@@ -508,6 +691,13 @@ inline namespace coulombic_ewald
     {
       for( int l = 0 ; l < pppm_constants::MAXORDER ; l++ )
         for( int k = 0 ; k < pppm_constants::MAXORDER ; k++ ) rho_coeff[l][k] = p.rho_coeff[l][k];
+      if( p.diff_ad )
+      {
+        diff_ad = true;
+        hinv = Vec3d{ p.nx / p.cell.m11 , p.ny / p.cell.m22 , p.nz / p.cell.m33 };
+        xf = Vec3d{ p.cell.m11 / bounds_size.x , p.cell.m22 / bounds_size.y , p.cell.m33 / bounds_size.z };
+        for( int i = 0 ; i < 6 ; i++ ) sf_coeff[i] = p.sf_coeff[i];
+      }
     }
   };
 
@@ -518,7 +708,26 @@ inline namespace coulombic_ewald
     double wx[pppm_constants::MAXORDER];
     double wy[pppm_constants::MAXORDER];
     double wz[pppm_constants::MAXORDER];
+    double dx, dy, dz; // distance to the lower left mesh point, in mesh units (LAMMPS dx,dy,dz)
   };
+
+  // LAMMPS compute_drho1d : derivative of the 1D weights with respect to dx,dy,dz, drho_coeff[l][k] = (l+1).rho_coeff[l+1][k]
+  ONIKA_HOST_DEVICE_FUNC inline void pppm_stencil_derivative( const ReadOnlyPPPMParameters& p, const PPPMStencil& st,
+                                                             double dwx[pppm_constants::MAXORDER], double dwy[pppm_constants::MAXORDER], double dwz[pppm_constants::MAXORDER] )
+  {
+    for( int k = 0 ; k < p.order ; k++ )
+    {
+      double r1 = 0.0, r2 = 0.0, r3 = 0.0;
+      for( int l = p.order-2 ; l >= 0 ; l-- )
+      {
+        const double c = (l+1) * p.rho_coeff[l+1][k];
+        r1 = c + r1*st.dx;
+        r2 = c + r2*st.dy;
+        r3 = c + r3*st.dz;
+      }
+      dwx[k] = r1; dwy[k] = r2; dwz[k] = r3;
+    }
+  }
 
   ONIKA_HOST_DEVICE_FUNC inline int pppm_wrap( int i, int n ) { i %= n; return i < 0 ? i + n : i; }
 
@@ -546,6 +755,7 @@ inline namespace coulombic_ewald
       }
       st.wx[k] = r1; st.wy[k] = r2; st.wz[k] = r3;
     }
+    st.dx = dx; st.dy = dy; st.dz = dz;
     st.ix = pppm_wrap( gx + p.nlower , p.nx );
     st.iy = pppm_wrap( gy + p.nlower , p.ny );
     st.iz = pppm_wrap( gz + p.nlower , p.nz );

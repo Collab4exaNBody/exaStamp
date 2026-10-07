@@ -18,7 +18,12 @@ dF ~3e-8 eV/ang, dE_atom ~3e-8 eV : differences are at output precision.
 Cases ewald_tri / ewald_tri_fixed / pppm_tri use a triclinic cell (UO2_tri.lmp / UO2_tri_ext.xyz, tilts xy=5 xz=3 yz=4 ang).
 Cases pppm / pppm_tri (coulombic_pppm, LAMMPS kspace_style pppm 1e-5 order 5 diff ik) : g_ewald and mesh are chosen
 automatically by both codes and agree (pppm 0.33415064, 72x72x72 ; pppm_tri 0.33026023, 72x75x75) ; same expected
-differences as Ewald. Variant pppm_tri+species reads species charges. Variants pppm+gpu / pppm_tri+gpu run with
+differences as Ewald. Variant pppm_tri+species reads species charges.
+Case pppm_ad (kspace_modify diff ad, orthogonal box only as in LAMMPS ; in.coul switches the box to ortho) : same mesh
+(96x96x96), but the automatic g_ewald differs (0.32925083 vs LAMMPS 0.32923668) : LAMMPS's ad estimate is a difference
+of nearly equal sums and g_ewald comes from a finite difference derivative of it, so a 1e-13 relative change of the sum
+of q^2 already moves g_ewald by 3e-5 ; both meet the accuracy. Hence |dPE| ~1e-3 eV, dF ~9e-8 eV/ang. Variant pppm_ad+g
+uses LAMMPS's g_ewald and gives the usual agreement (dF 3.2e-8 eV/ang, dE_atom 2.9e-8 eV, dP 9e-8). Variants pppm+gpu / pppm_tri+gpu run with
 nogpu: false (GPU kernels + cuFFT on Cuda builds) and give the same agreement.
 Variants +sym use symmetric pair computation (use_symmetry). Variants +fold (ewald_fixed, wolf, pppm) add
 ghost_fold_back : pairs from owned cells only on half neighbor lists, ghost contributions folded back by
