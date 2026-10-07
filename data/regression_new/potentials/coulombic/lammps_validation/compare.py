@@ -14,7 +14,10 @@ Comparison (needs numpy) :
 Variants <case>+<tag> are compared with the LAMMPS run of <case>.
 Expected (2026-10) : |dPE| ~1e-5 eV (csv precision), dP ~9e-8 relative (LAMMPS nktv2p constant), dx ~3e-9 ang,
 dF ~3e-8 eV/ang, dE_atom ~3e-8 eV : differences are at output precision.
-Cases ewald_tri / ewald_tri_fixed use a triclinic cell (UO2_tri.lmp / UO2_tri_ext.xyz, tilts xy=5 xz=3 yz=4 ang).
+Cases ewald_tri / ewald_tri_fixed / pppm_tri use a triclinic cell (UO2_tri.lmp / UO2_tri_ext.xyz, tilts xy=5 xz=3 yz=4 ang).
+Cases pppm / pppm_tri (coulombic_pppm, LAMMPS kspace_style pppm 1e-5 order 5 diff ik) : g_ewald and mesh are chosen
+automatically by both codes and agree (pppm 0.33415064, 72x72x72 ; pppm_tri 0.33026023, 72x75x75) ; same expected
+differences as Ewald. Variant pppm_tri+species reads species charges.
 Variants +pair use the pair potential template front-ends (coul_wolf_pair, coul_dsf) with species charges. For dsf+pair,
 energies differ by 3.74e-2 eV in total (8e-6 eV per atom) : the template subtracts e(rcut) per pair, which is not exactly
 0 for DSF (A&S erfc) ; forces are identical.
