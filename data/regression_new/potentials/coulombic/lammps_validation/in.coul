@@ -1,12 +1,15 @@
 # Coulomb-only ground truth on disturbed UO2 (12000 atoms), LAMMPS metal units.
-# Usage: lmp -in in.coul -var case <wolf|dsf|ewald_auto|ewald_fixed>
+# Usage: lmp -in in.coul -var case <wolf|dsf|ewald_auto|ewald_fixed|ewald_tri|ewald_tri_fixed>
+# *_tri cases use UO2_tri.lmp : same fractional coordinates in a triclinic cell (xy=5 xz=3 yz=4 ang)
 units        metal
 dimension    3
 boundary     p p p
 atom_style   charge
 atom_modify  map array
 
-read_data    UO2_disturbed_charge.lmp
+variable data string UO2_disturbed_charge.lmp
+if "${case} == ewald_tri || ${case} == ewald_tri_fixed" then "variable data string UO2_tri.lmp"
+read_data    ${data}
 
 group  U type 1
 set group U charge 2.2208
@@ -19,18 +22,18 @@ if "${case} == wolf" then &
 if "${case} == dsf" then &
   "pair_style coul/dsf 0.2 10.0" &
   "pair_coeff * *"
-if "${case} == ewald_auto" then &
+if "${case} == ewald_auto || ${case} == ewald_tri" then &
   "pair_style coul/long 10.0" &
   "pair_coeff * *" &
   "kspace_style ewald 1.0e-5"
-if "${case} == ewald_fixed" then &
+if "${case} == ewald_fixed || ${case} == ewald_tri_fixed" then &
   "pair_style coul/long 10.0" &
   "pair_coeff * *" &
   "kspace_style ewald 1.0e-5" &
   "kspace_modify gewald 0.3 kmax/ewald 8 8 8"
 
 # no tables: real-space part uses the A&S erfc polynomial, same as coulombic/ewald.h
-if "${case} == ewald_auto || ${case} == ewald_fixed" then "pair_modify table 0"
+if "${case} != wolf && ${case} != dsf" then "pair_modify table 0"
 
 compute pe all pe/atom
 compute st all stress/atom NULL virial

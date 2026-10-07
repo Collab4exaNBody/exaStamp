@@ -62,16 +62,11 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
       {
         auto & p = *ewald_config;
 
-        auto domainSize = domain->bounds_size();
-        const auto xform = domain->xform();
-        if( ! is_diagonal( xform ) )
-        {
-          fatal_error() << "Domain XForm is not diagonal, cannot compute domain box size" << std::endl;
-        }
-        domainSize = xform * domainSize;
+        // cell matrix (orthogonal or triclinic) : columns are the cell vectors
+        const Mat3d cell = ewald_cell_matrix( domain->xform() , domain->bounds_size() );
 
         // called before the system is set up (e.g. in init_parameters, to get rcut) : nothing to initialize yet
-        const bool empty_domain = ( domainSize.x * domainSize.y * domainSize.z ) == 0.0;
+        const bool empty_domain = determinant( cell ) == 0.0;
 
         // all inputs are global (identical on all ranks), so every rank takes the same decision and
         // computes the same parameters : no broadcast needed.
@@ -81,7 +76,7 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
           || *radius != p.radius
           || *accuracy_relative != p.accuracy_relative
           || ( *kmax > 0 && *kmax != p.kmax )
-          || domainSize != p.box ); // box changed (NPT, deformation) : k vectors must be rebuilt
+          || ! ewald_same_cell( cell , p.cell ) ); // cell changed (NPT, deformation) : k vectors must be rebuilt
         
         if( need_init )
         {
@@ -95,12 +90,12 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
           }
 
           const bool first_init = ( p.volume == 0.0 );
-          ewald_init_parameters( *g_ewald , *radius , *accuracy_relative , *kmax , domainSize, *natoms, *sum_square_charge, *sum_charge, p , ldbg<<"" );
+          ewald_init_parameters( *g_ewald , *radius , *accuracy_relative , *kmax , cell, *natoms, *sum_square_charge, *sum_charge, p , ldbg<<"" );
           
           if( rank == 0 && p.volume > 0.0 && first_init )
           {
             lout << "====== Ewald configuration ======" << std::endl;      
-            lout << "size    = "<< domainSize << std::endl;
+            lout << "cell    = "<< cell << std::endl;
             lout << "g_ewald = "<<p.g_ewald << std::endl;
             lout << "radius  = "<<p.radius << std::endl;
             lout << "accuracy_relative = "<<p.accuracy_relative << std::endl;
@@ -112,7 +107,7 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
           }
           else
           {
-            ldbg << "Ewald re-initialized : size="<<domainSize<<" g_ewald="<<p.g_ewald<<" nknz="<<p.nknz<<std::endl;
+            ldbg << "Ewald re-initialized : cell="<<cell<<" g_ewald="<<p.g_ewald<<" nknz="<<p.nknz<<std::endl;
           }
         }
       }

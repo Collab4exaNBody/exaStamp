@@ -233,12 +233,12 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
       
       if( grid->number_of_cells() == 0 ) return;
 
-      // k vectors depend on the box, refuse to compute with stale ones
-      const Vec3d domainSize = domain->xform() * domain->bounds_size();
-      if( domainSize != ewald_config->box )
+      // k vectors depend on the cell, refuse to compute with stale ones
+      const Mat3d cell = ewald_cell_matrix( domain->xform() , domain->bounds_size() );
+      if( ! ewald_same_cell( cell , ewald_config->cell ) )
       {
-        fatal_error() << "coulombic_ewald_long_range : domain size "<<domainSize<<" differs from the one used to build k vectors "
-                      << ewald_config->box << ". Call coulombic_ewald_init before force computation when the box changes." << std::endl;
+        fatal_error() << "coulombic_ewald_long_range : domain cell "<<cell<<" differs from the one used to build k vectors "
+                      << ewald_config->cell << ". Call coulombic_ewald_init before force computation when the cell changes." << std::endl;
       }
 
       const size_t nk = ewald_config->nknz;

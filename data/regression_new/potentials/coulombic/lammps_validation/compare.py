@@ -14,6 +14,7 @@ Comparison (needs numpy) :
 Variants <case>+<tag> are compared with the LAMMPS run of <case>.
 Expected (2026-10) : |dPE| ~1e-5 eV (csv precision), dP ~9e-8 relative (LAMMPS nktv2p constant), dx ~3e-9 ang,
 dF ~3e-8 eV/ang, dE_atom ~3e-8 eV : differences are at output precision.
+Cases ewald_tri / ewald_tri_fixed use a triclinic cell (UO2_tri.lmp / UO2_tri_ext.xyz, tilts xy=5 xz=3 yz=4 ang).
 Variants +pair use the pair potential template front-ends (coul_wolf_pair, coul_dsf) with species charges. For dsf+pair,
 energies differ by 3.74e-2 eV in total (8e-6 eV per atom) : the template subtracts e(rcut) per pair, which is not exactly
 0 for DSF (A&S erfc) ; forces are identical.
@@ -94,9 +95,12 @@ def compare(case):
     lx, lf, le = lammps_dump(f"dump_{base}.10.txt")
     ids, ex, ef, ee, et = exastamp_xyz(f"exastamp_{case}_000000010.xyz")
     assert np.array_equal(ids + 1, np.arange(1, len(lx) + 1)), "id mismatch"
-    L = 54.5
-    dx = ex - lx
-    dx -= L * np.round(dx / L)
+    # minimum image in the (possibly triclinic) cell read from the exaStamp snapshot (Lattice rows = cell vectors)
+    lat = open(f"exastamp_{case}_000000010.xyz").read().splitlines()[1].split('"')[1].split()
+    H = np.array([float(v) for v in lat]).reshape(3, 3).T
+    sd = np.linalg.solve(H, (ex - lx).T).T
+    sd -= np.round(sd)
+    dx = (H @ sd.T).T
     # at snapshot time the force field holds accelerations (F/m, internal units) : F[eV/ang] = a * m / EV_INTERNAL
     mass = np.array([15.999, 238.02891])[et]  # species order O, U
     fscale = (mass / EV_INTERNAL)[:, None]

@@ -90,7 +90,7 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
     double qsum = 0.0;  // total charge, for neutralizing background energy
     
     double volume = 0.0;
-    Vec3d box = { 0.0 , 0.0 , 0.0 }; // box size used to build k vectors
+    Mat3d cell = { 0.,0.,0., 0.,0.,0., 0.,0.,0. }; // cell matrix H (columns = cell vectors) used to build k vectors
     Vec3d unitk = { 0.0 , 0.0 , 0.0 };
     
     onika::memory::CudaMMVector<EwaldCoeffs> Gdata;
@@ -147,6 +147,19 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
     return - qqr2e * ( p.g_ewald / sqrt(M_PI) * q * q + 0.5 * M_PI * q * p.qsum / ( p.g_ewald * p.g_ewald * p.volume ) );
   }
 
+  // cell matrix H (columns = cell vectors a,b,c) : real positions = xform * grid positions, H = xform * diag(bounds size)
+  inline Mat3d ewald_cell_matrix( const Mat3d& xform, const Vec3d& bounds_size )
+  {
+    return xform * diag_matrix( bounds_size );
+  }
+
+  inline bool ewald_same_cell( const Mat3d& a, const Mat3d& b )
+  {
+    return a.m11==b.m11 && a.m12==b.m12 && a.m13==b.m13
+        && a.m21==b.m21 && a.m22==b.m22 && a.m23==b.m23
+        && a.m31==b.m31 && a.m32==b.m32 && a.m33==b.m33;
+  }
+
   // rms force error estimate of the reciprocal part (same as LAMMPS Ewald::rms), q2 = sum of squared charges
   inline double ewald_error_accuracy(double g_ewald, int km, double length, uint64_t natoms, double q2)
   {
@@ -155,22 +168,38 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
     return value;
   }
   
-  inline void ewald_init_parameters(double g_ewald, double radius, double accuracy_relative, long in_kmax, const Vec3d& domainSize, const uint64_t natoms, double qsq, double qsum, EwaldParameters& p , ::exanb::LogStreamWrapper& ldbg )
+  // H is the cell matrix (columns = cell vectors), orthogonal or triclinic.
+  // Triclinic cells follow LAMMPS Ewald : estimates use the restricted triclinic parameters (lx,ly,lz,xy,xz,yz),
+  // which are rotation invariant, k vectors are G = 2.pi.H^-T.n in the actual frame.
+  inline void ewald_init_parameters(double g_ewald, double radius, double accuracy_relative, long in_kmax, const Mat3d& H, const uint64_t natoms, double qsq, double qsum, EwaldParameters& p , ::exanb::LogStreamWrapper& ldbg )
   {
     using ewald_constants::fpe0;
     
+    const bool orthogonal = is_diagonal( H );
+    double xL = H.m11, yL = H.m22, zL = H.m33; // lx, ly, lz
+    double xy = 0.0, xz = 0.0, yz = 0.0;
+    if( ! orthogonal )
+    {
+      const Vec3d a = { H.m11, H.m21, H.m31 };
+      const Vec3d b = { H.m12, H.m22, H.m32 };
+      const Vec3d c = { H.m13, H.m23, H.m33 };
+      xL = norm( a );
+      const Vec3d ahat = a / xL;
+      xy = dot( b , ahat );
+      yL = sqrt( norm2(b) - xy*xy );
+      xz = dot( c , ahat );
+      yz = ( dot(b,c) - xy*xz ) / yL;
+      zL = sqrt( norm2(c) - xz*xz - yz*yz );
+    }
+
     p.g_ewald = g_ewald;
     p.radius = radius;
     p.accuracy_relative = accuracy_relative;
     p.qsum = qsum;
     p.kmax = in_kmax;
     p.kxmax = p.kymax = p.kzmax = 0;
-    p.box = domainSize;
-    p.volume = domainSize.x * domainSize.y * domainSize.z ;
-
-    const double xL = domainSize.x;
-    const double yL = domainSize.y;
-    const double zL = domainSize.z;
+    p.cell = H;
+    p.volume = xL * yL * zL ;
     
     if( p.volume == 0.0 ) return;
 
@@ -223,6 +252,19 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
     const double GnMax_z = p.unitk.z * p.unitk.z * p.kzmax * p.kzmax;
     // 1.00001 margin as in LAMMPS, so that k vectors exactly on the sphere are not lost to rounding
     const double GnMax = std::max( GnMax_x , std::max( GnMax_y , GnMax_z ) ) * 1.00001;
+
+    // triclinic : scale integer bounds for the skew (LAMMPS Ewald::init, lamda2xT with absolute tilts)
+    if( ! orthogonal && in_kmax <= 0 )
+    {
+      const double t0 = p.kxmax / xL;
+      const double t1 = p.kymax / yL;
+      const double t2 = p.kzmax / zL;
+      p.kxmax = std::max( ssize_t(1) , static_cast<ssize_t>( xL*t0 ) );
+      p.kymax = std::max( ssize_t(1) , static_cast<ssize_t>( std::fabs(xy)*t0 + yL*t1 ) );
+      p.kzmax = std::max( ssize_t(1) , static_cast<ssize_t>( std::fabs(xz)*t0 + std::fabs(yz)*t1 + zL*t2 ) );
+      p.kmax = std::max( p.kxmax , std::max( p.kymax , p.kzmax ) );
+    }
+    const Mat3d Hinv = inverse( H );
     
     p.nk = (2 * p.kxmax + 1) * (2 * p.kymax + 1) * (2 * p.kzmax + 1) - 1;
     p.Gdata.resize( p.nk );
@@ -245,7 +287,15 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
         {
           if( kx*kx + ky*ky + kz*kz > 0 )
           {
-            const Vec3d G_kk = { kx * p.unitk.x, ky * p.unitk.y, kz * p.unitk.z };
+            Vec3d G_kk = { kx * p.unitk.x, ky * p.unitk.y, kz * p.unitk.z };
+            if( ! orthogonal )
+            {
+              // G = H^-T (2.pi.n)
+              const Vec3d v = { 2.0*M_PI*kx , 2.0*M_PI*ky , 2.0*M_PI*kz };
+              G_kk = Vec3d{ Hinv.m11*v.x + Hinv.m21*v.y + Hinv.m31*v.z ,
+                            Hinv.m12*v.x + Hinv.m22*v.y + Hinv.m32*v.z ,
+                            Hinv.m13*v.x + Hinv.m23*v.y + Hinv.m33*v.z };
+            }
             const double Gn_kk = norm2(G_kk);
             if ( Gn_kk <= GnMax)
             {
@@ -275,9 +325,15 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
     p.Gdata.shrink_to_fit();
   }
 
+  inline void ewald_init_parameters(double g_ewald, double radius, double accuracy_relative, long in_kmax, const Mat3d& H, const uint64_t natoms, double qsq, double qsum, EwaldParameters& p )
+  {
+    ewald_init_parameters(g_ewald,radius,accuracy_relative,in_kmax,H,natoms,qsq,qsum,p , ::exanb::ldbg<<"" );
+  }
+
+  // orthogonal box given by its size
   inline void ewald_init_parameters(double g_ewald, double radius, double accuracy_relative, long in_kmax, const Vec3d& domainSize, const uint64_t natoms, double qsq, double qsum, EwaldParameters& p )
   {
-    ewald_init_parameters(g_ewald,radius,accuracy_relative,in_kmax,domainSize,natoms,qsq,qsum,p , ::exanb::ldbg<<"" );
+    ewald_init_parameters(g_ewald,radius,accuracy_relative,in_kmax,diag_matrix(domainSize),natoms,qsq,qsum,p , ::exanb::ldbg<<"" );
   }
 
 }
