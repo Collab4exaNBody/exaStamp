@@ -1,0 +1,55 @@
+# Coulomb-only exaStamp counterpart of in.coul (case pppm_tri_slab): compared with LAMMPS dumps of the same case
+configuration:
+  nogpu: true
+  logging: { debug: false }
+
+grid_flavor: grid_flavor_full
+
+species:
+  - O: { mass: 15.999000 Da , z: 8 , charge: -1.1104 e- }
+  - U: { mass: 238.02891 Da , z: 92 , charge: 2.2208 e- }
+
+init_parameters:
+  - coulombic_pppm_init
+
+coulombic_pppm_init:
+  accuracy_relative: 1.0e-5
+  g_ewald: 0.0
+  radius: 10.0 ang
+  order: 5
+  mesh: [ 0, 0, 0 ]
+  slab: 3.0
+
+compute_force:
+  - coulombic_ewald_short_range
+  - coulombic_pppm
+
+setup_system:
+  - domain:
+      cell_size: 5.5 ang
+      periodic: [ true, true, false ]
+      expandable: false
+  - read_xyz_file_with_xform:
+      filename: "UO2_slab_tri_ext.xyz"
+      pbc_adjust_xform: true
+  - copy_charge_specy_to_particle
+  - sum_charges
+  - coulombic_pppm_init
+
+write_snapshot:
+  - timestep_file: "exastamp_pppm_tri_slab_%09d.xyz"
+  - write_xyz:
+      fields: [ "id", "type", "force", "ep" ]
+      units: { force: "eV/ang", ep: "eV" }
+
++first_iteration:
+  - write_snapshot
+
+global:
+  max_iteration: 10
+  simulation_thermostate_screen_frequency: 1
+  simulation_thermostate_file_frequency: 1
+  thermostate_file: "thermo_exastamp_pppm_tri_slab.csv"
+  simulation_snapshot_frequency: 10
+  rcut_inc: 1.0 ang
+  dt: 0.001 ps

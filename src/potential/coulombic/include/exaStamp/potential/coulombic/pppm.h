@@ -28,6 +28,7 @@ under the License.
 #include <onika/cuda/cuda.h>
 #include <onika/log.h>
 #include <cmath>
+#include <algorithm>
 #include <cstdint>
 #include <vector>
 
@@ -56,12 +57,15 @@ inline namespace coulombic_ewald
     long order = 5;
     long mesh_user[3] = { 0, 0, 0 }; // 0 = automatic
     bool diff_ad = false;            // LAMMPS kspace_modify diff ad (analytic differentiation), otherwise diff ik
+    double slab_user = 0.0;          // LAMMPS kspace_modify slab <volfactor> (EW3DC), 0 = no slab correction
+    bool slab_auto = false;          // LAMMPS kspace_modify slab auto : volfactor computed from accuracy and g_ewald
 
     // derived
     double g_ewald = 0.0;
     int nx = 0, ny = 0, nz = 0;
     Mat3d cell = { 0.,0.,0., 0.,0.,0., 0.,0.,0. }; // cell matrix H the influence function was built for
-    double volume = 0.0;
+    double volume = 0.0;             // volume of the (z extended with slab) cell
+    double slab_volfactor = 1.0;     // z extension of the cell for the slab correction (1 = no slab)
     double qsum = 0.0;
     double qsqsum = 0.0;
     double estimated_accuracy = 0.0; // absolute rms force error estimate, eV/ang
@@ -78,6 +82,7 @@ inline namespace coulombic_ewald
     onika::memory::CudaMMVector<double> fkx, fky, fkz;
 
     inline size_t nfft() const { return size_t(nx) * size_t(ny) * size_t(nz); }
+    inline bool slab() const { return slab_auto || slab_user > 0.0; }
     inline int nlower() const { return -(order-1)/2; }
     inline int nupper() const { return order/2; }
   };
@@ -92,8 +97,9 @@ inline namespace coulombic_ewald
     v[0]=v0; v[1]=v1; v[2]=v2;
   }
 
-  // x2lamdaT = h_inv^T . v (LAMMPS Domain h_inv of the restricted cell)
-  inline void pppm_x2lamdaT( const RestrictedCell& c, const double* v, double* l )
+  // x2lamdaT = h_inv^T . v (LAMMPS Domain h_inv of the restricted cell). With the slab correction, LAMMPS divides the
+  // z component by slab_volfactor (z extended cell, slab normal along z : xz = yz = 0)
+  inline void pppm_x2lamdaT( const RestrictedCell& c, const double* v, double* l, double slab_volfactor = 1.0 )
   {
     const double hi0 = 1.0/c.lx, hi1 = 1.0/c.ly, hi2 = 1.0/c.lz;
     const double hi3 = -c.yz/(c.ly*c.lz);
@@ -101,7 +107,8 @@ inline namespace coulombic_ewald
     const double hi5 = -c.xy/(c.lx*c.ly);
     const double l0 = hi0*v[0];
     const double l1 = hi5*v[0] + hi1*v[1];
-    const double l2 = hi4*v[0] + hi3*v[1] + hi2*v[2];
+    double l2 = hi4*v[0] + hi3*v[1] + hi2*v[2];
+    if( slab_volfactor != 1.0 ) l2 /= slab_volfactor;
     l[0]=l0; l[1]=l1; l[2]=l2;
   }
 
@@ -139,6 +146,8 @@ inline namespace coulombic_ewald
     double h_x = 0.0, h_y = 0.0, h_z = 0.0;
     bool diff_ad = false;
     int nx = 0, ny = 0, nz = 0; // mesh, used by the ad error estimate
+    double slab_volfactor = 1.0;
+    inline double zprd_slab() const { return c.lz*slab_volfactor; }
 
     // LAMMPS PPPM::compute_qopt (ad differentiation, orthogonal cell). qopt is a difference of nearly equal sums and
     // g_ewald comes from a finite difference derivative of it : terms are computed in parallel but summed in the LAMMPS
@@ -146,7 +155,7 @@ inline namespace coulombic_ewald
     inline double compute_qopt() const
     {
       static constexpr double MY_4PI = 4.0*M_PI;
-      const double xprd = c.lx, yprd = c.ly, zprd = c.lz;
+      const double xprd = c.lx, yprd = c.ly, zprd = zprd_slab();
       const double unitkx = 2.0*M_PI/xprd, unitky = 2.0*M_PI/yprd, unitkz = 2.0*M_PI/zprd;
       const int twoorder = 2*order;
       const int64_t nxy = int64_t(nx) * ny;
@@ -219,10 +228,10 @@ inline namespace coulombic_ewald
 
     inline double df_kspace() const
     {
-      if( diff_ad ) return std::sqrt( compute_qopt()/natoms ) * q2 / ( c.lx*c.ly*c.lz );
+      if( diff_ad ) return std::sqrt( compute_qopt()/natoms ) * q2 / ( c.lx*c.ly*zprd_slab() );
       const double lprx = estimate_ik_error( h_x , c.lx );
       const double lpry = estimate_ik_error( h_y , c.ly );
-      const double lprz = estimate_ik_error( h_z , c.lz );
+      const double lprz = estimate_ik_error( h_z , zprd_slab() );
       return std::sqrt( lprx*lprx + lpry*lpry + lprz*lprz ) / std::sqrt(3.0);
     }
 
@@ -261,10 +270,11 @@ inline namespace coulombic_ewald
     }
   };
 
-  // LAMMPS PPPM::set_grid_global (ik or ad differentiation, no slab) : chooses nx,ny,nz when not user defined, sets h_x,h_y,h_z
+  // LAMMPS PPPM::set_grid_global (ik or ad differentiation, z extended by the slab volfactor) : chooses nx,ny,nz when not user defined, sets h_x,h_y,h_z
   inline void pppm_set_grid_global( PPPMEstimator& e, bool triclinic, const long mesh_user[3], int& nx, int& ny, int& nz, double accuracy )
   {
     const double xprd = e.c.lx, yprd = e.c.ly, zprd = e.c.lz;
+    const double zprd_slab = e.zprd_slab();
     const bool gridflag = mesh_user[0] > 0 && mesh_user[1] > 0 && mesh_user[2] > 0;
     if( gridflag )
     {
@@ -277,7 +287,7 @@ inline namespace coulombic_ewald
       int count = 0;
       while( true )
       {
-        nx = static_cast<int>( xprd/h ); ny = static_cast<int>( yprd/h ); nz = static_cast<int>( zprd/h );
+        nx = static_cast<int>( xprd/h ); ny = static_cast<int>( yprd/h ); nz = static_cast<int>( zprd_slab/h );
         if( nx <= 1 ) nx = 2;
         if( ny <= 1 ) ny = 2;
         if( nz <= 1 ) nz = 2;
@@ -295,15 +305,15 @@ inline namespace coulombic_ewald
       e.h_x = e.h_y = e.h_z = 1.0/e.g_ewald;
       nx = static_cast<int>( xprd/e.h_x ) + 1;
       ny = static_cast<int>( yprd/e.h_y ) + 1;
-      nz = static_cast<int>( zprd/e.h_z ) + 1;
+      nz = static_cast<int>( zprd_slab/e.h_z ) + 1;
 
       // as in LAMMPS, err is evaluated before the increment (the final mesh is one point beyond the first passing one)
       err = e.estimate_ik_error( e.h_x , xprd );
       while( err > accuracy ) { err = e.estimate_ik_error( e.h_x , xprd ); nx++; e.h_x = xprd/nx; }
       err = e.estimate_ik_error( e.h_y , yprd );
       while( err > accuracy ) { err = e.estimate_ik_error( e.h_y , yprd ); ny++; e.h_y = yprd/ny; }
-      err = e.estimate_ik_error( e.h_z , zprd );
-      while( err > accuracy ) { err = e.estimate_ik_error( e.h_z , zprd ); nz++; e.h_z = zprd/nz; }
+      err = e.estimate_ik_error( e.h_z , zprd_slab );
+      while( err > accuracy ) { err = e.estimate_ik_error( e.h_z , zprd_slab ); nz++; e.h_z = zprd_slab/nz; }
 
       if( triclinic )
       {
@@ -322,12 +332,12 @@ inline namespace coulombic_ewald
 
     if( ! triclinic )
     {
-      e.h_x = xprd/nx; e.h_y = yprd/ny; e.h_z = zprd/nz;
+      e.h_x = xprd/nx; e.h_y = yprd/ny; e.h_z = zprd_slab/nz;
     }
     else
     {
       double tmp[3] = { double(nx) , double(ny) , double(nz) };
-      pppm_x2lamdaT( e.c , tmp , tmp );
+      pppm_x2lamdaT( e.c , tmp , tmp , e.slab_volfactor );
       e.h_x = 1.0/tmp[0]; e.h_y = 1.0/tmp[1]; e.h_z = 1.0/tmp[2];
     }
 
@@ -410,7 +420,7 @@ inline namespace coulombic_ewald
   inline void pppm_setup_ad( PPPMParameters& p, const RestrictedCell& c )
   {
     const int nx = p.nx, ny = p.ny, nz = p.nz;
-    const double xprd = c.lx, yprd = c.ly, zprd = c.lz;
+    const double xprd = c.lx, yprd = c.ly, zprd = c.lz*p.slab_volfactor; // zprd_slab
     const double unitkx = 2.0*M_PI/xprd, unitky = 2.0*M_PI/yprd, unitkz = 2.0*M_PI/zprd;
     const double g = p.g_ewald;
     const int order = p.order;
@@ -497,8 +507,9 @@ inline namespace coulombic_ewald
     const size_t nfft = p.nfft();
     const double g = p.g_ewald;
 
+    const double vf = p.slab_volfactor;
     p.cell = H;
-    p.volume = c.lx * c.ly * c.lz;
+    p.volume = c.lx * c.ly * ( c.lz * vf );
 
     p.greensfn.resize( nfft );
     p.fkx.resize( nfft ); p.fky.resize( nfft ); p.fkz.resize( nfft );
@@ -514,6 +525,7 @@ inline namespace coulombic_ewald
                       (g/(M_PI*ny)) * std::pow(-std::log(EPS_HOC),0.25) ,
                       (g/(M_PI*nz)) * std::pow(-std::log(EPS_HOC),0.25) };
     pppm_lamda2xT( c , tmp , tmp );
+    tmp[2] *= vf; // slab : alias sum bound on the extended z length, as LAMMPS
     const int nbx = static_cast<int>( tmp[0] );
     const int nby = static_cast<int>( tmp[1] );
     const int nbz = static_cast<int>( tmp[2] );
@@ -534,7 +546,8 @@ inline namespace coulombic_ewald
           const int kper = k - nx*(2*k/nx);
           const double snx = std::pow( std::sin(M_PI*kper/nx) , 2 );
 
-          const Vec3d fk = pppm_reciprocal( Hinv , 2.0*M_PI*kper , 2.0*M_PI*lper , 2.0*M_PI*mper );
+          Vec3d fk = pppm_reciprocal( Hinv , 2.0*M_PI*kper , 2.0*M_PI*lper , 2.0*M_PI*mper );
+          if( vf != 1.0 ) fk.z /= vf; // slab : z extended cell (c along z, see pppm_init_parameters)
           p.fkx[n] = fk.x; p.fky[n] = fk.y; p.fkz[n] = fk.z;
           const double sqk = fk.x*fk.x + fk.y*fk.y + fk.z*fk.z;
 
@@ -556,7 +569,8 @@ inline namespace coulombic_ewald
               for( int az = -nbz ; az <= nbz ; az++ )
               {
                 const double wz = pppm_powsinxx( M_PI*mper/nz + M_PI*az , twoorder );
-                const Vec3d b = pppm_reciprocal( Hinv , 2.0*M_PI*nx*ax , 2.0*M_PI*ny*ay , 2.0*M_PI*nz*az );
+                Vec3d b = pppm_reciprocal( Hinv , 2.0*M_PI*nx*ax , 2.0*M_PI*ny*ay , 2.0*M_PI*nz*az );
+                if( vf != 1.0 ) b.z /= vf;
                 const double qx = fk.x + b.x;
                 const double qy = fk.y + b.y;
                 const double qz = fk.z + b.z;
@@ -575,9 +589,21 @@ inline namespace coulombic_ewald
     }
   }
 
-  // LAMMPS PPPM::init (ik or ad, no slab, no tip4p) followed by setup.
+  // LAMMPS auto_slab_volfactor (kspace_modify slab auto) : vacuum large enough for the lateral and reciprocal decay lengths
+  inline double pppm_auto_slab_volfactor( double force_tolerance, double alpha, double xprd, double yprd, double zprd )
+  {
+    if( alpha <= 0.0 ) ::onika::fatal_error() << "PPPM slab_auto requires a positive g_ewald" << std::endl;
+    if( !( force_tolerance > 0.0 && force_tolerance < 1.0 ) ) ::onika::fatal_error() << "PPPM slab_auto requires accuracy_relative between 0 and 1" << std::endl;
+    const double logeps = std::log( 1.0 / force_tolerance );
+    const double lateral = std::max( xprd , yprd ) * logeps / (2.0*M_PI);
+    const double reciprocal = std::sqrt( logeps ) / alpha;
+    return std::max( ( zprd + std::max( lateral , reciprocal ) ) / zprd , 1.0 );
+  }
+
+  // LAMMPS PPPM::init (ik or ad, slab EW3DC with fixed or automatic volfactor, no tip4p) followed by setup.
   // qsqsum = sum of q^2, qsum = sum of q (elementary charges). Estimates use LAMMPS metal units (eV, ang).
   inline void pppm_init_parameters( double g_ewald, double radius, double accuracy_relative, long order, const long mesh[3], bool diff_ad,
+                                    double slab_user, bool slab_auto,
                                     const Mat3d& H, uint64_t natoms, double qsqsum, double qsum, PPPMParameters& p )
   {
     if( order < 2 || order > pppm_constants::MAXORDER )
@@ -590,12 +616,20 @@ inline namespace coulombic_ewald
     p.radius = radius;
     p.order = order;
     p.diff_ad = diff_ad;
+    p.slab_user = slab_user;
+    p.slab_auto = slab_auto;
     for( int i = 0 ; i < 3 ; i++ ) p.mesh_user[i] = mesh[i];
     p.qsum = qsum;
     p.qsqsum = qsqsum;
 
     const bool triclinic = ! is_diagonal( H );
     if( diff_ad && triclinic ) ::onika::fatal_error() << "PPPM : diff ad requires an orthogonal cell (as in LAMMPS)" << std::endl;
+    if( slab_user != 0.0 && slab_user <= 1.0 ) ::onika::fatal_error() << "PPPM : slab volfactor must be > 1, got "<<slab_user << std::endl;
+    if( slab_user > 0.0 && slab_auto ) ::onika::fatal_error() << "PPPM : slab and slab_auto are exclusive" << std::endl;
+    if( p.slab() && ( H.m13 != 0.0 || H.m23 != 0.0 || H.m31 != 0.0 || H.m32 != 0.0 ) )
+    {
+      ::onika::fatal_error() << "PPPM : slab correction requires the third cell vector along z and the two others in the xy plane (xz = yz = 0)" << std::endl;
+    }
     PPPMEstimator e;
     e.diff_ad = diff_ad;
     e.c = restricted_cell( H );
@@ -617,16 +651,30 @@ inline namespace coulombic_ewald
       e.g_ewald = g;
     }
 
-    pppm_set_grid_global( e , triclinic , mesh , p.nx , p.ny , p.nz , accuracy );
-    if( p.nx < order || p.ny < order || p.nz < order )
+    // slab auto : volfactor depends on g_ewald, which depends on the mesh, which depends on volfactor (LAMMPS loop)
+    const double force_tolerance = accuracy / COULOMB_CONSTANT_EV_ANG;
+    double vf = slab_user > 0.0 ? slab_user : 1.0;
+    if( slab_auto ) vf = pppm_auto_slab_volfactor( force_tolerance , e.g_ewald , e.c.lx , e.c.ly , e.c.lz );
+    int slab_iterations = 0;
+    while( true )
     {
-      ::onika::fatal_error() << "PPPM mesh "<<p.nx<<"x"<<p.ny<<"x"<<p.nz<<" must have at least order="<<order<<" points in each direction" << std::endl;
+      e.slab_volfactor = vf;
+      pppm_set_grid_global( e , triclinic , mesh , p.nx , p.ny , p.nz , accuracy );
+      if( p.nx < order || p.ny < order || p.nz < order )
+      {
+        ::onika::fatal_error() << "PPPM mesh "<<p.nx<<"x"<<p.ny<<"x"<<p.nz<<" must have at least order="<<order<<" points in each direction" << std::endl;
+      }
+      if( ! gewaldflag )
+      {
+        if( ! e.adjust_gewald() ) ::onika::fatal_error() << "PPPM : could not compute g_ewald" << std::endl;
+      }
+      if( ! slab_auto ) break;
+      const double new_vf = pppm_auto_slab_volfactor( force_tolerance , e.g_ewald , e.c.lx , e.c.ly , e.c.lz );
+      if( std::fabs( new_vf - vf ) <= pppm_constants::SMALL * new_vf ) break;
+      vf = new_vf;
+      if( ++slab_iterations > 5 ) ::onika::fatal_error() << "PPPM : could not converge slab_auto" << std::endl;
     }
-
-    if( ! gewaldflag )
-    {
-      if( ! e.adjust_gewald() ) ::onika::fatal_error() << "PPPM : could not compute g_ewald" << std::endl;
-    }
+    p.slab_volfactor = vf;
     p.g_ewald = e.g_ewald;
 
     // final accuracy estimate (no coulomb table)
@@ -678,6 +726,12 @@ inline namespace coulombic_ewald
     Vec3d hinv = {0.,0.,0.};
     Vec3d xf = {1.,1.,1.};
     double sf_coeff[6] = {};
+    // slab correction (EW3DC) : real z = zscale * grid z, extended height, total dipole sum(q.z) and sum(q.z^2)
+    bool slab = false;
+    double zscale = 1.0;
+    double zprd_slab = 0.0;
+    double dipole = 0.0;
+    double dipole_r2 = 0.0;
 
     ReadOnlyPPPMParameters() = default;
     inline ReadOnlyPPPMParameters( const PPPMParameters& p, const Vec3d& bounds_min, const Vec3d& bounds_size )
@@ -687,16 +741,24 @@ inline namespace coulombic_ewald
       , g_ewald( p.g_ewald ), qsum( p.qsum ), volume( p.volume )
       , delvolinv( double(p.nfft()) / p.volume )
       , bmin( bounds_min )
-      , delinv( Vec3d{ p.nx / bounds_size.x , p.ny / bounds_size.y , p.nz / bounds_size.z } )
+      , delinv( Vec3d{ p.nx / bounds_size.x , p.ny / bounds_size.y , p.nz / ( bounds_size.z * p.slab_volfactor ) } )
     {
       for( int l = 0 ; l < pppm_constants::MAXORDER ; l++ )
         for( int k = 0 ; k < pppm_constants::MAXORDER ; k++ ) rho_coeff[l][k] = p.rho_coeff[l][k];
       if( p.diff_ad )
       {
         diff_ad = true;
-        hinv = Vec3d{ p.nx / p.cell.m11 , p.ny / p.cell.m22 , p.nz / p.cell.m33 };
+        // z : extended height with the slab correction. LAMMPS fieldforce_ad uses nz/zprd here, which scales the
+        // z field by slab_volfactor (wrong forces with diff ad + slab) ; the mesh spacing is zprd_slab/nz.
+        hinv = Vec3d{ p.nx / p.cell.m11 , p.ny / p.cell.m22 , p.nz / ( p.cell.m33 * p.slab_volfactor ) };
         xf = Vec3d{ p.cell.m11 / bounds_size.x , p.cell.m22 / bounds_size.y , p.cell.m33 / bounds_size.z };
         for( int i = 0 ; i < 6 ; i++ ) sf_coeff[i] = p.sf_coeff[i];
+      }
+      if( p.slab() )
+      {
+        slab = true;
+        zscale = p.cell.m33 / bounds_size.z;
+        zprd_slab = restricted_cell( p.cell ).lz * p.slab_volfactor;
       }
     }
   };
@@ -759,6 +821,16 @@ inline namespace coulombic_ewald
     st.ix = pppm_wrap( gx + p.nlower , p.nx );
     st.iy = pppm_wrap( gy + p.nlower , p.ny );
     st.iz = pppm_wrap( gz + p.nlower , p.nz );
+  }
+
+  // LAMMPS PPPM::slabcorr (EW3DC) for one particle at real height z : force along z and per particle energy, internal units
+  ONIKA_HOST_DEVICE_FUNC inline double pppm_slab_force_z( const ReadOnlyPPPMParameters& p, double q, double z )
+  {
+    return COULOMB_CONSTANT * ( -4.0*M_PI / p.volume ) * q * ( p.dipole - p.qsum * z );
+  }
+  ONIKA_HOST_DEVICE_FUNC inline double pppm_slab_energy( const ReadOnlyPPPMParameters& p, double q, double z )
+  {
+    return COULOMB_CONSTANT * (2.0*M_PI) / p.volume * q * ( z * p.dipole - 0.5 * ( p.dipole_r2 + p.qsum * z * z ) - p.qsum * p.zprd_slab * p.zprd_slab / 12.0 );
   }
 
   // self energy + neutralizing background energy of one particle with charge q (LAMMPS PPPM per atom correction), internal units

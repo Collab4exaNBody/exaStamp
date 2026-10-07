@@ -43,6 +43,8 @@ inline namespace coulombic_ewald
     ADD_SLOT( double            , radius            , INPUT , REQUIRED , DocString{"real space cutoff"} );
     ADD_SLOT( std::vector<long> , mesh              , INPUT , std::vector<long>{0,0,0} , DocString{"mesh points in each direction, 0 0 0 = automatic"} );
     ADD_SLOT( long              , order             , INPUT , 5 , DocString{"charge assignment order, 2 to 7"} );
+    ADD_SLOT( double            , slab              , INPUT , 0.0 , DocString{"slab correction (EW3DC, z non periodic) : z extension factor of the cell (> 1, LAMMPS kspace_modify slab), 0 = none"} );
+    ADD_SLOT( bool              , slab_auto         , INPUT , false , DocString{"slab correction with the extension factor computed from accuracy and g_ewald (LAMMPS kspace_modify slab auto)"} );
     ADD_SLOT( std::string       , diff              , INPUT , std::string("ik") , DocString{"differentiation : ik (3 inverse FFTs) or ad (analytic, 1 inverse FFT, orthogonal cells only)"} );
     ADD_SLOT( Domain            , domain            , INPUT , OPTIONAL );
     ADD_SLOT( double            , sum_square_charge , INPUT );
@@ -88,6 +90,7 @@ inline namespace coulombic_ewald
           || *accuracy_relative != p.accuracy_relative
           || *order != p.order
           || diff_ad != p.diff_ad
+          || *slab != p.slab_user || *slab_auto != p.slab_auto
           || mesh_user[0] != p.mesh_user[0] || mesh_user[1] != p.mesh_user[1] || mesh_user[2] != p.mesh_user[2] );
 
         // cell change only (NPT, deformation) : keep mesh and g_ewald, update volume dependent quantities (LAMMPS PPPM::setup)
@@ -95,9 +98,14 @@ inline namespace coulombic_ewald
 
         if( need_init )
         {
-          if( ! ( domain->periodic_boundary_x() && domain->periodic_boundary_y() && domain->periodic_boundary_z() ) )
+          const bool use_slab = *slab_auto || *slab > 0.0;
+          if( ! use_slab && ! ( domain->periodic_boundary_x() && domain->periodic_boundary_y() && domain->periodic_boundary_z() ) )
           {
-            fatal_error() << "Domain must be entierly periodic, cannot initialize PPPM." << std::endl;
+            fatal_error() << "Domain must be entierly periodic, cannot initialize PPPM (or use the slab correction, z non periodic)." << std::endl;
+          }
+          if( use_slab && ! ( domain->periodic_boundary_x() && domain->periodic_boundary_y() && ! domain->periodic_boundary_z() ) )
+          {
+            fatal_error() << "PPPM slab correction requires x and y periodic, z non periodic." << std::endl;
           }
           if( ! natoms.has_value() )
           {
@@ -105,7 +113,7 @@ inline namespace coulombic_ewald
           }
 
           const bool first_init = ( p.volume == 0.0 );
-          pppm_init_parameters( *g_ewald , *radius , *accuracy_relative , *order , mesh_user , diff_ad , cell , *natoms , *sum_square_charge , *sum_charge , p );
+          pppm_init_parameters( *g_ewald , *radius , *accuracy_relative , *order , mesh_user , diff_ad , *slab , *slab_auto , cell , *natoms , *sum_square_charge , *sum_charge , p );
 
           if( rank == 0 && first_init )
           {
@@ -116,6 +124,7 @@ inline namespace coulombic_ewald
             lout << "mesh    = "<< p.nx <<" "<< p.ny <<" "<< p.nz << std::endl;
             lout << "order   = "<< p.order << std::endl;
             lout << "diff    = "<< ( p.diff_ad ? "ad" : "ik" ) << std::endl;
+            if( p.slab() ) lout << "slab    = "<< p.slab_volfactor << ( p.slab_auto ? " (auto)" : "" ) << " , extended z = "<< restricted_cell(cell).lz * p.slab_volfactor << std::endl;
             lout << "accuracy_relative  = "<< p.accuracy_relative << std::endl;
             lout << "estimated accuracy = "<< p.estimated_accuracy << " eV/ang (relative "<< p.estimated_accuracy / COULOMB_CONSTANT_EV_ANG <<")" << std::endl;
             lout << "qsum    = "<< p.qsum << std::endl;
@@ -159,7 +168,10 @@ inline namespace coulombic_ewald
     {
       return R"EOF(
 Initializes PPPM long range coulomb (coulombic_pppm), same algorithm and parameter choice as LAMMPS kspace_style pppm
-(ik or ad differentiation). Works on orthogonal and triclinic periodic cells (ad : orthogonal only, as LAMMPS). Also fills ewald_config with the real space
+(ik or ad differentiation). Works on orthogonal and triclinic periodic cells (ad : orthogonal only, as LAMMPS).
+slab / slab_auto : slab correction (EW3DC) for systems periodic in x and y only, z non periodic, as LAMMPS
+kspace_modify slab <volfactor> / slab auto ; triclinic cells need xz = yz = 0. With diff ad, the z field uses the
+extended mesh spacing (LAMMPS fieldforce_ad uses the unextended one, which gives wrong z forces). Also fills ewald_config with the real space
 parameters (g_ewald, radius) used by coulombic_ewald_short_range. Needs sum_square_charge, sum_charge and natoms
 (sum_charges operator). When only the cell changes, mesh and g_ewald are kept and the influence function is rebuilt.
 )EOF";

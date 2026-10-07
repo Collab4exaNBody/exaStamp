@@ -1,14 +1,21 @@
 # Coulomb-only ground truth on disturbed UO2 (12000 atoms), LAMMPS metal units.
-# Usage: lmp -in in.coul -var case <wolf|dsf|ewald_auto|ewald_fixed|ewald_tri|ewald_tri_fixed|pppm|pppm_tri|pppm_ad>
+# Usage: lmp -in in.coul -var case <wolf|dsf|ewald_auto|ewald_fixed|ewald_tri|ewald_tri_fixed|pppm|pppm_tri|pppm_ad|
+#                                   pppm_slab|pppm_slab_auto|pppm_tri_slab|pppm_ad_slab>
 # *_tri cases use UO2_tri.lmp : same fractional coordinates in a triclinic cell (xy=5 xz=3 yz=4 ang)
+# *slab* cases use UO2_slab.lmp / UO2_slab_tri.lmp (made by mk_slab.py) : same atoms shifted by 5.75 ang in z in a box
+# of height 66 ang, z non periodic (boundary p p f), slab correction (EW3DC) ; UO2_slab_tri.lmp has an xy tilt of 5 ang
 units        metal
 dimension    3
-boundary     p p p
+variable bnd string "p p p"
+if "${case} == pppm_slab || ${case} == pppm_slab_auto || ${case} == pppm_tri_slab || ${case} == pppm_ad_slab" then "variable bnd string 'p p f'"
+boundary     ${bnd}
 atom_style   charge
 atom_modify  map array
 
 variable data string UO2_disturbed_charge.lmp
 if "${case} == ewald_tri || ${case} == ewald_tri_fixed || ${case} == pppm_tri" then "variable data string UO2_tri.lmp"
+if "${case} == pppm_slab || ${case} == pppm_slab_auto || ${case} == pppm_ad_slab" then "variable data string UO2_slab.lmp"
+if "${case} == pppm_tri_slab" then "variable data string UO2_slab_tri.lmp"
 read_data    ${data}
 # the data file box (avec/bvec/cvec) is read as triclinic ; diff ad needs an orthogonal box (tilts are 0)
 if "${case} == pppm_ad" then "change_box all ortho"
@@ -39,6 +46,23 @@ if "${case} == pppm || ${case} == pppm_tri" then &
   "pair_coeff * *" &
   "kspace_style pppm 1.0e-5" &
   "kspace_modify diff ik order 5"
+if "${case} == pppm_slab || ${case} == pppm_tri_slab" then &
+  "pair_style coul/long 10.0" &
+  "pair_coeff * *" &
+  "kspace_style pppm 1.0e-5" &
+  "kspace_modify diff ik order 5 slab 3.0"
+if "${case} == pppm_slab_auto" then &
+  "pair_style coul/long 10.0" &
+  "pair_coeff * *" &
+  "kspace_style pppm 1.0e-5" &
+  "kspace_modify diff ik order 5 slab auto"
+# LAMMPS diff ad + slab gives wrong z forces (fieldforce_ad uses nz/zprd instead of nz/zprd_slab) : this case only
+# shows it, exaStamp's ad + slab is compared with pppm_slab (ik)
+if "${case} == pppm_ad_slab" then &
+  "pair_style coul/long 10.0" &
+  "pair_coeff * *" &
+  "kspace_style pppm 1.0e-5" &
+  "kspace_modify diff ad order 5 slab 3.0"
 if "${case} == pppm_ad" then &
   "pair_style coul/long 10.0" &
   "pair_coeff * *" &

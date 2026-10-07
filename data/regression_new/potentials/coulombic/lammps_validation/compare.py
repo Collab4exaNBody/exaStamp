@@ -25,6 +25,15 @@ of nearly equal sums and g_ewald comes from a finite difference derivative of it
 of q^2 already moves g_ewald by 3e-5 ; both meet the accuracy. Hence |dPE| ~1e-3 eV, dF ~9e-8 eV/ang. Variant pppm_ad+g
 uses LAMMPS's g_ewald and gives the usual agreement (dF 3.2e-8 eV/ang, dE_atom 2.9e-8 eV, dP 9e-8). Variants pppm+gpu / pppm_tri+gpu run with
 nogpu: false (GPU kernels + cuFFT on Cuda builds) and give the same agreement.
+Cases pppm_slab / pppm_slab_auto / pppm_tri_slab (slab correction EW3DC, z non periodic, kspace_modify slab 3.0 /
+slab auto / slab 3.0 with an xy tilt) use UO2_slab*.lmp / UO2_slab*_ext.xyz (made by mk_slab.py) : g_ewald, mesh,
+auto volfactor (2.5130678) and estimated accuracy are those of LAMMPS ; dF ~1.5e-7 eV/ang for max|F| ~15 eV/ang
+(surface atoms), dE_atom ~7e-7 eV, dP ~1.5e-7 ; step 0 energies agree to 3e-6 eV, the trajectories then drift apart
+(dx ~1.4e-8 ang at step 10). Variant pppm_slab+ad (diff ad + slab) is compared with LAMMPS diff ik + slab : agreement
+at the accuracy level only (dF 3.4e-4 x,y 7.6e-4 z ; LAMMPS's own ik/ad difference is ~3e-4). LAMMPS diff ad + slab
+(case pppm_ad_slab) gives wrong z forces (fieldforce_ad uses nz/zprd instead of nz/zprd_slab, |dF_z| up to 13 eV/ang
+vs ik), exaStamp uses the extended spacing : at fixed g_ewald, ik and ad converge to the same forces when the mesh is
+refined (fine mesh difference 1.6e-5 eV/ang in all directions).
 Variants +sym use symmetric pair computation (use_symmetry). Variants +fold (ewald_fixed, wolf, pppm) add
 ghost_fold_back : pairs from owned cells only on half neighbor lists, ghost contributions folded back by
 update_virial_force_energy_from_ghost (CPU, 1 thread, ewald real space 140 -> 89 ms/step vs LAMMPS 69 ms) ; same agreement.

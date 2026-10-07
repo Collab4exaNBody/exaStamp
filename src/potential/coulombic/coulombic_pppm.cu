@@ -120,6 +120,23 @@ inline namespace coulombic_ewald
     }
   };
 
+  // slab correction (LAMMPS slabcorr) : sum of q.z and q.z^2 over local particles, z = real height
+  template<bool PerAtomCharge>
+  struct PPPMSlabDipoleFunc
+  {
+    const ParticleSpecie * __restrict__ m_species = nullptr;
+    double * __restrict__ m_sum = nullptr; // [ sum q.z , sum q.z^2 ]
+    double m_zscale = 1.0;
+    template<class ChargeOrTypeT>
+    ONIKA_HOST_DEVICE_FUNC inline void operator () ( double rz, ChargeOrTypeT ct ) const
+    {
+      const double q = pppm_particle_charge<PerAtomCharge>( m_species , ct );
+      const double z = m_zscale * rz;
+      ONIKA_CU_ATOMIC_ADD( m_sum[0] , q * z );
+      ONIKA_CU_ATOMIC_ADD( m_sum[1] , q * z * z );
+    }
+  };
+
   // real space meshes interpolated back to particles. Two real meshes are stored in one complex mesh (real and
   // imaginary parts), as they come out of one backward FFT (see PPPMPairFactorFunc).
   struct PPPMMeshes
@@ -230,6 +247,12 @@ inline namespace coulombic_ewald
       f.x += qfactor * ekx - COULOMB_CONSTANT * sfx;
       f.y += qfactor * eky - COULOMB_CONSTANT * sfy;
       f.z += qfactor * ekz - COULOMB_CONSTANT * sfz;
+      if( p.slab )
+      {
+        const double z = p.zscale * rz;
+        f.z += pppm_slab_force_z( p , q , z );
+        if constexpr ( ComputeEnergy ) ep += pppm_slab_energy( p , q , z );
+      }
       if constexpr ( ComputeEnergy )
       {
         ep += 0.5 * qfactor * u + pppm_self_energy( p , q );
@@ -397,6 +420,12 @@ namespace exanb
     static inline constexpr bool CudaCompatible = true;
   };
 
+  template<bool PerAtomCharge> struct ComputeCellParticlesTraits< exaStamp::PPPMSlabDipoleFunc<PerAtomCharge> >
+  {
+    static inline constexpr bool RequiresBlockSynchronousCall = false;
+    static inline constexpr bool CudaCompatible = true;
+  };
+
   template<bool PerAtomCharge, bool ComputeEnergy, bool ComputeVirial>
   struct ComputeCellParticlesTraits< exaStamp::PPPMForceFunc<PerAtomCharge,ComputeEnergy,ComputeVirial> >
   {
@@ -445,6 +474,7 @@ inline namespace coulombic_ewald
     onika::memory::CudaMMVector<Complexd> m_work1; // rho(k), then V(k)
     onika::memory::CudaMMVector<Complexd> m_field; // 2 complex meshes : (vdx,vdy) , (vdz,u)
     onika::memory::CudaMMVector<Complexd> m_vir;   // 3 complex meshes : (xx,yy) , (zz,xy) , (xz,yz)
+    onika::memory::CudaMMVector<double> m_slab_sum; // slab correction : sum q.z , sum q.z^2
     PPPMFFT m_fft;
 
     // per mesh point loop : GPU (one thread per point) when the FFT runs there, OpenMP otherwise
@@ -517,7 +547,7 @@ inline namespace coulombic_ewald
       int nprocs = 1;
       MPI_Comm_size( *mpi , &nprocs );
 
-      const ReadOnlyPPPMParameters ro( p , domain->bounds().bmin , domain->bounds_size() );
+      ReadOnlyPPPMParameters ro( p , domain->bounds().bmin , domain->bounds_size() );
 
       auto rx = grid->field_accessor( field::rx );
       auto ry = grid->field_accessor( field::ry );
@@ -531,6 +561,19 @@ inline namespace coulombic_ewald
       auto compute_with_charges = [&]( auto per_atom_charge_tag , auto charge_or_type )
       {
         static constexpr bool PerAtomCharge = decltype(per_atom_charge_tag)::value;
+
+        // 0. slab correction : total dipole along z (LAMMPS slabcorr), needed by the force pass
+        if( ro.slab )
+        {
+          if( m_slab_sum.size() != 2 ) m_slab_sum.resize( 2 );
+          mesh_for( 2 , PPPMZeroFunc{ m_slab_sum.data() } );
+          PPPMSlabDipoleFunc<PerAtomCharge> dipole_func = { species->data() , m_slab_sum.data() , ro.zscale };
+          compute_cell_particles( *grid , false , dipole_func , onika::make_flat_tuple(rz,charge_or_type) , parallel_execution_context() );
+          double sums[2] = { m_slab_sum[0] , m_slab_sum[1] };
+          if( nprocs > 1 ) MPI_Allreduce( MPI_IN_PLACE , sums , 2 , MPI_DOUBLE , MPI_SUM , *mpi );
+          ro.dipole = sums[0];
+          ro.dipole_r2 = sums[1];
+        }
 
         // 1. charge density of local particles, summed over all ranks (replicated global mesh)
         double * __restrict__ density = m_density.data();
@@ -600,7 +643,8 @@ inline namespace coulombic_ewald
     {
       return R"EOF(
 Reciprocal space part of PPPM long range coulomb (ik or ad differentiation), set up by coulombic_pppm_init.
-Same algorithm as LAMMPS kspace_style pppm, orthogonal and triclinic cells (ad : orthogonal only, as LAMMPS). Use with coulombic_ewald_short_range for
+Same algorithm as LAMMPS kspace_style pppm, orthogonal and triclinic cells (ad : orthogonal only, as LAMMPS), with
+optional slab correction (EW3DC, z non periodic). Use with coulombic_ewald_short_range for
 the real space part. Computes forces, and when trigger_thermo_state is true, per particle energy (reciprocal + self +
 neutralizing background) and per particle reciprocal virial.
 The mesh is global and replicated on every MPI rank (density summed with MPI_Allreduce). When a GPU is available,
