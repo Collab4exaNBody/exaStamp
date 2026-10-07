@@ -100,7 +100,7 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
             lout << "radius  = "<<p.radius << std::endl;
             lout << "accuracy_relative = "<<p.accuracy_relative << std::endl;
             lout << "kmax    = "<<p.kmax << " ("<<p.kxmax<<","<<p.kymax<<","<<p.kzmax<<")" << std::endl;
-            lout << "nknz    = "<<p.nknz << std::endl;
+            lout << "nknz    = "<<p.nknz << " (half k space)" << std::endl;
             lout << "qsum    = "<<p.qsum << std::endl;
             lout << "volume  = "<< p.volume << std::endl;
             lout << "=================================" << std::endl;

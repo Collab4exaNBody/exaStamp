@@ -61,15 +61,27 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
     onika::memory::CudaMMVector<Complexd> rho;
   };
 
+  // one k vector of the half k space (k and -k give the same contribution, counted twice through Gc)
   struct EwaldCoeffs
   {
     double Gx;
     double Gy;
     double Gz;
-    double Gc; // 2.pi/(4.pi.epsilon0.V) exp(-G^2/(4g^2))/G^2
+    double Gc; // 2 x 2.pi/(4.pi.epsilon0.V) exp(-G^2/(4g^2))/G^2 , factor 2 for -k
     double Gv; // 2.(1+G^2/(4g^2))/G^2 , used for reciprocal virial
+    int nx;    // integer indices : G = 2.pi.H^-T.n , nx >= 0
+    int ny;
+    int nz;
   };
   
+  // run of consecutive k vectors sharing (nx,ny), with consecutive nz values
+  struct EwaldKGroup
+  {
+    unsigned int k0 = 0;
+    unsigned int count = 0;
+  };
+  static constexpr unsigned int EWALD_MAX_KGROUP = 16; // groups longer than that are split (GPU per thread accumulators)
+
   struct alignas(DEFAULT_ALIGNMENT) EwaldParameters
   {
     double g_ewald = 0.0;
@@ -94,6 +106,7 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
     Vec3d unitk = { 0.0 , 0.0 , 0.0 };
     
     onika::memory::CudaMMVector<EwaldCoeffs> Gdata;
+    onika::memory::CudaMMVector<EwaldKGroup> kgroups;
   };
 
   // trivially copyable view of EwaldParameters, suitable for GPU functors
@@ -101,12 +114,17 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
   {
     double g_ewald = 0.0;
     ssize_t nknz = 0;
+    int kxmax = 0;
+    int kymax = 0;
+    int kzmax = 0;
     double gm_sr = 0.0;
     double bt_sr = 0.0;
     double qsum = 0.0;
     double volume = 0.0;
     
     const EwaldCoeffs* __restrict__ Gdata = nullptr;
+    const EwaldKGroup* __restrict__ kgroups = nullptr;
+    size_t nkgroups = 0;
     
     ReadOnlyEwaldParameters() = default;
     ReadOnlyEwaldParameters(const ReadOnlyEwaldParameters&) = default;
@@ -117,11 +135,16 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
     inline ReadOnlyEwaldParameters( const EwaldParameters & p )
       : g_ewald( p.g_ewald )
       , nknz( p.nknz )
+      , kxmax( p.kxmax )
+      , kymax( p.kymax )
+      , kzmax( p.kzmax )
       , gm_sr( p.gm_sr )
       , bt_sr( p.bt_sr )
       , qsum( p.qsum )
       , volume( p.volume )
       , Gdata( p.Gdata.data() )
+      , kgroups( p.kgroups.data() )
+      , nkgroups( p.kgroups.size() )
     {}
   };
 
@@ -281,10 +304,11 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
     }
     const Mat3d Hinv = inverse( H );
     
-    p.nk = (2 * p.kxmax + 1) * (2 * p.kymax + 1) * (2 * p.kzmax + 1) - 1;
+    // half k space : nx > 0, or nx = 0 and ny > 0, or nx = ny = 0 and nz > 0
+    p.nk = ( (2 * p.kxmax + 1) * (2 * p.kymax + 1) * (2 * p.kzmax + 1) - 1 ) / 2;
     p.Gdata.resize( p.nk );
 
-    const double bt = 2. * M_PI / fpe0 / p.volume;
+    const double bt = 2.0 * 2. * M_PI / fpe0 / p.volume; // first factor 2 accounts for -k
     p.bt_sr = 2. * p.g_ewald / std::sqrt(M_PI);
     p.gm = 1. / (4. * p.g_ewald * p.g_ewald);
     p.gm_sr = ewald_constants::qqr2e;
@@ -294,13 +318,13 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
     double gcmin = 1e30;
     double gcmax = 0.0;
 
-    for (ssize_t kx=-p.kxmax; kx<=p.kxmax; ++kx )
+    for (ssize_t kx=0; kx<=p.kxmax; ++kx )
     {
       for (ssize_t ky=-p.kymax; ky<=p.kymax; ++ky)
       {
         for (ssize_t kz=-p.kzmax; kz<=p.kzmax; ++kz)
         {
-          if( kx*kx + ky*ky + kz*kz > 0 )
+          if( kx > 0 || ky > 0 || ( ky == 0 && kz > 0 ) )
           {
             Vec3d G_kk = { kx * p.unitk.x, ky * p.unitk.y, kz * p.unitk.z };
             if( ! orthogonal )
@@ -320,7 +344,7 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
               gcmax = std::max( gcmax , Gc_kk );
               Gc_kk *= bt;
               const double Gv_kk = 2.0 * ( 1.0 + Gn_kk * p.gm ) / Gn_kk;
-              p.Gdata[kk] = EwaldCoeffs{ G_kk.x , G_kk.y , G_kk.z , Gc_kk , Gv_kk };
+              p.Gdata[kk] = EwaldCoeffs{ G_kk.x , G_kk.y , G_kk.z , Gc_kk , Gv_kk , int(kx) , int(ky) , int(kz) };
               ++kk;
             }
           }
@@ -333,11 +357,28 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
 
     // number of non zero values
     p.nknz = kk;    
-    ldbg << "   number of k points="<< p.nknz <<std::endl;
+    ldbg << "   number of k points (half k space)="<< p.nknz <<std::endl;
 
     // adjust coeffs size
     p.Gdata.resize( p.nknz );
     p.Gdata.shrink_to_fit();
+
+    // groups of consecutive k vectors with the same (nx,ny) : nz is the fastest index, and for given (nx,ny)
+    // the k vectors kept inside the sphere have consecutive nz values
+    p.kgroups.clear();
+    for(size_t k=0;k<kk;k++)
+    {
+      const EwaldCoeffs& g = p.Gdata[k];
+      if( ! p.kgroups.empty() )
+      {
+        EwaldKGroup& last = p.kgroups.back();
+        const EwaldCoeffs& h = p.Gdata[ last.k0 + last.count - 1 ];
+        if( g.nx == h.nx && g.ny == h.ny && g.nz == h.nz + 1 && last.count < EWALD_MAX_KGROUP ) { ++ last.count; continue; }
+      }
+      p.kgroups.push_back( EwaldKGroup{ static_cast<unsigned int>(k) , 1 } );
+    }
+    p.kgroups.shrink_to_fit();
+    ldbg << "   number of k groups="<< p.kgroups.size() <<std::endl;
   }
 
   inline void ewald_init_parameters(double g_ewald, double radius, double accuracy_relative, long in_kmax, const Mat3d& H, const uint64_t natoms, double qsq, double qsum, EwaldParameters& p )
