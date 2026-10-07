@@ -19,7 +19,8 @@ under the License.
 
 // 3D complex-to-complex FFT on a nx*ny*nz mesh stored with x fastest (index (iz*ny+iy)*nx+ix).
 // Unnormalized, forward = exp(-i k.x), backward = exp(+i k.x), as LAMMPS FFT3d used by PPPM.
-// GPU : cuFFT (Cuda builds, EXASTAMP_PPPM_CUFFT), in place on unified memory, synchronous.
+// GPU : cuFFT (Cuda builds, EXASTAMP_PPPM_CUFFT), in place on unified memory, asynchronous on the given stream :
+// call sync() before the results are used from another stream or from the host.
 // CPU : pocketfft (vendored in pocketfft/). Both are only included by pppm_fft.cpp.
 
 #include <onika/math/basic_types.h>
@@ -42,6 +43,7 @@ inline namespace coulombic_ewald
     void resize( int nx, int ny, int nz, bool use_gpu = false, void* stream = nullptr );
     void forward( Complexd* data ) const;
     void backward( Complexd* data ) const;
+    void sync() const; // wait for transforms launched on the GPU stream (no-op on CPU)
     inline bool on_gpu() const { return m_gpu; }
 
     static bool gpu_support();

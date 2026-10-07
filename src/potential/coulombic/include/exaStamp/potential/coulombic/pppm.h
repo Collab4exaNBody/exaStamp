@@ -68,10 +68,10 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
     double rho_coeff[pppm_constants::MAXORDER][pppm_constants::MAXORDER] = {};
     double gf_b[pppm_constants::MAXORDER] = {};
 
-    // per mesh point (x fastest) : influence function, k vectors (actual frame), virial coefficients (xx,yy,zz,xy,xz,yz)
+    // per mesh point (x fastest) : influence function, k vectors (actual frame).
+    // virial coefficients (LAMMPS vg) are computed from k when needed, see pppm_virial_coeffs
     onika::memory::CudaMMVector<double> greensfn;
     onika::memory::CudaMMVector<double> fkx, fky, fkz;
-    onika::memory::CudaMMVector<double> vg;
 
     inline size_t nfft() const { return size_t(nx) * size_t(ny) * size_t(nz); }
     inline int nlower() const { return -(order-1)/2; }
@@ -335,7 +335,6 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
 
     p.greensfn.resize( nfft );
     p.fkx.resize( nfft ); p.fky.resize( nfft ); p.fkz.resize( nfft );
-    p.vg.resize( 6 * nfft );
 
     double tmp[3] = { (g/(M_PI*nx)) * std::pow(-std::log(EPS_HOC),0.25) ,
                       (g/(M_PI*ny)) * std::pow(-std::log(EPS_HOC),0.25) ,
@@ -365,21 +364,11 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
           p.fkx[n] = fk.x; p.fky[n] = fk.y; p.fkz[n] = fk.z;
           const double sqk = fk.x*fk.x + fk.y*fk.y + fk.z*fk.z;
 
-          double* vg = p.vg.data() + 6*n;
           if( sqk == 0.0 )
           {
-            for( int i = 0 ; i < 6 ; i++ ) vg[i] = 0.0;
             p.greensfn[n] = 0.0;
             continue;
           }
-
-          const double vterm = -2.0 * ( 1.0/sqk + 0.25/(g*g) );
-          vg[0] = 1.0 + vterm*fk.x*fk.x;
-          vg[1] = 1.0 + vterm*fk.y*fk.y;
-          vg[2] = 1.0 + vterm*fk.z*fk.z;
-          vg[3] = vterm*fk.x*fk.y;
-          vg[4] = vterm*fk.x*fk.z;
-          vg[5] = vterm*fk.y*fk.z;
 
           const double numerator = FOUR_PI_LMP / sqk;
           const double denominator = pppm_gf_denom( p , snx , sny , snz );
@@ -474,6 +463,24 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
   }
 
   // trivially copyable view of PPPMParameters for particle <-> mesh functors
+  // LAMMPS PPPM vg : virial coefficients (xx,yy,zz,xy,xz,yz) of mesh point with k vector (kx,ky,kz)
+  ONIKA_HOST_DEVICE_FUNC inline void pppm_virial_coeffs( double kx, double ky, double kz, double g, double vg[6] )
+  {
+    const double sqk = kx*kx + ky*ky + kz*kz;
+    if( sqk == 0.0 )
+    {
+      for( int i = 0 ; i < 6 ; i++ ) vg[i] = 0.0;
+      return;
+    }
+    const double vterm = -2.0 * ( 1.0/sqk + 0.25/(g*g) );
+    vg[0] = 1.0 + vterm*kx*kx;
+    vg[1] = 1.0 + vterm*ky*ky;
+    vg[2] = 1.0 + vterm*kz*kz;
+    vg[3] = vterm*kx*ky;
+    vg[4] = vterm*kx*kz;
+    vg[5] = vterm*ky*kz;
+  }
+
   struct ReadOnlyPPPMParameters
   {
     int order = 5;

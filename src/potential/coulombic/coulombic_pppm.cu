@@ -32,6 +32,7 @@ under the License.
 #include <onika/cuda/cuda_context.h>
 #include <onika/parallel/parallel_for.h>
 #include <mpi.h>
+#include <omp.h>
 
 #include <exaStamp/potential/coulombic/pppm.h>
 #include <exaStamp/potential/coulombic/pppm_fft.h>
@@ -49,13 +50,19 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
     else return species[ct].m_charge;
   }
 
-  // LAMMPS PPPM::make_rho : charge density on the (global, replicated) mesh
+  // LAMMPS PPPM::make_rho : charge density on the (global, replicated) mesh.
+  // GPU : atomic adds into m_density. CPU with several OpenMP threads (m_thread_density set) : each thread adds into
+  // its own mesh (m_nthreads meshes, nfft apart), summed afterwards by PPPMSumThreadMeshesFunc. CPU with one thread :
+  // plain adds into m_density.
   template<bool PerAtomCharge>
   struct PPPMSpreadFunc
   {
     ReadOnlyPPPMParameters p;
     const ParticleSpecie * __restrict__ m_species = nullptr;
     double * __restrict__ m_density = nullptr;
+    double * __restrict__ m_thread_density = nullptr;
+    int m_nthreads = 0;
+    size_t m_nfft = 0;
 
     template<class ChargeOrTypeT>
     ONIKA_HOST_DEVICE_FUNC inline void operator () ( double rx, double ry, double rz, ChargeOrTypeT ct ) const
@@ -65,6 +72,35 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
       PPPMStencil st;
       pppm_stencil( p , Vec3d{rx,ry,rz} , st );
       const double z0 = p.delvolinv * q;
+#     ifndef ONIKA_GPU_DEVICE_COMPILE
+      if( m_nthreads == 1 || m_thread_density != nullptr )
+      {
+        double * __restrict__ mesh = m_density;
+        if( m_thread_density != nullptr )
+        {
+          const int t = omp_get_thread_num();
+          if( t >= m_nthreads ) onika::fatal_error() << "PPPMSpreadFunc : thread "<<t<<" out of "<<m_nthreads<<" thread meshes"<<std::endl;
+          mesh = m_thread_density + size_t(t) * m_nfft;
+        }
+        for( int n = 0 ; n < p.order ; n++ )
+        {
+          int mz = st.iz + n; if( mz >= p.nz ) mz -= p.nz;
+          const double y0 = z0 * st.wz[n];
+          for( int m = 0 ; m < p.order ; m++ )
+          {
+            int my = st.iy + m; if( my >= p.ny ) my -= p.ny;
+            const double x0 = y0 * st.wy[m];
+            double * __restrict__ row = mesh + ( size_t(mz) * p.ny + my ) * p.nx;
+            for( int l = 0 ; l < p.order ; l++ )
+            {
+              int mx = st.ix + l; if( mx >= p.nx ) mx -= p.nx;
+              row[mx] += x0 * st.wx[l];
+            }
+          }
+        }
+        return;
+      }
+#     endif
       for( int n = 0 ; n < p.order ; n++ )
       {
         int mz = st.iz + n; if( mz >= p.nz ) mz -= p.nz;
@@ -84,14 +120,15 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
     }
   };
 
-  // real space meshes interpolated back to particles
+  // real space meshes interpolated back to particles. Two real meshes are stored in one complex mesh (real and
+  // imaginary parts), as they come out of one backward FFT (see PPPMPairFactorFunc).
   struct PPPMMeshes
   {
-    const double * __restrict__ vdx = nullptr; // gradient of the potential
-    const double * __restrict__ vdy = nullptr;
-    const double * __restrict__ vdz = nullptr;
-    const double * __restrict__ u = nullptr;   // potential (per particle energy)
-    const double * __restrict__ v = nullptr;   // 6 virial meshes, xx yy zz xy xz yz, nfft apart
+    const Complexd * __restrict__ exy = nullptr; // gradient of the potential : x (real) , y (imaginary)
+    const Complexd * __restrict__ ezu = nullptr; // gradient z (real) , potential for per particle energy (imaginary)
+    const Complexd * __restrict__ v01 = nullptr; // virial meshes xx , yy
+    const Complexd * __restrict__ v23 = nullptr; // virial meshes zz , xy
+    const Complexd * __restrict__ v45 = nullptr; // virial meshes xz , yz
   };
 
   // LAMMPS PPPM::fieldforce_ik (+ fieldforce_peratom and per atom self/background correction)
@@ -101,7 +138,6 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
     ReadOnlyPPPMParameters p;
     const ParticleSpecie * __restrict__ m_species = nullptr;
     PPPMMeshes m;
-    size_t nfft = 0;
 
     ONIKA_HOST_DEVICE_FUNC inline void compute( double q, double rx, double ry, double rz, Vec3d& f, double& ep, Mat3d& vir ) const
     {
@@ -125,18 +161,21 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
             int mx = st.ix + l; if( mx >= p.nx ) mx -= p.nx;
             const size_t idx = row + mx;
             const double x0 = y0 * st.wx[l];
-            ekx -= x0 * m.vdx[idx];
-            eky -= x0 * m.vdy[idx];
-            ekz -= x0 * m.vdz[idx];
-            if constexpr ( ComputeEnergy ) u += x0 * m.u[idx];
+            const Complexd exy = m.exy[idx];
+            const Complexd ezu = m.ezu[idx];
+            ekx -= x0 * exy.r;
+            eky -= x0 * exy.i;
+            ekz -= x0 * ezu.r;
+            if constexpr ( ComputeEnergy ) u += x0 * ezu.i;
             if constexpr ( ComputeVirial )
             {
-              v0 += x0 * m.v[idx];
-              v1 += x0 * m.v[nfft+idx];
-              v2 += x0 * m.v[2*nfft+idx];
-              v3 += x0 * m.v[3*nfft+idx];
-              v4 += x0 * m.v[4*nfft+idx];
-              v5 += x0 * m.v[5*nfft+idx];
+              const Complexd a = m.v01[idx], b = m.v23[idx], c = m.v45[idx];
+              v0 += x0 * a.r;
+              v1 += x0 * a.i;
+              v2 += x0 * b.r;
+              v3 += x0 * b.i;
+              v4 += x0 * c.r;
+              v5 += x0 * c.i;
             }
           }
         }
@@ -180,6 +219,20 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
 
   // ------------- per mesh point operations (parallel_for, one thread per mesh point on GPU) -------------
 
+  struct PPPMSumThreadMeshesFunc
+  {
+    const double * __restrict__ m_thread_density = nullptr;
+    double * __restrict__ m_density = nullptr;
+    int m_nthreads = 0;
+    size_t m_nfft = 0;
+    ONIKA_HOST_DEVICE_FUNC inline void operator () ( ssize_t i ) const
+    {
+      double s = 0.0;
+      for( int t = 0 ; t < m_nthreads ; t++ ) s += m_thread_density[ t * m_nfft + i ];
+      m_density[i] = s;
+    }
+  };
+
   struct PPPMZeroFunc
   {
     double * __restrict__ a = nullptr;
@@ -207,29 +260,78 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
     }
   };
 
-  // w2 = V(k) times a per mesh point factor, before a backward FFT
-  enum class PPPMFactor { COPY , VIRIAL , IK };
-  struct PPPMFactorFunc
+  // Two real meshes A and B from one backward FFT : w2 = H(A(k)) + i.H(B(k)), where H(X)(k) = ( X(k) + conj(X(-k)) )/2
+  // is the hermitian part. The backward FFT of a hermitian array is real, so the result holds A in its real part and
+  // B in its imaginary part. LAMMPS keeps the real part of each backward FFT, which is exactly the transform of the
+  // hermitian part : results are the same, including at Nyquist frequencies where i.k.V(k) is not hermitian.
+  // FIELD  : (A,B) = (i.kx.V , i.ky.V) into w2[0] and (i.kz.V , V or 0) into w2[1] (LAMMPS poisson_ik, poisson_peratom u)
+  // VIRIAL : (vg_xx.V , vg_yy.V) , (vg_zz.V , vg_xy.V) , (vg_xz.V , vg_yz.V) into w2[0..2] (LAMMPS poisson_peratom v)
+  ONIKA_HOST_DEVICE_FUNC static inline Complexd pppm_hermitian_pair( const Complexd& a , const Complexd& am , const Complexd& b , const Complexd& bm )
   {
-    const Complexd * __restrict__ w1 = nullptr;
-    Complexd * __restrict__ w2 = nullptr;
-    PPPMFactor mode = PPPMFactor::COPY;
-    const double * __restrict__ coef = nullptr; // vg (6 per point) for VIRIAL, fk component for IK
-    int j = 0;                                   // virial component for VIRIAL
+    const Complexd ha = { 0.5 * ( a.r + am.r ) , 0.5 * ( a.i - am.i ) };
+    const Complexd hb = { 0.5 * ( b.r + bm.r ) , 0.5 * ( b.i - bm.i ) };
+    return Complexd{ ha.r - hb.i , ha.i + hb.r };
+  }
+  ONIKA_HOST_DEVICE_FUNC static inline Complexd pppm_ik( double k , const Complexd& c ) { return Complexd{ - k * c.i , k * c.r }; }
+  ONIKA_HOST_DEVICE_FUNC static inline Complexd pppm_scale( double s , const Complexd& c ) { return Complexd{ s * c.r , s * c.i }; }
+
+  enum class PPPMBackwardKind { FIELD , VIRIAL };
+
+  // Work item = one mesh point (m_rows false, GPU), or one x row of the mesh (m_rows true, CPU : no index division).
+  struct PPPMPairFactorFunc
+  {
+    const Complexd * __restrict__ w1 = nullptr;     // V(k)
+    Complexd * __restrict__ w2[3] = { nullptr , nullptr , nullptr };
+    const double * __restrict__ fkx = nullptr;
+    const double * __restrict__ fky = nullptr;
+    const double * __restrict__ fkz = nullptr;
+    double g_ewald = 0.0;
+    PPPMBackwardKind kind = PPPMBackwardKind::FIELD;
+    bool with_u = false; // FIELD : potential mesh in the imaginary part of w2[1]
+    int nx = 0, ny = 0, nz = 0;
+    bool m_rows = false;
+
+    ONIKA_HOST_DEVICE_FUNC inline void point( size_t i , size_t im ) const
+    {
+      const Complexd c = w1[i], cm = w1[im];
+      if( kind == PPPMBackwardKind::FIELD )
+      {
+        w2[0][i] = pppm_hermitian_pair( pppm_ik( fkx[i] , c ) , pppm_ik( fkx[im] , cm ) , pppm_ik( fky[i] , c ) , pppm_ik( fky[im] , cm ) );
+        const Complexd zero = { 0.0 , 0.0 };
+        w2[1][i] = pppm_hermitian_pair( pppm_ik( fkz[i] , c ) , pppm_ik( fkz[im] , cm ) , with_u ? c : zero , with_u ? cm : zero );
+      }
+      else
+      {
+        double v[6], vm[6];
+        pppm_virial_coeffs( fkx[i] , fky[i] , fkz[i] , g_ewald , v );
+        pppm_virial_coeffs( fkx[im] , fky[im] , fkz[im] , g_ewald , vm );
+        for( int q = 0 ; q < 3 ; q++ )
+        {
+          w2[q][i] = pppm_hermitian_pair( pppm_scale( v[2*q] , c ) , pppm_scale( vm[2*q] , cm ) , pppm_scale( v[2*q+1] , c ) , pppm_scale( vm[2*q+1] , cm ) );
+        }
+      }
+    }
+
     ONIKA_HOST_DEVICE_FUNC inline void operator () ( ssize_t i ) const
     {
-      const Complexd c = w1[i];
-      if( mode == PPPMFactor::COPY ) w2[i] = c;
-      else if( mode == PPPMFactor::VIRIAL ) { const double s = coef[6*i+j]; w2[i] = Complexd{ c.r * s , c.i * s }; }
-      else { const double k = coef[i]; w2[i] = Complexd{ - k * c.i , k * c.r }; }
+      if( m_rows )
+      {
+        const int iy = i % ny;
+        const int iz = i / ny;
+        const size_t row = size_t(i) * nx;
+        const size_t rowm = ( size_t( iz ? nz - iz : 0 ) * ny + ( iy ? ny - iy : 0 ) ) * nx; // row of -k
+        point( row , rowm );
+        for( int ix = 1 ; ix < nx ; ix++ ) point( row + ix , rowm + nx - ix );
+      }
+      else
+      {
+        const unsigned int ui = i;
+        const unsigned int ix = ui % nx;
+        const unsigned int iy = ( ui / nx ) % ny;
+        const unsigned int iz = ui / ( unsigned(nx) * ny );
+        point( i , ( size_t( iz ? nz - iz : 0 ) * ny + ( iy ? ny - iy : 0 ) ) * nx + ( ix ? nx - ix : 0 ) ); // -k
+      }
     }
-  };
-
-  struct PPPMRealPartFunc
-  {
-    const Complexd * __restrict__ w = nullptr;
-    double * __restrict__ out = nullptr;
-    ONIKA_HOST_DEVICE_FUNC inline void operator () ( ssize_t i ) const { out[i] = w[i].r; }
   };
 
 }
@@ -256,10 +358,10 @@ namespace onika
   namespace parallel
   {
     template<> struct ParallelForFunctorTraits< exaStamp::PPPMZeroFunc > { static inline constexpr bool CudaCompatible = true; };
+    template<> struct ParallelForFunctorTraits< exaStamp::PPPMSumThreadMeshesFunc > { static inline constexpr bool CudaCompatible = true; };
     template<> struct ParallelForFunctorTraits< exaStamp::PPPMLoadDensityFunc > { static inline constexpr bool CudaCompatible = true; };
     template<> struct ParallelForFunctorTraits< exaStamp::PPPMApplyGreenFunc > { static inline constexpr bool CudaCompatible = true; };
-    template<> struct ParallelForFunctorTraits< exaStamp::PPPMFactorFunc > { static inline constexpr bool CudaCompatible = true; };
-    template<> struct ParallelForFunctorTraits< exaStamp::PPPMRealPartFunc > { static inline constexpr bool CudaCompatible = true; };
+    template<> struct ParallelForFunctorTraits< exaStamp::PPPMPairFactorFunc > { static inline constexpr bool CudaCompatible = true; };
   }
 }
 
@@ -287,11 +389,10 @@ inline namespace coulombic_ewald
 
     // mesh work buffers, kept between time steps
     onika::memory::CudaMMVector<double> m_density;
-    onika::memory::CudaMMVector<double> m_vd;     // 3 gradient meshes
-    onika::memory::CudaMMVector<double> m_u;
-    onika::memory::CudaMMVector<double> m_v;      // 6 virial meshes
-    onika::memory::CudaMMVector<Complexd> m_work1;
-    onika::memory::CudaMMVector<Complexd> m_work2;
+    onika::memory::CudaMMVector<double> m_thread_density; // CPU, several OpenMP threads : one mesh per thread
+    onika::memory::CudaMMVector<Complexd> m_work1; // rho(k), then V(k)
+    onika::memory::CudaMMVector<Complexd> m_field; // 2 complex meshes : (vdx,vdy) , (vdz,u)
+    onika::memory::CudaMMVector<Complexd> m_vir;   // 3 complex meshes : (xx,yy) , (zz,xy) , (xz,yz)
     PPPMFFT m_fft;
 
     // per mesh point loop : GPU (one thread per point) when the FFT runs there, OpenMP otherwise
@@ -303,13 +404,23 @@ inline namespace coulombic_ewald
       onika::parallel::parallel_for( n , func , parallel_execution_context() , opts );
     }
 
-    // m_work2 = m_work1 * factor (copy, virial coefficient or i.k), backward FFT, real part into out
-    inline void backward_to( double * __restrict__ out, PPPMFactor mode, const double* coef = nullptr, int j = 0 )
+    // backward FFTs of the FIELD (2 meshes out) or VIRIAL (3 meshes out) pairs, see PPPMPairFactorFunc
+    inline void backward_pairs( const PPPMParameters& p, PPPMBackwardKind kind, bool with_u, Complexd* const out[] )
     {
-      const size_t nfft = m_work1.size();
-      mesh_for( nfft , PPPMFactorFunc{ m_work1.data() , m_work2.data() , mode , coef , j } );
-      m_fft.backward( m_work2.data() );
-      mesh_for( nfft , PPPMRealPartFunc{ m_work2.data() , out } );
+      const bool rows = ! m_fft.on_gpu();
+      const int nout = ( kind == PPPMBackwardKind::FIELD ) ? 2 : 3;
+      PPPMPairFactorFunc func = {};
+      func.w1 = m_work1.data();
+      for( int q = 0 ; q < nout ; q++ ) func.w2[q] = out[q];
+      func.fkx = p.fkx.data(); func.fky = p.fky.data(); func.fkz = p.fkz.data();
+      func.g_ewald = p.g_ewald;
+      func.kind = kind;
+      func.with_u = with_u;
+      func.nx = p.nx; func.ny = p.ny; func.nz = p.nz;
+      func.m_rows = rows;
+      mesh_for( rows ? size_t(p.ny) * p.nz : p.nfft() , func );
+      for( int q = 0 ; q < nout ; q++ ) m_fft.backward( out[q] );
+      m_fft.sync();
     }
 
   public:
@@ -338,10 +449,9 @@ inline namespace coulombic_ewald
       if( m_density.size() != nfft )
       {
         m_density.resize( nfft );
-        m_vd.resize( 3*nfft );
         m_work1.resize( nfft );
-        m_work2.resize( nfft );
-        m_u.clear(); m_v.clear();
+        m_field.resize( 2*nfft );
+        m_vir.clear();
       }
       // GPU path when a device is available : particle kernels, mesh loops and cuFFT all run there (unified memory)
       const bool gpu_available = ( global_cuda_ctx() != nullptr ) && global_cuda_ctx()->has_devices() && PPPMFFT::gpu_support();
@@ -350,11 +460,7 @@ inline namespace coulombic_ewald
       if( gpu_available ) stream = global_cuda_ctx()->getThreadStream(0);
 #     endif
       m_fft.resize( p.nx , p.ny , p.nz , gpu_available , stream );
-      if( log_energy && m_u.size() != nfft )
-      {
-        m_u.resize( nfft );
-        m_v.resize( 6*nfft );
-      }
+      if( log_energy && m_vir.size() != 3*nfft ) m_vir.resize( 3*nfft );
 
       int nprocs = 1;
       MPI_Comm_size( *mpi , &nprocs );
@@ -376,38 +482,53 @@ inline namespace coulombic_ewald
 
         // 1. charge density of local particles, summed over all ranks (replicated global mesh)
         double * __restrict__ density = m_density.data();
-        mesh_for( nfft , PPPMZeroFunc{ density } );
-        PPPMSpreadFunc<PerAtomCharge> spread_func = { ro , species->data() , density };
+        const int nthreads = m_fft.on_gpu() ? 0 : omp_get_max_threads();
+        double * thread_density = nullptr;
+        if( nthreads > 1 )
+        {
+          if( m_thread_density.size() != nthreads * nfft ) m_thread_density.resize( nthreads * nfft );
+          thread_density = m_thread_density.data();
+          mesh_for( nthreads * nfft , PPPMZeroFunc{ thread_density } );
+        }
+        else mesh_for( nfft , PPPMZeroFunc{ density } );
+        PPPMSpreadFunc<PerAtomCharge> spread_func = { ro , species->data() , density , thread_density , nthreads , nfft };
         compute_cell_particles( *grid , false , spread_func , onika::make_flat_tuple(rx,ry,rz,charge_or_type) , parallel_execution_context() );
+        if( nthreads > 1 ) mesh_for( nfft , PPPMSumThreadMeshesFunc{ thread_density , density , nthreads , nfft } );
         if( nprocs > 1 ) MPI_Allreduce( MPI_IN_PLACE , density , nfft , MPI_DOUBLE , MPI_SUM , *mpi );
 
         // 2. rho(k), then V(k) = G(k) rho(k) / N (LAMMPS poisson_ik)
         mesh_for( nfft , PPPMLoadDensityFunc{ density , m_work1.data() } );
         m_fft.forward( m_work1.data() );
+        m_fft.sync();
         mesh_for( nfft , PPPMApplyGreenFunc{ m_work1.data() , p.greensfn.data() , 1.0 / double(nfft) } );
 
-        // 3. per particle energy and virial meshes (LAMMPS poisson_peratom)
+        // 3. gradient of the potential, i.k V(k) back to real space (LAMMPS poisson_ik), and on energy steps the
+        // potential and virial meshes (LAMMPS poisson_peratom), two real meshes per backward FFT
+        Complexd * exy = m_field.data();
+        Complexd * ezu = m_field.data() + nfft;
+        {
+          Complexd* const out[2] = { exy , ezu };
+          backward_pairs( p , PPPMBackwardKind::FIELD , log_energy , out );
+        }
+        PPPMMeshes meshes = { exy , ezu , nullptr , nullptr , nullptr };
         if( log_energy )
         {
-          backward_to( m_u.data() , PPPMFactor::COPY );
-          for( int j = 0 ; j < 6 ; j++ ) backward_to( m_v.data() + j*nfft , PPPMFactor::VIRIAL , p.vg.data() , j );
+          Complexd* const out[3] = { m_vir.data() , m_vir.data() + nfft , m_vir.data() + 2*nfft };
+          meshes.v01 = out[0];
+          meshes.v23 = out[1];
+          meshes.v45 = out[2];
+          backward_pairs( p , PPPMBackwardKind::VIRIAL , false , out );
         }
 
-        // 4. gradient of the potential, i.k V(k) back to real space
-        backward_to( m_vd.data()          , PPPMFactor::IK , p.fkx.data() );
-        backward_to( m_vd.data() +   nfft , PPPMFactor::IK , p.fky.data() );
-        backward_to( m_vd.data() + 2*nfft , PPPMFactor::IK , p.fkz.data() );
-
-        // 5. interpolate field (and energy, virial) back to local particles
-        PPPMMeshes meshes = { m_vd.data() , m_vd.data() + nfft , m_vd.data() + 2*nfft , m_u.data() , m_v.data() };
+        // 4. interpolate field (and energy, virial) back to local particles
         if( log_energy )
         {
-          PPPMForceFunc<PerAtomCharge,true,true> force_func = { ro , species->data() , meshes , nfft };
+          PPPMForceFunc<PerAtomCharge,true,true> force_func = { ro , species->data() , meshes };
           compute_cell_particles( *grid , false , force_func , onika::make_flat_tuple(fx,fy,fz,ep,virial,rx,ry,rz,charge_or_type) , parallel_execution_context() );
         }
         else
         {
-          PPPMForceFunc<PerAtomCharge,false,false> force_func = { ro , species->data() , meshes , nfft };
+          PPPMForceFunc<PerAtomCharge,false,false> force_func = { ro , species->data() , meshes };
           compute_cell_particles( *grid , false , force_func , onika::make_flat_tuple(fx,fy,fz,rx,ry,rz,charge_or_type) , parallel_execution_context() );
         }
       };

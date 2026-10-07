@@ -19,6 +19,7 @@ under the License.
 #include <onika/log.h>
 #include <complex>
 #include <cstddef>
+#include <omp.h>
 
 // pocketfft's own thread pool would compete with OpenMP
 #define POCKETFFT_NO_MULTITHREADING
@@ -99,18 +100,44 @@ inline namespace coulombic_ewald
     {
       auto* c = reinterpret_cast<cufftDoubleComplex*>( data );
       pppm_cufft_check( cufftExecZ2Z( static_cast<cufftHandle>(m_plan) , c , c , forward ? CUFFT_FORWARD : CUFFT_INVERSE ) , "cufftExecZ2Z" );
-      pppm_cuda_check( cudaStreamSynchronize( static_cast<cudaStream_t>(m_stream) ) , "cudaStreamSynchronize" );
       return;
     }
 #endif
-    const pocketfft::shape_t shape = { size_t(m_nz) , size_t(m_ny) , size_t(m_nx) };
     const ptrdiff_t cs = sizeof(std::complex<double>);
-    const pocketfft::stride_t stride = { ptrdiff_t(m_ny)*m_nx*cs , ptrdiff_t(m_nx)*cs , cs };
     auto* c = reinterpret_cast<std::complex<double>*>( data );
-    pocketfft::c2c( shape , stride , stride , { 0 , 1 , 2 } , forward , c , c , 1.0 , 1 );
+    if( omp_get_max_threads() <= 1 )
+    {
+      const pocketfft::shape_t shape = { size_t(m_nz) , size_t(m_ny) , size_t(m_nx) };
+      const pocketfft::stride_t stride = { ptrdiff_t(m_ny)*m_nx*cs , ptrdiff_t(m_nx)*cs , cs };
+      pocketfft::c2c( shape , stride , stride , { 0 , 1 , 2 } , forward , c , c , 1.0 , 1 );
+      return;
+    }
+    // OpenMP : 2D transforms of the xy planes, then 1D transforms along z, one xz plane per iteration
+    const size_t nxy = size_t(m_ny) * m_nx;
+    const pocketfft::shape_t plane_shape = { size_t(m_ny) , size_t(m_nx) };
+    const pocketfft::stride_t plane_stride = { ptrdiff_t(m_nx)*cs , cs };
+#   pragma omp parallel for schedule(static)
+    for( int iz = 0 ; iz < m_nz ; iz++ )
+    {
+      pocketfft::c2c( plane_shape , plane_stride , plane_stride , { 0 , 1 } , forward , c + iz*nxy , c + iz*nxy , 1.0 , 1 );
+    }
+    const pocketfft::shape_t zx_shape = { size_t(m_nz) , size_t(m_nx) };
+    const pocketfft::stride_t zx_stride = { ptrdiff_t(nxy)*cs , cs };
+#   pragma omp parallel for schedule(static)
+    for( int iy = 0 ; iy < m_ny ; iy++ )
+    {
+      pocketfft::c2c( zx_shape , zx_stride , zx_stride , { 0 } , forward , c + size_t(iy)*m_nx , c + size_t(iy)*m_nx , 1.0 , 1 );
+    }
   }
 
   void PPPMFFT::forward( Complexd* data ) const { exec( data , true ); }
   void PPPMFFT::backward( Complexd* data ) const { exec( data , false ); }
+
+  void PPPMFFT::sync() const
+  {
+#ifdef EXASTAMP_PPPM_CUFFT
+    if( m_gpu ) pppm_cuda_check( cudaStreamSynchronize( static_cast<cudaStream_t>(m_stream) ) , "cudaStreamSynchronize" );
+#endif
+  }
 }
 }
