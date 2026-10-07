@@ -20,6 +20,9 @@ Cases pppm / pppm_tri (coulombic_pppm, LAMMPS kspace_style pppm 1e-5 order 5 dif
 automatically by both codes and agree (pppm 0.33415064, 72x72x72 ; pppm_tri 0.33026023, 72x75x75) ; same expected
 differences as Ewald. Variant pppm_tri+species reads species charges. Variants pppm+gpu / pppm_tri+gpu run with
 nogpu: false (GPU kernels + cuFFT on Cuda builds) and give the same agreement.
+Variants +sym use symmetric pair computation (use_symmetry). Variants +fold (ewald_fixed, wolf, pppm) add
+ghost_fold_back : pairs from owned cells only on half neighbor lists, ghost contributions folded back by
+update_virial_force_energy_from_ghost (CPU, 1 thread, ewald real space 140 -> 89 ms/step vs LAMMPS 69 ms) ; same agreement.
 Variants +pair use the pair potential template front-ends (coul_wolf_pair, coul_dsf) with species charges. For dsf+pair,
 energies differ by 3.74e-2 eV in total (8e-6 eV per atom) : the template subtracts e(rcut) per pair, which is not exactly
 0 for DSF (A&S erfc) ; forces are identical.

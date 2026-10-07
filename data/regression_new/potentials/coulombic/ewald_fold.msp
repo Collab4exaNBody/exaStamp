@@ -1,0 +1,75 @@
+# Ewald, symmetric short range computation on owned cells only, ghost contributions folded back (ghost_fold_back)
+# Coulomb-only, 768 atoms of disturbed fluorite UO2 (generated). Accuracy vs LAMMPS is checked in lammps_validation/.
+
+species:
+  - O: { mass: 15.999000 Da , z: 8 , charge: -1.1104 e- }
+  - U: { mass: 238.02891 Da , z: 92 , charge: 2.2208 e- }
+
+coulombic_ewald_init:
+  accuracy_relative: 1.0e-5
+  g_ewald: 0.35 1/ang
+  radius: 8.0 ang
+  kmax: 6
+
+init_parameters:
+  - coulombic_ewald_init
+
+coulombic_ewald_short_range:
+  use_symmetry: true
+  ghost_fold_back: true
+
+# ghost_fold_back : pairs are computed from owned cells only, contributions to ghost particles are added back to
+# their owners. Ghost forces, energies and virials must be zeroed before, and folded back after the force computation.
+compute_force_prolog:
+  - zero_force_energy: { ghost: true }
+
+compute_force_epilog:
+  - update_virial_force_energy_from_ghost
+  - force_to_accel
+
+# half neighbor lists (optional with use_symmetry, halves the neighbor list memory)
+chunk_neighbors:
+  config:
+    free_scratch_memory: false
+    build_particle_offset: true
+    subcell_compaction: true
+    scratch_mem_per_cell: 1048576
+    stream_prealloc_factor: 1.05
+    chunk_size: 1
+    half_symmetric: true
+
+compute_force:
+  - coulombic_ewald_short_range
+  - coulombic_ewald_long_range
+
+setup_system:
+  - domain:
+      cell_size: 5.45 ang
+      grid_dims: [ 4, 4, 4 ]
+      bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 21.8 ang, 21.8 ang, 21.8 ang ] ]
+      xform: [ [ 1, 0, 0 ], [ 0, 1, 0 ], [ 0, 0, 1 ] ]
+      periodic: [ true, true, true ]
+      expandable: false
+  - init_rcb_grid
+  - lattice: # fluorite UO2, 4x4x4 unit cells
+      structure: CUSTOM
+      types: [ U, U, U, U, O, O, O, O, O, O, O, O ]
+      positions:
+        [
+          [ 0.0, 0.0, 0.0 ], [ 0.0, 0.5, 0.5 ], [ 0.5, 0.0, 0.5 ], [ 0.5, 0.5, 0.0 ],
+          [ 0.25, 0.25, 0.25 ], [ 0.25, 0.25, 0.75 ], [ 0.25, 0.75, 0.25 ], [ 0.25, 0.75, 0.75 ],
+          [ 0.75, 0.25, 0.25 ], [ 0.75, 0.25, 0.75 ], [ 0.75, 0.75, 0.25 ], [ 0.75, 0.75, 0.75 ],
+        ]
+      size: [ 5.45 ang, 5.45 ang, 5.45 ang ]
+  - gaussian_noise_r: { sigma: 0.05 ang }
+  - copy_charge_specy_to_particle
+  - sum_charges
+  - coulombic_ewald_init
+
+global:
+  max_iteration: 10
+  simulation_thermostate_screen_frequency: 1
+  simulation_thermostate_file_frequency: -1
+  simulation_snapshot_frequency: -1
+  rcut_inc: 1.0 ang
+  dt: 0.001 ps
