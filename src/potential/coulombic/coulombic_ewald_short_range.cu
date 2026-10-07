@@ -25,7 +25,7 @@ under the License.
 
 namespace exaStamp
 {
-inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugin (plugins are loaded RTLD_GLOBAL)
+inline namespace coulombic_ewald
 {
   using namespace exanb;
 
@@ -48,6 +48,7 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
     ADD_SLOT( bool                      , enable_pair_weights , INPUT , true );
     ADD_SLOT( bool                      , per_atom_charge     , INPUT , true , DocString{"read charges from per particle charge field instead of species charges"} );
     ADD_SLOT( bool                      , use_symmetry        , INPUT , false , DocString{"must match the symmetric setting of neighbor lists"} );
+    ADD_SLOT( bool                      , ghost_fold_back     , INPUT , false , DocString{"with use_symmetry : compute pairs from owned cells only (faster) ; ghost contributions must be added back by update_virial_force_energy_from_ghost in compute_force_epilog, after zero_force_energy: { ghost: true } in compute_force_prolog"} );
     ADD_SLOT( bool                      , trigger_thermo_state, INPUT , OPTIONAL );
     ADD_SLOT( Domain                    , domain              , INPUT , REQUIRED );
     ADD_SLOT( ParticleSpecies           , species             , INPUT , REQUIRED );
@@ -70,11 +71,12 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
       opt.log_energy = trigger_thermo_state.has_value() ? *trigger_thermo_state : false;
       opt.per_atom_charge = *per_atom_charge;
       opt.use_symmetry = *use_symmetry;
+      opt.ghost_fold_back = *ghost_fold_back;
       if( compact_nbh_weight.has_value() && *enable_pair_weights ) opt.weights = compact_nbh_weight.get_pointer();
       if( particle_locks.has_value() ) opt.particle_locks = particle_locks.get_pointer();
 
       ldbg << std::boolalpha << "coulombic_ewald_short_range: rc="<< opt.rcut <<" , g_ewald="<< ewald_config->g_ewald <<" , pair_weights="<< (opt.weights!=nullptr)
-           <<" , log_energy="<< opt.log_energy <<" , use_symmetry="<< opt.use_symmetry <<" , per_atom_charge="<< opt.per_atom_charge << std::endl;
+           <<" , log_energy="<< opt.log_energy <<" , use_symmetry="<< opt.use_symmetry <<" , ghost_fold_back="<< opt.ghost_fold_back <<" , per_atom_charge="<< opt.per_atom_charge << std::endl;
 
       const EwaldShortRangeKernel kernel = { ReadOnlyEwaldParameters( *ewald_config ) };
       coulombic_pair_compute( *grid, *chunk_neighbors, *domain, *species, kernel, opt, [this](){ return parallel_execution_context(); } );

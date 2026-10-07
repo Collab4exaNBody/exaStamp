@@ -204,6 +204,7 @@ namespace exaStamp
     bool per_atom_charge = true;  // read charges from field::charge, otherwise from species charge
     bool use_symmetry = false;    // neighbor lists are symmetric (half lists), contributions added to both particles
     bool log_energy = false;      // compute per particle energy and virial
+    bool ghost_fold_back = false; // symmetric mode only : pairs from owned cells only, ghost particles' contributions are added back by update_(virial_)force_energy_from_ghost
     const CompactGridPairWeights * weights = nullptr;
     GridParticleLocks * particle_locks = nullptr;
   };
@@ -216,6 +217,10 @@ namespace exaStamp
     if( opt.use_symmetry && opt.particle_locks == nullptr )
     {
       fatal_error() << "use_symmetry requires particle_locks" << std::endl;
+    }
+    if( opt.ghost_fold_back && ! opt.use_symmetry )
+    {
+      fatal_error() << "ghost_fold_back requires use_symmetry" << std::endl;
     }
 
     using ChargeFieldT = decltype( grid.field_accessor( field::charge ) );
@@ -234,7 +239,7 @@ namespace exaStamp
       auto optional = make_compute_pair_optional_args( nbh_it, cp_weight , cp_xform, cp_locks );
       static constexpr std::true_type use_cells_accessor = {};
       ForceOp force_op { kernel, species.data(), cp_locks, charge_field, virial_field, opt.per_atom_charge };
-      compute_cell_particle_pairs2( grid, opt.rcut, UseSym, optional, make_compute_pair_buffer<CPBufT>(), force_op, onika::FlatTuple<>{}, DefaultPositionFields{}, exec_ctx_func(), use_cells_accessor );
+      compute_cell_particle_pairs2( grid, opt.rcut, UseSym && ! opt.ghost_fold_back, optional, make_compute_pair_buffer<CPBufT>(), force_op, onika::FlatTuple<>{}, DefaultPositionFields{}, exec_ctx_func(), use_cells_accessor );
     };
 
     auto run_opt_energy = [&]( auto cp_locks , auto cp_weight , auto use_sym_tag )

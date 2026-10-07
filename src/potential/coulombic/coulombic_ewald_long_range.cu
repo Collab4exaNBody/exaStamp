@@ -43,7 +43,7 @@ under the License.
 
 namespace exaStamp
 {
-inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugin (plugins are loaded RTLD_GLOBAL)
+inline namespace coulombic_ewald
 {
   using namespace exanb;
 
@@ -498,7 +498,7 @@ namespace onika
 
 namespace exaStamp
 {
-inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugin (plugins are loaded RTLD_GLOBAL)
+inline namespace coulombic_ewald
 {
   using namespace exanb;
 
