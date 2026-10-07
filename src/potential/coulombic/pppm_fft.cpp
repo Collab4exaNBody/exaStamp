@@ -20,6 +20,8 @@ under the License.
 #include <complex>
 #include <cstddef>
 #include <omp.h>
+#include <algorithm>
+#include <cstdint>
 
 // pocketfft's own thread pool would compete with OpenMP
 #define POCKETFFT_NO_MULTITHREADING
@@ -129,6 +131,112 @@ inline namespace coulombic_ewald
       pocketfft::c2c( zx_shape , zx_stride , zx_stride , { 0 } , forward , c + size_t(iy)*m_nx , c + size_t(iy)*m_nx , 1.0 , 1 );
     }
   }
+
+  // ---------------------------------- distributed FFT building blocks ----------------------------------
+
+  void PPPMDistFFT::release()
+  {
+#ifdef EXASTAMP_PPPM_CUFFT
+    if( m_has_plan_planes ) cufftDestroy( static_cast<cufftHandle>(m_plan_planes) );
+    if( m_has_plan_columns ) cufftDestroy( static_cast<cufftHandle>(m_plan_columns) );
+#endif
+    m_has_plan_planes = m_has_plan_columns = false;
+  }
+
+  PPPMDistFFT::~PPPMDistFFT()
+  {
+    release();
+  }
+
+  void PPPMDistFFT::resize( int nx, int ny, int nz, int nzl, int ncol, bool use_gpu, void* stream )
+  {
+    use_gpu = use_gpu && PPPMFFT::gpu_support();
+    if( nx == m_nx && ny == m_ny && nz == m_nz && nzl == m_nzl && ncol == m_ncol && use_gpu == m_gpu && stream == m_stream ) return;
+    release();
+    m_nx = nx; m_ny = ny; m_nz = nz; m_nzl = nzl; m_ncol = ncol;
+    m_gpu = use_gpu;
+    m_stream = stream;
+#ifdef EXASTAMP_PPPM_CUFFT
+    if( m_gpu )
+    {
+      if( nzl > 0 )
+      {
+        cufftHandle plan;
+        int n[2] = { ny , nx };
+        pppm_cufft_check( cufftPlanMany( &plan , 2 , n , nullptr , 1 , nx*ny , nullptr , 1 , nx*ny , CUFFT_Z2Z , nzl ) , "cufftPlanMany planes" );
+        pppm_cufft_check( cufftSetStream( plan , static_cast<cudaStream_t>(stream) ) , "cufftSetStream" );
+        m_plan_planes = plan; m_has_plan_planes = true;
+      }
+      if( ncol > 0 )
+      {
+        cufftHandle plan;
+        int n[1] = { nz };
+        pppm_cufft_check( cufftPlanMany( &plan , 1 , n , nullptr , 1 , nz , nullptr , 1 , nz , CUFFT_Z2Z , ncol ) , "cufftPlanMany columns" );
+        pppm_cufft_check( cufftSetStream( plan , static_cast<cudaStream_t>(stream) ) , "cufftSetStream" );
+        m_plan_columns = plan; m_has_plan_columns = true;
+      }
+    }
+#endif
+  }
+
+  void PPPMDistFFT::planes( Complexd* data, bool forward ) const
+  {
+    if( m_nzl == 0 ) return;
+#ifdef EXASTAMP_PPPM_CUFFT
+    if( m_gpu )
+    {
+      auto* c = reinterpret_cast<cufftDoubleComplex*>( data );
+      pppm_cufft_check( cufftExecZ2Z( static_cast<cufftHandle>(m_plan_planes) , c , c , forward ? CUFFT_FORWARD : CUFFT_INVERSE ) , "cufftExecZ2Z planes" );
+      return;
+    }
+#endif
+    const ptrdiff_t cs = sizeof(std::complex<double>);
+    auto* c = reinterpret_cast<std::complex<double>*>( data );
+    const size_t nxy = size_t(m_ny) * m_nx;
+    const pocketfft::shape_t plane_shape = { size_t(m_ny) , size_t(m_nx) };
+    const pocketfft::stride_t plane_stride = { ptrdiff_t(m_nx)*cs , cs };
+#   pragma omp parallel for schedule(static)
+    for( int iz = 0 ; iz < m_nzl ; iz++ )
+    {
+      pocketfft::c2c( plane_shape , plane_stride , plane_stride , { 0 , 1 } , forward , c + iz*nxy , c + iz*nxy , 1.0 , 1 );
+    }
+  }
+
+  void PPPMDistFFT::columns( Complexd* data, bool forward ) const
+  {
+    if( m_ncol == 0 ) return;
+#ifdef EXASTAMP_PPPM_CUFFT
+    if( m_gpu )
+    {
+      auto* c = reinterpret_cast<cufftDoubleComplex*>( data );
+      pppm_cufft_check( cufftExecZ2Z( static_cast<cufftHandle>(m_plan_columns) , c , c , forward ? CUFFT_FORWARD : CUFFT_INVERSE ) , "cufftExecZ2Z columns" );
+      return;
+    }
+#endif
+    const ptrdiff_t cs = sizeof(std::complex<double>);
+    auto* c = reinterpret_cast<std::complex<double>*>( data );
+    // chunks of columns, one pocketfft call per chunk (vectorized over columns inside pocketfft)
+    const int nthreads = omp_get_max_threads();
+    const int nchunks = std::min( m_ncol , std::max( 1 , 4*nthreads ) );
+#   pragma omp parallel for schedule(static)
+    for( int ch = 0 ; ch < nchunks ; ch++ )
+    {
+      const int c0 = int( ( int64_t(ch) * m_ncol ) / nchunks ), c1 = int( ( int64_t(ch+1) * m_ncol ) / nchunks );
+      if( c1 <= c0 ) continue;
+      const pocketfft::shape_t shape = { size_t(c1-c0) , size_t(m_nz) };
+      const pocketfft::stride_t stride = { ptrdiff_t(m_nz)*cs , cs };
+      pocketfft::c2c( shape , stride , stride , { 1 } , forward , c + size_t(c0)*m_nz , c + size_t(c0)*m_nz , 1.0 , 1 );
+    }
+  }
+
+  void PPPMDistFFT::sync() const
+  {
+#ifdef EXASTAMP_PPPM_CUFFT
+    if( m_gpu ) pppm_cuda_check( cudaStreamSynchronize( static_cast<cudaStream_t>(m_stream) ) , "cudaStreamSynchronize" );
+#endif
+  }
+
+  // ---------------------------------- replicated mesh FFT ----------------------------------
 
   void PPPMFFT::forward( Complexd* data ) const { exec( data , true ); }
   void PPPMFFT::backward( Complexd* data ) const { exec( data , false ); }

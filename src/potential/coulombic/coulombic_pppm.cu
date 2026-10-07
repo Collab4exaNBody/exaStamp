@@ -33,6 +33,9 @@ under the License.
 #include <onika/parallel/parallel_for.h>
 #include <mpi.h>
 #include <omp.h>
+#include <algorithm>
+#include <climits>
+#include <limits>
 
 #include <exaStamp/potential/coulombic/pppm.h>
 #include <exaStamp/potential/coulombic/pppm_fft.h>
@@ -84,16 +87,16 @@ inline namespace coulombic_ewald
         }
         for( int n = 0 ; n < p.order ; n++ )
         {
-          int mz = st.iz + n; if( mz >= p.nz ) mz -= p.nz;
+          int mz = st.iz + n; if( mz >= p.mnz ) mz -= p.mnz;
           const double y0 = z0 * st.wz[n];
           for( int m = 0 ; m < p.order ; m++ )
           {
-            int my = st.iy + m; if( my >= p.ny ) my -= p.ny;
+            int my = st.iy + m; if( my >= p.mny ) my -= p.mny;
             const double x0 = y0 * st.wy[m];
-            double * __restrict__ row = mesh + ( size_t(mz) * p.ny + my ) * p.nx;
+            double * __restrict__ row = mesh + ( size_t(mz) * p.mny + my ) * p.mnx;
             for( int l = 0 ; l < p.order ; l++ )
             {
-              int mx = st.ix + l; if( mx >= p.nx ) mx -= p.nx;
+              int mx = st.ix + l; if( mx >= p.mnx ) mx -= p.mnx;
               row[mx] += x0 * st.wx[l];
             }
           }
@@ -103,16 +106,16 @@ inline namespace coulombic_ewald
 #     endif
       for( int n = 0 ; n < p.order ; n++ )
       {
-        int mz = st.iz + n; if( mz >= p.nz ) mz -= p.nz;
+        int mz = st.iz + n; if( mz >= p.mnz ) mz -= p.mnz;
         const double y0 = z0 * st.wz[n];
         for( int m = 0 ; m < p.order ; m++ )
         {
-          int my = st.iy + m; if( my >= p.ny ) my -= p.ny;
+          int my = st.iy + m; if( my >= p.mny ) my -= p.mny;
           const double x0 = y0 * st.wy[m];
-          double * __restrict__ row = m_density + ( size_t(mz) * p.ny + my ) * p.nx;
+          double * __restrict__ row = m_density + ( size_t(mz) * p.mny + my ) * p.mnx;
           for( int l = 0 ; l < p.order ; l++ )
           {
-            int mx = st.ix + l; if( mx >= p.nx ) mx -= p.nx;
+            int mx = st.ix + l; if( mx >= p.mnx ) mx -= p.mnx;
             ONIKA_CU_ATOMIC_ADD( row[mx] , x0 * st.wx[l] );
           }
         }
@@ -172,14 +175,14 @@ inline namespace coulombic_ewald
         pppm_stencil_derivative( p , st , dwx , dwy , dwz );
         for( int n = 0 ; n < p.order ; n++ )
         {
-          int mz = st.iz + n; if( mz >= p.nz ) mz -= p.nz;
+          int mz = st.iz + n; if( mz >= p.mnz ) mz -= p.mnz;
           for( int mm = 0 ; mm < p.order ; mm++ )
           {
-            int my = st.iy + mm; if( my >= p.ny ) my -= p.ny;
-            const size_t row = ( size_t(mz) * p.ny + my ) * p.nx;
+            int my = st.iy + mm; if( my >= p.mny ) my -= p.mny;
+            const size_t row = ( size_t(mz) * p.mny + my ) * p.mnx;
             for( int l = 0 ; l < p.order ; l++ )
             {
-              int mx = st.ix + l; if( mx >= p.nx ) mx -= p.nx;
+              int mx = st.ix + l; if( mx >= p.mnx ) mx -= p.mnx;
               const size_t idx = row + mx;
               const double uval = m.exy[idx].r;
               ekx += dwx[l] * st.wy[mm] * st.wz[n] * uval;
@@ -212,16 +215,16 @@ inline namespace coulombic_ewald
       else
       for( int n = 0 ; n < p.order ; n++ )
       {
-        int mz = st.iz + n; if( mz >= p.nz ) mz -= p.nz;
+        int mz = st.iz + n; if( mz >= p.mnz ) mz -= p.mnz;
         const double z0 = st.wz[n];
         for( int mm = 0 ; mm < p.order ; mm++ )
         {
-          int my = st.iy + mm; if( my >= p.ny ) my -= p.ny;
+          int my = st.iy + mm; if( my >= p.mny ) my -= p.mny;
           const double y0 = z0 * st.wy[mm];
-          const size_t row = ( size_t(mz) * p.ny + my ) * p.nx;
+          const size_t row = ( size_t(mz) * p.mny + my ) * p.mnx;
           for( int l = 0 ; l < p.order ; l++ )
           {
-            int mx = st.ix + l; if( mx >= p.nx ) mx -= p.nx;
+            int mx = st.ix + l; if( mx >= p.mnx ) mx -= p.mnx;
             const size_t idx = row + mx;
             const double x0 = y0 * st.wx[l];
             const Complexd exy = m.exy[idx];
@@ -360,6 +363,7 @@ inline namespace coulombic_ewald
     bool with_u = false; // FIELD : potential mesh in the imaginary part of w2[1]
     int nx = 0, ny = 0, nz = 0;
     bool m_rows = false;
+    const int * __restrict__ krow_partner = nullptr; // distributed layout (l*nx+ix)*nz+iz : local row of -y for each local row
 
     ONIKA_HOST_DEVICE_FUNC inline void point( size_t i , size_t im ) const
     {
@@ -389,6 +393,29 @@ inline namespace coulombic_ewald
 
     ONIKA_HOST_DEVICE_FUNC inline void operator () ( ssize_t i ) const
     {
+      if( krow_partner != nullptr )
+      {
+        // distributed layout : work item = one z column (CPU, m_rows) or one point (GPU)
+        if( m_rows )
+        {
+          const int li = i / nx;
+          const int ix = i % nx;
+          const size_t col = size_t(i) * nz;
+          const size_t colm = ( size_t( krow_partner[li] ) * nx + ( ix ? nx - ix : 0 ) ) * nz;
+          point( col , colm );
+          for( int iz = 1 ; iz < nz ; iz++ ) point( col + iz , colm + nz - iz );
+        }
+        else
+        {
+          const unsigned int ui = i;
+          const unsigned int iz = ui % nz;
+          const unsigned int c = ui / nz;
+          const unsigned int ix = c % nx;
+          const unsigned int li = c / nx;
+          point( i , ( size_t( krow_partner[li] ) * nx + ( ix ? nx - ix : 0 ) ) * nz + ( iz ? nz - iz : 0 ) );
+        }
+        return;
+      }
       if( m_rows )
       {
         const int iy = i % ny;
@@ -409,12 +436,119 @@ inline namespace coulombic_ewald
     }
   };
 
+  // ------------- distributed mesh : brick bounds, pack / unpack through index maps -------------
+
+  // bounds of the local particles' stencils, unwrapped mesh indices : [xmin,ymin,zmin,xmax,ymax,zmax] (inclusive)
+  struct PPPMBrickBoundsFunc
+  {
+    ReadOnlyPPPMParameters p;
+    int * __restrict__ m_bounds = nullptr;
+    template<class ChargeOrTypeT>
+    ONIKA_HOST_DEVICE_FUNC inline void operator () ( double rx, double ry, double rz, ChargeOrTypeT ) const
+    {
+      PPPMStencil st;
+      pppm_stencil( p , Vec3d{rx,ry,rz} , st );
+      ONIKA_CU_ATOMIC_MIN( m_bounds[0] , st.gx0 );
+      ONIKA_CU_ATOMIC_MIN( m_bounds[1] , st.gy0 );
+      ONIKA_CU_ATOMIC_MIN( m_bounds[2] , st.gz0 );
+      ONIKA_CU_ATOMIC_MAX( m_bounds[3] , st.gx0 + p.order - 1 );
+      ONIKA_CU_ATOMIC_MAX( m_bounds[4] , st.gy0 + p.order - 1 );
+      ONIKA_CU_ATOMIC_MAX( m_bounds[5] , st.gz0 + p.order - 1 );
+    }
+  };
+
+  // pack / unpack loops skip this rank's own segment [skip_lo, skip_lo+skip_n) of the index map, copied directly
+  // (PPPMCopyAddRealFunc, PPPMCopyComplexFunc) : loop index i < total - skip_n
+  ONIKA_HOST_DEVICE_FUNC inline size_t pppm_skip_own( size_t i, size_t skip_lo, size_t skip_n ) { return i < skip_lo ? i : i + skip_n; }
+
+  struct PPPMPackRealFunc
+  {
+    const double * __restrict__ src = nullptr;
+    const size_t * __restrict__ idx = nullptr;
+    double * __restrict__ buf = nullptr;
+    size_t skip_lo = 0, skip_n = 0;
+    ONIKA_HOST_DEVICE_FUNC inline void operator () ( ssize_t i ) const { const size_t j = pppm_skip_own( i , skip_lo , skip_n ); buf[j] = src[ idx[j] ]; }
+  };
+
+  // several sources may map to the same destination point (several bricks) : atomic adds
+  struct PPPMUnpackAddRealFunc
+  {
+    double * __restrict__ dst = nullptr;
+    const size_t * __restrict__ idx = nullptr;
+    const double * __restrict__ buf = nullptr;
+    size_t skip_lo = 0, skip_n = 0;
+    ONIKA_HOST_DEVICE_FUNC inline void operator () ( ssize_t i ) const { const size_t j = pppm_skip_own( i , skip_lo , skip_n ); ONIKA_CU_ATOMIC_ADD( dst[ idx[j] ] , buf[j] ); }
+  };
+
+  // own points, from the send map to the receive map (both list them in the same order)
+  struct PPPMCopyAddRealFunc
+  {
+    const double * __restrict__ src = nullptr;
+    const size_t * __restrict__ sidx = nullptr;
+    double * __restrict__ dst = nullptr;
+    const size_t * __restrict__ didx = nullptr;
+    ONIKA_HOST_DEVICE_FUNC inline void operator () ( ssize_t i ) const { ONIKA_CU_ATOMIC_ADD( dst[ didx[i] ] , src[ sidx[i] ] ); }
+  };
+
+  static constexpr int PPPM_MAX_PACK_MESHES = 3;
+
+  // K complex meshes packed point by point : buf[i*K+k] = src[k][idx[i]]
+  struct PPPMPackComplexFunc
+  {
+    const Complexd * src[PPPM_MAX_PACK_MESHES] = { nullptr , nullptr , nullptr };
+    int K = 1;
+    const size_t * __restrict__ idx = nullptr;
+    Complexd * __restrict__ buf = nullptr;
+    size_t skip_lo = 0, skip_n = 0;
+    ONIKA_HOST_DEVICE_FUNC inline void operator () ( ssize_t i ) const
+    {
+      const size_t ii = pppm_skip_own( i , skip_lo , skip_n );
+      const size_t j = idx[ii];
+      for( int k = 0 ; k < K ; k++ ) buf[ ii*K + k ] = src[k][j];
+    }
+  };
+
+  struct PPPMUnpackComplexFunc
+  {
+    Complexd * dst[PPPM_MAX_PACK_MESHES] = { nullptr , nullptr , nullptr };
+    int K = 1;
+    const size_t * __restrict__ idx = nullptr;
+    const Complexd * __restrict__ buf = nullptr;
+    size_t skip_lo = 0, skip_n = 0;
+    ONIKA_HOST_DEVICE_FUNC inline void operator () ( ssize_t i ) const
+    {
+      const size_t ii = pppm_skip_own( i , skip_lo , skip_n );
+      const size_t j = idx[ii];
+      for( int k = 0 ; k < K ; k++ ) dst[k][j] = buf[ ii*K + k ];
+    }
+  };
+
+  struct PPPMCopyComplexFunc
+  {
+    const Complexd * src[PPPM_MAX_PACK_MESHES] = { nullptr , nullptr , nullptr };
+    Complexd * dst[PPPM_MAX_PACK_MESHES] = { nullptr , nullptr , nullptr };
+    int K = 1;
+    const size_t * __restrict__ sidx = nullptr;
+    const size_t * __restrict__ didx = nullptr;
+    ONIKA_HOST_DEVICE_FUNC inline void operator () ( ssize_t i ) const
+    {
+      const size_t a = sidx[i], b = didx[i];
+      for( int k = 0 ; k < K ; k++ ) dst[k][b] = src[k][a];
+    }
+  };
+
 }
 }
 
 namespace exanb
 {
   template<bool PerAtomCharge> struct ComputeCellParticlesTraits< exaStamp::PPPMSpreadFunc<PerAtomCharge> >
+  {
+    static inline constexpr bool RequiresBlockSynchronousCall = false;
+    static inline constexpr bool CudaCompatible = true;
+  };
+
+  template<> struct ComputeCellParticlesTraits< exaStamp::PPPMBrickBoundsFunc >
   {
     static inline constexpr bool RequiresBlockSynchronousCall = false;
     static inline constexpr bool CudaCompatible = true;
@@ -443,6 +577,12 @@ namespace onika
     template<> struct ParallelForFunctorTraits< exaStamp::PPPMLoadDensityFunc > { static inline constexpr bool CudaCompatible = true; };
     template<> struct ParallelForFunctorTraits< exaStamp::PPPMApplyGreenFunc > { static inline constexpr bool CudaCompatible = true; };
     template<> struct ParallelForFunctorTraits< exaStamp::PPPMPairFactorFunc > { static inline constexpr bool CudaCompatible = true; };
+    template<> struct ParallelForFunctorTraits< exaStamp::PPPMPackRealFunc > { static inline constexpr bool CudaCompatible = true; };
+    template<> struct ParallelForFunctorTraits< exaStamp::PPPMUnpackAddRealFunc > { static inline constexpr bool CudaCompatible = true; };
+    template<> struct ParallelForFunctorTraits< exaStamp::PPPMPackComplexFunc > { static inline constexpr bool CudaCompatible = true; };
+    template<> struct ParallelForFunctorTraits< exaStamp::PPPMUnpackComplexFunc > { static inline constexpr bool CudaCompatible = true; };
+    template<> struct ParallelForFunctorTraits< exaStamp::PPPMCopyAddRealFunc > { static inline constexpr bool CudaCompatible = true; };
+    template<> struct ParallelForFunctorTraits< exaStamp::PPPMCopyComplexFunc > { static inline constexpr bool CudaCompatible = true; };
   }
 }
 
@@ -468,41 +608,235 @@ inline namespace coulombic_ewald
     ADD_SLOT( MPI_Comm        , mpi                  , INPUT );
     ADD_SLOT( bool            , trigger_thermo_state , INPUT , OPTIONAL );
 
-    // mesh work buffers, kept between time steps
+    // mesh work buffers, kept between time steps (replicated mesh)
     onika::memory::CudaMMVector<double> m_density;
-    onika::memory::CudaMMVector<double> m_thread_density; // CPU, several OpenMP threads : one mesh per thread
+    onika::memory::CudaMMVector<double> m_thread_density; // CPU, several OpenMP threads : one mesh (or brick) per thread
     onika::memory::CudaMMVector<Complexd> m_work1; // rho(k), then V(k)
     onika::memory::CudaMMVector<Complexd> m_field; // 2 complex meshes : (vdx,vdy) , (vdz,u)
     onika::memory::CudaMMVector<Complexd> m_vir;   // 3 complex meshes : (xx,yy) , (zz,xy) , (xz,yz)
     onika::memory::CudaMMVector<double> m_slab_sum; // slab correction : sum q.z , sum q.z^2
     PPPMFFT m_fft;
+    bool m_gpu = false;
+
+    // distributed mesh (see PPPMDecomposition) : local brick of the particles' stencils, z slab of the real space mesh,
+    // local rows of the reciprocal space mesh, and index maps of the exchanges between them
+    static constexpr int BRICK_PAD = 1; // brick margin (mesh points) : maps are rebuilt only when particles leave it
+    PPPMDistFFT m_dfft;
+    onika::memory::CudaMMVector<int> m_bounds;
+    std::vector<int> m_all_bricks;      // lo[3],dims[3] of every rank's brick, as the brick maps were built for
+    int m_brick_lo[3] = {0,0,0}, m_brick_dims[3] = {0,0,0};
+    size_t m_brick_n = 0;
+    onika::memory::CudaMMVector<double> m_brick_density;
+    onika::memory::CudaMMVector<Complexd> m_brick_mesh;  // 5 bricks : (vdx,vdy) or u , (vdz,u) , virial pairs
+    onika::memory::CudaMMVector<double> m_slab_density;
+    onika::memory::CudaMMVector<Complexd> m_slab_mesh;   // 3 slabs : FFT work, then backward outputs
+    onika::memory::CudaMMVector<Complexd> m_kwork;       // rho(k), then V(k), local rows
+    onika::memory::CudaMMVector<Complexd> m_kout;        // 3 local reciprocal meshes, backward inputs
+    onika::memory::CudaMMVector<size_t> m_t_slab_idx, m_t_k_idx;     // slab <-> rows transpose, grouped by peer
+    std::vector<size_t> m_t_slab_cnt, m_t_k_cnt;
+    onika::memory::CudaMMVector<size_t> m_b_brick_idx, m_b_slab_idx; // brick <-> slab exchanges, grouped by peer
+    std::vector<size_t> m_b_brick_cnt, m_b_slab_cnt;
+    int m_tmaps_key[5] = { -1, -1, -1, -1, -1 }; // nx,ny,nz,nprocs,rank the transpose maps were built for
+    onika::memory::CudaMMVector<double> m_sendbuf, m_recvbuf;
 
     // per mesh point loop : GPU (one thread per point) when the FFT runs there, OpenMP otherwise
     template<class FuncT>
     inline void mesh_for( size_t n, const FuncT& func )
     {
+      if( n == 0 ) return;
       onika::parallel::ParallelForOptions opts;
-      opts.enable_gpu = m_fft.on_gpu();
+      opts.enable_gpu = m_gpu;
       onika::parallel::parallel_for( n , func , parallel_execution_context() , opts );
     }
 
-    // backward FFTs of the FIELD (2 meshes out) or VIRIAL (3 meshes out) pairs, see PPPMPairFactorFunc
-    inline void backward_pairs( const PPPMParameters& p, PPPMBackwardKind kind, bool with_u, Complexd* const out[] )
+    inline PPPMPairFactorFunc pair_factor( const PPPMParameters& p, PPPMBackwardKind kind, bool with_u, const Complexd* w1, Complexd* const out[] ) const
     {
-      const bool rows = ! m_fft.on_gpu();
       const int nout = ( kind == PPPMBackwardKind::POTENTIAL ) ? 1 : ( ( kind == PPPMBackwardKind::FIELD ) ? 2 : 3 );
       PPPMPairFactorFunc func = {};
-      func.w1 = m_work1.data();
+      func.w1 = w1;
       for( int q = 0 ; q < nout ; q++ ) func.w2[q] = out[q];
       func.fkx = p.fkx.data(); func.fky = p.fky.data(); func.fkz = p.fkz.data();
       func.g_ewald = p.g_ewald;
       func.kind = kind;
       func.with_u = with_u;
       func.nx = p.nx; func.ny = p.ny; func.nz = p.nz;
-      func.m_rows = rows;
-      mesh_for( rows ? size_t(p.ny) * p.nz : p.nfft() , func );
+      func.m_rows = ! m_gpu;
+      if( p.dec.distributed ) func.krow_partner = p.krow_partner.data();
+      return func;
+    }
+
+    static inline int backward_count( PPPMBackwardKind kind ) { return ( kind == PPPMBackwardKind::POTENTIAL ) ? 1 : ( ( kind == PPPMBackwardKind::FIELD ) ? 2 : 3 ); }
+
+    // backward FFTs of the FIELD (2 meshes out), POTENTIAL (1) or VIRIAL (3) pairs, see PPPMPairFactorFunc
+    inline void backward_pairs( const PPPMParameters& p, PPPMBackwardKind kind, bool with_u, Complexd* const out[] )
+    {
+      const int nout = backward_count( kind );
+      const PPPMPairFactorFunc func = pair_factor( p , kind , with_u , m_work1.data() , out );
+      mesh_for( func.m_rows ? size_t(p.ny) * p.nz : p.nfft() , func );
       for( int q = 0 ; q < nout ; q++ ) m_fft.backward( out[q] );
       m_fft.sync();
+    }
+
+    // ------------------------------- distributed mesh -------------------------------
+
+    // MPI_Alltoallv of points made of dpp doubles each, counts given in points per peer. This rank's own points are
+    // not exchanged (copied directly, see move_real_add / move_complex) : their place in the buffers is left unused.
+    inline void exchange( const double* send, const std::vector<size_t>& scnt, double* recv, const std::vector<size_t>& rcnt, int dpp, int rank )
+    {
+      const int P = scnt.size();
+      if( P == 1 ) return;
+      std::vector<int> sc(P), sd(P), rc(P), rd(P);
+      size_t so = 0, ro = 0;
+      for( int r = 0 ; r < P ; r++ )
+      {
+        const size_t s = scnt[r] * dpp, q = rcnt[r] * dpp;
+        if( s > size_t(INT_MAX) || q > size_t(INT_MAX) || so > size_t(INT_MAX) || ro > size_t(INT_MAX) ) fatal_error() << "coulombic_pppm : MPI message too large" << std::endl;
+        sc[r] = ( r == rank ) ? 0 : s; sd[r] = so; so += s;
+        rc[r] = ( r == rank ) ? 0 : q; rd[r] = ro; ro += q;
+      }
+      MPI_Alltoallv( send , sc.data() , sd.data() , MPI_DOUBLE , recv , rc.data() , rd.data() , MPI_DOUBLE , *mpi );
+    }
+
+    static inline size_t total( const std::vector<size_t>& c ) { size_t t = 0; for( auto x : c ) t += x; return t; }
+    static inline size_t offset( const std::vector<size_t>& c, int rank ) { size_t t = 0; for( int r = 0 ; r < rank ; r++ ) t += c[r]; return t; }
+
+    // real mesh points sidx (grouped by destination rank, counts scnt) of src added to points didx (grouped by source
+    // rank, counts rcnt) of dst. Own points are added directly ; the send and receive maps list them in the same order.
+    inline void move_real_add( const double* src, const size_t* sidx, const std::vector<size_t>& scnt,
+                               double* dst, const size_t* didx, const std::vector<size_t>& rcnt, int rank )
+    {
+      const size_t ns = total( scnt ), nr = total( rcnt ), own = scnt[rank];
+      const size_t so = offset( scnt , rank ), ro = offset( rcnt , rank );
+      mesh_for( own , PPPMCopyAddRealFunc{ src , sidx + so , dst , didx + ro } );
+      if( ns == own && nr == own ) return;
+      resize_buffers( ns , nr );
+      mesh_for( ns - own , PPPMPackRealFunc{ src , sidx , m_sendbuf.data() , so , own } );
+      exchange( m_sendbuf.data() , scnt , m_recvbuf.data() , rcnt , 1 , rank );
+      mesh_for( nr - own , PPPMUnpackAddRealFunc{ dst , didx , m_recvbuf.data() , ro , own } );
+    }
+
+    // same for K complex meshes, destination points overwritten
+    inline void move_complex( int K, const Complexd* const src[], const size_t* sidx, const std::vector<size_t>& scnt,
+                              Complexd* const dst[], const size_t* didx, const std::vector<size_t>& rcnt, int rank )
+    {
+      const size_t ns = total( scnt ), nr = total( rcnt ), own = scnt[rank];
+      const size_t so = offset( scnt , rank ), ro = offset( rcnt , rank );
+      PPPMCopyComplexFunc copy = {}; copy.K = K; copy.sidx = sidx + so; copy.didx = didx + ro;
+      for( int q = 0 ; q < K ; q++ ) { copy.src[q] = src[q]; copy.dst[q] = dst[q]; }
+      mesh_for( own , copy );
+      if( ns == own && nr == own ) return;
+      resize_buffers( 2*K*ns , 2*K*nr );
+      PPPMPackComplexFunc pack = {}; pack.K = K; pack.idx = sidx; pack.buf = reinterpret_cast<Complexd*>( m_sendbuf.data() ); pack.skip_lo = so; pack.skip_n = own;
+      for( int q = 0 ; q < K ; q++ ) pack.src[q] = src[q];
+      mesh_for( ns - own , pack );
+      exchange( m_sendbuf.data() , scnt , m_recvbuf.data() , rcnt , 2*K , rank );
+      PPPMUnpackComplexFunc unpack = {}; unpack.K = K; unpack.idx = didx; unpack.buf = reinterpret_cast<const Complexd*>( m_recvbuf.data() ); unpack.skip_lo = ro; unpack.skip_n = own;
+      for( int q = 0 ; q < K ; q++ ) unpack.dst[q] = dst[q];
+      mesh_for( nr - own , unpack );
+    }
+
+    inline void resize_buffers( size_t send_doubles, size_t recv_doubles )
+    {
+      if( m_sendbuf.size() < send_doubles ) m_sendbuf.resize( send_doubles );
+      if( m_recvbuf.size() < recv_doubles ) m_recvbuf.resize( recv_doubles );
+    }
+
+    // z slab (index ((z-z0)*ny+y)*nx+x) <-> local rows (index (l*nx+x)*nz+z) : points this rank sends to / receives from each peer
+    inline void build_transpose_maps( const PPPMParameters& p )
+    {
+      const auto& d = p.dec;
+      const int key[5] = { p.nx , p.ny , p.nz , d.nprocs , d.rank };
+      if( std::equal( key , key+5 , m_tmaps_key ) ) return;
+      std::copy( key , key+5 , m_tmaps_key );
+      const int nx = p.nx, ny = p.ny, nz = p.nz, P = d.nprocs;
+      const int z0 = d.z0(), nzl = d.nzl(), nyl = d.nyl();
+      m_t_slab_cnt.assign( P , 0 ); m_t_k_cnt.assign( P , 0 );
+      std::vector<size_t> sidx, kidx;
+      for( int s = 0 ; s < P ; s++ )
+      {
+        const int* rows = d.rows(s);
+        for( int i = 0 ; i < d.nyl(s) ; i++ )
+          for( int z = 0 ; z < nzl ; z++ )
+            for( int x = 0 ; x < nx ; x++ ) sidx.push_back( ( size_t(z) * ny + rows[i] ) * nx + x );
+        m_t_slab_cnt[s] = size_t( d.nyl(s) ) * nzl * nx;
+      }
+      for( int t = 0 ; t < P ; t++ )
+      {
+        for( int l = 0 ; l < nyl ; l++ )
+          for( int z = d.zlo[t] ; z < d.zlo[t+1] ; z++ )
+            for( int x = 0 ; x < nx ; x++ ) kidx.push_back( ( size_t(l) * nx + x ) * nz + z );
+        m_t_k_cnt[t] = size_t( nyl ) * d.nzl(t) * nx;
+      }
+      m_t_slab_idx.assign( sidx.begin() , sidx.end() );
+      m_t_k_idx.assign( kidx.begin() , kidx.end() );
+      ldbg << "coulombic_pppm : transpose maps, slab "<< z0 <<"+"<< nzl <<" planes, "<< nyl <<" rows" << std::endl;
+    }
+
+    // local brick (unwrapped indices) <-> z slabs of the owners of its planes
+    inline void build_brick_maps( const PPPMParameters& p )
+    {
+      const auto& d = p.dec;
+      const int nx = p.nx, ny = p.ny, nz = p.nz, P = d.nprocs;
+      const int z0 = d.z0(), z1 = d.z0() + d.nzl();
+      const int* b = m_all_bricks.data() + 6*d.rank;
+      m_b_brick_cnt.assign( P , 0 ); m_b_slab_cnt.assign( P , 0 );
+      std::vector<size_t> bidx, sidx;
+      for( int s = 0 ; s < P ; s++ )
+      {
+        const size_t before = bidx.size();
+        for( int bz = 0 ; bz < b[5] ; bz++ )
+        {
+          if( d.z_owner( pppm_wrap( b[2] + bz , nz ) ) != s ) continue;
+          for( int by = 0 ; by < b[4] ; by++ )
+            for( int bx = 0 ; bx < b[3] ; bx++ ) bidx.push_back( ( size_t(bz) * b[4] + by ) * b[3] + bx );
+        }
+        m_b_brick_cnt[s] = bidx.size() - before;
+      }
+      for( int t = 0 ; t < P ; t++ )
+      {
+        const int* bt = m_all_bricks.data() + 6*t;
+        const size_t before = sidx.size();
+        for( int bz = 0 ; bz < bt[5] ; bz++ )
+        {
+          const int wz = pppm_wrap( bt[2] + bz , nz );
+          if( wz < z0 || wz >= z1 ) continue;
+          for( int by = 0 ; by < bt[4] ; by++ )
+          {
+            const int wy = pppm_wrap( bt[1] + by , ny );
+            for( int bx = 0 ; bx < bt[3] ; bx++ ) sidx.push_back( ( size_t(wz - z0) * ny + wy ) * nx + pppm_wrap( bt[0] + bx , nx ) );
+          }
+        }
+        m_b_slab_cnt[t] = sidx.size() - before;
+      }
+      m_b_brick_idx.assign( bidx.begin() , bidx.end() );
+      m_b_slab_idx.assign( sidx.begin() , sidx.end() );
+      ldbg << "coulombic_pppm : brick maps, brick "<<b[0]<<","<<b[1]<<","<<b[2]<<" + "<<b[3]<<"x"<<b[4]<<"x"<<b[5]
+           <<", "<< bidx.size() <<" points sent, "<< sidx.size() <<" received" << std::endl;
+    }
+
+    // backward chain of the distributed mesh : pair factor on local rows, z FFTs, transpose to slabs, xy FFTs, slab ->
+    // bricks. Outputs nout complex bricks.
+    inline void backward_pairs_distributed( const PPPMParameters& p, PPPMBackwardKind kind, bool with_u, Complexd* const brick_out[] )
+    {
+      const auto& d = p.dec;
+      const int nout = backward_count( kind );
+      const size_t nk = p.nk_local();
+      const size_t nslab = size_t( d.nzl() ) * p.ny * p.nx;
+      Complexd* kout[3] = { m_kout.data() , m_kout.data() + nk , m_kout.data() + 2*nk };
+      Complexd* slab_out[3] = { m_slab_mesh.data() , m_slab_mesh.data() + nslab , m_slab_mesh.data() + 2*nslab };
+
+      const PPPMPairFactorFunc func = pair_factor( p , kind , with_u , m_kwork.data() , kout );
+      mesh_for( func.m_rows ? size_t( d.nyl() ) * p.nx : nk , func );
+      for( int q = 0 ; q < nout ; q++ ) m_dfft.columns( kout[q] , false );
+      m_dfft.sync();
+
+      // rows -> slabs
+      move_complex( nout , kout , m_t_k_idx.data() , m_t_k_cnt , slab_out , m_t_slab_idx.data() , m_t_slab_cnt , d.rank );
+      for( int q = 0 ; q < nout ; q++ ) m_dfft.planes( slab_out[q] , false );
+      m_dfft.sync();
+
+      // slabs -> bricks
+      move_complex( nout , slab_out , m_b_slab_idx.data() , m_b_slab_cnt , brick_out , m_b_brick_idx.data() , m_b_brick_cnt , d.rank );
     }
 
   public:
@@ -527,25 +861,45 @@ inline namespace coulombic_ewald
                       << p.cell << ". Call coulombic_pppm_init before force computation when the cell changes." << std::endl;
       }
 
-      const size_t nfft = p.nfft();
-      if( m_density.size() != nfft )
+      int nprocs = 1, rank = 0;
+      MPI_Comm_size( *mpi , &nprocs );
+      MPI_Comm_rank( *mpi , &rank );
+      const bool distributed = p.dec.distributed;
+      if( distributed && ( p.dec.nprocs != nprocs || p.dec.rank != rank ) )
       {
-        m_density.resize( nfft );
-        m_work1.resize( nfft );
-        m_field.resize( 2*nfft );
-        m_vir.clear();
+        fatal_error() << "coulombic_pppm : mesh decomposition was built for "<<p.dec.nprocs<<" ranks, running on "<<nprocs << std::endl;
       }
+
       // GPU path when a device is available : particle kernels, mesh loops and cuFFT all run there (unified memory)
       const bool gpu_available = ( global_cuda_ctx() != nullptr ) && global_cuda_ctx()->has_devices() && PPPMFFT::gpu_support();
       void* stream = nullptr;
 #     ifdef EXASTAMP_PPPM_CUFFT
       if( gpu_available ) stream = global_cuda_ctx()->getThreadStream(0);
 #     endif
-      m_fft.resize( p.nx , p.ny , p.nz , gpu_available , stream );
-      if( log_energy && m_vir.size() != 3*nfft ) m_vir.resize( 3*nfft );
+      m_gpu = gpu_available;
 
-      int nprocs = 1;
-      MPI_Comm_size( *mpi , &nprocs );
+      const size_t nfft = p.nfft();
+      const size_t nk = p.nk_local();
+      const size_t nslab = distributed ? size_t( p.dec.nzl() ) * p.ny * p.nx : 0;
+      if( ! distributed )
+      {
+        if( m_density.size() != nfft )
+        {
+          m_density.resize( nfft );
+          m_work1.resize( nfft );
+          m_field.resize( 2*nfft );
+          m_vir.clear();
+        }
+        m_fft.resize( p.nx , p.ny , p.nz , gpu_available , stream );
+        if( log_energy && m_vir.size() != 3*nfft ) m_vir.resize( 3*nfft );
+      }
+      else
+      {
+        if( m_slab_density.size() != nslab ) { m_slab_density.resize( nslab ); m_slab_mesh.resize( 3*nslab ); }
+        if( m_kwork.size() != nk ) { m_kwork.resize( nk ); m_kout.resize( 3*nk ); }
+        m_dfft.resize( p.nx , p.ny , p.nz , p.dec.nzl() , p.dec.nyl() * p.nx , gpu_available , stream );
+        build_transpose_maps( p );
+      }
 
       ReadOnlyPPPMParameters ro( p , domain->bounds().bmin , domain->bounds_size() );
 
@@ -575,51 +929,133 @@ inline namespace coulombic_ewald
           ro.dipole_r2 = sums[1];
         }
 
-        // 1. charge density of local particles, summed over all ranks (replicated global mesh)
-        double * __restrict__ density = m_density.data();
-        const int nthreads = m_fft.on_gpu() ? 0 : omp_get_max_threads();
+        // distributed : brick of the local particles' stencils (padded, kept while particles stay inside), shared with all ranks
+        if( distributed )
+        {
+          if( m_bounds.size() != 6 ) m_bounds.resize( 6 );
+          for( int i = 0 ; i < 3 ; i++ ) { m_bounds[i] = std::numeric_limits<int>::max(); m_bounds[3+i] = std::numeric_limits<int>::min(); }
+          PPPMBrickBoundsFunc bounds_func = { ro , m_bounds.data() };
+          compute_cell_particles( *grid , false , bounds_func , onika::make_flat_tuple(rx,ry,rz,charge_or_type) , parallel_execution_context() );
+          int brick[6] = { 0, 0, 0, 0, 0, 0 };
+          if( m_bounds[0] <= m_bounds[3] )
+          {
+            // a direction where the padded stencils span the whole mesh is the whole periodic mesh (lo 0, wrapped
+            // indices) : no mesh point is held twice
+            const int n[3] = { int(p.nx) , int(p.ny) , int(p.nz) };
+            bool inside = m_brick_n > 0;
+            for( int i = 0 ; i < 3 ; i++ )
+              if( m_brick_dims[i] != n[i] ) inside = inside && m_bounds[i] >= m_brick_lo[i] && m_bounds[3+i] < m_brick_lo[i] + m_brick_dims[i];
+            for( int i = 0 ; i < 3 ; i++ )
+            {
+              const int len = m_bounds[3+i] - m_bounds[i] + 1 + 2*BRICK_PAD;
+              if( inside )         { brick[i] = m_brick_lo[i]; brick[3+i] = m_brick_dims[i]; }
+              else if( len >= n[i] ) { brick[i] = 0; brick[3+i] = n[i]; }
+              else                 { brick[i] = m_bounds[i] - BRICK_PAD; brick[3+i] = len; }
+            }
+          }
+          std::vector<int> all( 6*nprocs );
+          MPI_Allgather( brick , 6 , MPI_INT , all.data() , 6 , MPI_INT , *mpi );
+          for( int i = 0 ; i < 3 ; i++ ) { m_brick_lo[i] = brick[i]; m_brick_dims[i] = brick[3+i]; }
+          m_brick_n = size_t( brick[3] ) * brick[4] * brick[5];
+          if( all != m_all_bricks )
+          {
+            m_all_bricks = all;
+            build_brick_maps( p );
+          }
+          if( m_brick_density.size() != m_brick_n ) { m_brick_density.resize( m_brick_n ); m_brick_mesh.resize( 5*m_brick_n ); }
+          ro.set_brick( m_brick_lo , m_brick_dims );
+        }
+
+        // 1. charge density of local particles : replicated, whole mesh summed over all ranks ; distributed, local brick
+        const size_t nmesh = distributed ? m_brick_n : nfft;
+        double * __restrict__ density = distributed ? m_brick_density.data() : m_density.data();
+        const int nthreads = m_gpu ? 0 : omp_get_max_threads();
         double * thread_density = nullptr;
         if( nthreads > 1 )
         {
-          if( m_thread_density.size() != nthreads * nfft ) m_thread_density.resize( nthreads * nfft );
+          if( m_thread_density.size() != nthreads * nmesh ) m_thread_density.resize( nthreads * nmesh );
           thread_density = m_thread_density.data();
-          mesh_for( nthreads * nfft , PPPMZeroFunc{ thread_density } );
+          mesh_for( nthreads * nmesh , PPPMZeroFunc{ thread_density } );
         }
-        else mesh_for( nfft , PPPMZeroFunc{ density } );
-        PPPMSpreadFunc<PerAtomCharge> spread_func = { ro , species->data() , density , thread_density , nthreads , nfft };
+        else mesh_for( nmesh , PPPMZeroFunc{ density } );
+        PPPMSpreadFunc<PerAtomCharge> spread_func = { ro , species->data() , density , thread_density , nthreads , nmesh };
         compute_cell_particles( *grid , false , spread_func , onika::make_flat_tuple(rx,ry,rz,charge_or_type) , parallel_execution_context() );
-        if( nthreads > 1 ) mesh_for( nfft , PPPMSumThreadMeshesFunc{ thread_density , density , nthreads , nfft } );
-        if( nprocs > 1 ) MPI_Allreduce( MPI_IN_PLACE , density , nfft , MPI_DOUBLE , MPI_SUM , *mpi );
+        if( nthreads > 1 ) mesh_for( nmesh , PPPMSumThreadMeshesFunc{ thread_density , density , nthreads , nmesh } );
 
-        // 2. rho(k), then V(k) = G(k) rho(k) / N (LAMMPS poisson_ik)
-        mesh_for( nfft , PPPMLoadDensityFunc{ density , m_work1.data() } );
-        m_fft.forward( m_work1.data() );
-        m_fft.sync();
-        mesh_for( nfft , PPPMApplyGreenFunc{ m_work1.data() , p.greensfn.data() , 1.0 / double(nfft) } );
-
-        // 3. gradient of the potential, i.k V(k) back to real space (LAMMPS poisson_ik), and on energy steps the
-        // potential and virial meshes (LAMMPS poisson_peratom), two real meshes per backward FFT
-        // ad (LAMMPS poisson_ad) : the potential only, its gradient is taken on the particles
-        Complexd * exy = m_field.data();
-        Complexd * ezu = m_field.data() + nfft;
-        if( p.diff_ad )
+        PPPMMeshes meshes = {};
+        if( ! distributed )
         {
-          Complexd* const out[1] = { exy };
-          backward_pairs( p , PPPMBackwardKind::POTENTIAL , false , out );
+          if( nprocs > 1 ) MPI_Allreduce( MPI_IN_PLACE , density , nfft , MPI_DOUBLE , MPI_SUM , *mpi );
+
+          // 2. rho(k), then V(k) = G(k) rho(k) / N (LAMMPS poisson_ik)
+          mesh_for( nfft , PPPMLoadDensityFunc{ density , m_work1.data() } );
+          m_fft.forward( m_work1.data() );
+          m_fft.sync();
+          mesh_for( nfft , PPPMApplyGreenFunc{ m_work1.data() , p.greensfn.data() , 1.0 / double(nfft) } );
+
+          // 3. gradient of the potential, i.k V(k) back to real space (LAMMPS poisson_ik), and on energy steps the
+          // potential and virial meshes (LAMMPS poisson_peratom), two real meshes per backward FFT
+          // ad (LAMMPS poisson_ad) : the potential only, its gradient is taken on the particles
+          Complexd * exy = m_field.data();
+          Complexd * ezu = m_field.data() + nfft;
+          if( p.diff_ad )
+          {
+            Complexd* const out[1] = { exy };
+            backward_pairs( p , PPPMBackwardKind::POTENTIAL , false , out );
+          }
+          else
+          {
+            Complexd* const out[2] = { exy , ezu };
+            backward_pairs( p , PPPMBackwardKind::FIELD , log_energy , out );
+          }
+          meshes = { exy , ezu , nullptr , nullptr , nullptr };
+          if( log_energy )
+          {
+            Complexd* const out[3] = { m_vir.data() , m_vir.data() + nfft , m_vir.data() + 2*nfft };
+            meshes.v01 = out[0];
+            meshes.v23 = out[1];
+            meshes.v45 = out[2];
+            backward_pairs( p , PPPMBackwardKind::VIRIAL , false , out );
+          }
         }
         else
         {
-          Complexd* const out[2] = { exy , ezu };
-          backward_pairs( p , PPPMBackwardKind::FIELD , log_energy , out );
-        }
-        PPPMMeshes meshes = { exy , ezu , nullptr , nullptr , nullptr };
-        if( log_energy )
-        {
-          Complexd* const out[3] = { m_vir.data() , m_vir.data() + nfft , m_vir.data() + 2*nfft };
-          meshes.v01 = out[0];
-          meshes.v23 = out[1];
-          meshes.v45 = out[2];
-          backward_pairs( p , PPPMBackwardKind::VIRIAL , false , out );
+          // 2. bricks -> z slabs (sum), rho(k) : xy FFTs, transpose to rows, z FFTs, V(k) = G(k) rho(k) / N
+          mesh_for( nslab , PPPMZeroFunc{ m_slab_density.data() } );
+          move_real_add( density , m_b_brick_idx.data() , m_b_brick_cnt , m_slab_density.data() , m_b_slab_idx.data() , m_b_slab_cnt , rank );
+          Complexd* slab_work = m_slab_mesh.data();
+          mesh_for( nslab , PPPMLoadDensityFunc{ m_slab_density.data() , slab_work } );
+          m_dfft.planes( slab_work , true );
+          m_dfft.sync();
+          {
+            const Complexd* const src[1] = { slab_work };
+            Complexd* const dst[1] = { m_kwork.data() };
+            move_complex( 1 , src , m_t_slab_idx.data() , m_t_slab_cnt , dst , m_t_k_idx.data() , m_t_k_cnt , rank );
+          }
+          m_dfft.columns( m_kwork.data() , true );
+          m_dfft.sync();
+          mesh_for( nk , PPPMApplyGreenFunc{ m_kwork.data() , p.greensfn.data() , 1.0 / double(nfft) } );
+
+          // 3. backward chains down to the bricks (same pairs as the replicated mesh)
+          Complexd* b[5];
+          for( int q = 0 ; q < 5 ; q++ ) b[q] = m_brick_mesh.data() + q*m_brick_n;
+          if( p.diff_ad )
+          {
+            Complexd* const out[1] = { b[0] };
+            backward_pairs_distributed( p , PPPMBackwardKind::POTENTIAL , false , out );
+          }
+          else
+          {
+            Complexd* const out[2] = { b[0] , b[1] };
+            backward_pairs_distributed( p , PPPMBackwardKind::FIELD , log_energy , out );
+          }
+          meshes = { b[0] , b[1] , nullptr , nullptr , nullptr };
+          if( log_energy )
+          {
+            Complexd* const out[3] = { b[2] , b[3] , b[4] };
+            meshes.v01 = b[2]; meshes.v23 = b[3]; meshes.v45 = b[4];
+            backward_pairs_distributed( p , PPPMBackwardKind::VIRIAL , false , out );
+          }
         }
 
         // 4. interpolate field (and energy, virial) back to local particles
@@ -647,8 +1083,11 @@ Same algorithm as LAMMPS kspace_style pppm, orthogonal and triclinic cells (ad :
 optional slab correction (EW3DC, z non periodic). Use with coulombic_ewald_short_range for
 the real space part. Computes forces, and when trigger_thermo_state is true, per particle energy (reciprocal + self +
 neutralizing background) and per particle reciprocal virial.
-The mesh is global and replicated on every MPI rank (density summed with MPI_Allreduce). When a GPU is available,
-particle kernels, mesh loops and FFTs (cuFFT) run on the GPU ; otherwise on CPU with pocketfft.
+Mesh decomposition (coulombic_pppm_init mesh_decomposition) : distributed (default), each rank spreads its particles on
+a local brick, the mesh is split in z slabs for the xy FFTs and in y rows for the z FFTs (MPI_Alltoallv exchanges, the
+rank's own points copied directly) ; replicated, the whole mesh on every MPI rank (density summed with MPI_Allreduce,
+every rank runs the full FFTs). When a GPU
+is available, particle kernels, mesh loops and FFTs (cuFFT) run on the GPU ; otherwise on CPU with pocketfft.
 )EOF";
     }
   };

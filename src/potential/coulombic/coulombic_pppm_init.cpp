@@ -45,6 +45,7 @@ inline namespace coulombic_ewald
     ADD_SLOT( long              , order             , INPUT , 5 , DocString{"charge assignment order, 2 to 7"} );
     ADD_SLOT( double            , slab              , INPUT , 0.0 , DocString{"slab correction (EW3DC, z non periodic) : z extension factor of the cell (> 1, LAMMPS kspace_modify slab), 0 = none"} );
     ADD_SLOT( bool              , slab_auto         , INPUT , false , DocString{"slab correction with the extension factor computed from accuracy and g_ewald (LAMMPS kspace_modify slab auto)"} );
+    ADD_SLOT( std::string       , mesh_decomposition, INPUT , std::string("distributed") , DocString{"distributed (mesh split among ranks, default), replicated (whole mesh on every MPI rank) or auto (distributed with several ranks)"} );
     ADD_SLOT( std::string       , diff              , INPUT , std::string("ik") , DocString{"differentiation : ik (3 inverse FFTs) or ad (analytic, 1 inverse FFT, orthogonal cells only)"} );
     ADD_SLOT( Domain            , domain            , INPUT , OPTIONAL );
     ADD_SLOT( double            , sum_square_charge , INPUT );
@@ -73,6 +74,13 @@ inline namespace coulombic_ewald
         fatal_error() << "coulombic_pppm_init : diff must be ik or ad, got '"<< *diff <<"'" << std::endl;
       }
       const bool diff_ad = ( *diff == "ad" );
+      if( *mesh_decomposition != "auto" && *mesh_decomposition != "replicated" && *mesh_decomposition != "distributed" )
+      {
+        fatal_error() << "coulombic_pppm_init : mesh_decomposition must be auto, replicated or distributed, got '"<< *mesh_decomposition <<"'" << std::endl;
+      }
+      int nprocs = 1;
+      MPI_Comm_size( *mpi , &nprocs );
+      const bool mesh_distributed = ( *mesh_decomposition == "distributed" ) || ( *mesh_decomposition == "auto" && nprocs > 1 );
 
       if( domain.has_value() )
       {
@@ -90,6 +98,7 @@ inline namespace coulombic_ewald
           || *accuracy_relative != p.accuracy_relative
           || *order != p.order
           || diff_ad != p.diff_ad
+          || mesh_distributed != p.mesh_distributed_user
           || *slab != p.slab_user || *slab_auto != p.slab_auto
           || mesh_user[0] != p.mesh_user[0] || mesh_user[1] != p.mesh_user[1] || mesh_user[2] != p.mesh_user[2] );
 
@@ -113,7 +122,7 @@ inline namespace coulombic_ewald
           }
 
           const bool first_init = ( p.volume == 0.0 );
-          pppm_init_parameters( *g_ewald , *radius , *accuracy_relative , *order , mesh_user , diff_ad , *slab , *slab_auto , cell , *natoms , *sum_square_charge , *sum_charge , p );
+          pppm_init_parameters( *g_ewald , *radius , *accuracy_relative , *order , mesh_user , diff_ad , *slab , *slab_auto , mesh_distributed , cell , *natoms , *sum_square_charge , *sum_charge , *mpi , p );
 
           if( rank == 0 && first_init )
           {
@@ -124,6 +133,7 @@ inline namespace coulombic_ewald
             lout << "mesh    = "<< p.nx <<" "<< p.ny <<" "<< p.nz << std::endl;
             lout << "order   = "<< p.order << std::endl;
             lout << "diff    = "<< ( p.diff_ad ? "ad" : "ik" ) << std::endl;
+            lout << "mesh decomposition = "<< ( p.dec.distributed ? "distributed" : "replicated" ) << " ("<< nprocs <<" ranks)" << std::endl;
             if( p.slab() ) lout << "slab    = "<< p.slab_volfactor << ( p.slab_auto ? " (auto)" : "" ) << " , extended z = "<< restricted_cell(cell).lz * p.slab_volfactor << std::endl;
             lout << "accuracy_relative  = "<< p.accuracy_relative << std::endl;
             lout << "estimated accuracy = "<< p.estimated_accuracy << " eV/ang (relative "<< p.estimated_accuracy / COULOMB_CONSTANT_EV_ANG <<")" << std::endl;
@@ -138,7 +148,7 @@ inline namespace coulombic_ewald
         }
         else if( need_setup )
         {
-          pppm_setup( p , cell );
+          pppm_setup( p , cell , *mpi );
           ldbg << "PPPM setup for new cell "<<cell<<" volume="<<p.volume<<std::endl;
         }
 

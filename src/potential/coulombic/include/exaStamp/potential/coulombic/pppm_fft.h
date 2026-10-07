@@ -59,5 +59,36 @@ inline namespace coulombic_ewald
     bool m_has_plan = false;
   };
 
+  // Building blocks of the distributed 3D FFT (see PPPMDecomposition) : the 3D transform is the 2D transform of the
+  // xy planes followed by the 1D transform along z, with an MPI transpose in between (done by the caller).
+  // planes  : nzl planes of ny*nx points, x fastest (real space z slab of this rank)
+  // columns : ncol columns of nz contiguous points (reciprocal space, local rows : ncol = nyl*nx)
+  // Same conventions as PPPMFFT (unnormalized, asynchronous on the GPU stream).
+  class PPPMDistFFT
+  {
+  public:
+    PPPMDistFFT() = default;
+    PPPMDistFFT( const PPPMDistFFT& ) = delete;
+    PPPMDistFFT& operator = ( const PPPMDistFFT& ) = delete;
+    ~PPPMDistFFT();
+
+    void resize( int nx, int ny, int nz, int nzl, int ncol, bool use_gpu = false, void* stream = nullptr );
+    void planes( Complexd* data, bool forward ) const;
+    void columns( Complexd* data, bool forward ) const;
+    void sync() const;
+    inline bool on_gpu() const { return m_gpu; }
+
+  private:
+    void release();
+
+    int m_nx = 0, m_ny = 0, m_nz = 0, m_nzl = 0, m_ncol = 0;
+    bool m_gpu = false;
+    void* m_stream = nullptr;
+    int m_plan_planes = 0;   // cufftHandle
+    int m_plan_columns = 0;  // cufftHandle
+    bool m_has_plan_planes = false;
+    bool m_has_plan_columns = false;
+  };
+
 }
 }

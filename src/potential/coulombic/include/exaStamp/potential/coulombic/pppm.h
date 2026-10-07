@@ -31,6 +31,7 @@ under the License.
 #include <algorithm>
 #include <cstdint>
 #include <vector>
+#include <mpi.h>
 
 namespace exaStamp
 {
@@ -46,6 +47,63 @@ inline namespace coulombic_ewald
     static constexpr double SMALL = 0.00001;   // g_ewald Newton-Raphson tolerance (eV/ang, absolute as in LAMMPS)
     static constexpr int LARGE = 10000;
     static constexpr double FOUR_PI_LMP = 12.5663706; // truncated 4.pi used by LAMMPS compute_gf_ik, kept for parity
+  }
+
+  // Distributed mesh (MPI ranks > 1) : real space mesh split in z slabs (rank r owns planes [zlo[r],zlo[r+1]) ), reciprocal
+  // space split in y rows, each rank's rows closed under y -> -y so that the -k partner of a local k point is local.
+  // Local reciprocal layout : index (l*nx + ix)*nz + iz for local row l (global y = rows_all[row_first[rank]+l]).
+  struct PPPMDecomposition
+  {
+    bool distributed = false;
+    int nprocs = 1, rank = 0;
+    std::vector<int> zlo;       // nprocs+1
+    std::vector<int> row_first; // nprocs+1
+    std::vector<int> rows_all;  // rows grouped by owner rank
+    std::vector<int> row_owner; // ny
+    std::vector<int> row_local; // ny : index of a row in its owner's list
+
+    inline int z0() const { return zlo[rank]; }
+    inline int nzl() const { return zlo[rank+1] - zlo[rank]; }
+    inline int nzl( int r ) const { return zlo[r+1] - zlo[r]; }
+    inline int nyl() const { return row_first[rank+1] - row_first[rank]; }
+    inline int nyl( int r ) const { return row_first[r+1] - row_first[r]; }
+    inline const int* rows() const { return rows_all.data() + row_first[rank]; }
+    inline const int* rows( int r ) const { return rows_all.data() + row_first[r]; }
+    inline int z_owner( int z ) const { int r = 0; while( z >= zlo[r+1] ) ++r; return r; }
+  };
+
+  inline void pppm_make_decomposition( PPPMDecomposition& d, bool distributed, int nprocs, int rank, int nx, int ny, int nz )
+  {
+    d = PPPMDecomposition{};
+    d.distributed = distributed;
+    d.nprocs = distributed ? nprocs : 1;
+    d.rank = distributed ? rank : 0;
+    const int P = d.nprocs;
+    d.zlo.resize( P+1 );
+    for( int r = 0 ; r <= P ; r++ ) d.zlo[r] = int( ( int64_t(r) * nz ) / P );
+    // row groups {0}, {y, ny-y}, {ny/2} if ny even : group g holds rows g and ny-g
+    const int ngroups = ny/2 + 1;
+    d.row_first.resize( P+1 );
+    d.row_owner.assign( ny , 0 );
+    d.row_local.assign( ny , 0 );
+    d.rows_all.clear();
+    for( int r = 0 ; r < P ; r++ )
+    {
+      d.row_first[r] = d.rows_all.size();
+      const int g0 = int( ( int64_t(r) * ngroups ) / P ), g1 = int( ( int64_t(r+1) * ngroups ) / P );
+      for( int g = g0 ; g < g1 ; g++ )
+      {
+        const int ys[2] = { g , ( ny - g ) % ny };
+        const int n = ( ys[1] == ys[0] ) ? 1 : 2;
+        for( int i = 0 ; i < n ; i++ )
+        {
+          d.row_owner[ ys[i] ] = r;
+          d.row_local[ ys[i] ] = d.rows_all.size() - d.row_first[r];
+          d.rows_all.push_back( ys[i] );
+        }
+      }
+    }
+    d.row_first[P] = d.rows_all.size();
   }
 
   struct alignas(onika::memory::DEFAULT_ALIGNMENT) PPPMParameters
@@ -76,12 +134,18 @@ inline namespace coulombic_ewald
     double gf_b[pppm_constants::MAXORDER] = {};
     double sf_coeff[6] = {}; // ad : self force correction coefficients (LAMMPS sf_coeff)
 
-    // per mesh point (x fastest) : influence function, k vectors (actual frame).
-    // virial coefficients (LAMMPS vg) are computed from k when needed, see pppm_virial_coeffs
+    // per local k point (replicated : whole mesh, x fastest ; distributed : local rows, see PPPMDecomposition) :
+    // influence function, k vectors (actual frame). Virial coefficients (LAMMPS vg) are computed from k when needed,
+    // see pppm_virial_coeffs
     onika::memory::CudaMMVector<double> greensfn;
     onika::memory::CudaMMVector<double> fkx, fky, fkz;
 
+    PPPMDecomposition dec;
+    bool mesh_distributed_user = false; // distributed mesh requested (also valid with one rank)
+    onika::memory::CudaMMVector<int> krow_partner; // distributed : local row of -y for each local row
+
     inline size_t nfft() const { return size_t(nx) * size_t(ny) * size_t(nz); }
+    inline size_t nk_local() const { return dec.distributed ? size_t(dec.nyl()) * nx * nz : nfft(); }
     inline bool slab() const { return slab_auto || slab_user > 0.0; }
     inline int nlower() const { return -(order-1)/2; }
     inline int nupper() const { return order/2; }
@@ -416,8 +480,31 @@ inline namespace coulombic_ewald
                   Hinv.m13*v0 + Hinv.m23*v1 + Hinv.m33*v2 };
   }
 
+  // calls f(n, k, l, m) for each local k point : n local index, (k,l,m) = global mesh indices along x,y,z
+  template<class FuncT>
+  inline void pppm_for_local_kpoints( const PPPMParameters& p, const FuncT& f )
+  {
+    const int nx = p.nx, ny = p.ny, nz = p.nz;
+    if( ! p.dec.distributed )
+    {
+#     pragma omp parallel for schedule(static)
+      for( int m = 0 ; m < nz ; m++ )
+        for( int l = 0 ; l < ny ; l++ )
+          for( int k = 0 ; k < nx ; k++ ) f( ( size_t(m)*ny + l ) * nx + k , k , l , m );
+    }
+    else
+    {
+      const int nyl = p.dec.nyl();
+      const int* rows = p.dec.rows();
+#     pragma omp parallel for schedule(static)
+      for( int li = 0 ; li < nyl ; li++ )
+        for( int k = 0 ; k < nx ; k++ )
+          for( int m = 0 ; m < nz ; m++ ) f( ( size_t(li)*nx + k ) * nz + m , k , rows[li] , m );
+    }
+  }
+
   // LAMMPS PPPM::setup + compute_sf_precoeff + compute_gf_ad (ad differentiation, orthogonal cell only)
-  inline void pppm_setup_ad( PPPMParameters& p, const RestrictedCell& c )
+  inline void pppm_setup_ad( PPPMParameters& p, const RestrictedCell& c, MPI_Comm comm )
   {
     const int nx = p.nx, ny = p.ny, nz = p.nz;
     const double xprd = c.lx, yprd = c.ly, zprd = c.lz*p.slab_volfactor; // zprd_slab
@@ -425,99 +512,104 @@ inline namespace coulombic_ewald
     const double g = p.g_ewald;
     const int order = p.order;
     const int twoorder = 2*order;
-    double sf0 = 0.0, sf1 = 0.0, sf2 = 0.0, sf3 = 0.0, sf4 = 0.0, sf5 = 0.0;
+    const size_t nk = p.nk_local();
+    std::vector<double> sfterms( 6*nk , 0.0 ); // per point self force terms, summed in point order afterwards (as LAMMPS)
 
-#   pragma omp parallel for schedule(static) reduction(+:sf0,sf1,sf2,sf3,sf4,sf5)
-    for( int m = 0 ; m < nz ; m++ )
+    pppm_for_local_kpoints( p , [&]( size_t n, int k, int l, int m )
     {
       const int mper = m - nz*(2*m/nz);
       const double qz = unitkz*mper;
       const double snz = std::pow( std::sin(0.5*qz*zprd/nz) , 2 );
       const double sz = std::exp(-0.25*(qz/g)*(qz/g));
       const double wz = pppm_powsinxx( 0.5*qz*zprd/nz , twoorder );
-      for( int l = 0 ; l < ny ; l++ )
-      {
-        const int lper = l - ny*(2*l/ny);
-        const double qy = unitky*lper;
-        const double sny = std::pow( std::sin(0.5*qy*yprd/ny) , 2 );
-        const double sy = std::exp(-0.25*(qy/g)*(qy/g));
-        const double wy = pppm_powsinxx( 0.5*qy*yprd/ny , twoorder );
-        for( int k = 0 ; k < nx ; k++ )
-        {
-          const size_t n = ( size_t(m)*ny + l ) * nx + k;
-          const int kper = k - nx*(2*k/nx);
-          const double qx = unitkx*kper;
-          const double snx = std::pow( std::sin(0.5*qx*xprd/nx) , 2 );
-          const double sx = std::exp(-0.25*(qx/g)*(qx/g));
-          const double wx = pppm_powsinxx( 0.5*qx*xprd/nx , twoorder );
-          p.fkx[n] = qx; p.fky[n] = qy; p.fkz[n] = qz;
-          const double sqk = qx*qx + qy*qy + qz*qz;
-          if( sqk == 0.0 ) { p.greensfn[n] = 0.0; continue; }
-          const double numerator = (4.0*M_PI)/sqk;
-          const double gf = numerator*sx*sy*sz*wx*wy*wz/pppm_gf_denom( p , snx , sny , snz );
-          p.greensfn[n] = gf;
+      const int lper = l - ny*(2*l/ny);
+      const double qy = unitky*lper;
+      const double sny = std::pow( std::sin(0.5*qy*yprd/ny) , 2 );
+      const double sy = std::exp(-0.25*(qy/g)*(qy/g));
+      const double wy = pppm_powsinxx( 0.5*qy*yprd/ny , twoorder );
+      const int kper = k - nx*(2*k/nx);
+      const double qx = unitkx*kper;
+      const double snx = std::pow( std::sin(0.5*qx*xprd/nx) , 2 );
+      const double sx = std::exp(-0.25*(qx/g)*(qx/g));
+      const double wx = pppm_powsinxx( 0.5*qx*xprd/nx , twoorder );
+      p.fkx[n] = qx; p.fky[n] = qy; p.fkz[n] = qz;
+      const double sqk = qx*qx + qy*qy + qz*qz;
+      if( sqk == 0.0 ) { p.greensfn[n] = 0.0; return; }
+      const double numerator = (4.0*M_PI)/sqk;
+      const double gf = numerator*sx*sy*sz*wx*wy*wz/pppm_gf_denom( p , snx , sny , snz );
+      p.greensfn[n] = gf;
 
-          // self force pre-coefficients of this mesh point (LAMMPS compute_sf_precoeff)
-          double wx0[5], wy0[5], wz0[5], wx1[5], wy1[5], wz1[5], wx2[5], wy2[5], wz2[5];
-          for( int i = 0 ; i < 5 ; i++ )
-          {
-            wx0[i] = pppm_powsinxx( 0.5*(2.0*M_PI)*(kper+nx*(i-2))/nx , order );
-            wx1[i] = pppm_powsinxx( 0.5*(2.0*M_PI)*(kper+nx*(i-1))/nx , order );
-            wx2[i] = pppm_powsinxx( 0.5*(2.0*M_PI)*(kper+nx*i)/nx , order );
-            wy0[i] = pppm_powsinxx( 0.5*(2.0*M_PI)*(lper+ny*(i-2))/ny , order );
-            wy1[i] = pppm_powsinxx( 0.5*(2.0*M_PI)*(lper+ny*(i-1))/ny , order );
-            wy2[i] = pppm_powsinxx( 0.5*(2.0*M_PI)*(lper+ny*i)/ny , order );
-            wz0[i] = pppm_powsinxx( 0.5*(2.0*M_PI)*(mper+nz*(i-2))/nz , order );
-            wz1[i] = pppm_powsinxx( 0.5*(2.0*M_PI)*(mper+nz*(i-1))/nz , order );
-            wz2[i] = pppm_powsinxx( 0.5*(2.0*M_PI)*(mper+nz*i)/nz , order );
-          }
-          double s1 = 0.0, s2 = 0.0, s3 = 0.0, s4 = 0.0, s5 = 0.0, s6 = 0.0;
-          for( int ax = 0 ; ax < 5 ; ax++ )
-            for( int ay = 0 ; ay < 5 ; ay++ )
-              for( int az = 0 ; az < 5 ; az++ )
-              {
-                const double u0 = wx0[ax]*wy0[ay]*wz0[az];
-                s1 += u0 * wx1[ax]*wy0[ay]*wz0[az];
-                s2 += u0 * wx2[ax]*wy0[ay]*wz0[az];
-                s3 += u0 * wx0[ax]*wy1[ay]*wz0[az];
-                s4 += u0 * wx0[ax]*wy2[ay]*wz0[az];
-                s5 += u0 * wx0[ax]*wy0[ay]*wz1[az];
-                s6 += u0 * wx0[ax]*wy0[ay]*wz2[az];
-              }
-          sf0 += s1*gf; sf1 += s2*gf; sf2 += s3*gf; sf3 += s4*gf; sf4 += s5*gf; sf5 += s6*gf;
-        }
+      // self force pre-coefficients of this mesh point (LAMMPS compute_sf_precoeff)
+      double wx0[5], wy0[5], wz0[5], wx1[5], wy1[5], wz1[5], wx2[5], wy2[5], wz2[5];
+      for( int i = 0 ; i < 5 ; i++ )
+      {
+        wx0[i] = pppm_powsinxx( 0.5*(2.0*M_PI)*(kper+nx*(i-2))/nx , order );
+        wx1[i] = pppm_powsinxx( 0.5*(2.0*M_PI)*(kper+nx*(i-1))/nx , order );
+        wx2[i] = pppm_powsinxx( 0.5*(2.0*M_PI)*(kper+nx*i)/nx , order );
+        wy0[i] = pppm_powsinxx( 0.5*(2.0*M_PI)*(lper+ny*(i-2))/ny , order );
+        wy1[i] = pppm_powsinxx( 0.5*(2.0*M_PI)*(lper+ny*(i-1))/ny , order );
+        wy2[i] = pppm_powsinxx( 0.5*(2.0*M_PI)*(lper+ny*i)/ny , order );
+        wz0[i] = pppm_powsinxx( 0.5*(2.0*M_PI)*(mper+nz*(i-2))/nz , order );
+        wz1[i] = pppm_powsinxx( 0.5*(2.0*M_PI)*(mper+nz*(i-1))/nz , order );
+        wz2[i] = pppm_powsinxx( 0.5*(2.0*M_PI)*(mper+nz*i)/nz , order );
       }
-    }
+      double s1 = 0.0, s2 = 0.0, s3 = 0.0, s4 = 0.0, s5 = 0.0, s6 = 0.0;
+      for( int ax = 0 ; ax < 5 ; ax++ )
+        for( int ay = 0 ; ay < 5 ; ay++ )
+          for( int az = 0 ; az < 5 ; az++ )
+          {
+            const double u0 = wx0[ax]*wy0[ay]*wz0[az];
+            s1 += u0 * wx1[ax]*wy0[ay]*wz0[az];
+            s2 += u0 * wx2[ax]*wy0[ay]*wz0[az];
+            s3 += u0 * wx0[ax]*wy1[ay]*wz0[az];
+            s4 += u0 * wx0[ax]*wy2[ay]*wz0[az];
+            s5 += u0 * wx0[ax]*wy0[ay]*wz1[az];
+            s6 += u0 * wx0[ax]*wy0[ay]*wz2[az];
+          }
+      double* t = sfterms.data() + 6*n;
+      t[0] = s1*gf; t[1] = s2*gf; t[2] = s3*gf; t[3] = s4*gf; t[4] = s5*gf; t[5] = s6*gf;
+    } );
+
+    double sf[6] = { 0., 0., 0., 0., 0., 0. };
+    for( size_t n = 0 ; n < nk ; n++ ) for( int i = 0 ; i < 6 ; i++ ) sf[i] += sfterms[6*n+i];
+    if( p.dec.distributed ) MPI_Allreduce( MPI_IN_PLACE , sf , 6 , MPI_DOUBLE , MPI_SUM , comm );
 
     const double pre = M_PI / p.volume;
     const double prex = pre * nx / xprd, prey = pre * ny / yprd, prez = pre * nz / zprd;
-    p.sf_coeff[0] = sf0 * prex; p.sf_coeff[1] = sf1 * prex * 2;
-    p.sf_coeff[2] = sf2 * prey; p.sf_coeff[3] = sf3 * prey * 2;
-    p.sf_coeff[4] = sf4 * prez; p.sf_coeff[5] = sf5 * prez * 2;
+    p.sf_coeff[0] = sf[0] * prex; p.sf_coeff[1] = sf[1] * prex * 2;
+    p.sf_coeff[2] = sf[2] * prey; p.sf_coeff[3] = sf[3] * prey * 2;
+    p.sf_coeff[4] = sf[4] * prez; p.sf_coeff[5] = sf[5] * prez * 2;
   }
 
   // LAMMPS PPPM::setup_triclinic + compute_gf_ik_triclinic (the orthogonal formulas are the same algebra) :
   // volume dependent quantities, called at init and whenever the cell changes (mesh and g_ewald are kept)
-  inline void pppm_setup( PPPMParameters& p, const Mat3d& H )
+  inline void pppm_setup( PPPMParameters& p, const Mat3d& H, MPI_Comm comm )
   {
     using namespace pppm_constants;
     const RestrictedCell c = restricted_cell( H );
     const Mat3d Hinv = inverse( H );
     const int nx = p.nx, ny = p.ny, nz = p.nz;
-    const size_t nfft = p.nfft();
+    const size_t nk = p.nk_local();
     const double g = p.g_ewald;
 
     const double vf = p.slab_volfactor;
     p.cell = H;
     p.volume = c.lx * c.ly * ( c.lz * vf );
 
-    p.greensfn.resize( nfft );
-    p.fkx.resize( nfft ); p.fky.resize( nfft ); p.fkz.resize( nfft );
+    p.greensfn.resize( nk );
+    p.fkx.resize( nk ); p.fky.resize( nk ); p.fkz.resize( nk );
+    if( p.dec.distributed )
+    {
+      const int nyl = p.dec.nyl();
+      p.krow_partner.resize( nyl );
+      for( int li = 0 ; li < nyl ; li++ ) p.krow_partner[li] = p.dec.row_local[ ( ny - p.dec.rows()[li] ) % ny ];
+    }
+    else p.krow_partner.clear();
 
     if( p.diff_ad )
     {
       if( ! is_diagonal( H ) ) ::onika::fatal_error() << "PPPM : diff ad requires an orthogonal cell (as in LAMMPS)" << std::endl;
-      pppm_setup_ad( p , c );
+      pppm_setup_ad( p , c , comm );
       return;
     }
 
@@ -531,62 +623,54 @@ inline namespace coulombic_ewald
     const int nbz = static_cast<int>( tmp[2] );
     const int twoorder = 2 * p.order;
 
-#   pragma omp parallel for schedule(static)
-    for( int m = 0 ; m < nz ; m++ )
+    pppm_for_local_kpoints( p , [&]( size_t n, int k, int l, int m )
     {
       const int mper = m - nz*(2*m/nz);
       const double snz = std::pow( std::sin(M_PI*mper/nz) , 2 );
-      for( int l = 0 ; l < ny ; l++ )
+      const int lper = l - ny*(2*l/ny);
+      const double sny = std::pow( std::sin(M_PI*lper/ny) , 2 );
+      const int kper = k - nx*(2*k/nx);
+      const double snx = std::pow( std::sin(M_PI*kper/nx) , 2 );
+
+      Vec3d fk = pppm_reciprocal( Hinv , 2.0*M_PI*kper , 2.0*M_PI*lper , 2.0*M_PI*mper );
+      if( vf != 1.0 ) fk.z /= vf; // slab : z extended cell (c along z, see pppm_init_parameters)
+      p.fkx[n] = fk.x; p.fky[n] = fk.y; p.fkz[n] = fk.z;
+      const double sqk = fk.x*fk.x + fk.y*fk.y + fk.z*fk.z;
+
+      if( sqk == 0.0 )
       {
-        const int lper = l - ny*(2*l/ny);
-        const double sny = std::pow( std::sin(M_PI*lper/ny) , 2 );
-        for( int k = 0 ; k < nx ; k++ )
+        p.greensfn[n] = 0.0;
+        return;
+      }
+
+      const double numerator = FOUR_PI_LMP / sqk;
+      const double denominator = pppm_gf_denom( p , snx , sny , snz );
+      double sum1 = 0.0;
+      for( int ax = -nbx ; ax <= nbx ; ax++ )
+      {
+        const double wx = pppm_powsinxx( M_PI*kper/nx + M_PI*ax , twoorder );
+        for( int ay = -nby ; ay <= nby ; ay++ )
         {
-          const size_t n = ( size_t(m)*ny + l ) * nx + k;
-          const int kper = k - nx*(2*k/nx);
-          const double snx = std::pow( std::sin(M_PI*kper/nx) , 2 );
-
-          Vec3d fk = pppm_reciprocal( Hinv , 2.0*M_PI*kper , 2.0*M_PI*lper , 2.0*M_PI*mper );
-          if( vf != 1.0 ) fk.z /= vf; // slab : z extended cell (c along z, see pppm_init_parameters)
-          p.fkx[n] = fk.x; p.fky[n] = fk.y; p.fkz[n] = fk.z;
-          const double sqk = fk.x*fk.x + fk.y*fk.y + fk.z*fk.z;
-
-          if( sqk == 0.0 )
+          const double wy = pppm_powsinxx( M_PI*lper/ny + M_PI*ay , twoorder );
+          for( int az = -nbz ; az <= nbz ; az++ )
           {
-            p.greensfn[n] = 0.0;
-            continue;
+            const double wz = pppm_powsinxx( M_PI*mper/nz + M_PI*az , twoorder );
+            Vec3d b = pppm_reciprocal( Hinv , 2.0*M_PI*nx*ax , 2.0*M_PI*ny*ay , 2.0*M_PI*nz*az );
+            if( vf != 1.0 ) b.z /= vf;
+            const double qx = fk.x + b.x;
+            const double qy = fk.y + b.y;
+            const double qz = fk.z + b.z;
+            const double sx = std::exp( -0.25 * (qx/g)*(qx/g) );
+            const double sy = std::exp( -0.25 * (qy/g)*(qy/g) );
+            const double sz = std::exp( -0.25 * (qz/g)*(qz/g) );
+            const double dot1 = fk.x*qx + fk.y*qy + fk.z*qz;
+            const double dot2 = qx*qx + qy*qy + qz*qz;
+            sum1 += ( dot1/dot2 ) * sx*sy*sz * wx*wy*wz;
           }
-
-          const double numerator = FOUR_PI_LMP / sqk;
-          const double denominator = pppm_gf_denom( p , snx , sny , snz );
-          double sum1 = 0.0;
-          for( int ax = -nbx ; ax <= nbx ; ax++ )
-          {
-            const double wx = pppm_powsinxx( M_PI*kper/nx + M_PI*ax , twoorder );
-            for( int ay = -nby ; ay <= nby ; ay++ )
-            {
-              const double wy = pppm_powsinxx( M_PI*lper/ny + M_PI*ay , twoorder );
-              for( int az = -nbz ; az <= nbz ; az++ )
-              {
-                const double wz = pppm_powsinxx( M_PI*mper/nz + M_PI*az , twoorder );
-                Vec3d b = pppm_reciprocal( Hinv , 2.0*M_PI*nx*ax , 2.0*M_PI*ny*ay , 2.0*M_PI*nz*az );
-                if( vf != 1.0 ) b.z /= vf;
-                const double qx = fk.x + b.x;
-                const double qy = fk.y + b.y;
-                const double qz = fk.z + b.z;
-                const double sx = std::exp( -0.25 * (qx/g)*(qx/g) );
-                const double sy = std::exp( -0.25 * (qy/g)*(qy/g) );
-                const double sz = std::exp( -0.25 * (qz/g)*(qz/g) );
-                const double dot1 = fk.x*qx + fk.y*qy + fk.z*qz;
-                const double dot2 = qx*qx + qy*qy + qz*qz;
-                sum1 += ( dot1/dot2 ) * sx*sy*sz * wx*wy*wz;
-              }
-            }
-          }
-          p.greensfn[n] = numerator * sum1 / denominator;
         }
       }
-    }
+      p.greensfn[n] = numerator * sum1 / denominator;
+    } );
   }
 
   // LAMMPS auto_slab_volfactor (kspace_modify slab auto) : vacuum large enough for the lateral and reciprocal decay lengths
@@ -603,8 +687,8 @@ inline namespace coulombic_ewald
   // LAMMPS PPPM::init (ik or ad, slab EW3DC with fixed or automatic volfactor, no tip4p) followed by setup.
   // qsqsum = sum of q^2, qsum = sum of q (elementary charges). Estimates use LAMMPS metal units (eV, ang).
   inline void pppm_init_parameters( double g_ewald, double radius, double accuracy_relative, long order, const long mesh[3], bool diff_ad,
-                                    double slab_user, bool slab_auto,
-                                    const Mat3d& H, uint64_t natoms, double qsqsum, double qsum, PPPMParameters& p )
+                                    double slab_user, bool slab_auto, bool mesh_distributed,
+                                    const Mat3d& H, uint64_t natoms, double qsqsum, double qsum, MPI_Comm comm, PPPMParameters& p )
   {
     if( order < 2 || order > pppm_constants::MAXORDER )
     {
@@ -682,9 +766,15 @@ inline namespace coulombic_ewald
     const double dfr = e.df_rspace();
     p.estimated_accuracy = std::sqrt( dfk*dfk + dfr*dfr );
 
+    int nprocs = 1, rank = 0;
+    MPI_Comm_size( comm , &nprocs );
+    MPI_Comm_rank( comm , &rank );
+    p.mesh_distributed_user = mesh_distributed;
+    pppm_make_decomposition( p.dec , mesh_distributed , nprocs , rank , p.nx , p.ny , p.nz );
+
     pppm_compute_gf_denom( p );
     pppm_compute_rho_coeff( p );
-    pppm_setup( p , H );
+    pppm_setup( p , H , comm );
   }
 
   // trivially copyable view of PPPMParameters for particle <-> mesh functors
@@ -732,6 +822,22 @@ inline namespace coulombic_ewald
     double zprd_slab = 0.0;
     double dipole = 0.0;
     double dipole_r2 = 0.0;
+    // mesh read/written by the particle functors : whole periodic mesh, or a local brick holding the stencils of the
+    // local particles (distributed mesh). In each direction, the brick either covers the whole periodic mesh
+    // (mwrap, indices wrapped into [0,n)) or a range of unwrapped mesh indices [mo, mo+mn), mn < n.
+    int mnx = 0, mny = 0, mnz = 0;
+    int mox = 0, moy = 0, moz = 0;
+    bool mwrapx = true, mwrapy = true, mwrapz = true;
+
+    // a brick dimension equal to the mesh size is a whole wrapped direction (lo must then be 0)
+    inline void set_brick( const int lo[3], const int dims[3] )
+    {
+      mox = lo[0]; moy = lo[1]; moz = lo[2];
+      mnx = dims[0]; mny = dims[1]; mnz = dims[2];
+      mwrapx = ( mnx == nx );
+      mwrapy = ( mny == ny );
+      mwrapz = ( mnz == nz );
+    }
 
     ReadOnlyPPPMParameters() = default;
     inline ReadOnlyPPPMParameters( const PPPMParameters& p, const Vec3d& bounds_min, const Vec3d& bounds_size )
@@ -742,6 +848,7 @@ inline namespace coulombic_ewald
       , delvolinv( double(p.nfft()) / p.volume )
       , bmin( bounds_min )
       , delinv( Vec3d{ p.nx / bounds_size.x , p.ny / bounds_size.y , p.nz / ( bounds_size.z * p.slab_volfactor ) } )
+      , mnx( p.nx ), mny( p.ny ), mnz( p.nz )
     {
       for( int l = 0 ; l < pppm_constants::MAXORDER ; l++ )
         for( int k = 0 ; k < pppm_constants::MAXORDER ; k++ ) rho_coeff[l][k] = p.rho_coeff[l][k];
@@ -763,7 +870,7 @@ inline namespace coulombic_ewald
     }
   };
 
-  // stencil of one particle : lower mesh index (wrapped into [0,n)) and 1D weights in each direction
+  // stencil of one particle : lower mesh index in the mesh view (see ReadOnlyPPPMParameters::set_brick) and 1D weights
   struct PPPMStencil
   {
     int ix, iy, iz;
@@ -771,6 +878,7 @@ inline namespace coulombic_ewald
     double wy[pppm_constants::MAXORDER];
     double wz[pppm_constants::MAXORDER];
     double dx, dy, dz; // distance to the lower left mesh point, in mesh units (LAMMPS dx,dy,dz)
+    int gx0, gy0, gz0; // unwrapped global mesh index of the first stencil point
   };
 
   // LAMMPS compute_drho1d : derivative of the 1D weights with respect to dx,dy,dz, drho_coeff[l][k] = (l+1).rho_coeff[l+1][k]
@@ -818,9 +926,10 @@ inline namespace coulombic_ewald
       st.wx[k] = r1; st.wy[k] = r2; st.wz[k] = r3;
     }
     st.dx = dx; st.dy = dy; st.dz = dz;
-    st.ix = pppm_wrap( gx + p.nlower , p.nx );
-    st.iy = pppm_wrap( gy + p.nlower , p.ny );
-    st.iz = pppm_wrap( gz + p.nlower , p.nz );
+    st.gx0 = gx + p.nlower; st.gy0 = gy + p.nlower; st.gz0 = gz + p.nlower;
+    st.ix = p.mwrapx ? pppm_wrap( st.gx0 , p.nx ) : st.gx0 - p.mox;
+    st.iy = p.mwrapy ? pppm_wrap( st.gy0 , p.ny ) : st.gy0 - p.moy;
+    st.iz = p.mwrapz ? pppm_wrap( st.gz0 , p.nz ) : st.gz0 - p.moz;
   }
 
   // LAMMPS PPPM::slabcorr (EW3DC) for one particle at real height z : force along z and per particle energy, internal units
