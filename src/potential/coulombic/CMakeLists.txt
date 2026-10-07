@@ -21,5 +21,11 @@ set(exaStampCoulombic_INCLUDE_DIRS
   ${CMAKE_CURRENT_SOURCE_DIR}/../pair_potentials/coul_wolf_pair/include
   ${CMAKE_CURRENT_SOURCE_DIR}/../pair_potentials/coul_dsf/include
   ${CMAKE_CURRENT_SOURCE_DIR}/../reaction_field/include)
+# PPPM FFT : cuFFT on Cuda builds (used when a GPU is available at runtime), vendored pocketfft otherwise
+if(ONIKA_BUILD_CUDA AND NOT ONIKA_ENABLE_HIP)
+  set(exaStampCoulombic_COMPILE_DEFINITIONS EXASTAMP_PPPM_CUFFT=1)
+  set(exaStampCoulombic_LINK_DIRECTORIES ${CUDA_SDK_ROOT_DIR}/lib64)
+  list(APPEND exaStampCoulombic_LINK_LIBRARIES cufft)
+endif()
 onika_add_plugin(exaStampCoulombic ${CMAKE_CURRENT_SOURCE_DIR})
 

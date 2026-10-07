@@ -19,7 +19,8 @@ under the License.
 
 // 3D complex-to-complex FFT on a nx*ny*nz mesh stored with x fastest (index (iz*ny+iy)*nx+ix).
 // Unnormalized, forward = exp(-i k.x), backward = exp(+i k.x), as LAMMPS FFT3d used by PPPM.
-// CPU implementation : pocketfft (vendored in pocketfft/), compiled in pppm_fft.cpp only.
+// GPU : cuFFT (Cuda builds, EXASTAMP_PPPM_CUFFT), in place on unified memory, synchronous.
+// CPU : pocketfft (vendored in pocketfft/). Both are only included by pppm_fft.cpp.
 
 #include <onika/math/basic_types.h>
 
@@ -32,12 +33,28 @@ inline namespace coulombic_ewald
   class PPPMFFT
   {
   public:
-    void resize( int nx, int ny, int nz );
+    PPPMFFT() = default;
+    PPPMFFT( const PPPMFFT& ) = delete;
+    PPPMFFT& operator = ( const PPPMFFT& ) = delete;
+    ~PPPMFFT();
+
+    // use_gpu : run with cuFFT (only possible when compiled with EXASTAMP_PPPM_CUFFT), stream = cudaStream_t to run on
+    void resize( int nx, int ny, int nz, bool use_gpu = false, void* stream = nullptr );
     void forward( Complexd* data ) const;
     void backward( Complexd* data ) const;
+    inline bool on_gpu() const { return m_gpu; }
+
+    static bool gpu_support();
 
   private:
+    void exec( Complexd* data, bool forward ) const;
+    void release();
+
     int m_nx = 0, m_ny = 0, m_nz = 0;
+    bool m_gpu = false;
+    void* m_stream = nullptr;
+    int m_plan = 0;          // cufftHandle
+    bool m_has_plan = false;
   };
 
 }

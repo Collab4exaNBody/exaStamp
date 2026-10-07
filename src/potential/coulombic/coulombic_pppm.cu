@@ -29,6 +29,8 @@ under the License.
 #include <onika/cpp_utils.h>
 #include <onika/flat_tuple.h>
 #include <onika/cuda/cuda.h>
+#include <onika/cuda/cuda_context.h>
+#include <onika/parallel/parallel_for.h>
 #include <mpi.h>
 
 #include <exaStamp/potential/coulombic/pppm.h>
@@ -176,24 +178,89 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
     }
   };
 
+  // ------------- per mesh point operations (parallel_for, one thread per mesh point on GPU) -------------
+
+  struct PPPMZeroFunc
+  {
+    double * __restrict__ a = nullptr;
+    ONIKA_HOST_DEVICE_FUNC inline void operator () ( ssize_t i ) const { a[i] = 0.0; }
+  };
+
+  // w = density (real) , then w *= scale * G(k) once transformed
+  struct PPPMLoadDensityFunc
+  {
+    const double * __restrict__ density = nullptr;
+    Complexd * __restrict__ w = nullptr;
+    ONIKA_HOST_DEVICE_FUNC inline void operator () ( ssize_t i ) const { w[i] = Complexd{ density[i] , 0.0 }; }
+  };
+
+  struct PPPMApplyGreenFunc
+  {
+    Complexd * __restrict__ w = nullptr;
+    const double * __restrict__ greensfn = nullptr;
+    double scaleinv = 1.0;
+    ONIKA_HOST_DEVICE_FUNC inline void operator () ( ssize_t i ) const
+    {
+      const double s = scaleinv * greensfn[i];
+      w[i].r *= s;
+      w[i].i *= s;
+    }
+  };
+
+  // w2 = V(k) times a per mesh point factor, before a backward FFT
+  enum class PPPMFactor { COPY , VIRIAL , IK };
+  struct PPPMFactorFunc
+  {
+    const Complexd * __restrict__ w1 = nullptr;
+    Complexd * __restrict__ w2 = nullptr;
+    PPPMFactor mode = PPPMFactor::COPY;
+    const double * __restrict__ coef = nullptr; // vg (6 per point) for VIRIAL, fk component for IK
+    int j = 0;                                   // virial component for VIRIAL
+    ONIKA_HOST_DEVICE_FUNC inline void operator () ( ssize_t i ) const
+    {
+      const Complexd c = w1[i];
+      if( mode == PPPMFactor::COPY ) w2[i] = c;
+      else if( mode == PPPMFactor::VIRIAL ) { const double s = coef[6*i+j]; w2[i] = Complexd{ c.r * s , c.i * s }; }
+      else { const double k = coef[i]; w2[i] = Complexd{ - k * c.i , k * c.r }; }
+    }
+  };
+
+  struct PPPMRealPartFunc
+  {
+    const Complexd * __restrict__ w = nullptr;
+    double * __restrict__ out = nullptr;
+    ONIKA_HOST_DEVICE_FUNC inline void operator () ( ssize_t i ) const { out[i] = w[i].r; }
+  };
+
 }
 }
 
 namespace exanb
 {
-  // CPU only for now (mesh buffers and FFT are on the host)
   template<bool PerAtomCharge> struct ComputeCellParticlesTraits< exaStamp::PPPMSpreadFunc<PerAtomCharge> >
   {
     static inline constexpr bool RequiresBlockSynchronousCall = false;
-    static inline constexpr bool CudaCompatible = false;
+    static inline constexpr bool CudaCompatible = true;
   };
 
   template<bool PerAtomCharge, bool ComputeEnergy, bool ComputeVirial>
   struct ComputeCellParticlesTraits< exaStamp::PPPMForceFunc<PerAtomCharge,ComputeEnergy,ComputeVirial> >
   {
     static inline constexpr bool RequiresBlockSynchronousCall = false;
-    static inline constexpr bool CudaCompatible = false;
+    static inline constexpr bool CudaCompatible = true;
   };
+}
+
+namespace onika
+{
+  namespace parallel
+  {
+    template<> struct ParallelForFunctorTraits< exaStamp::PPPMZeroFunc > { static inline constexpr bool CudaCompatible = true; };
+    template<> struct ParallelForFunctorTraits< exaStamp::PPPMLoadDensityFunc > { static inline constexpr bool CudaCompatible = true; };
+    template<> struct ParallelForFunctorTraits< exaStamp::PPPMApplyGreenFunc > { static inline constexpr bool CudaCompatible = true; };
+    template<> struct ParallelForFunctorTraits< exaStamp::PPPMFactorFunc > { static inline constexpr bool CudaCompatible = true; };
+    template<> struct ParallelForFunctorTraits< exaStamp::PPPMRealPartFunc > { static inline constexpr bool CudaCompatible = true; };
+  }
 }
 
 namespace exaStamp
@@ -227,18 +294,22 @@ inline namespace coulombic_ewald
     onika::memory::CudaMMVector<Complexd> m_work2;
     PPPMFFT m_fft;
 
-    // m_work2 = m_work1 * c (per mesh point real factor, or i.k), backward FFT, real part into out
-    template<class FactorFuncT>
-    inline void backward_to( double * __restrict__ out, FactorFuncT factor )
+    // per mesh point loop : GPU (one thread per point) when the FFT runs there, OpenMP otherwise
+    template<class FuncT>
+    inline void mesh_for( size_t n, const FuncT& func )
     {
-      const ssize_t nfft = m_work1.size();
-      const Complexd * __restrict__ w1 = m_work1.data();
-      Complexd * __restrict__ w2 = m_work2.data();
-#     pragma omp parallel for schedule(static)
-      for( ssize_t i = 0 ; i < nfft ; i++ ) w2[i] = factor( i , w1[i] );
-      m_fft.backward( w2 );
-#     pragma omp parallel for schedule(static)
-      for( ssize_t i = 0 ; i < nfft ; i++ ) out[i] = w2[i].r;
+      onika::parallel::ParallelForOptions opts;
+      opts.enable_gpu = m_fft.on_gpu();
+      onika::parallel::parallel_for( n , func , parallel_execution_context() , opts );
+    }
+
+    // m_work2 = m_work1 * factor (copy, virial coefficient or i.k), backward FFT, real part into out
+    inline void backward_to( double * __restrict__ out, PPPMFactor mode, const double* coef = nullptr, int j = 0 )
+    {
+      const size_t nfft = m_work1.size();
+      mesh_for( nfft , PPPMFactorFunc{ m_work1.data() , m_work2.data() , mode , coef , j } );
+      m_fft.backward( m_work2.data() );
+      mesh_for( nfft , PPPMRealPartFunc{ m_work2.data() , out } );
     }
 
   public:
@@ -272,12 +343,21 @@ inline namespace coulombic_ewald
         m_work2.resize( nfft );
         m_u.clear(); m_v.clear();
       }
-      m_fft.resize( p.nx , p.ny , p.nz );
+      // GPU path when a device is available : particle kernels, mesh loops and cuFFT all run there (unified memory)
+      const bool gpu_available = ( global_cuda_ctx() != nullptr ) && global_cuda_ctx()->has_devices() && PPPMFFT::gpu_support();
+      void* stream = nullptr;
+#     ifdef EXASTAMP_PPPM_CUFFT
+      if( gpu_available ) stream = global_cuda_ctx()->getThreadStream(0);
+#     endif
+      m_fft.resize( p.nx , p.ny , p.nz , gpu_available , stream );
       if( log_energy && m_u.size() != nfft )
       {
         m_u.resize( nfft );
         m_v.resize( 6*nfft );
       }
+
+      int nprocs = 1;
+      MPI_Comm_size( *mpi , &nprocs );
 
       const ReadOnlyPPPMParameters ro( p , domain->bounds().bmin , domain->bounds_size() );
 
@@ -296,40 +376,27 @@ inline namespace coulombic_ewald
 
         // 1. charge density of local particles, summed over all ranks (replicated global mesh)
         double * __restrict__ density = m_density.data();
-#       pragma omp parallel for schedule(static)
-        for( size_t i = 0 ; i < nfft ; i++ ) density[i] = 0.0;
+        mesh_for( nfft , PPPMZeroFunc{ density } );
         PPPMSpreadFunc<PerAtomCharge> spread_func = { ro , species->data() , density };
         compute_cell_particles( *grid , false , spread_func , onika::make_flat_tuple(rx,ry,rz,charge_or_type) , parallel_execution_context() );
-        MPI_Allreduce( MPI_IN_PLACE , density , nfft , MPI_DOUBLE , MPI_SUM , *mpi );
+        if( nprocs > 1 ) MPI_Allreduce( MPI_IN_PLACE , density , nfft , MPI_DOUBLE , MPI_SUM , *mpi );
 
         // 2. rho(k), then V(k) = G(k) rho(k) / N (LAMMPS poisson_ik)
-        Complexd * __restrict__ w1 = m_work1.data();
-        const double * __restrict__ gf = p.greensfn.data();
-        const double scaleinv = 1.0 / double(nfft);
-#       pragma omp parallel for schedule(static)
-        for( size_t i = 0 ; i < nfft ; i++ ) w1[i] = Complexd{ density[i] , 0.0 };
-        m_fft.forward( w1 );
-#       pragma omp parallel for schedule(static)
-        for( size_t i = 0 ; i < nfft ; i++ ) { w1[i].r *= scaleinv * gf[i]; w1[i].i *= scaleinv * gf[i]; }
+        mesh_for( nfft , PPPMLoadDensityFunc{ density , m_work1.data() } );
+        m_fft.forward( m_work1.data() );
+        mesh_for( nfft , PPPMApplyGreenFunc{ m_work1.data() , p.greensfn.data() , 1.0 / double(nfft) } );
 
         // 3. per particle energy and virial meshes (LAMMPS poisson_peratom)
         if( log_energy )
         {
-          backward_to( m_u.data() , []( ssize_t , const Complexd& c ) { return c; } );
-          const double * __restrict__ vg = p.vg.data();
-          for( int j = 0 ; j < 6 ; j++ )
-          {
-            backward_to( m_v.data() + j*nfft , [vg,j]( ssize_t i , const Complexd& c ) { const double s = vg[6*i+j]; return Complexd{ c.r * s , c.i * s }; } );
-          }
+          backward_to( m_u.data() , PPPMFactor::COPY );
+          for( int j = 0 ; j < 6 ; j++ ) backward_to( m_v.data() + j*nfft , PPPMFactor::VIRIAL , p.vg.data() , j );
         }
 
         // 4. gradient of the potential, i.k V(k) back to real space
-        const double * fk[3] = { p.fkx.data() , p.fky.data() , p.fkz.data() };
-        for( int d = 0 ; d < 3 ; d++ )
-        {
-          const double * __restrict__ k = fk[d];
-          backward_to( m_vd.data() + d*nfft , [k]( ssize_t i , const Complexd& c ) { return Complexd{ - k[i] * c.i , k[i] * c.r }; } );
-        }
+        backward_to( m_vd.data()          , PPPMFactor::IK , p.fkx.data() );
+        backward_to( m_vd.data() +   nfft , PPPMFactor::IK , p.fky.data() );
+        backward_to( m_vd.data() + 2*nfft , PPPMFactor::IK , p.fkz.data() );
 
         // 5. interpolate field (and energy, virial) back to local particles
         PPPMMeshes meshes = { m_vd.data() , m_vd.data() + nfft , m_vd.data() + 2*nfft , m_u.data() , m_v.data() };
@@ -356,7 +423,8 @@ Reciprocal space part of PPPM long range coulomb (ik differentiation), set up by
 Same algorithm as LAMMPS kspace_style pppm, orthogonal and triclinic cells. Use with coulombic_ewald_short_range for
 the real space part. Computes forces, and when trigger_thermo_state is true, per particle energy (reciprocal + self +
 neutralizing background) and per particle reciprocal virial.
-The mesh is global and replicated on every MPI rank (density summed with MPI_Allreduce). CPU only for now.
+The mesh is global and replicated on every MPI rank (density summed with MPI_Allreduce). When a GPU is available,
+particle kernels, mesh loops and FFTs (cuFFT) run on the GPU ; otherwise on CPU with pocketfft.
 )EOF";
     }
   };

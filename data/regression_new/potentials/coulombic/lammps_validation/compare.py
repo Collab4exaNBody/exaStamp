@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Validation of the coulombic operators (wolf, dsf, ewald) against LAMMPS, on 12000 atoms of disturbed UO2.
+"""Validation of the coulombic operators (wolf, dsf, ewald, pppm) against LAMMPS, on 12000 atoms of disturbed UO2.
 
-Reference (LAMMPS with KSPACE, metal units), already stored here as log_<case>.lammps and dump_<case>.10.txt :
-    lmp -in in.coul -var case <wolf|dsf|ewald_auto|ewald_fixed>
+Only inputs are stored here. First generate the reference (LAMMPS with KSPACE, metal units), from this folder :
+    lmp -in in.coul -var case <case> -log log_<case>.lammps    # writes dump_<case>.{0,10}.txt
+    case = wolf|dsf|ewald_auto|ewald_fixed|ewald_tri|ewald_tri_fixed|pppm|pppm_tri
 exaStamp runs (from this folder, 1 thread is enough) :
     exaStamp exastamp_<case>.msp                 # e.g. exastamp_wolf.msp, exastamp_ewald_fixed+sym.msp
     mpirun -np 2 exaStamp exastamp_<case>.msp    # MPI check, same files
@@ -17,7 +18,8 @@ dF ~3e-8 eV/ang, dE_atom ~3e-8 eV : differences are at output precision.
 Cases ewald_tri / ewald_tri_fixed / pppm_tri use a triclinic cell (UO2_tri.lmp / UO2_tri_ext.xyz, tilts xy=5 xz=3 yz=4 ang).
 Cases pppm / pppm_tri (coulombic_pppm, LAMMPS kspace_style pppm 1e-5 order 5 diff ik) : g_ewald and mesh are chosen
 automatically by both codes and agree (pppm 0.33415064, 72x72x72 ; pppm_tri 0.33026023, 72x75x75) ; same expected
-differences as Ewald. Variant pppm_tri+species reads species charges.
+differences as Ewald. Variant pppm_tri+species reads species charges. Variants pppm+gpu / pppm_tri+gpu run with
+nogpu: false (GPU kernels + cuFFT on Cuda builds) and give the same agreement.
 Variants +pair use the pair potential template front-ends (coul_wolf_pair, coul_dsf) with species charges. For dsf+pair,
 energies differ by 3.74e-2 eV in total (8e-6 eV per atom) : the template subtracts e(rcut) per pair, which is not exactly
 0 for DSF (A&S erfc) ; forces are identical.
