@@ -76,8 +76,10 @@ inline namespace coulombic_ewald // distinct symbols from the legacy ewald plugi
         const double ps = r.x * gdata.Gx + r.y * gdata.Gy + r.z * gdata.Gz;
         double s,c;
         sincos(ps,&s,&c);
-        ONIKA_CU_BLOCK_ATOMIC_ADD( m_ewald_rho[k].r , q * c );
-        ONIKA_CU_BLOCK_ATOMIC_ADD( m_ewald_rho[k].i , q * s );
+        // all threads of all blocks accumulate into the same S(k) : must be a true atomic on CPU too
+        // (ONIKA_CU_BLOCK_ATOMIC_ADD is a plain += on CPU, racing between OpenMP threads)
+        ONIKA_CU_ATOMIC_ADD( m_ewald_rho[k].r , q * c );
+        ONIKA_CU_ATOMIC_ADD( m_ewald_rho[k].i , q * s );
       }
     }
   };
