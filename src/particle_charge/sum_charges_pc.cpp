@@ -24,7 +24,8 @@ under the License.
 #include <onika/cpp_utils.h>
 #include <exanb/core/parallel_grid_algorithm.h>
 
-#include <iostream>
+#include <cmath>
+#include <algorithm>
 #include <mpi.h>
 
 namespace exaStamp
@@ -92,20 +93,31 @@ namespace exaStamp
        *sum_square_charge = tmp[1]; 
       }
 
-  //    *sum_charge = sc;
- //     *sum_square_charge = sc2;
 
 
       ldbg<<" Sum charge : "<<*sum_charge<<std::endl<<std::flush;
       ldbg<<" Sum square charge : "<<*sum_square_charge<<std::endl<<std::flush;
 
-      if(*sum_charge > 1.e-10){
-        lout<<"######## ERROR in sum_charges_pc.cpp : the system is'nt neutral : sum charge :  ="<<*sum_charge<<std::endl;
-        std::abort();
+      // non neutral system : Ewald and PPPM add the neutralizing background term, short range methods do not
+      int rank = 0;
+      MPI_Comm_rank( *mpi , &rank );
+      if( rank == 0 && std::abs( *sum_charge ) > 1.e-10 * std::max( 1.0 , std::sqrt( *sum_square_charge ) ) )
+      {
+        lout << "Warning: the system is not neutral, total charge = "<< *sum_charge
+             << " e. Ewald and PPPM add a neutralizing background term, short range coulombic methods do not." << std::endl;
       }
 
     }
 
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+Total charge, sum of squared charges and number of particles of the system (all MPI ranks), computed from the per particle charge field.
+Required by coulombic_ewald_init and coulombic_pppm_init (call it at the end of setup_system, before them).
+Use sum_charges when charges come from the species definitions instead.
+Prints a warning when the system is not neutral.
+)EOF";
+    }
   };
 
   template<class GridT> using SumChargesPC = SumChargesPCOperator<GridT>;

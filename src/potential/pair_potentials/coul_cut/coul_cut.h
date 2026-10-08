@@ -21,7 +21,7 @@ under the License.
 #include <yaml-cpp/yaml.h>
 
 #include <onika/physics/units.h>
-#include <onika/physics/units.h>
+#include <onika/log.h>
 #include <exaStamp/potential_factory/pair_potential.h>
 #include <onika/physics/constants.h>
 #include <exaStamp/unit_system.h>
@@ -37,7 +37,6 @@ namespace exaStamp
   struct CoulCutParms
   {
     double dielectric = 1.0;
-    bool shift = true;
   };
 
   ONIKA_HOST_DEVICE_FUNC inline void coul_cut_energy(const CoulCutParms& p, const PairPotentialMinimalParameters& p_pair, double r, double& e, double& de)
@@ -64,8 +63,11 @@ namespace YAML
 
       if( !node.IsMap() ) { return false; }
       v.dielectric = node["dielectric"].as<Quantity>().convert();
-      v.shift = node["shift"].as<bool>();
-      std::cout << "shift val = " << v.shift << std::endl;
+      // the pair potential template always shifts the energy to 0 at the cutoff : 'shift' is accepted for older inputs only
+      if( node["shift"] && ! node["shift"].as<bool>() )
+      {
+        onika::lout << "Warning: coul_cut 'shift: false' is ignored, the energy is always shifted to 0 at the cutoff" << std::endl;
+      }
       return true;
     }
   };
