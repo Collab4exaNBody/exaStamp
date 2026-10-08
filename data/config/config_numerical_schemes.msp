@@ -132,6 +132,7 @@ verlet_nhnvt:
 verlet_nhnpt:
   name: NHNPT_scheme
   body:
+    - force_thermo_state                  # pressure (virial) needed at every step
     - simulation_thermodynamic_state
     - nhc_press_integrate
     - nhc_temp_integrate
