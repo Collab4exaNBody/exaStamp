@@ -141,7 +141,7 @@ inline namespace coulombic_ewald
     onika::memory::CudaMMVector<double> fkx, fky, fkz;
 
     PPPMDecomposition dec;
-    bool mesh_distributed_user = false; // distributed mesh requested (also valid with one rank)
+    bool mesh_distributed_user = false; // distributed mesh in use (several ranks, mesh_decomposition not replicated)
     onika::memory::CudaMMVector<int> krow_partner; // distributed : local row of -y for each local row
 
     inline size_t nfft() const { return size_t(nx) * size_t(ny) * size_t(nz); }

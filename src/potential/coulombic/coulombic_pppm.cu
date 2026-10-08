@@ -1083,7 +1083,7 @@ Same algorithm as LAMMPS kspace_style pppm, orthogonal and triclinic cells (ad :
 optional slab correction (EW3DC, z non periodic). Use with coulombic_ewald_short_range for
 the real space part. Computes forces, and when trigger_thermo_state is true, per particle energy (reciprocal + self +
 neutralizing background) and per particle reciprocal virial.
-Mesh decomposition (coulombic_pppm_init mesh_decomposition) : distributed (default), each rank spreads its particles on
+Mesh decomposition (coulombic_pppm_init mesh_decomposition) : distributed (default, replicated path on a single rank), each rank spreads its particles on
 a local brick, the mesh is split in z slabs for the xy FFTs and in y rows for the z FFTs (MPI_Alltoallv exchanges, the
 rank's own points copied directly) ; replicated, the whole mesh on every MPI rank (density summed with MPI_Allreduce,
 every rank runs the full FFTs). When a GPU

@@ -45,7 +45,7 @@ inline namespace coulombic_ewald
     ADD_SLOT( long              , order             , INPUT , 5 , DocString{"charge assignment order, 2 to 7"} );
     ADD_SLOT( double            , slab              , INPUT , 0.0 , DocString{"slab correction (EW3DC, z non periodic) : z extension factor of the cell (> 1, LAMMPS kspace_modify slab), 0 = none"} );
     ADD_SLOT( bool              , slab_auto         , INPUT , false , DocString{"slab correction with the extension factor computed from accuracy and g_ewald (LAMMPS kspace_modify slab auto)"} );
-    ADD_SLOT( std::string       , mesh_decomposition, INPUT , std::string("distributed") , DocString{"distributed (mesh split among ranks, default), replicated (whole mesh on every MPI rank) or auto (distributed with several ranks)"} );
+    ADD_SLOT( std::string       , mesh_decomposition, INPUT , std::string("distributed") , DocString{"distributed (mesh split among ranks, default ; on a single rank the replicated path is used), replicated (whole mesh on every MPI rank) or auto (same as distributed)"} );
     ADD_SLOT( std::string       , diff              , INPUT , std::string("ik") , DocString{"differentiation : ik (3 inverse FFTs) or ad (analytic, 1 inverse FFT, orthogonal cells only)"} );
     ADD_SLOT( Domain            , domain            , INPUT , OPTIONAL );
     ADD_SLOT( double            , sum_square_charge , INPUT );
@@ -80,7 +80,8 @@ inline namespace coulombic_ewald
       }
       int nprocs = 1;
       MPI_Comm_size( *mpi , &nprocs );
-      const bool mesh_distributed = ( *mesh_decomposition == "distributed" ) || ( *mesh_decomposition == "auto" && nprocs > 1 );
+      // on a single rank the distributed mesh brings only extra layout transposes : use the replicated path
+      const bool mesh_distributed = ( *mesh_decomposition != "replicated" ) && nprocs > 1;
 
       if( domain.has_value() )
       {
@@ -110,7 +111,7 @@ inline namespace coulombic_ewald
           const bool use_slab = *slab_auto || *slab > 0.0;
           if( ! use_slab && ! ( domain->periodic_boundary_x() && domain->periodic_boundary_y() && domain->periodic_boundary_z() ) )
           {
-            fatal_error() << "Domain must be entierly periodic, cannot initialize PPPM (or use the slab correction, z non periodic)." << std::endl;
+            fatal_error() << "Domain must be entirely periodic, cannot initialize PPPM (or use the slab correction, z non periodic)." << std::endl;
           }
           if( use_slab && ! ( domain->periodic_boundary_x() && domain->periodic_boundary_y() && ! domain->periodic_boundary_z() ) )
           {
@@ -183,7 +184,7 @@ slab / slab_auto : slab correction (EW3DC) for systems periodic in x and y only,
 kspace_modify slab <volfactor> / slab auto ; triclinic cells need xz = yz = 0. With diff ad, the z field uses the
 extended mesh spacing (LAMMPS fieldforce_ad uses the unextended one, which gives wrong z forces). Also fills ewald_config with the real space
 parameters (g_ewald, radius) used by coulombic_ewald_short_range. Needs sum_square_charge, sum_charge and natoms
-(sum_charges operator). When only the cell changes, mesh and g_ewald are kept and the influence function is rebuilt.
+(sum_charges or sum_charges_pc operator). When only the cell changes, mesh and g_ewald are kept and the influence function is rebuilt.
 )EOF";
     }
 
