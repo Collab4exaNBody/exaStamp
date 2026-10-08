@@ -81,6 +81,17 @@ inline namespace coulombic_ewald
       const EwaldShortRangeKernel kernel = { ReadOnlyEwaldParameters( *ewald_config ) };
       coulombic_pair_compute( *grid, *chunk_neighbors, *domain, *species, kernel, opt, [this](){ return parallel_execution_context(); } );
     }
+
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+Real space part of Ewald and PPPM long range coulomb : qi.qj/(4.pi.eps0) erfc(g_ewald.r)/r for r < radius, as LAMMPS
+pair_style coul/long. Its parameters (g_ewald, radius) come from coulombic_ewald_init or coulombic_pppm_init.
+Charges are read from the per particle charge field (per_atom_charge: true, default) or from the species.
+Forces are always computed ; per particle energies and virial when trigger_thermo_state is true.
+With use_symmetry: true, ghost_fold_back: true computes pairs from owned cells only (see the slot documentation).
+)EOF";
+    }
   };
 
   template<class GridT> using EwaldShortRangePCTmpl = EwaldShortRangePC<GridT>;

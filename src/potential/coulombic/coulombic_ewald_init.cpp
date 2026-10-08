@@ -36,19 +36,19 @@ inline namespace coulombic_ewald
   class EwaldInitOperator : public OperatorNode
   {
     // ========= I/O slots =======================
-    ADD_SLOT( double     , accuracy_relative , INPUT , REQUIRED );
-    ADD_SLOT( double     , g_ewald       , INPUT , REQUIRED );
-    ADD_SLOT( double     , radius      , INPUT , REQUIRED );
-    ADD_SLOT( long       , kmax        , INPUT , REQUIRED );
-    ADD_SLOT( Domain     , domain      , INPUT , OPTIONAL );
-    ADD_SLOT( EwaldParameters , ewald_config, INPUT_OUTPUT );
-    ADD_SLOT( double     , rcut        , OUTPUT );
-    ADD_SLOT( double     , sum_square_charge, INPUT );
-    ADD_SLOT( double     , sum_charge, INPUT );
-    ADD_SLOT( uint64_t   , natoms , INPUT , OPTIONAL);
-    ADD_SLOT( double     , rcut_max    , INPUT_OUTPUT , 0.0 );
-    ADD_SLOT( MPI_Comm           , mpi                 , INPUT );
-             
+    ADD_SLOT( double            , accuracy_relative , INPUT , 1.0e-5 , DocString{"relative rms force accuracy (relative to the force between two unit charges at 1 ang)"} );
+    ADD_SLOT( double            , g_ewald           , INPUT , 0.0 , DocString{"Ewald splitting parameter, 0 = automatic"} );
+    ADD_SLOT( double            , radius            , INPUT , REQUIRED , DocString{"real space cutoff"} );
+    ADD_SLOT( long              , kmax              , INPUT , 0 , DocString{"maximum k vector index, same in the 3 directions (LAMMPS kspace_modify kmax/ewald), 0 = automatic per direction"} );
+    ADD_SLOT( Domain            , domain            , INPUT , OPTIONAL );
+    ADD_SLOT( double            , sum_square_charge , INPUT );
+    ADD_SLOT( double            , sum_charge        , INPUT );
+    ADD_SLOT( uint64_t          , natoms            , INPUT , OPTIONAL );
+    ADD_SLOT( MPI_Comm          , mpi               , INPUT );
+    ADD_SLOT( EwaldParameters   , ewald_config      , INPUT_OUTPUT , DocString{"k vectors and real space parameters, for coulombic_ewald_long_range and coulombic_ewald_short_range"} );
+    ADD_SLOT( double            , rcut              , OUTPUT );
+    ADD_SLOT( double            , rcut_max          , INPUT_OUTPUT , 0.0 );
+
   public:
 
     // -----------------------------------------------
@@ -82,7 +82,7 @@ inline namespace coulombic_ewald
         {
           if( ! ( domain->periodic_boundary_x() && domain->periodic_boundary_y() && domain->periodic_boundary_z() ) )
           {
-            fatal_error() << "Domain must be entierly periodic, cannot initialize ewald." << std::endl;
+            fatal_error() << "Domain must be entirely periodic, cannot initialize ewald." << std::endl;
           }
           if( ! natoms.has_value() )
           {
@@ -114,6 +114,17 @@ inline namespace coulombic_ewald
 
       *rcut = *radius;
       *rcut_max = std::max( *rcut_max , *radius );
+    }
+
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+Initializes the Ewald summation (coulombic_ewald_long_range), same algorithm and parameter choice as LAMMPS
+kspace_style ewald. Works on orthogonal and triclinic periodic cells. g_ewald and kmax are computed from
+accuracy_relative when set to 0. Also fills ewald_config with the real space parameters (g_ewald, radius) used by
+coulombic_ewald_short_range. Needs sum_square_charge, sum_charge and natoms (sum_charges or sum_charges_pc operator).
+When the cell changes (NPT, deformation), all parameters and k vectors are recomputed.
+)EOF";
     }
 
   };

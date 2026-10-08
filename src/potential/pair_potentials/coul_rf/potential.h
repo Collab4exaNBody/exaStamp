@@ -22,7 +22,7 @@ under the License.
 
 #include <onika/physics/units.h>
 #include <exaStamp/potential_factory/pair_potential.h>
-#include <exaStamp/potential/reaction_field/reaction_field.h>
+#include <exaStamp/potential/pair_potentials/coul_rf/coul_rf.h>
 
 #include <onika/cuda/cuda.h>
 #include <onika/flat_tuple.h>
@@ -37,7 +37,7 @@ namespace exaStamp
   }
 }
 
-#define USTAMP_POTENTIAL_NAME     reaction_field
+#define USTAMP_POTENTIAL_NAME     coul_rf
 #define USTAMP_POTENTIAL_PARAMS   ReactionFieldParms
 #define USTAMP_POTENTIAL_COMPUTE  reaction_field_compute_energy
 

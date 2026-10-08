@@ -15,15 +15,15 @@ specific language governing permissions and limitations
 under the License.
 */
 
-#pragma once
+// coul_wolf was named coul_wolf_pair : old operator and potential names are kept for existing input files.
 
-#include <exaStamp/potential/pair_potentials/coul_wolf_pair/coul_wolf_pair.h>
+#include <exaStamp/potential_factory/pair_potential_alias.h>
+#include <onika/cpp_utils.h>
 
-#define USTAMP_POTENTIAL_NAME     coul_wolf_pair
-#define USTAMP_POTENTIAL_PARAMS   CoulWolfParms
-#define USTAMP_POTENTIAL_COMPUTE  coul_wolf_pair_energy
-
-#define USTAMP_POTENTIAL_PAIR_PARAMS_EXTRACT(p) char(0) // PairPotentialParameters not used in computation
-
-//#define USTAMP_POTENTIAL_ENABLE_CUDA 1
-
+namespace exaStamp
+{
+  ONIKA_AUTORUN_INIT(coul_wolf_deprecated_names)
+  {
+    register_deprecated_pair_style_alias( "coul_wolf_pair" , "coul_wolf" );
+  }
+}

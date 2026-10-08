@@ -27,7 +27,8 @@ namespace exaStamp
 {
   using namespace exanb;
 
-  // ReactionField Parameters
+  // Reaction field coulomb potential (dielectric continuum beyond rc). Single definition, used by the coul_rf pair style,
+  // the ljrf, exp6rf and ljexp6rf pair styles, the ljexp6rf_pc molecular force field and coulombic_rf (per atom charges).
   struct ReactionFieldParms
   {
     //double epsilon = 80.0;

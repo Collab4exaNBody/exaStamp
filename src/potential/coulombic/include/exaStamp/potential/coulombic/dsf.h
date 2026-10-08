@@ -30,6 +30,12 @@ namespace exaStamp
     DsfParameters m_params;
     DsfKernel() = default;
     inline DsfKernel(const DsfParameters& p) : m_params(p) {}
+    static inline const char* documentation() { return R"EOF(
+Damped shifted force coulomb potential with per particle charges (Fennell & Gezelter, LAMMPS pair_style coul/dsf) :
+energy and force shifted to 0 at rc. parameters : { alpha: <1/distance> , rc: <distance> }.
+The self energy -(e_shift/2 + alpha/sqrt(pi)).q^2/(4.pi.eps0) is included (self_energy: true).
+Pair style with species charges : coul_dsf.
+)EOF"; }
     ONIKA_HOST_DEVICE_FUNC inline void operator () (double c, double r, double& e, double& de) const { coul_dsf_kernel( m_params, c, r, e, de ); }
     ONIKA_HOST_DEVICE_FUNC inline double self_energy(double q) const { return coul_dsf_self_energy( m_params, q ); }
   };

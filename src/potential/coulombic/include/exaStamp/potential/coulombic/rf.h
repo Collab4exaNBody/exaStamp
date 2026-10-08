@@ -18,9 +18,9 @@ under the License.
 
 #pragma once
 
-// Per atom charge front-end of the reaction field potential. The kernel is defined once, in the reaction_field plugin
-// (also used by the reaction_field, ljrf, exp6rf and ljexp6rf pair potentials).
-#include <exaStamp/potential/reaction_field/reaction_field.h>
+// Per atom charge front-end of the reaction field potential. The kernel is defined once, in the coul_rf pair potential
+// (also used by the ljrf, exp6rf and ljexp6rf pair potentials and the ljexp6rf_pc molecular force field).
+#include <exaStamp/potential/pair_potentials/coul_rf/coul_rf.h>
 
 namespace exaStamp
 {
@@ -31,6 +31,11 @@ namespace exaStamp
     ReactionFieldParameters m_params;
     ReactionFieldKernel() = default;
     inline ReactionFieldKernel(const ReactionFieldParameters& p) : m_params(p) {}
+    static inline const char* documentation() { return R"EOF(
+Reaction field coulomb potential with per particle charges (dielectric continuum beyond rc) :
+E = qi.qj/(4.pi.eps0) [1/r + k_rf.r^2 - c_rf] for r < rc, k_rf = (eps-1)/(2.eps+1)/rc^3, c_rf = 1/rc + k_rf.rc^2.
+parameters : { epsilon: <dielectric constant> , rc: <distance> }. Pair style with species charges : coul_rf.
+)EOF"; }
     ONIKA_HOST_DEVICE_FUNC inline void operator () (double c, double r, double& e, double& de) const { reaction_field_compute_energy( m_params, c, r, e, de ); }
   };
 }

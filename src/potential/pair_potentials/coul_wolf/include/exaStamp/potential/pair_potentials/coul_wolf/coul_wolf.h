@@ -32,7 +32,7 @@ namespace exaStamp
   using namespace exanb;
 
   // Wolf damped shifted coulomb potential (LAMMPS pair coul/wolf).
-  // Single definition, used by the pair potential template (coul_wolf_pair, ljwolf) and by coulombic_wolf (per atom charges).
+  // Single definition, used by the pair potential template (coul_wolf, ljwolf) and by coulombic_wolf (per atom charges).
   struct CoulWolfParms
   {
     double alpha = 0.0;

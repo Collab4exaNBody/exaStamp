@@ -45,7 +45,6 @@ add_subdirectory(meam)
 add_subdirectory(coulombic)
 #add_subdirectory(coul_dsf)
 #add_subdirectory(coul_wolf)
-add_subdirectory(reaction_field)
 # ======================================================= #
 
 # ======================================================= #

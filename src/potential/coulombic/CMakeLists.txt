@@ -18,9 +18,9 @@
 set(exaStampCoulombic_LINK_LIBRARIES exaStampCompute exaStampPotential exanbParticleNeighbors)
 # pair kernels are header only and defined once, next to the pair potentials using them
 set(exaStampCoulombic_INCLUDE_DIRS
-  ${CMAKE_CURRENT_SOURCE_DIR}/../pair_potentials/coul_wolf_pair/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../pair_potentials/coul_wolf/include
   ${CMAKE_CURRENT_SOURCE_DIR}/../pair_potentials/coul_dsf/include
-  ${CMAKE_CURRENT_SOURCE_DIR}/../reaction_field/include)
+  ${CMAKE_CURRENT_SOURCE_DIR}/../pair_potentials/coul_rf/include)
 # PPPM FFT : cuFFT on Cuda builds (used when a GPU is available at runtime), vendored pocketfft otherwise
 if(ONIKA_BUILD_CUDA AND NOT ONIKA_ENABLE_HIP)
   set(exaStampCoulombic_COMPILE_DEFINITIONS EXASTAMP_PPPM_CUFFT=1)
