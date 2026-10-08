@@ -35,7 +35,7 @@ compute_force:
   - ionic_eletronic_heat_transfer:
       gamma_p: 29.5917 Da/ps
       gamma_s: 47.5679 Da/ps
-      lammps_noise: true
+      uniform_noise: true
       v_0: 58.4613 ang/ps
       Ke: 0.0005365 eV/ps/ang/K
       Ce: 1.2470e-5 eV/K

@@ -30,7 +30,7 @@ namespace exaStamp
   //
   // salt selects which of a particle's 3 independent per-axis draws (0=x, 1=y, 2=z) this call produces.
 
-  // uniform draw in [-0.5,0.5), matching LAMMPS fix-ttm's own noise convention (lammps_noise: true).
+  // uniform draw in [-0.5,0.5), matching LAMMPS fix-ttm's own noise convention (uniform_noise: true).
   ONIKA_HOST_DEVICE_FUNC inline double ttm_langevin_uniform_rand( uint64_t p_id, uint64_t md_step, int salt )
   {
     return exanb::particle_random_key( p_id, md_step * 8 + uint64_t(salt) ) - 0.5;

@@ -77,7 +77,7 @@ namespace exaStamp
     // false (default): Gaussian noise, sqrt(2*kB*gamma_p*Te/dt) prefactor (this codebase's own
     // langevin_thermostat convention). true: LAMMPS fix-ttm's own uniform[-0.5,0.5) noise,
     // sqrt(24*kB*gamma_p*Te/dt) prefactor (same target variance, different RNG family).
-    ADD_SLOT( bool           , lammps_noise , INPUT , false );
+    ADD_SLOT( bool           , uniform_noise , INPUT , false );
     // false (default): one explicit-Euler diffusion step per MD step, as before. true: LAMMPS
     // fix-ttm's own stability check (fix_ttm.cpp end_of_step) -- if a single step would exceed
     // the explicit-diffusion stability limit, subdivide it into several smaller inner steps.
@@ -377,8 +377,8 @@ namespace exaStamp
       if( gamma_p_coupling != 0.0 )
       {
         const double kB = onika::physics::make_quantity( onika::physics::boltzmann, "J/K" ).convert();
-        const bool use_lammps_noise = *lammps_noise;
-        const double noise_variance_factor = use_lammps_noise ? 24.0 : 2.0; // uniform vs gaussian fluctuation-dissipation prefactor
+        const bool use_uniform_noise = *uniform_noise;
+        const double noise_variance_factor = use_uniform_noise ? 24.0 : 2.0; // uniform vs gaussian fluctuation-dissipation prefactor
 
         // Pass B, GPU-portable: exanb::compute_cell_particles + TtmLangevinCouplingFunctor, see
         // ttm_langevin_coupling.h -- replaces the old #pragma omp parallel / GRID_OMP_FOR_BEGIN block.
@@ -386,7 +386,7 @@ namespace exaStamp
           cells,
           grid->origin(), grid->offset(), dims, gl, subdiv,
           cell_size, subcell_size, sp_size,
-          gamma_p_coupling, *gamma_s, (*v_0)*(*v_0), kB, delta_t, noise_variance_factor, use_lammps_noise, uint64_t(*timestep),
+          gamma_p_coupling, *gamma_s, (*v_0)*(*v_0), kB, delta_t, noise_variance_factor, use_uniform_noise, uint64_t(*timestep),
           masses,
           Te, cell_te_data.m_stride,
           cell_energy_transfer
@@ -667,11 +667,11 @@ Handles heat transfer between ionic and electronic temperatures. Electronic temp
 while ionic temperature (Ti) commes from particles kinetic energy.
 1. compute per cell Ti (diagnostic / copy_ti_te only)
 2. apply an additive Langevin force (friction gamma_p, boosted to gamma_p+gamma_s above velocity
-   v_0, plus noise -- gaussian by default, or LAMMPS fix-ttm's own uniform noise if lammps_noise:
+   v_0, plus noise -- gaussian by default, or uniform noise in [-0.5,0.5) if uniform_noise:
    true) to each particle using the local Te; the work done on particles is deposited back as a Te sink
 3. solve the heat equation on the rectilinear grid for Te (conduction Ke/(Ce*rho_e), the coupling sink, and
    source terms) over local cells; if substep_diffusion: true and a single MD step would exceed the explicit-diffusion
-   stability limit (LAMMPS fix-ttm style), this step is subdivided into several smaller inner steps, with a
+   stability limit, this step is subdivided into several smaller inner steps, with a
    ghost exchange of Te between them (ghost Te is otherwise refreshed once per MD step by ghost_update_r)
 NOTE: the coupling also runs over ghost particles, whose velocities are only current if a ghost_update_r_v is
 run before this operator (ghost_update_r sends positions only)

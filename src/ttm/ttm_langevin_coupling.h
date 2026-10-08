@@ -56,7 +56,7 @@ namespace exaStamp
     double kB = 0.0;
     double delta_t = 0.0;
     double noise_variance_factor = 2.0;
-    bool use_lammps_noise = false;
+    bool use_uniform_noise = false;
     uint64_t rng_md_step = 0;
 
     const double * __restrict__ masses = nullptr;   // persistent GPU-visible species-mass table
@@ -128,9 +128,9 @@ namespace exaStamp
         double friction = gamma_p;
         if( gamma_s != 0.0 && norm2(v) > v_0_sq ) { friction += gamma_s; }
 
-        const double noise_x = use_lammps_noise ? ttm_langevin_uniform_rand(p_id,rng_md_step,0) : ttm_langevin_gauss_rand(p_id,rng_md_step,0);
-        const double noise_y = use_lammps_noise ? ttm_langevin_uniform_rand(p_id,rng_md_step,1) : ttm_langevin_gauss_rand(p_id,rng_md_step,1);
-        const double noise_z = use_lammps_noise ? ttm_langevin_uniform_rand(p_id,rng_md_step,2) : ttm_langevin_gauss_rand(p_id,rng_md_step,2);
+        const double noise_x = use_uniform_noise ? ttm_langevin_uniform_rand(p_id,rng_md_step,0) : ttm_langevin_gauss_rand(p_id,rng_md_step,0);
+        const double noise_y = use_uniform_noise ? ttm_langevin_uniform_rand(p_id,rng_md_step,1) : ttm_langevin_gauss_rand(p_id,rng_md_step,1);
+        const double noise_z = use_uniform_noise ? ttm_langevin_uniform_rand(p_id,rng_md_step,2) : ttm_langevin_gauss_rand(p_id,rng_md_step,2);
 
         const double noise_amplitude = std::sqrt( noise_variance_factor * kB * gamma_p * Te_local / delta_t );
         const Vec3d f_langevin {
