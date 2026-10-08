@@ -873,7 +873,7 @@ inline namespace coulombic_ewald
       // GPU path when a device is available : particle kernels, mesh loops and cuFFT all run there (unified memory)
       const bool gpu_available = ( global_cuda_ctx() != nullptr ) && global_cuda_ctx()->has_devices() && PPPMFFT::gpu_support();
       void* stream = nullptr;
-#     ifdef EXASTAMP_PPPM_CUFFT
+#     if defined(EXASTAMP_PPPM_CUFFT) || defined(EXASTAMP_PPPM_HIPFFT)
       if( gpu_available ) stream = global_cuda_ctx()->getThreadStream(0);
 #     endif
       m_gpu = gpu_available;
@@ -1079,7 +1079,7 @@ inline namespace coulombic_ewald
     {
       return R"EOF(
 Reciprocal space part of PPPM long range coulomb (ik or ad differentiation), set up by coulombic_pppm_init.
-Same algorithm as LAMMPS kspace_style pppm, orthogonal and triclinic cells (ad : orthogonal only, as LAMMPS), with
+Orthogonal and triclinic cells (ad : orthogonal only), with
 optional slab correction (EW3DC, z non periodic). Use with coulombic_ewald_short_range for
 the real space part. Computes forces, and when trigger_thermo_state is true, per particle energy (reciprocal + self +
 neutralizing background) and per particle reciprocal virial.
@@ -1087,7 +1087,7 @@ Mesh decomposition (coulombic_pppm_init mesh_decomposition) : distributed (defau
 a local brick, the mesh is split in z slabs for the xy FFTs and in y rows for the z FFTs (MPI_Alltoallv exchanges, the
 rank's own points copied directly) ; replicated, the whole mesh on every MPI rank (density summed with MPI_Allreduce,
 every rank runs the full FFTs). When a GPU
-is available, particle kernels, mesh loops and FFTs (cuFFT) run on the GPU ; otherwise on CPU with pocketfft.
+is available, particle kernels, mesh loops and FFTs (cuFFT or hipFFT) run on the GPU ; otherwise on CPU with pocketfft.
 )EOF";
     }
   };

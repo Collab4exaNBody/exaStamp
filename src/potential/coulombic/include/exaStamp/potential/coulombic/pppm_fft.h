@@ -19,11 +19,13 @@ under the License.
 
 // 3D complex-to-complex FFT on a nx*ny*nz mesh stored with x fastest (index (iz*ny+iy)*nx+ix).
 // Unnormalized, forward = exp(-i k.x), backward = exp(+i k.x), as LAMMPS FFT3d used by PPPM.
-// GPU : cuFFT (Cuda builds, EXASTAMP_PPPM_CUFFT), in place on unified memory, asynchronous on the given stream :
+// GPU : cuFFT (Cuda builds, EXASTAMP_PPPM_CUFFT) or hipFFT (HIP builds, EXASTAMP_PPPM_HIPFFT), in place on unified
+// memory, asynchronous on the given stream :
 // call sync() before the results are used from another stream or from the host.
 // CPU : pocketfft (vendored in pocketfft/). Both are only included by pppm_fft.cpp.
 
 #include <onika/math/basic_types.h>
+#include <cstdint>
 
 namespace exaStamp
 {
@@ -39,7 +41,7 @@ inline namespace coulombic_ewald
     PPPMFFT& operator = ( const PPPMFFT& ) = delete;
     ~PPPMFFT();
 
-    // use_gpu : run with cuFFT (only possible when compiled with EXASTAMP_PPPM_CUFFT), stream = cudaStream_t to run on
+    // use_gpu : run with cuFFT / hipFFT (only possible when compiled with one of them), stream = cudaStream_t / hipStream_t
     void resize( int nx, int ny, int nz, bool use_gpu = false, void* stream = nullptr );
     void forward( Complexd* data ) const;
     void backward( Complexd* data ) const;
@@ -55,7 +57,7 @@ inline namespace coulombic_ewald
     int m_nx = 0, m_ny = 0, m_nz = 0;
     bool m_gpu = false;
     void* m_stream = nullptr;
-    int m_plan = 0;          // cufftHandle
+    std::intptr_t m_plan = 0;          // GPU FFT plan (cufftHandle / hipfftHandle)
     bool m_has_plan = false;
   };
 
@@ -84,8 +86,8 @@ inline namespace coulombic_ewald
     int m_nx = 0, m_ny = 0, m_nz = 0, m_nzl = 0, m_ncol = 0;
     bool m_gpu = false;
     void* m_stream = nullptr;
-    int m_plan_planes = 0;   // cufftHandle
-    int m_plan_columns = 0;  // cufftHandle
+    std::intptr_t m_plan_planes = 0;   // GPU FFT plans (cufftHandle / hipfftHandle)
+    std::intptr_t m_plan_columns = 0;
     bool m_has_plan_planes = false;
     bool m_has_plan_columns = false;
   };

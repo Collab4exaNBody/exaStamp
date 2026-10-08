@@ -39,7 +39,7 @@ inline namespace coulombic_ewald
     ADD_SLOT( double            , accuracy_relative , INPUT , 1.0e-5 , DocString{"relative rms force accuracy (relative to the force between two unit charges at 1 ang)"} );
     ADD_SLOT( double            , g_ewald           , INPUT , 0.0 , DocString{"Ewald splitting parameter, 0 = automatic"} );
     ADD_SLOT( double            , radius            , INPUT , REQUIRED , DocString{"real space cutoff"} );
-    ADD_SLOT( long              , kmax              , INPUT , 0 , DocString{"maximum k vector index, same in the 3 directions (LAMMPS kspace_modify kmax/ewald), 0 = automatic per direction"} );
+    ADD_SLOT( long              , kmax              , INPUT , 0 , DocString{"maximum k vector index, same in the 3 directions, 0 = automatic per direction"} );
     ADD_SLOT( Domain            , domain            , INPUT , OPTIONAL );
     ADD_SLOT( double            , sum_square_charge , INPUT );
     ADD_SLOT( double            , sum_charge        , INPUT );
@@ -119,8 +119,7 @@ inline namespace coulombic_ewald
     inline std::string documentation() const override final
     {
       return R"EOF(
-Initializes the Ewald summation (coulombic_ewald_long_range), same algorithm and parameter choice as LAMMPS
-kspace_style ewald. Works on orthogonal and triclinic periodic cells. g_ewald and kmax are computed from
+Initializes the Ewald summation (coulombic_ewald_long_range). Works on orthogonal and triclinic periodic cells. g_ewald and kmax are computed from
 accuracy_relative when set to 0. Also fills ewald_config with the real space parameters (g_ewald, radius) used by
 coulombic_ewald_short_range. Needs sum_square_charge, sum_charge and natoms (sum_charges or sum_charges_pc operator).
 When the cell changes (NPT, deformation), all parameters and k vectors are recomputed.

@@ -22,14 +22,26 @@ under the License.
 #include <omp.h>
 #include <algorithm>
 #include <cstdint>
+#include <type_traits>
 
 // pocketfft's own thread pool would compete with OpenMP
 #define POCKETFFT_NO_MULTITHREADING
 #include <exaStamp/potential/coulombic/pocketfft/pocketfft_hdronly.h>
 
-#ifdef EXASTAMP_PPPM_CUFFT
+#if defined(EXASTAMP_PPPM_CUFFT)
 #include <cuda_runtime.h>
 #include <cufft.h>
+#elif defined(EXASTAMP_PPPM_HIPFFT)
+#include <hip/hip_runtime_api.h>
+#if __has_include(<hipfft/hipfft.h>)
+#include <hipfft/hipfft.h>
+#else
+#include <hipfft.h>
+#endif
+#endif
+
+#if defined(EXASTAMP_PPPM_CUFFT) || defined(EXASTAMP_PPPM_HIPFFT)
+#define EXASTAMP_PPPM_GPUFFT 1
 #endif
 
 namespace exaStamp
@@ -38,23 +50,87 @@ inline namespace coulombic_ewald
 {
   static_assert( sizeof(Complexd) == sizeof(std::complex<double>) );
 
-#ifdef EXASTAMP_PPPM_CUFFT
-  static_assert( sizeof(Complexd) == sizeof(cufftDoubleComplex) );
-  static_assert( sizeof(cufftHandle) == sizeof(int) );
+#ifdef EXASTAMP_PPPM_GPUFFT
+  // GPU FFT backend : cuFFT and hipFFT have the same API up to the prefix. Plans are stored as an opaque integer
+  // (cufftHandle is an int, hipfftHandle a pointer).
+  namespace gpufft
+  {
+#   if defined(EXASTAMP_PPPM_CUFFT)
+    using Handle = cufftHandle;
+    using DoubleComplex = cufftDoubleComplex;
+    using Stream = cudaStream_t;
+    static constexpr const char* name = "cuFFT";
+    static inline bool ok( cufftResult r ) { return r == CUFFT_SUCCESS; }
+    static inline auto plan_3d( Handle* p, int nz, int ny, int nx ) { return cufftPlan3d( p , nz , ny , nx , CUFFT_Z2Z ); }
+    static inline auto plan_many( Handle* p, int rank, int* n, int dist, int batch ) { return cufftPlanMany( p , rank , n , nullptr , 1 , dist , nullptr , 1 , dist , CUFFT_Z2Z , batch ); }
+    static inline auto set_stream( Handle p, Stream s ) { return cufftSetStream( p , s ); }
+    static inline auto exec( Handle p, DoubleComplex* c, bool forward ) { return cufftExecZ2Z( p , c , c , forward ? CUFFT_FORWARD : CUFFT_INVERSE ); }
+    static inline void destroy( Handle p ) { cufftDestroy( p ); }
+    static inline void stream_sync( Stream s )
+    {
+      const cudaError_t r = cudaStreamSynchronize( s );
+      if( r != cudaSuccess ) ::onika::fatal_error() << "PPPM cuda error '"<<cudaGetErrorString(r)<<"' in cudaStreamSynchronize" << std::endl;
+    }
+#   else
+    using Handle = hipfftHandle;
+    using DoubleComplex = hipfftDoubleComplex;
+    using Stream = hipStream_t;
+    static constexpr const char* name = "hipFFT";
+    static inline bool ok( hipfftResult r ) { return r == HIPFFT_SUCCESS; }
+    static inline auto plan_3d( Handle* p, int nz, int ny, int nx ) { return hipfftPlan3d( p , nz , ny , nx , HIPFFT_Z2Z ); }
+    static inline auto plan_many( Handle* p, int rank, int* n, int dist, int batch ) { return hipfftPlanMany( p , rank , n , nullptr , 1 , dist , nullptr , 1 , dist , HIPFFT_Z2Z , batch ); }
+    static inline auto set_stream( Handle p, Stream s ) { return hipfftSetStream( p , s ); }
+    static inline auto exec( Handle p, DoubleComplex* c, bool forward ) { return hipfftExecZ2Z( p , c , c , forward ? HIPFFT_FORWARD : HIPFFT_BACKWARD ); }
+    static inline void destroy( Handle p ) { hipfftDestroy( p ); }
+    static inline void stream_sync( Stream s )
+    {
+      const hipError_t r = hipStreamSynchronize( s );
+      if( r != hipSuccess ) ::onika::fatal_error() << "PPPM hip error '"<<hipGetErrorString(r)<<"' in hipStreamSynchronize" << std::endl;
+    }
+#   endif
 
-  static inline void pppm_cufft_check( cufftResult r, const char* what )
-  {
-    if( r != CUFFT_SUCCESS ) ::onika::fatal_error() << "PPPM cuFFT error "<<int(r)<<" in "<<what << std::endl;
-  }
-  static inline void pppm_cuda_check( cudaError_t r, const char* what )
-  {
-    if( r != cudaSuccess ) ::onika::fatal_error() << "PPPM cuda error '"<<cudaGetErrorString(r)<<"' in "<<what << std::endl;
+    static_assert( sizeof(Complexd) == sizeof(DoubleComplex) );
+    static_assert( sizeof(Handle) <= sizeof(std::intptr_t) );
+
+    template<class R> static inline void check( R r, const char* what )
+    {
+      if( ! ok(r) ) ::onika::fatal_error() << "PPPM "<<name<<" error "<<int(r)<<" in "<<what << std::endl;
+    }
+    // templates, so that only the cast matching the handle type is instantiated
+    template<class H = Handle> static inline std::intptr_t store( H p )
+    {
+      if constexpr ( std::is_pointer_v<H> ) return reinterpret_cast<std::intptr_t>( p );
+      else return static_cast<std::intptr_t>( p );
+    }
+    template<class H = Handle> static inline H load( std::intptr_t p )
+    {
+      if constexpr ( std::is_pointer_v<H> ) return reinterpret_cast<H>( p );
+      else return static_cast<H>( p );
+    }
+    static inline std::intptr_t make_plan_3d( int nz, int ny, int nx, void* stream )
+    {
+      Handle p;
+      check( plan_3d( &p , nz , ny , nx ) , "plan 3d" );
+      check( set_stream( p , static_cast<Stream>(stream) ) , "set stream" );
+      return store( p );
+    }
+    static inline std::intptr_t make_plan_many( int rank, int* n, int dist, int batch, void* stream, const char* what )
+    {
+      Handle p;
+      check( plan_many( &p , rank , n , dist , batch ) , what );
+      check( set_stream( p , static_cast<Stream>(stream) ) , "set stream" );
+      return store( p );
+    }
+    static inline void run( std::intptr_t plan, Complexd* data, bool forward, const char* what )
+    {
+      check( exec( load(plan) , reinterpret_cast<DoubleComplex*>(data) , forward ) , what );
+    }
   }
 #endif
 
   bool PPPMFFT::gpu_support()
   {
-#ifdef EXASTAMP_PPPM_CUFFT
+#ifdef EXASTAMP_PPPM_GPUFFT
     return true;
 #else
     return false;
@@ -63,8 +139,8 @@ inline namespace coulombic_ewald
 
   void PPPMFFT::release()
   {
-#ifdef EXASTAMP_PPPM_CUFFT
-    if( m_has_plan ) cufftDestroy( static_cast<cufftHandle>(m_plan) );
+#ifdef EXASTAMP_PPPM_GPUFFT
+    if( m_has_plan ) gpufft::destroy( gpufft::load(m_plan) );
 #endif
     m_has_plan = false;
   }
@@ -82,14 +158,11 @@ inline namespace coulombic_ewald
     m_nx = nx; m_ny = ny; m_nz = nz;
     m_gpu = use_gpu;
     m_stream = stream;
-#ifdef EXASTAMP_PPPM_CUFFT
+#ifdef EXASTAMP_PPPM_GPUFFT
     if( m_gpu )
     {
-      cufftHandle plan;
       // row major nz x ny x nx : x is the fastest index, as the mesh storage
-      pppm_cufft_check( cufftPlan3d( &plan , nz , ny , nx , CUFFT_Z2Z ) , "cufftPlan3d" );
-      pppm_cufft_check( cufftSetStream( plan , static_cast<cudaStream_t>(stream) ) , "cufftSetStream" );
-      m_plan = plan;
+      m_plan = gpufft::make_plan_3d( nz , ny , nx , stream );
       m_has_plan = true;
     }
 #endif
@@ -97,11 +170,10 @@ inline namespace coulombic_ewald
 
   void PPPMFFT::exec( Complexd* data, bool forward ) const
   {
-#ifdef EXASTAMP_PPPM_CUFFT
+#ifdef EXASTAMP_PPPM_GPUFFT
     if( m_gpu )
     {
-      auto* c = reinterpret_cast<cufftDoubleComplex*>( data );
-      pppm_cufft_check( cufftExecZ2Z( static_cast<cufftHandle>(m_plan) , c , c , forward ? CUFFT_FORWARD : CUFFT_INVERSE ) , "cufftExecZ2Z" );
+      gpufft::run( m_plan , data , forward , "exec 3d" );
       return;
     }
 #endif
@@ -136,9 +208,9 @@ inline namespace coulombic_ewald
 
   void PPPMDistFFT::release()
   {
-#ifdef EXASTAMP_PPPM_CUFFT
-    if( m_has_plan_planes ) cufftDestroy( static_cast<cufftHandle>(m_plan_planes) );
-    if( m_has_plan_columns ) cufftDestroy( static_cast<cufftHandle>(m_plan_columns) );
+#ifdef EXASTAMP_PPPM_GPUFFT
+    if( m_has_plan_planes ) gpufft::destroy( gpufft::load(m_plan_planes) );
+    if( m_has_plan_columns ) gpufft::destroy( gpufft::load(m_plan_columns) );
 #endif
     m_has_plan_planes = m_has_plan_columns = false;
   }
@@ -156,24 +228,20 @@ inline namespace coulombic_ewald
     m_nx = nx; m_ny = ny; m_nz = nz; m_nzl = nzl; m_ncol = ncol;
     m_gpu = use_gpu;
     m_stream = stream;
-#ifdef EXASTAMP_PPPM_CUFFT
+#ifdef EXASTAMP_PPPM_GPUFFT
     if( m_gpu )
     {
       if( nzl > 0 )
       {
-        cufftHandle plan;
         int n[2] = { ny , nx };
-        pppm_cufft_check( cufftPlanMany( &plan , 2 , n , nullptr , 1 , nx*ny , nullptr , 1 , nx*ny , CUFFT_Z2Z , nzl ) , "cufftPlanMany planes" );
-        pppm_cufft_check( cufftSetStream( plan , static_cast<cudaStream_t>(stream) ) , "cufftSetStream" );
-        m_plan_planes = plan; m_has_plan_planes = true;
+        m_plan_planes = gpufft::make_plan_many( 2 , n , nx*ny , nzl , stream , "plan planes" );
+        m_has_plan_planes = true;
       }
       if( ncol > 0 )
       {
-        cufftHandle plan;
         int n[1] = { nz };
-        pppm_cufft_check( cufftPlanMany( &plan , 1 , n , nullptr , 1 , nz , nullptr , 1 , nz , CUFFT_Z2Z , ncol ) , "cufftPlanMany columns" );
-        pppm_cufft_check( cufftSetStream( plan , static_cast<cudaStream_t>(stream) ) , "cufftSetStream" );
-        m_plan_columns = plan; m_has_plan_columns = true;
+        m_plan_columns = gpufft::make_plan_many( 1 , n , nz , ncol , stream , "plan columns" );
+        m_has_plan_columns = true;
       }
     }
 #endif
@@ -182,11 +250,10 @@ inline namespace coulombic_ewald
   void PPPMDistFFT::planes( Complexd* data, bool forward ) const
   {
     if( m_nzl == 0 ) return;
-#ifdef EXASTAMP_PPPM_CUFFT
+#ifdef EXASTAMP_PPPM_GPUFFT
     if( m_gpu )
     {
-      auto* c = reinterpret_cast<cufftDoubleComplex*>( data );
-      pppm_cufft_check( cufftExecZ2Z( static_cast<cufftHandle>(m_plan_planes) , c , c , forward ? CUFFT_FORWARD : CUFFT_INVERSE ) , "cufftExecZ2Z planes" );
+      gpufft::run( m_plan_planes , data , forward , "exec planes" );
       return;
     }
 #endif
@@ -205,11 +272,10 @@ inline namespace coulombic_ewald
   void PPPMDistFFT::columns( Complexd* data, bool forward ) const
   {
     if( m_ncol == 0 ) return;
-#ifdef EXASTAMP_PPPM_CUFFT
+#ifdef EXASTAMP_PPPM_GPUFFT
     if( m_gpu )
     {
-      auto* c = reinterpret_cast<cufftDoubleComplex*>( data );
-      pppm_cufft_check( cufftExecZ2Z( static_cast<cufftHandle>(m_plan_columns) , c , c , forward ? CUFFT_FORWARD : CUFFT_INVERSE ) , "cufftExecZ2Z columns" );
+      gpufft::run( m_plan_columns , data , forward , "exec columns" );
       return;
     }
 #endif
@@ -231,8 +297,8 @@ inline namespace coulombic_ewald
 
   void PPPMDistFFT::sync() const
   {
-#ifdef EXASTAMP_PPPM_CUFFT
-    if( m_gpu ) pppm_cuda_check( cudaStreamSynchronize( static_cast<cudaStream_t>(m_stream) ) , "cudaStreamSynchronize" );
+#ifdef EXASTAMP_PPPM_GPUFFT
+    if( m_gpu ) gpufft::stream_sync( static_cast<gpufft::Stream>(m_stream) );
 #endif
   }
 
@@ -243,8 +309,8 @@ inline namespace coulombic_ewald
 
   void PPPMFFT::sync() const
   {
-#ifdef EXASTAMP_PPPM_CUFFT
-    if( m_gpu ) pppm_cuda_check( cudaStreamSynchronize( static_cast<cudaStream_t>(m_stream) ) , "cudaStreamSynchronize" );
+#ifdef EXASTAMP_PPPM_GPUFFT
+    if( m_gpu ) gpufft::stream_sync( static_cast<gpufft::Stream>(m_stream) );
 #endif
   }
 }

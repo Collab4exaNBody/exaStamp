@@ -608,7 +608,7 @@ inline namespace coulombic_ewald
 
     if( p.diff_ad )
     {
-      if( ! is_diagonal( H ) ) ::onika::fatal_error() << "PPPM : diff ad requires an orthogonal cell (as in LAMMPS)" << std::endl;
+      if( ! is_diagonal( H ) ) ::onika::fatal_error() << "PPPM : diff ad requires an orthogonal cell" << std::endl;
       pppm_setup_ad( p , c , comm );
       return;
     }
@@ -707,7 +707,7 @@ inline namespace coulombic_ewald
     p.qsqsum = qsqsum;
 
     const bool triclinic = ! is_diagonal( H );
-    if( diff_ad && triclinic ) ::onika::fatal_error() << "PPPM : diff ad requires an orthogonal cell (as in LAMMPS)" << std::endl;
+    if( diff_ad && triclinic ) ::onika::fatal_error() << "PPPM : diff ad requires an orthogonal cell" << std::endl;
     if( slab_user != 0.0 && slab_user <= 1.0 ) ::onika::fatal_error() << "PPPM : slab volfactor must be > 1, got "<<slab_user << std::endl;
     if( slab_user > 0.0 && slab_auto ) ::onika::fatal_error() << "PPPM : slab and slab_auto are exclusive" << std::endl;
     if( p.slab() && ( H.m13 != 0.0 || H.m23 != 0.0 || H.m31 != 0.0 || H.m32 != 0.0 ) )

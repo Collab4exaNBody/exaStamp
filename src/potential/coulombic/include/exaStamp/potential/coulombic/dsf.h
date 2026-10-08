@@ -31,7 +31,7 @@ namespace exaStamp
     DsfKernel() = default;
     inline DsfKernel(const DsfParameters& p) : m_params(p) {}
     static inline const char* documentation() { return R"EOF(
-Damped shifted force coulomb potential with per particle charges (Fennell & Gezelter, LAMMPS pair_style coul/dsf) :
+Damped shifted force coulomb potential with per particle charges (Fennell & Gezelter) :
 energy and force shifted to 0 at rc. parameters : { alpha: <1/distance> , rc: <distance> }.
 The self energy -(e_shift/2 + alpha/sqrt(pi)).q^2/(4.pi.eps0) is included (self_energy: true).
 Pair style with species charges : coul_dsf.

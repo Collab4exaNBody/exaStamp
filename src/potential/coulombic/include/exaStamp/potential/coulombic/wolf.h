@@ -31,7 +31,7 @@ namespace exaStamp
     WolfKernel() = default;
     inline WolfKernel(const WolfParameters& p) : m_params(p) {}
     static inline const char* documentation() { return R"EOF(
-Wolf damped shifted coulomb potential with per particle charges (LAMMPS pair_style coul/wolf) :
+Wolf damped shifted coulomb potential with per particle charges :
 E = qi.qj/(4.pi.eps0) [erfc(alpha.r)/r - erfc(alpha.rc)/rc] for r < rc, force shifted to 0 at rc.
 parameters : { alpha: <1/distance> , rc: <distance> }. The self energy -(e_shift/2 + alpha/sqrt(pi)).q^2/(4.pi.eps0) is
 included (self_energy: true). Pair style with species charges : coul_wolf.

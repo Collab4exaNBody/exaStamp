@@ -43,8 +43,8 @@ inline namespace coulombic_ewald
     ADD_SLOT( double            , radius            , INPUT , REQUIRED , DocString{"real space cutoff"} );
     ADD_SLOT( std::vector<long> , mesh              , INPUT , std::vector<long>{0,0,0} , DocString{"mesh points in each direction, 0 0 0 = automatic"} );
     ADD_SLOT( long              , order             , INPUT , 5 , DocString{"charge assignment order, 2 to 7"} );
-    ADD_SLOT( double            , slab              , INPUT , 0.0 , DocString{"slab correction (EW3DC, z non periodic) : z extension factor of the cell (> 1, LAMMPS kspace_modify slab), 0 = none"} );
-    ADD_SLOT( bool              , slab_auto         , INPUT , false , DocString{"slab correction with the extension factor computed from accuracy and g_ewald (LAMMPS kspace_modify slab auto)"} );
+    ADD_SLOT( double            , slab              , INPUT , 0.0 , DocString{"slab correction (EW3DC, z non periodic) : z extension factor of the cell (> 1), 0 = none"} );
+    ADD_SLOT( bool              , slab_auto         , INPUT , false , DocString{"slab correction with the extension factor computed from accuracy and g_ewald"} );
     ADD_SLOT( std::string       , mesh_decomposition, INPUT , std::string("distributed") , DocString{"distributed (mesh split among ranks, default ; on a single rank the replicated path is used), replicated (whole mesh on every MPI rank) or auto (same as distributed)"} );
     ADD_SLOT( std::string       , diff              , INPUT , std::string("ik") , DocString{"differentiation : ik (3 inverse FFTs) or ad (analytic, 1 inverse FFT, orthogonal cells only)"} );
     ADD_SLOT( Domain            , domain            , INPUT , OPTIONAL );
@@ -178,11 +178,10 @@ inline namespace coulombic_ewald
     inline std::string documentation() const override final
     {
       return R"EOF(
-Initializes PPPM long range coulomb (coulombic_pppm), same algorithm and parameter choice as LAMMPS kspace_style pppm
-(ik or ad differentiation). Works on orthogonal and triclinic periodic cells (ad : orthogonal only, as LAMMPS).
-slab / slab_auto : slab correction (EW3DC) for systems periodic in x and y only, z non periodic, as LAMMPS
-kspace_modify slab <volfactor> / slab auto ; triclinic cells need xz = yz = 0. With diff ad, the z field uses the
-extended mesh spacing (LAMMPS fieldforce_ad uses the unextended one, which gives wrong z forces). Also fills ewald_config with the real space
+Initializes PPPM long range coulomb (coulombic_pppm), ik or ad differentiation. Works on orthogonal and triclinic
+periodic cells (ad : orthogonal only). g_ewald and the mesh are computed from accuracy_relative when set to 0.
+slab / slab_auto : slab correction (EW3DC) for systems periodic in x and y only, z non periodic ; triclinic cells need
+xz = yz = 0. Also fills ewald_config with the real space
 parameters (g_ewald, radius) used by coulombic_ewald_short_range. Needs sum_square_charge, sum_charge and natoms
 (sum_charges or sum_charges_pc operator). When only the cell changes, mesh and g_ewald are kept and the influence function is rebuilt.
 )EOF";
