@@ -12,12 +12,8 @@ species:
 coulombic_wolf:
   parameters: { alpha: 0.2 1/ang , rc: 10. ang }
 
-coulombic_wolf_self:
-  parameters: { alpha: 0.2 1/ang , rc: 10. ang }
-
 compute_force:
   - coulombic_wolf
-  - coulombic_wolf_self
 
 setup_system:
   - domain:
@@ -27,7 +23,7 @@ setup_system:
   - read_xyz_file_with_xform:
       filename: "UO2_disturbed_ext.xyz"
       pbc_adjust_xform: true
-  - copy_charge_specy_to_particle
+  - copy_charge_species_to_particle
 
 write_snapshot:
   - timestep_file: "exastamp_wolf_%09d.xyz"

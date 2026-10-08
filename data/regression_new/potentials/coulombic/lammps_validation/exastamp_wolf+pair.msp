@@ -9,7 +9,7 @@ species:
   - O: { mass: 15.999000 Da , z: 8 , charge: -1.1104 e- }
   - U: { mass: 238.02891 Da , z: 92 , charge: 2.2208 e- }
 
-coul_wolf_pair_multi_force:
+coul_wolf_multi_force:
   rcut: 10. ang
   parameters:
     - { type_a: U , type_b: O , rcut: 10.0 ang , parameters: { alpha: 0.2 1/ang , rc: 10. ang } }
@@ -21,7 +21,7 @@ coulombic_wolf_self:
   parameters: { alpha: 0.2 1/ang , rc: 10. ang }
 
 compute_force:
-  - coul_wolf_pair_multi_force
+  - coul_wolf_multi_force
   - coulombic_wolf_self
 
 setup_system:
@@ -32,7 +32,7 @@ setup_system:
   - read_xyz_file_with_xform:
       filename: "UO2_disturbed_ext.xyz"
       pbc_adjust_xform: true
-  - copy_charge_specy_to_particle
+  - copy_charge_species_to_particle
 
 write_snapshot:
   - timestep_file: "exastamp_wolf+pair_%09d.xyz"

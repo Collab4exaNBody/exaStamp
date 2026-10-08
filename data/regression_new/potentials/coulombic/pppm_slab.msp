@@ -43,7 +43,7 @@ setup_system:
       size: [ 5.64 ang, 5.64 ang, 5.64 ang ]
       region: SLAB
   - gaussian_noise_r: { sigma: 0.05 ang }
-  - copy_charge_specy_to_particle
+  - copy_charge_species_to_particle
   - sum_charges
   - coulombic_pppm_init
 

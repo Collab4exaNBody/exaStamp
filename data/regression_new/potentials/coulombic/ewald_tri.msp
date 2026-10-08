@@ -40,7 +40,7 @@ setup_system:
   - gaussian_noise_r: { sigma: 0.05 ang }
   - domain_set_xform: # shear the generated crystal (fractional coordinates kept) : triclinic cell
       xform: [ [ 1, 0.1, 0.05 ], [ 0, 1, 0.08 ], [ 0, 0, 1 ] ]
-  - copy_charge_specy_to_particle
+  - copy_charge_species_to_particle
   - sum_charges
   - coulombic_ewald_init
 

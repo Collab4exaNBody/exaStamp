@@ -1,4 +1,4 @@
-# Damped shifted force (coulombic_dsf + coulombic_dsf_self)
+# Damped shifted force (coulombic_dsf, self energy included)
 # Coulomb-only, 768 atoms of disturbed fluorite UO2 (generated). Accuracy vs LAMMPS is checked in lammps_validation/.
 
 species:
@@ -8,12 +8,8 @@ species:
 coulombic_dsf:
   parameters: { alpha: 0.25 1/ang , rc: 8.0 ang }
 
-coulombic_dsf_self:
-  parameters: { alpha: 0.25 1/ang , rc: 8.0 ang }
-
 compute_force:
   - coulombic_dsf
-  - coulombic_dsf_self
 
 setup_system:
   - domain:
@@ -35,7 +31,7 @@ setup_system:
         ]
       size: [ 5.45 ang, 5.45 ang, 5.45 ang ]
   - gaussian_noise_r: { sigma: 0.05 ang }
-  - copy_charge_specy_to_particle
+  - copy_charge_species_to_particle
 
 global:
   max_iteration: 10

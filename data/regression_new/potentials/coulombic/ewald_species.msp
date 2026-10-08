@@ -44,7 +44,7 @@ setup_system:
         ]
       size: [ 5.45 ang, 5.45 ang, 5.45 ang ]
   - gaussian_noise_r: { sigma: 0.05 ang }
-  - copy_charge_specy_to_particle
+  - copy_charge_species_to_particle
   - sum_charges
   - coulombic_ewald_init
 

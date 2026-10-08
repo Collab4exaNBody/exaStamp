@@ -32,7 +32,7 @@ setup_system:
   - read_xyz_file_with_xform:
       filename: "UO2_slab_ext.xyz"
       pbc_adjust_xform: true
-  - copy_charge_specy_to_particle
+  - copy_charge_species_to_particle
   - sum_charges
   - coulombic_pppm_init
 
