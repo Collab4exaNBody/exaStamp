@@ -1,3 +1,4 @@
+# enable-if-EXASTAMP_MLIP_SNAP_BUILD enable-if-XNB_BUILD_mdSnap
 species:
   - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
 

@@ -1,3 +1,4 @@
+# enable-if-EXASTAMP_MLIP_SNAP_BUILD enable-if-XNB_BUILD_mdSnap
 species:
   - In: { mass: 114.818 Da, z: 49, charge: 0 e- }
   - P:  { mass: 30.974 Da, z: 15, charge: 0 e- }

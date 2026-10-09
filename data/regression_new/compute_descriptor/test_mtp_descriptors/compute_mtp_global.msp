@@ -1,3 +1,4 @@
+# enable-if-EXASTAMP_MLIP_MTP_BUILD
 species:
   - Cu: { mass: 63.546 Da , z: 29 , charge: 0.0 e- }
 
