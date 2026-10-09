@@ -1605,10 +1605,26 @@ void EAPOD::radialbasis(double *rbf, double *rbfx, double *rbfy, double *rbfz, d
     // Calculate the derivative of the final cutoff function
     double dfcut = ((3.0/(rmax*exp(-1.0)))*(y2)*y6*(y*y2 - 1.0))/y7;
 
-    // Calculate fcut/r, fcut/r^2, and dfcut/r
-    double f1 = fcut/r;
+    // Fade-in function fin(dij) = 1/(1+exp(2/delta*(mu-dij))) and its derivative w.r.t. dij,
+    // applied on top of the cutoff function (same factor as in snapshots()). Note: the original
+    // implementation (ML-POD eapod.cpp / pair_pod.cpp, radialbasis) redeclared `double fin` and
+    // `double dfin` inside the `if`, shadowing the outer variables, so the fade-in was silently
+    // ignored here while snapshots() applied it. Fixed in this port.
+    double fin = 1.0;
+    double dfin = 0.0;
+    if (fadeinMu > 0 && fadeinDelta > 0) {
+      const double invDelta = 2.0/fadeinDelta;
+      const double expIn = exp(invDelta * (fadeinMu - dij));
+      fin = 1.0/(1.0 + expIn);
+      dfin = invDelta * expIn * fin*fin;
+    }
+    const double fincut = fin*fcut;
+    const double dfincut = fin*dfcut + dfin*fcut;
+
+    // Calculate fincut/r, fincut/r^2, and dfincut/r
+    double f1 = fincut/r;
     double f2 = f1/r;
-    double df1 = dfcut/r;
+    double df1 = dfincut/r;
 
     double alpha = besselparams[0];
     double t1 = (1.0-exp(-alpha));
@@ -1709,16 +1725,16 @@ void EAPOD::radialbasis(double *rbf, double *rbfx, double *rbfy, double *rbfz, d
       }
     }
 
-    // Calculate fcut/dij and dfcut/dij
-    f1 = fcut/dij;
+    // Calculate fincut/dij and dfincut/dij
+    f1 = fincut/dij;
     for (int i=0; i<inversedegree; i++) {
       int p = besseldegree*nbesselpars + i;
       int nij = n + N*p;
       double a = powint(dij/scaleLJ, i+1);
 
-      rbf[nij] = fcut/a;
+      rbf[nij] = fincut/a;
 
-      double drbfdr = (dfcut - (i+1.0)*f1)/a;
+      double drbfdr = (dfincut - (i+1.0)*f1)/a;
       rbfx[nij] = drbfdr*dr1;
       rbfy[nij] = drbfdr*dr2;
       rbfz[nij] = drbfdr*dr3;
