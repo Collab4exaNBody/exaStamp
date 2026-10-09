@@ -1,3 +1,4 @@
+# no-mpi enable-if-EXASTAMP_MLIP_POD_BUILD
 species:
   - A: { mass: 1.0 Da, z: 1, charge: 0 e- }
   - B: { mass: 1.0 Da, z: 1, charge: 0 e- }

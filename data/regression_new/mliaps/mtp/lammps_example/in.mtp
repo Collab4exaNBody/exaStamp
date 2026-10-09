@@ -6,7 +6,7 @@ atom_style      atomic
 read_data   Cu_noisy.lmp
 replicate   6 6 6
   
-pair_style mtp pot.almtp
+pair_style mtp ../exastamp_example/pot.almtp
 pair_coeff      * *
 
 thermo          1
