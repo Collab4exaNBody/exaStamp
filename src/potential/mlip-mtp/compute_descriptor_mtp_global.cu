@@ -16,6 +16,7 @@ under the License.
 */
 
 #include <exanb/core/grid.h>
+#include <exanb/core/domain.h>
 #include <exanb/core/grid_fields.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <onika/scg/operator.h>
@@ -31,39 +32,18 @@ under the License.
 
 #include "include/mtp_config.h"
 
-// Global linear-fitting design matrix for MTP -- same two-stage local-then-Allreduce design as
-// snap/compute_descriptor_snap_global.cu and k2b/compute_descriptor_k2b_global.cu (NOT POD's
-// single-rank, re-run-from-scratch pod_global_op.h pattern). Purely additive: does NOT re-run the
-// descriptor+derivative pass -- reads compute_descriptor_mtp's existing output (the per-atom
-// `mtp_descriptors` buffer and its `compute_derivative: true` aggregate fields).
-//
-// Column layout differs from POD's own per-element-block convention, and this IS the correct
-// shape for MTP (not a simplification): MTP's fitted `linear_coeffs` (moment_coeffs in the file)
-// is a SINGLE array shared across every species -- only `species_coeffs` (one scalar per species)
-// varies by type. So:
-//   size_array_cols = species_count + alpha_scalar_moments
-//   columns [0, species_count)                -- one-hot species-count indicators (row 0 only,
-//                                                zero gradient/virial contribution)
-//   columns [species_count, species_count+alpha_scalar_moments) -- the shared B_k columns
-// Dotting row 0 with [species_coeffs..., linear_coeffs...] gives the total configuration energy
-// directly.
-//
-// Row layout (rows), matching the established convention (no reference-label column):
-//   size_array_rows = 1 + 3*natoms + 6
-//   row 0            -- summed one-hot species counts + summed MTP descriptor over every atom
-//   rows 1..3*natoms -- ALREADY FORCE-SIGNED per-atom aggregate (self term + every neighbor
-//                       interaction), row = 1 + 3*field::id + xyz (exaStamp field::id is 0-indexed,
-//                       no "-1") -- F_atom = +coeff . row directly, NOT -coeff . row, despite the
-//                       "dB_k/dR_m" name suggesting a raw +dE/dr. Same central+=/neighbor-=
-//                       convention as POD, independently finite-difference-verified there (see
-//                       compute_descriptor_pod_global.cu's header comment).
-//   rows 3N+1..3N+6  -- summed r_atom . (already force-signed) gradient row, Voigt order
-//                       [xx,yy,zz,yz,xz,xy]
-//
-// Real ordering requirement: must run AFTER compute_descriptor_mtp: { compute_derivative: true }
-// and BEFORE any update_opt_from_ghost call on its aggregate fields -- needs the raw, per-rank-
-// local, UN-FOLDED aggregate. See compute_descriptor_snap_global.cu's header comment for the full
-// reasoning (identical here).
+// Global linear-fitting design matrix for MTP, built from the output of compute_descriptor_mtp
+// (mtp_descriptors + compute_derivative mda_* aggregate fields), without recomputing them.
+//   rows             : 1 + 3*natoms + 6 (natoms = total atom count, all MPI ranks)
+//   columns          : species_count one-hot species-count columns, then the alpha_scalar_moments
+//                      B_k columns shared by every species (MTP's linear_coeffs are not per species)
+//   row 0            : summed species counts + summed descriptor
+//   rows 1..3*natoms : force-signed gradient w.r.t. atom id's x/y/z (row = 1 + 3*id + xyz),
+//                      F = +coeff . row (B_k columns only, species columns have no gradient)
+//   last 6 rows      : sum over slots of r . gradient, Voigt order [xx,yy,zz,yz,xz,xy]
+// Each rank accumulates its owned and ghost slots (ghosts weighted by their periodic-image
+// position) before the final Allreduce: this operator must run BEFORE update_opt_from_ghost folds
+// the ghost aggregates into their owners.
 namespace exaStamp
 {
   using namespace exanb;
@@ -73,14 +53,15 @@ namespace exaStamp
   {
     ADD_SLOT( MPI_Comm , mpi     , INPUT , REQUIRED );
     ADD_SLOT( GridT    , grid    , INPUT , REQUIRED );
+    ADD_SLOT( Domain   , domain , INPUT , REQUIRED );
     ADD_SLOT( MtpContext , mtp_ctx , INPUT , REQUIRED );
     ADD_SLOT( onika::memory::CudaMMVector<double> , mtp_descriptors , INPUT , OPTIONAL , DocString{"see compute_descriptor_mtp; required"} );
     ADD_SLOT( long     , ncoeff , INPUT , OPTIONAL , DocString{"see compute_descriptor_mtp; required"} );
     ADD_SLOT( std::string , deriv_agg_field_prefix , INPUT , std::string("mda_")
-            , DocString{"Must match compute_descriptor_mtp's own deriv_agg_field_prefix. Must be read before update_opt_from_ghost runs on these fields -- see this file's header comment."} );
+            , DocString{"Must match compute_descriptor_mtp's deriv_agg_field_prefix. Must run before update_opt_from_ghost on these fields."} );
 
     ADD_SLOT( onika::memory::CudaMMVector<double> , mtp_global , OUTPUT
-            , DocString{"Row-major (1+3*natoms+6) x (species_count+ncoeff) global design matrix. Row 0 = summed one-hot species counts + summed descriptor; rows 1..3*natoms = per-atom gradient of the ncoeff B_k columns only (row=1+3*id+xyz); rows 3*natoms+1..+6 = virial, Voigt order [xx,yy,zz,yz,xz,xy]. See this file's header comment for why the column layout differs from POD's."} );
+            , DocString{"Row-major (1+3*natoms+6) x (species_count+ncoeff) global design matrix. Row 0 = summed one-hot species counts + summed descriptor; rows 1..3*natoms = force-signed gradient of the ncoeff B_k columns only (row=1+3*id+xyz); last 6 rows = virial, Voigt order [xx,yy,zz,yz,xz,xy]."} );
     ADD_SLOT( long , ncoeff_all , OUTPUT , DocString{"Number of columns (= species_count + ncoeff)"} );
 
   public:
@@ -108,6 +89,7 @@ namespace exaStamp
       }
 
       const auto & type_map = mtp_ctx->type_map;
+      const Mat3d xform = domain->xform();
       const auto * cell_particle_offset = grid->cell_particle_offset_data();
       const size_t n_cells = grid->number_of_cells();
 
@@ -138,9 +120,12 @@ namespace exaStamp
         {
           const size_t p = cell_particle_offset[ci] + pi;
           const uint64_t id = cell[field::id][pi];
-          const double rx = cell[field::rx][pi];
-          const double ry = cell[field::ry][pi];
-          const double rz = cell[field::rz][pi];
+          // real-frame position of this slot (owned atom or ghost image), same frame as the
+          // derivative fields, which were computed on xform-applied pair vectors
+          const Vec3d r = xform * Vec3d{ cell[field::rx][pi], cell[field::ry][pi], cell[field::rz][pi] };
+          const double rx = r.x;
+          const double ry = r.y;
+          const double rz = r.z;
 
           if( ! is_ghost )
           {
@@ -180,31 +165,29 @@ namespace exaStamp
     {
       return R"EOF(
 
-Global linear-fitting design matrix for MTP -- same row/rank convention as
-compute_descriptor_snap_global, but a different COLUMN layout because MTP's fitted coefficients
-are structured differently from POD/SNAP: `linear_coeffs` is a single array shared across every
-species (only a per-species scalar offset varies by type), so:
+Global linear-fitting design matrix for MTP. Row-major (1+3*natoms+6) x (species_count+ncoeff)
+array. MTP's linear coefficients are shared by every species, only a scalar offset is per species:
 
-  columns [0, species_count)                         -- one-hot species-count indicators (row 0 only)
-  columns [species_count, species_count+ncoeff)       -- the shared per-basis-function B_k columns
+  columns [0, species_count)                    -- one-hot species-count columns (row 0 only)
+  columns [species_count, species_count+ncoeff) -- the shared B_k columns
 
-Row 0 dotted with [species_coeffs..., linear_coeffs...] gives the total configuration energy
-directly. Rows 1..3*natoms give the ALREADY FORCE-SIGNED aggregate (self term + every neighbor
-interaction) at row 1+3*id+xyz (id = field::id, 0-indexed) -- F_atom = +coeff . row directly, NOT
--coeff . row (see this file's header comment) -- only the trailing ncoeff columns are populated
-(the species columns have zero spatial gradient). Rows 3N+1..3N+6 give the virial (same
-already-force-signed convention), Voigt order [xx,yy,zz,yz,xz,xy], same trailing-columns-only rule.
+  row 0             -- summed species counts + summed descriptor.
+                       [species_coeffs..., linear_coeffs...] . row = total energy.
+  rows 1..3*natoms  -- force-signed gradient w.r.t. atom m's x/y/z, at row 1+3*m+xyz
+                       (m = particle id, 0-indexed). coeff . row = force component.
+  rows 3N+1..3N+6   -- virial, Voigt order [xx,yy,zz,yz,xz,xy]. coeff . row = virial component.
 
-Purely additive: reads compute_descriptor_mtp's existing output rather than re-running the
-descriptor+derivative pass. Must run right after compute_descriptor_mtp (compute_derivative: true)
-and BEFORE any update_opt_from_ghost call on its aggregate fields -- this operator needs the raw,
-un-folded per-rank-local aggregate.
+The matrix has no reference-label column. Must run after compute_descriptor_mtp
+(compute_derivative: true) and before any update_opt_from_ghost on its aggregate fields.
 
 Usage example:
 
+init_parameters:
+  - species
+  - mtp_init: { parameters: { mtp_file: "pot.almtp" } }
+
 compute_descriptor_mtp: { compute_derivative: true }
 compute_descriptor_mtp_global
-update_opt_from_ghost: { opt_fields: [ "mda_.*" ] }   # only needed if the per-atom export below also runs
 write_descriptor_mtp_global: { filename: "mtp_global.txt" }
 
 )EOF";

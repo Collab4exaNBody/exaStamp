@@ -23,7 +23,7 @@ under the License.
 #include <exanb/core/grid.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/compute/reduce_cell_particles.h>
-#include <memory>
+#include <exanb/core/domain.h>
 
 namespace exaStamp {
 
@@ -68,39 +68,12 @@ namespace exanb
 
 }
 
-// Global virial/stress tensor via LAMMPS's cheap "fdotr" trick: Sum_i (F_i (x) r_i), the outer
-// product of each particle's TOTAL force with its ABSOLUTE position, summed over every particle --
-// no per-pair bookkeeping, no per-atom field::_virial needed. Mirrors LAMMPS's
-// Pair::virial_fdotr_compute() (src/pair.cpp) exactly: a single O(N) pass over owned+ghost atoms
-// using only fields (_fx/_fy/_fz, _rx/_ry/_rz) that already exist for any MD run, regardless of
-// potential -- same idea as how this codebase's own momentum reduction (mass*velocity, in
-// simulation_thermodynamic_state.cpp) needs no potential-specific per-atom field either.
-//
-// CORRECTNESS REQUIREMENT (not a tunable, not a performance knob): this sum MUST include ghost
-// atoms with their true periodic-image coordinates (ghost slot defaults to true, unlike every
-// other operator of this shape in the codebase), and MUST run BEFORE any ghost-force fold-back
-// (update_force_energy_from_ghost) -- a ghost's force contribution has to still be "in place" on
-// the ghost's own (correctly wrapped) position for the telescoping Newton's-third-law cancellation
-// across periodic boundaries to work out, exactly as documented for LAMMPS's own virial_fdotr_compute
-// (see LAMMPS doc/src/Developer_flow.rst and Developer_write_pair.rst). Typical placement:
-//
-//   compute_force_epilog:
-//     - compute_sum_fdotr
-//     - update_force_energy_from_ghost
-//     - force_to_accel
-//
-// Uses exanb::reduce_cell_particles (same GPU/CUDA-capable reduction machinery as
-// src/compute/sum_forces.cu), with enable_ghosts=true. NOTE: this exercised a real bug in
-// exaNBody's reduce_cell_particles.h -- when enable_ghosts=true (m_ghost_layers==0), the flat
-// cell index was only ever computed inside an `if (m_ghost_layers != 0)` guard, so it was NEVER
-// assigned in the ghost-inclusive case, leaving it at its uninitialized sentinel value (silently
-// reading zero-valued/garbage cells instead of asserting or crashing in a release build). Fixed
-// upstream in exaNBody/src/compute/include/exanb/compute/reduce_cell_particles.h to always compute
-// the flat index, matching compute_cell_particles.h's own (correct, unconditional) sibling code --
-// no other caller of reduce_cell_particles in this codebase passed enable_ghosts=true before, so
-// this path was previously untested.
-//
-// Standalone operator only for now -- NOT wired into simulation_thermodynamic_state.cpp.
+// Global virial tensor Sum_i (F_i (x) r_i), summed over owned AND ghost particles in a single O(N)
+// pass over the force and position fields: no per-pair virial tally, no per-atom virial field.
+// It must include ghosts (with their periodic-image positions) and run BEFORE the ghost force
+// fold-back (update_force_energy_from_ghost): the ghost force contributions must still sit on the
+// ghost positions for the Newton's-third-law cancellation across periodic boundaries to hold.
+// Positions are stored in grid space; the real-frame result is (Sum_i F_i (x) r_i) . xform^T.
 namespace exaStamp {
 
   using namespace exanb;
@@ -116,25 +89,21 @@ namespace exaStamp {
 
     ADD_SLOT(MPI_Comm, mpi, INPUT, MPI_COMM_WORLD);
     ADD_SLOT(GridT, grid, INPUT, REQUIRED);
+    ADD_SLOT(Domain, domain, INPUT, REQUIRED);
     ADD_SLOT(bool, ghost, INPUT, true,
              DocString{"Include ghost atoms in the sum. Must stay true for correctness under periodic "
-                       "boundary conditions -- this is the same requirement LAMMPS's virial_fdotr_compute() "
-                       "has (owned+ghost, before ghost-force fold-back), not a performance knob."});
-    ADD_SLOT(Mat3d, out, OUTPUT, DocString{"Sum_i (F_i (x) r_i) -- the global virial/stress tensor, "
-                                            "computed via the O(N) LAMMPS-style 'fdotr' trick instead of "
-                                            "a per-pair virial tally or a per-atom field::_virial field."});
+                       "boundary conditions (owned + ghost, before the ghost force fold-back)."});
+    ADD_SLOT(Mat3d, out, OUTPUT, DocString{"Sum_i (F_i (x) r_i): the global virial tensor, computed in a single "
+                                            "O(N) pass over forces and positions."});
 
     inline std::string documentation() const final {
       return R"EOF(
-        Computes the global virial/stress tensor as Sum_i (F_i (x) r_i) over every particle
-        (owned + ghost), mirroring LAMMPS's Pair::virial_fdotr_compute() -- an O(N) reduction over
-        fields (force, position) that already exist for any MD run, needing no per-pair virial
-        bookkeeping in any force kernel and no per-atom field::_virial field.
+        Computes the global virial tensor Sum_i (F_i (x) r_i) over every particle (owned + ghost),
+        in a single O(N) reduction over the force and position fields. It needs no per-pair virial
+        bookkeeping in the force kernels and no per-atom virial field, so it works with any potential.
 
-        Must run in compute_force_epilog BEFORE update_force_energy_from_ghost (needs the raw,
-        un-folded ghost force contributions still on their own wrapped positions -- see this file's
-        header comment for the full correctness argument). Standalone operator for now, not wired
-        into simulation_thermodynamic_state.
+        Must run in compute_force_epilog BEFORE update_force_energy_from_ghost: the ghost force
+        contributions must still sit on the ghost positions. The result is printed at each call.
 
         YAML example:
 
@@ -145,10 +114,7 @@ namespace exaStamp {
       )EOF";
     }
 
-    // A pure-OUTPUT slot with no downstream consumer gets silently pruned from the execution graph
-    // (this operator would simply never run) unless explicitly marked as a sink -- same reason
-    // print_thermodynamic_state.cpp/grid_clear.cpp do this. This operator's whole purpose (for now)
-    // is its printed value, not feeding another operator, so it must always be a sink.
+    // pure-output operator whose result is only printed: mark it as a sink so it is not pruned
     inline bool is_sink() const override final { return true; }
 
   public:
@@ -163,7 +129,8 @@ namespace exaStamp {
                            value.vir_tot.m31, value.vir_tot.m32, value.vir_tot.m33 };
       double global[9] = {0.,0.,0., 0.,0.,0., 0.,0.,0.};
       MPI_Allreduce(&local, &global, 9, MPI_DOUBLE, MPI_SUM, *mpi);
-      *out = Mat3d{ global[0], global[1], global[2], global[3], global[4], global[5], global[6], global[7], global[8] };
+      // positions are in grid space: F (x) (X r) = (F (x) r) X^T
+      *out = Mat3d{ global[0], global[1], global[2], global[3], global[4], global[5], global[6], global[7], global[8] } * transpose( domain->xform() );
 
       lout << "compute_sum_fdotr: Sum_i(F_i (x) r_i) = " << *out << std::endl;
     }

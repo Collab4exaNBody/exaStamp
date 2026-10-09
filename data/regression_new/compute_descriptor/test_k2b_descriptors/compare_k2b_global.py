@@ -58,7 +58,7 @@ def k2b_descriptor_and_deriv(pos, box):
                 g = np.exp(-arg)
                 D[i, k] += g
                 dgdr = -d * inv_sig2 * g
-                c = -dgdr / r
+                c = dgdr / r                       # force-signed: F = +coeff . row
                 v = c * dr
                 deriv[i, k, :] += v
                 deriv[j, k, :] -= v

@@ -35,11 +35,9 @@ namespace exaStamp
   // scatter idiom as POD's PodDescriptorOp (mlip-pod/include/pod_descriptor_op.h), but computed
   // directly here since k2b has no external descriptor library (no EAPOD equivalent).
   //
-  // Sign convention: buf.drx/dry/drz point from the central particle to the neighbor (same
-  // convention SymetricForceOp relies on: F_central = +de*dr, F_neighbor = -de*dr for
-  // F = -dE/dx). For a plain (non-force) derivative d(g_k)/dx there is no extra "-dE/dx" sign
-  // flip, so the central/neighbor contributions come out negated relative to that force pattern:
-  // d(g_k)/dx_central = -dgdr*dr/r, d(g_k)/dx_neighbor = +dgdr*dr/r.
+  // Sign convention: buf.drx/dry/drz point from the central particle to the neighbor. The
+  // aggregate is force-signed, -d(g_k)/dx (F = +coeff . aggregate, same as POD and SNAP), with the
+  // same pattern as SymetricForceOp: central += dgdr*dr/r, neighbor -= dgdr*dr/r.
   struct alignas(onika::memory::DEFAULT_ALIGNMENT) K2bDescriptorOp
   {
     K2bPotentialParametersRO             m_params;
@@ -85,7 +83,7 @@ namespace exaStamp
           if (m_deriv_agg_ptrs != nullptr)
           {
             const double dgdr = -d * inv_sig2 * g;   // d(g_k)/dr
-            const double c = -dgdr / r;              // see sign-convention note above
+            const double c = dgdr / r;               // force-signed, see note above
             const double vx = c * drx, vy = c * dry, vz = c * drz;
             atomic_add_contribution(m_deriv_agg_ptrs[k*3+0][p],  vx);
             atomic_add_contribution(m_deriv_agg_ptrs[k*3+1][p],  vy);

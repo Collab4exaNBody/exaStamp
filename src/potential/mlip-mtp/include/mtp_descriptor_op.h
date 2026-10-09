@@ -52,9 +52,9 @@ namespace exaStamp
       double * const __restrict__ out = m_descriptors + static_cast<size_t>(K) * p;
       for (int k = 0; k < K; k++) out[k] = mtp.bd[k];
 
-      // Raw per-neighbor-pair Jacobian mtp.bdd[3*jj + 3*jnum*k] = d(B_k)/d(rij), rij = r_neighbor -
-      // r_central. Reduce it into a compact per-atom aggregate using the same central+=/neighbor-=
-      // scatter idiom as POD/SNAP/k2b.
+      // Per-neighbor-pair Jacobian mtp.bdd[3*jj + 3*jnum*k] = d(B_k)/d(rij), rij = r_neighbor -
+      // r_central, reduced into a per-atom aggregate with the central+=/neighbor-= scatter used by
+      // POD/SNAP/k2b: the aggregate is -d(B_k)/d(r_atom) (force-signed, F = +coeff . aggregate).
       if (m_deriv_agg_ptrs != nullptr)
       {
         for (int jj = 0; jj < jnum; jj++)

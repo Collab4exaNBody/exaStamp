@@ -16,6 +16,7 @@ under the License.
 */
 
 #include <exanb/core/grid.h>
+#include <exanb/core/domain.h>
 #include <exanb/core/grid_fields.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <onika/scg/operator.h>
@@ -29,36 +30,18 @@ under the License.
 #include <vector>
 #include <mpi.h>
 
-// Global linear-fitting design matrix for k2b -- direct port of
-// snap/compute_descriptor_snap_global.cu's two-stage local-then-Allreduce design, simplified since
-// k2b's descriptor has no species/type dependence at all (pair_params unused -- see
-// k2b_descriptor_op.h -- so there is no mono-type guard to inherit, unlike SNAP's).
-//
-// Purely additive: does NOT re-run the descriptor+derivative pass -- it reads the existing,
-// already-computed output of compute_descriptor_k2b (the per-atom `k2b_descriptors` buffer and its
-// `compute_derivative: true` per-atom aggregate fields), so the existing per-atom descriptor
-// capability stays fully intact and usable on its own.
-//
-// Row/column layout (matches compute_descriptor_snap_global's convention -- no reference-label
-// column, labels left for external attachment):
-//   size_array_rows = 1 + 3*natoms + 6   (natoms = total atom count across the whole simulation)
-//   size_array_cols = ncoeff             (= n_rbf)
-//   row 0            -- summed k2b descriptor over every atom
-//   rows 1..3*natoms -- ALREADY FORCE-SIGNED per-atom aggregate (self term + every neighbor
-//                       interaction), row = 1 + 3*field::id + xyz (exaStamp field::id is 0-indexed,
-//                       no "-1") -- F_atom = +coeff . row directly, NOT -coeff . row, despite the
-//                       "dD_i/dR_m" name suggesting a raw +dE/dr. Same central+=/neighbor-=
-//                       convention as POD, independently finite-difference-verified there (see
-//                       compute_descriptor_pod_global.cu's header comment).
-//   rows 3N+1..3N+6  -- summed r_atom . (already force-signed) gradient row, Voigt order
-//                       [xx,yy,zz,yz,xz,xy]
-//
-// Real ordering requirement: must run AFTER compute_descriptor_k2b: { compute_derivative: true }
-// and BEFORE any update_opt_from_ghost call on its aggregate fields. This operator needs the raw,
-// per-rank-local, UN-FOLDED aggregate (real and ghost slots each carry their own local view) --
-// update_opt_from_ghost folds each ghost's value into its real owner in place, which would silently
-// corrupt both the gradient-row and virial-row accumulation here if run first. See
-// compute_descriptor_snap_global.cu's own header comment for the full reasoning (identical here).
+// Global linear-fitting design matrix for k2b, built from the output of compute_descriptor_k2b
+// (k2b_descriptors + compute_derivative k2bda_* aggregate fields), without recomputing them.
+// The k2b descriptor does not depend on species.
+//   rows             : 1 + 3*natoms + 6 (natoms = total atom count, all MPI ranks)
+//   columns          : ncoeff (= n_rbf)
+//   row 0            : summed descriptor
+//   rows 1..3*natoms : force-signed gradient w.r.t. atom id's x/y/z (row = 1 + 3*id + xyz),
+//                      F = +coeff . row
+//   last 6 rows      : sum over slots of r . gradient, Voigt order [xx,yy,zz,yz,xz,xy]
+// Each rank accumulates its owned and ghost slots (ghosts weighted by their periodic-image
+// position) before the final Allreduce: this operator must run BEFORE update_opt_from_ghost folds
+// the ghost aggregates into their owners.
 namespace exaStamp
 {
   using namespace exanb;
@@ -68,13 +51,14 @@ namespace exaStamp
   {
     ADD_SLOT( MPI_Comm , mpi  , INPUT , REQUIRED );
     ADD_SLOT( GridT    , grid , INPUT , REQUIRED );
+    ADD_SLOT( Domain   , domain , INPUT , REQUIRED );
     ADD_SLOT( onika::memory::CudaMMVector<double> , k2b_descriptors , INPUT , OPTIONAL , DocString{"see compute_descriptor_k2b; required"} );
     ADD_SLOT( long     , ncoeff , INPUT , OPTIONAL , DocString{"see compute_descriptor_k2b; required"} );
     ADD_SLOT( std::string , deriv_agg_field_prefix , INPUT , std::string("k2bda_")
-            , DocString{"Must match compute_descriptor_k2b's own deriv_agg_field_prefix. Must be read before update_opt_from_ghost runs on these fields -- see this file's header comment."} );
+            , DocString{"Must match compute_descriptor_k2b's deriv_agg_field_prefix. Must run before update_opt_from_ghost on these fields."} );
 
     ADD_SLOT( onika::memory::CudaMMVector<double> , k2b_global , OUTPUT
-            , DocString{"Row-major (1+3*natoms+6) x ncoeff global design matrix (natoms = total atom count across the whole simulation, all MPI ranks). Row 0 = summed descriptor; rows 1..3*natoms = per-atom gradient (row=1+3*id+xyz); rows 3*natoms+1..+6 = virial, Voigt order [xx,yy,zz,yz,xz,xy]. Matches compute_descriptor_snap_global's convention, minus a reference-label column."} );
+            , DocString{"Row-major (1+3*natoms+6) x ncoeff global design matrix (natoms = total atom count across the whole simulation, all MPI ranks). Row 0 = summed descriptor; rows 1..3*natoms = force-signed gradient (row=1+3*id+xyz); last 6 rows = virial, Voigt order [xx,yy,zz,yz,xz,xy]."} );
     ADD_SLOT( long , ncoeff_all , OUTPUT , DocString{"Number of columns (= ncoeff = n_rbf)"} );
 
   public:
@@ -99,6 +83,7 @@ namespace exaStamp
         }
       }
 
+      const Mat3d xform = domain->xform();
       const auto * cell_particle_offset = grid->cell_particle_offset_data();
       const size_t n_cells = grid->number_of_cells();
 
@@ -129,9 +114,12 @@ namespace exaStamp
         {
           const size_t p = cell_particle_offset[ci] + pi;
           const uint64_t id = cell[field::id][pi];
-          const double rx = cell[field::rx][pi];
-          const double ry = cell[field::ry][pi];
-          const double rz = cell[field::rz][pi];
+          // real-frame position of this slot (owned atom or ghost image), same frame as the
+          // derivative fields, which were computed on xform-applied pair vectors
+          const Vec3d r = xform * Vec3d{ cell[field::rx][pi], cell[field::ry][pi], cell[field::rz][pi] };
+          const double rx = r.x;
+          const double ry = r.y;
+          const double rz = r.z;
 
           if( ! is_ghost )
           {
@@ -167,32 +155,20 @@ namespace exaStamp
     {
       return R"EOF(
 
-Global linear-fitting design matrix for k2b -- same convention as compute_descriptor_snap_global.
-Row-major (1+3*natoms+6) x ncoeff array:
+Global linear-fitting design matrix for k2b. Row-major (1+3*natoms+6) x ncoeff array:
 
-  row 0             -- summed k2b descriptor over every atom. Dot with a coefficient vector to get
-                       the total configuration energy.
-  rows 1..3*natoms  -- ALREADY FORCE-SIGNED aggregate (self term + every neighbor interaction) w.r.t.
-                       atom m's x/y/z, at row 1+3*m+xyz (m = field::id, 0-indexed). Dot this row with
-                       the same coefficient vector directly to get that atom's force component:
-                       F = +coeff . row (no extra negation -- see this file's header comment).
-  rows 3N+1..3N+6   -- summed r_atom . (already force-signed) gradient row, Voigt order
-                       [xx,yy,zz,yz,xz,xy]. Dot with the same coefficient vector to get the
-                       virial/stress tensor component.
+  row 0             -- summed descriptor. coeff . row = total energy.
+  rows 1..3*natoms  -- force-signed gradient w.r.t. atom m's x/y/z, at row 1+3*m+xyz
+                       (m = particle id, 0-indexed). coeff . row = force component.
+  rows 3N+1..3N+6   -- virial, Voigt order [xx,yy,zz,yz,xz,xy]. coeff . row = virial component.
 
-No trailing reference-label column -- pure descriptor/gradient/virial matrix, labels left for
-external attachment.
-
-Purely additive: reads compute_descriptor_k2b's existing output rather than re-running the
-descriptor+derivative pass, so the existing per-atom descriptor capability stays intact. Must run
-right after compute_descriptor_k2b (compute_derivative: true) and BEFORE any update_opt_from_ghost
-call on its aggregate fields -- this operator needs the raw, un-folded per-rank-local aggregate.
+The matrix has no reference-label column. Must run after compute_descriptor_k2b
+(compute_derivative: true) and before any update_opt_from_ghost on its aggregate fields.
 
 Usage example:
 
 compute_descriptor_k2b: { compute_derivative: true }
 compute_descriptor_k2b_global
-update_opt_from_ghost: { opt_fields: [ "k2bda_.*" ] }   # only needed if the per-atom export below also runs
 write_descriptor_k2b_global: { filename: "k2b_global.txt" }
 
 )EOF";

@@ -16,6 +16,7 @@ under the License.
 */
 
 #include <exanb/core/grid.h>
+#include <exanb/core/domain.h>
 #include <exanb/core/grid_fields.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <onika/scg/operator.h>
@@ -32,52 +33,18 @@ under the License.
 #include <vector>
 #include <mpi.h>
 
-// Global linear-fitting design matrix for SNAP, analogous to LAMMPS's compute snap / compute mliap
-// (descriptor sna model linear) -- ML-SNAP/compute_snap.cpp and ML-IAP/compute_mliap.cpp, confirmed
-// byte-for-byte identical row/column semantics for this case. Sibling to
-// mlip-pod/compute_descriptor_pod_global.cu (same design-matrix idea for POD), but generalized to
-// include the 6 virial rows LAMMPS's SNAP/MLIAP composites have and POD's own global op does not.
-//
-// Purely additive: does NOT re-run the bispectrum+derivative pass -- it reads the existing,
-// already-computed output of compute_descriptor_snap (the per-atom `bispectrum` buffer and its
-// `compute_derivative: true` per-atom aggregate fields), so the existing per-atom descriptor
-// capability stays fully intact and usable on its own.
-//
-// Multi-type (ntypes>1) support: SNAP's own sda_* aggregate (compute_descriptor_snap.cu) is widened
-// by ntypes -- one ncoeff*3-wide slot per possible CENTRAL atom type, exactly LAMMPS's own
-// compute_snad_atom.cpp / snap_peratom layout. Row 0 (descriptor sum) only ever needs the atom's own
-// type (available directly at assembly time). The gradient rows, read from sda_*, loop over every
-// itype in [0,ntypes) to recover all of an atom's contributions (its own type's slot for its self
-// terms, plus one slot per OTHER type it was ever a neighbor of) -- mono-type (ntypes==1) is the
-// trivial single-iteration special case of the same loop, mirrors compute_descriptor_pod_global.cu's
-// ti0 loop and LAMMPS compute_snap.cpp's typeoffset_local/typeoffset_global split.
-//
-// Row/column layout (matches compute_snap.cpp's array, minus its trailing reference-label column --
-// this is left as a pure descriptor/gradient/virial matrix, no energy/force/virial labels):
-//   size_array_rows = 1 + 3*natoms + 6   (natoms = total atom count across the whole simulation)
-//   size_array_cols = ncoeff * ntypes
-//   row 0            -- summed bispectrum descriptor over every atom
-//   rows 1..3*natoms -- ALREADY FORCE-SIGNED per-atom aggregate (self term + every neighbor
-//                       interaction), row = 1 + 3*field::id + xyz (exaStamp field::id is 0-indexed,
-//                       no "-1") -- F_atom = +coeff . row directly, NOT -coeff . row, despite the
-//                       "dB_i/dR_m" name suggesting a raw +dE/dr. Verified by finite-difference
-//                       against row 0 for the identical central+=/neighbor-= aggregate convention
-//                       in POD (see compute_descriptor_pod_global.cu's header comment and
-//                       data/regression_new/compute_descriptor/test_pod_descriptors/
-//                       compare_global_strain_fd.py) -- SNAP's own aggregate is built the same way
-//                       (same rij=r_neighbor-r_central convention), so the same sign applies here.
-//   rows 3N+1..3N+6  -- summed r_atom . (already force-signed) gradient row, Voigt order
-//                       [xx,yy,zz,yz,xz,xy] (LAMMPS compute_snap.cpp's dbdotr_compute)
-//
-// Real ordering requirement: must run AFTER compute_descriptor_snap: { compute_derivative: true }
-// and BEFORE any update_opt_from_ghost call on its aggregate fields. This operator needs the raw,
-// per-rank-local, UN-FOLDED aggregate (real and ghost slots each carry their own local view) --
-// exactly LAMMPS's own pre-MPI_Allreduce snap_peratom buffer, whose virial contribution
-// (dbdotr_compute) is likewise computed before LAMMPS's own final Allreduce. update_opt_from_ghost
-// folds each ghost's value into its real owner in place, which would silently corrupt both the
-// gradient-row and virial-row accumulation here if run first -- no per-atom export needs the
-// folded aggregate downstream of this operator anymore (only write_descriptor_snap_global does,
-// which reads the already-Allreduce'd global array, not the raw per-atom fields).
+// Global linear-fitting design matrix for SNAP, built from the output of compute_descriptor_snap
+// (per-atom bispectrum + compute_derivative aggregate fields), without recomputing them.
+//   rows             : 1 + 3*natoms + 6 (natoms = total atom count, all MPI ranks)
+//   columns          : ncoeff * ntypes, one ncoeff-wide block per type (column = ncoeff*itype + k)
+//   row 0            : summed bispectrum descriptor
+//   rows 1..3*natoms : force-signed gradient w.r.t. atom id's x/y/z (row = 1 + 3*id + xyz),
+//                      F = +coeff . row
+//   last 6 rows      : sum over slots of r . gradient, Voigt order [xx,yy,zz,yz,xz,xy]
+// The sda_* aggregate holds one ncoeff*3 slot per CENTRAL atom type, so the gradient rows loop over
+// every type. Each rank accumulates its owned and ghost slots (ghosts weighted by their periodic-image
+// position) before the final Allreduce: this operator must run BEFORE update_opt_from_ghost folds
+// the ghost aggregates into their owners.
 namespace exaStamp
 {
   using namespace exanb;
@@ -87,14 +54,15 @@ namespace exaStamp
   {
     ADD_SLOT( MPI_Comm , mpi  , INPUT , REQUIRED );
     ADD_SLOT( GridT    , grid , INPUT , REQUIRED );
+    ADD_SLOT( Domain   , domain , INPUT , REQUIRED );
     ADD_SLOT( onika::memory::CudaMMVector<double> , bispectrum , INPUT , OPTIONAL , DocString{"see compute_descriptor_snap; required"} );
     ADD_SLOT( long     , ncoeff , INPUT , OPTIONAL , DocString{"see compute_descriptor_snap; required"} );
-    ADD_SLOT( md::SnapXSContextRealT<double> , snap_ctx , INPUT , REQUIRED , DocString{"still needed for ntypes (materials().size())"} );
+    ADD_SLOT( md::SnapXSContextRealT<double> , snap_ctx , INPUT , REQUIRED , DocString{"SNAP context built by snap_init (number of types)"} );
     ADD_SLOT( std::string , deriv_agg_field_prefix , INPUT , std::string("sda_")
-            , DocString{"Must match compute_descriptor_snap's own deriv_agg_field_prefix. Must be read before update_opt_from_ghost runs on these fields -- see this file's header comment."} );
+            , DocString{"Must match compute_descriptor_snap's deriv_agg_field_prefix. Must run before update_opt_from_ghost on these fields."} );
 
     ADD_SLOT( onika::memory::CudaMMVector<double> , snap_global , OUTPUT
-            , DocString{"Row-major (1+3*natoms+6) x (ncoeff*ntypes) global design matrix (natoms = total atom count across the whole simulation, all MPI ranks). Row 0 = summed descriptor; rows 1..3*natoms = per-atom gradient (row=1+3*id+xyz); rows 3*natoms+1..+6 = virial, Voigt order [xx,yy,zz,yz,xz,xy]. Matches LAMMPS compute snap / compute mliap (descriptor sna model linear), minus their trailing reference-label column."} );
+            , DocString{"Row-major (1+3*natoms+6) x (ncoeff*ntypes) global design matrix (natoms = total atom count across the whole simulation, all MPI ranks). Row 0 = summed descriptor; rows 1..3*natoms = per-atom gradient (row=1+3*id+xyz); rows 3*natoms+1..+6 = virial, Voigt order [xx,yy,zz,yz,xz,xy]."} );
     ADD_SLOT( long , ncoeff_all , OUTPUT , DocString{"Number of columns (= ncoeff * ntypes)"} );
 
   public:
@@ -121,6 +89,7 @@ namespace exaStamp
         }
       }
 
+      const Mat3d xform = domain->xform();
       const auto * cell_particle_offset = grid->cell_particle_offset_data();
       const size_t n_cells = grid->number_of_cells();
 
@@ -152,22 +121,22 @@ namespace exaStamp
         {
           const size_t p = cell_particle_offset[ci] + pi;
           const uint64_t id = cell[field::id][pi];
-          const double rx = cell[field::rx][pi];
-          const double ry = cell[field::ry][pi];
-          const double rz = cell[field::rz][pi];
+          // real-frame position of this slot (owned atom or ghost image), same frame as the
+          // derivative fields, which were computed on xform-applied pair vectors
+          const Vec3d r = xform * Vec3d{ cell[field::rx][pi], cell[field::ry][pi], cell[field::rz][pi] };
+          const double rx = r.x;
+          const double ry = r.y;
+          const double rz = r.z;
 
           if( ! is_ghost )
           {
-            // Row 0 only ever needs THIS atom's own type -- no per-contribution type ambiguity
-            // here, unlike the gradient rows below (bispectrum itself was never widened by ntypes).
+            // row 0 only needs this atom's own type
             const long itype0 = static_cast<long>( cell[field::type][pi] );
             const double * const src = bispectrum->data() + static_cast<size_t>(nc) * p;
             for( long k=0; k<nc; k++ ) arr[ nc*itype0 + k ] += src[k];
           }
 
-          // Gradient rows: this atom's sda_* aggregate spans one slot per possible CENTRAL-atom
-          // type it was ever involved with -- loop every itype to recover all of it. Mono-type
-          // (ntypes==1) is the trivial single-iteration case of this same loop.
+          // gradient rows: the sda_* aggregate has one slot per CENTRAL-atom type, loop over all
           const long grad_row0 = 1 + 3*static_cast<long>(id);
           for( long itype=0; itype<ntypes; itype++ )
           {
@@ -201,32 +170,18 @@ namespace exaStamp
     {
       return R"EOF(
 
-Global linear-fitting design matrix for SNAP -- analogue of LAMMPS's compute snap / compute mliap
-(descriptor sna model linear). Row-major (1+3*natoms+6) x (ncoeff*ntypes) array. Multi-type
-(ntypes>1) supported -- column block selected by type, one ncoeff-wide block per type, matching
-LAMMPS compute_snap.cpp's typeoffset_local/typeoffset_global convention:
+Global linear-fitting design matrix for SNAP. Row-major (1+3*natoms+6) x (ncoeff*ntypes) array,
+one ncoeff-wide column block per type (column = ncoeff*itype + k):
 
-  row 0             -- summed bispectrum descriptor over every atom, one ncoeff-wide column block
-                       per type (column = ncoeff*itype + k). Dot with a coefficient vector to get
-                       the total configuration energy.
-  rows 1..3*natoms  -- ALREADY FORCE-SIGNED aggregate (self term + every neighbor interaction) w.r.t.
-                       atom m's x/y/z, at row 1+3*m+xyz (m = field::id, 0-indexed). Dot this row with
-                       the same coefficient vector directly to get that atom's force component:
-                       F = +coeff . row (no extra negation -- see this file's header comment).
-  rows 3N+1..3N+6   -- summed r_atom . (already force-signed) gradient row, Voigt order
-                       [xx,yy,zz,yz,xz,xy]. Dot with the same coefficient vector to get the
-                       virial/stress tensor component.
+  row 0             -- summed bispectrum descriptor. coeff . row = total energy.
+  rows 1..3*natoms  -- force-signed gradient w.r.t. atom m's x/y/z, at row 1+3*m+xyz
+                       (m = particle id, 0-indexed). coeff . row = force component.
+  rows 3N+1..3N+6   -- virial, Voigt order [xx,yy,zz,yz,xz,xy]. coeff . row = virial component.
 
-No trailing reference-label column (unlike LAMMPS's own compute snap/mliap) -- this is a pure
-descriptor/gradient/virial matrix, labels left for external attachment, matching
-compute_descriptor_pod_global's own convention.
+The matrix has no reference-label column. Must run after compute_descriptor_snap
+(compute_derivative: true) and before any update_opt_from_ghost on its aggregate fields.
 
-Purely additive: reads compute_descriptor_snap's existing output rather than re-running the
-bispectrum+derivative pass, so the existing per-atom descriptor capability stays intact. Must run
-right after compute_descriptor_snap (compute_derivative: true) and BEFORE any update_opt_from_ghost
-call on its aggregate fields -- this operator needs the raw, un-folded per-rank-local aggregate.
-
-Usage example (snap_ctx is built once, early, by snap_init -- see snap_init.cu):
+Usage example:
 
 init_parameters:
   - species
