@@ -1,0 +1,69 @@
+includes:
+  - config_species.msp
+
+species:
+  - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+
+init_parameters:
+  - species
+  - snap_init:
+      parameters:
+        param: "param.txt"
+        coef: "coeff.txt"
+
+read_single_file:
+  - read_xyz_file_with_xform:
+      verbose: false
+
+get_desc_snap:
+  - compute_descriptor_snap: { compute_derivative: true }
+  - compute_descriptor_snap_global
+
+write_desc_snap:
+  rebind: { filename: output_filename }
+  body:
+    - write_descriptor_snap_global:
+        format: npy
+
+process_files_loop:
+  loop: true
+  name: get_desc_files_loop
+  condition: compute_desc_continue
+  body:
+    - next_database_file
+    - grid_clear
+    - read_single_file
+    - species: { verbose: false , fail_if_empty: true }
+    - grid_post_processing
+    - reduce_species_after_read
+    - init_particles
+    - get_desc_snap
+    - write_desc_snap
+
+global:
+  rcut_max: 6.0 ang
+  rcut_inc: 1.0 ang
+  xyz_database: "Ta_DB_XYZ"
+  desc_database: "Ta_Desc_SNAP"
+  compute_desc_continue: true
+
+simulation:
+  name: exaStamp_training
+  body:
+    - print_logo_banner
+    - hw_device_init
+    - make_empty_grid
+    - grid_flavor_full
+    - global
+    - init_parameters
+    - generate_default_species
+    - particle_regions
+    - preinit_rcut_max
+    - domain:
+        cell_size: 6.0 ang
+        periodic: [ true, true, true ]
+        expandable: false
+    - init_prolog
+    - list_file_directory
+    - process_files_loop
+    - hw_device_finalize
