@@ -53,7 +53,6 @@ namespace exaStamp
     >
   class MtpForce : public OperatorNode
   {
-    ADD_SLOT( MPI_Comm                  , mpi                 , INPUT        , REQUIRED );
     ADD_SLOT( double                    , rcut_max            , INPUT_OUTPUT , 0.0 );
     ADD_SLOT( exanb::GridChunkNeighbors , chunk_neighbors     , INPUT        , exanb::GridChunkNeighbors{}, DocString{"neighbor list"} );
     ADD_SLOT( bool                      , ghost               , INPUT        , false );
@@ -62,10 +61,7 @@ namespace exaStamp
     ADD_SLOT( GridT                     , grid                , INPUT_OUTPUT );
     ADD_SLOT( Domain                    , domain              , INPUT        , REQUIRED );
     ADD_SLOT( GridParticleLocks         , particle_locks      , INPUT        , OPTIONAL, DocString{"particle spin locks"} );
-    ADD_SLOT( long                      , timestep            , INPUT        , REQUIRED, DocString{"Iteration number"} );
-    ADD_SLOT( ParticleSpecies           , species             , INPUT        , REQUIRED );
-    ADD_SLOT( ParticleTypeMap           , particle_type_map   , INPUT        , REQUIRED );
-    ADD_SLOT( MtpContext                , mtp_ctx             , INPUT );
+    ADD_SLOT( MtpContext                , mtp_ctx             , INPUT , REQUIRED , DocString{"MTP context built by mtp_init"} );
 
     static constexpr bool UseWeights   = false;
     static constexpr bool UseNeighbors = true;
@@ -80,6 +76,22 @@ namespace exaStamp
     static constexpr ComputeFields compute_force_field_set{};
 
   public:
+
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+MTP (Moment Tensor Potential) forces, energies and virial, using the context built by mtp_init.
+
+Usage example:
+
+init_parameters:
+  - species
+  - mtp_init:
+      parameters: { mtp_file: "pot.almtp" }
+
+compute_force: mtp_force
+)EOF";
+    }
 
     inline void execute() override final
     {
@@ -101,13 +113,7 @@ namespace exaStamp
         fatal_error() << "No particle locks" << std::endl;
       }
 
-      bool eflag = false;
-      if (trigger_thermo_state.has_value()) {
-        ldbg << "trigger_thermo_state = " << *trigger_thermo_state << std::endl;
-        eflag = *trigger_thermo_state;
-      } else {
-        ldbg << "trigger_thermo_state missing" << std::endl;
-      }
+      const bool eflag = trigger_thermo_state.has_value() && *trigger_thermo_state;
 
       ComputePairNullWeightIterator cp_weight{};
       exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };

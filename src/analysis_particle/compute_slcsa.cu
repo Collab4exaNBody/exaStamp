@@ -160,8 +160,12 @@ directly via cell_particle_offset, writes a single scalar field. GPU-compatible.
 
 Usage example:
 
-compute_descriptor_snap:
-  parameters: { param: "W.snapparam", coef: "W.snapcoeff" }
+init_parameters:
+  - species
+  - snap_init:
+      parameters: { param: "W.snapparam", coef: "W.snapcoeff" }
+
+compute_descriptor_snap
 compute_slcsa:
   lda_scalings: [ ... ]   # ncoeff Vec3d rows
   overall_mean: [ ... ]   # ncoeff values

@@ -54,10 +54,7 @@ namespace exaStamp
       const size_t p = m_cell_particle_offset[buf.cell] + buf.part;
       double * const __restrict__ out = m_descriptors + static_cast<size_t>(Mdesc) * nClusters * p;
 
-      // Central atom's own species (POD 0-indexed) -- needed unconditionally now (not just for
-      // nClusters>1's environment-descriptor call) to widen the derivative aggregate's index by
-      // species below, so a multi-species pda_* aggregate keeps each central-type's contribution
-      // in its own slot instead of collapsing them together (see mk3 below).
+      // central atom's species (POD 0-indexed), also selects the derivative aggregate slot (mk3)
       const int ti0 = m_type_map[type] - 1;
 
       if (nClusters > 1)
@@ -72,24 +69,12 @@ namespace exaStamp
         for (int m = 0; m < Mdesc; m++) out[m] = pod.bd[m];
       }
 
-      // Raw per-neighbor-pair Jacobian bdd[xyz+3*jj+3*jnum*m] = d(bd[m])/d(rij[xyz]), rij =
-      // r_neighbor - r_central (see EAPOD::peratombase_descriptors / peratomenergyforce's DGEMV
-      // consumption of bdd). Reduce it into a compact per-atom aggregate using the exact same
-      // central+=/neighbor-=  scatter LAMMPS's own compute_podd_atom.cpp uses per local-atom row,
-      // just summed straight into each atom's own slot instead of kept as a dense global matrix.
-      // nClusters>1: apply the same product rule as PodGlobalOp (out[m,k]=pd[k]*bd[m], so its
-      // derivative is bdd[m]*pd[k] + bd[m]*pdd[k]) -- pod.pd/pod.pdd were already populated above
-      // by peratomenvironment_descriptors.
-      //
-      // Multi-species (nelements>1): the aggregate index is widened by Mdesc*nClusters*ti0, ti0
-      // being THIS operator() call's own central atom's type -- both the central (+=) and neighbor
-      // (-=) side of a pair land in the SAME ti0-selected slot, mirroring LAMMPS's own
-      // compute_pod_global.cpp (`k = nCoeffPerElement*(ti[0]-1) + ... `, identical central/neighbor
-      // column for a given pair). A given atom's own aggregate therefore ends up spanning MULTIPLE
-      // ti0 slots across its lifetime (its own type's slot for its `+=` self terms, plus one slot
-      // per OTHER central atom's type it was ever a neighbor of, for `-=` terms) -- this is why the
-      // consumer (compute_descriptor_pod_global.cu) reads back with a full loop over every ti0,
-      // not a single lookup by the atom's own type.
+      // Per-neighbor-pair Jacobian bdd[xyz+3*jj+3*jnum*m] = d(bd[m])/d(rij[xyz]), rij = r_neighbor -
+      // r_central, reduced into a per-atom aggregate with a central+=/neighbor-= scatter: the
+      // aggregate is force-signed (-d/dr_atom). nClusters>1: out[m,k] = pd[k]*bd[m], so its
+      // derivative is bdd[m]*pd[k] + bd[m]*pdd[k] (pd/pdd filled by peratomenvironment_descriptors).
+      // Multi-species: both sides of a pair land in the slot of the CENTRAL atom's species ti0, so
+      // an atom's aggregate spans several ti0 slots and compute_descriptor_pod_global loops over all.
       if (m_deriv_agg_ptrs != nullptr)
       {
         for (int jj = 0; jj < jnum; jj++)

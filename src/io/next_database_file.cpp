@@ -24,48 +24,43 @@ under the License.
 #include <string>
 #include <vector>
 
-// Cursor operator for process_files_loop's batch{loop:true} body (see
-// create_descriptor_database_<family>.msp, e.g. create_descriptor_database_snap.msp): each iteration emits the
-// next entry of list_file_directory's file_list (as `filename`, auto-wired into
-// read_xyz_file_with_xform), a matching per-file output path re-using that file's own stem (as
-// `output_filename`, auto-wired into write_descriptor_<family>_global -- the input file's own name
-// IS the label, no separate file_id column/sidecar manifest needed), and the loop-continue boolean
-// `compute_desc_continue` the batch's condition: watches.
+// Loop cursor over list_file_directory's file list (see create_descriptor_database_<family>.msp).
 namespace exaStamp
 {
   using namespace exanb;
 
   class NextDatabaseFile : public OperatorNode
   {
-    ADD_SLOT( std::vector<std::string> , file_list           , INPUT , REQUIRED );
-    ADD_SLOT( long                     , n_total_files       , INPUT , REQUIRED );
-    ADD_SLOT( std::string              , desc_database        , INPUT , REQUIRED , DocString{"Output directory; output_filename = desc_database/<source file stem> (extension-less prefix, matching write_descriptor_*'s own npy-prefix convention)"} );
-    ADD_SLOT( long                     , cursor               , INPUT_OUTPUT , 0 );
-    ADD_SLOT( std::string              , filename             , OUTPUT );
-    ADD_SLOT( std::string              , output_filename      , OUTPUT );
-    // INPUT_OUTPUT, no literal default here (matches onika's sim_continue's own loop-condition
-    // slot `result`) -- a batch{loop:true} condition slot is fed via the framework's loop_output/
-    // loop_input propagation, which only wires up correctly against an INPUT_OUTPUT slot; a pure
-    // OUTPUT slot's write is invisible to eval_condition() (confirmed by an infinite-loop repro),
-    // and adding a literal default here (instead of seeding via `global:`) caused a resource-cycle
-    // crash on startup -- seed the initial value via `global: { compute_desc_continue: true }`
-    // in the .msp instead (needed since eval_condition() runs once before the body's first pass).
+    ADD_SLOT( std::vector<std::string> , file_list           , INPUT , REQUIRED , DocString{"File list from list_file_directory"} );
+    ADD_SLOT( long                     , n_total_files       , INPUT , REQUIRED , DocString{"Number of files from list_file_directory"} );
+    ADD_SLOT( std::string              , desc_database        , INPUT , REQUIRED , DocString{"Output directory (created if needed); output_filename = desc_database/<source file stem>, without extension"} );
+    ADD_SLOT( long                     , cursor               , INPUT_OUTPUT , 0 , DocString{"Index of the next file"} );
+    ADD_SLOT( std::string              , filename             , OUTPUT , DocString{"Next file to read"} );
+    ADD_SLOT( std::string              , output_filename      , OUTPUT , DocString{"Output path prefix for that file"} );
+    // must be INPUT_OUTPUT to be seen by the loop condition, and must be seeded in `global:`
+    // (compute_desc_continue: true) since the condition is evaluated before the first iteration
     ADD_SLOT( bool                     , compute_desc_continue, INPUT_OUTPUT );
 
   public:
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+Loop cursor over the file list of list_file_directory. At each call, outputs the next file as
+`filename` and an output prefix `output_filename` = desc_database/<file stem>, and sets
+compute_desc_continue to false once every file has been processed. compute_desc_continue must be
+set to true in `global:`. See list_file_directory for an example.
+)EOF";
+    }
+
     inline void execute() override final
     {
       if( *cursor < *n_total_files )
       {
         const std::string & src = (*file_list)[*cursor];
         *filename = src;
-        // std::ofstream on a missing parent dir silently no-ops (write_descriptor_<family>_global
-        // does not check is_open()) -- create it here so a missing desc_database doesn't silently
-        // drop output
+        // the descriptor writers do not create missing directories
         std::filesystem::create_directories( *desc_database );
-        // no extension here: write_descriptor_<family>_global's npy path uses `filename` as a bare
-        // prefix and appends ".npy" itself (it only strips a trailing ".txt", so passing "*.npy"
-        // here would double up into "*.npy.npy")
+        // no extension: the npy writer appends ".npy" itself
         *output_filename = *desc_database + "/" + std::filesystem::path(src).stem().string();
         ++(*cursor);
         *compute_desc_continue = true;

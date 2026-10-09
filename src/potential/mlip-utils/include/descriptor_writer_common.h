@@ -25,25 +25,13 @@ under the License.
 #include <string>
 #include <mpi.h>
 
-// Shared _global writer body for every write_descriptor_<family>_global operator (POD/SNAP/k2b/MTP)
-// -- these were ~90% byte-identical hand-rolled copies before this header existed (confirmed by
-// diff), differing only by slot/type names. Header-only, no link dependency, no CMake registration
-// needed for this directory (headers-only, found via relative #include, not add_subdirectory).
-// Each per-family write_descriptor_<family>_global.cu keeps its own thin OperatorNode (ADD_SLOT
-// types genuinely differ per family), and its execute() just calls this one function.
-//
-// The per-atom counterpart (write_descriptor_common) that used to live alongside this one was
-// removed entirely -- write_descriptor_pod.cu/write_descriptor_snap.cu/write_descriptor_mtp.cu/
-// write_descriptor_k2b.cu are all gone now, only write_descriptor_<family>_global is built for any
-// family. Per-atom classification use cases consume compute_descriptor_<family>'s output directly
-// in-graph instead (see compute_slcsa.msp/compute_bispectrum.msp), no writer involved.
+// Shared body of the write_descriptor_<family>_global operators (POD/SNAP/k2b/MTP). Header-only:
+// each per-family operator keeps its own slots and calls this function from its execute().
 namespace exaStamp
 {
   using namespace exanb;
 
-  // compute_descriptor_<family>_global's (1+3*natoms+6) x ncoeff_all array is already identically
-  // MPI_Allreduce'd on every rank by the time this runs, so this just picks one rank (0) to
-  // actually write, no gather needed.
+  // the global array is identical on every rank (Allreduce'd), rank 0 writes it
   inline void write_descriptor_global_common(
       const char * op_name,
       MPI_Comm mpi_comm,

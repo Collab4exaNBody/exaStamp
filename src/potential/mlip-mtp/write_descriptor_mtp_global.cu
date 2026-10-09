@@ -25,10 +25,7 @@ under the License.
 
 #include "../mlip-utils/include/descriptor_writer_common.h"
 
-// Plain export of compute_descriptor_mtp_global's output array. Like
-// write_descriptor_snap_global.cu / write_descriptor_k2b_global.cu, this operator's output is
-// already identically MPI_Allreduce'd on every rank, so this writer just needs to pick one rank
-// (0) to actually write -- no gather needed.
+// Writes compute_descriptor_mtp_global's array from rank 0 (the array is identical on every rank).
 namespace exaStamp
 {
   using namespace exanb;
@@ -52,14 +49,17 @@ namespace exaStamp
     {
       return R"EOF(
 
-Writes compute_descriptor_mtp_global's (1+3*natoms+6) x (species_count+ncoeff) array to a single
-file, from rank 0 only (the array is already identically MPI_Allreduce'd on every rank). See
-compute_descriptor_mtp_global's own documentation for the exact row/column layout -- note the
-column layout differs from POD's (species one-hot columns first, then the shared B_k columns).
+Writes the (1+3*natoms+6) x (species_count+ncoeff) array of compute_descriptor_mtp_global to a single file,
+from rank 0: row 0 = summed descriptor, rows 1..3*natoms = force-signed gradient, last 6 rows =
+virial (Voigt order). See compute_descriptor_mtp_global for the layout.
 
-'format: npy' writes a single .npy v1.0 file, directly loadable with numpy.load().
+'format: npy' writes a .npy v1.0 file of shape (1+3*natoms+6, species_count+ncoeff), loadable with numpy.load().
 
 Usage example:
+
+init_parameters:
+  - species
+  - mtp_init: { parameters: { mtp_file: "pot.almtp" } }
 
 compute_descriptor_mtp: { compute_derivative: true }
 compute_descriptor_mtp_global

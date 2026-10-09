@@ -25,9 +25,7 @@ under the License.
 
 #include "../../mlip-utils/include/descriptor_writer_common.h"
 
-// Plain export of compute_descriptor_k2b_global's output array. Like
-// write_descriptor_snap_global.cu, this operator's output is already identically
-// MPI_Allreduce'd on every rank, so this writer just needs to pick one rank (0) to actually write.
+// Writes compute_descriptor_k2b_global's array from rank 0 (the array is identical on every rank).
 namespace exaStamp
 {
   using namespace exanb;
@@ -51,13 +49,11 @@ namespace exaStamp
     {
       return R"EOF(
 
-Writes compute_descriptor_k2b_global's (1+3*natoms+6) x ncoeff array to a single file, from rank 0
-only (the array is already identically MPI_Allreduce'd on every rank) -- row 0 = summed descriptor,
-rows 1..3*natoms = per-atom gradient, rows 3*natoms+1..+6 = virial (Voigt order). See
-compute_descriptor_k2b_global's own documentation for the exact layout.
+Writes the (1+3*natoms+6) x (ncoeff) array of compute_descriptor_k2b_global to a single file,
+from rank 0: row 0 = summed descriptor, rows 1..3*natoms = force-signed gradient, last 6 rows =
+virial (Voigt order). See compute_descriptor_k2b_global for the layout.
 
-'format: npy' writes a single .npy v1.0 file, shape (1+3*natoms+6, ncoeff), directly loadable with
-numpy.load().
+'format: npy' writes a .npy v1.0 file of shape (1+3*natoms+6, ncoeff), loadable with numpy.load().
 
 Usage example:
 

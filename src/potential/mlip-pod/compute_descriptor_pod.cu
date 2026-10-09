@@ -42,9 +42,8 @@ under the License.
 #include "pod_force_op.h"       // PodComputeBuffer, CopyParticleType
 #include "pod_descriptor_op.h"  // PodDescriptorOp
 
-// CPU/OpenMP-only descriptor-only pass, mirroring pod_force's shape but calling EAPOD's
-// coefficient-free peratombase_descriptors_soa (see eapod.h) instead of the energy path --
-// no locks/scatter needed since each particle only ever writes its own output slot.
+// Per-atom POD descriptors (CPU/OpenMP): same neighbor pass as pod_force, calling EAPOD's
+// coefficient-free peratombase_descriptors_soa (eapod.h) instead of the energy path.
 namespace exaStamp
 {
 
@@ -69,9 +68,9 @@ namespace exaStamp
                DocString{"Stride of the pod_descriptors buffer = Mdesc*nClusters"} );
 
     ADD_SLOT( bool , compute_derivative , INPUT , false ,
-               DocString{"If true, also computes the compact per-atom POD descriptor-derivative aggregate: for atom a, Mdesc*nClusters*3*nelements values ((m+Mdesc*k+Mdesc*nClusters*ti0)*3+xyz order, ti0 = the CENTRAL atom's own species for that contribution -- multi-species systems need one slot per species an atom was ever a neighbor of, not just its own, see pod_descriptor_op.h), the sum over every atom i that has a as a neighbor (or i==a, the self term) of d(out_[m,k] of atom i)/d(r_a). Stored as dynamically-named generic-real grid fields (see deriv_agg_field_prefix), NOT a private buffer -- run update_opt_from_ghost on them on multi-rank runs."} );
+               DocString{"If true, also computes the per-atom derivative aggregate: for atom a, Mdesc*nClusters*3*nelements values ((m+Mdesc*k+Mdesc*nClusters*ti0)*3+xyz order, ti0 = species of the CENTRAL atom of each contribution), minus the sum over every atom i that has a as a neighbor (or i==a) of d(descriptor of i)/d(r_a): force-signed, F = +coeff . aggregate. Stored as grid fields (see deriv_agg_field_prefix)."} );
     ADD_SLOT( std::string , deriv_agg_field_prefix , INPUT , std::string("pda_") ,
-               DocString{"compute_derivative only: name prefix for the Mdesc*nClusters*3*nelements dynamically-named generic-real grid fields ('<prefix>0'..'<prefix>{Mdesc*nClusters*3*nelements-1}') holding the derivative aggregate. KEEP THIS SHORT: dynamic field names are silently truncated to 15 characters + null (onika::soatl::FieldId's fixed char[16] m_name) -- this operator fatal_errors instead of silently colliding if prefix+max-index would overflow that limit."} );
+               DocString{"compute_derivative only: name prefix of the Mdesc*nClusters*3*nelements grid fields ('<prefix>0', '<prefix>1', ...) holding the derivative aggregate. Keep it short: field names are limited to 15 characters, this operator aborts if prefix+index is longer."} );
 
     static constexpr bool UseWeights   = false;
     static constexpr bool UseNeighbors = true;
@@ -79,6 +78,34 @@ namespace exaStamp
     static constexpr FieldSet<field::_type> compute_descriptor_field_set{};
 
   public:
+
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+
+Per-atom POD descriptors (Mdesc*nClusters per atom, see the POD parameter file). Output: a flat per-particle buffer and its stride (ncoeff = Mdesc*nClusters),
+
+  pod_descriptors[ ncoeff * ( cell_particle_offset[cell] + particle ) + component ]
+
+compute_derivative: true also computes the per-atom derivative aggregate: for atom m, minus the
+sum of the descriptor derivatives w.r.t. r_m over every atom that has m as a neighbor (and m
+itself), i.e. force-signed (F = +coeff . aggregate). It is stored as Mdesc*nClusters*3*nelements fields, one Mdesc*nClusters*3 slot per CENTRAL atom species named
+'<deriv_agg_field_prefix><index>' (default prefix "pda_"), read by compute_descriptor_pod_global.
+To use the per-atom aggregate itself on more than one MPI rank, reduce the ghost contributions with
+update_opt_from_ghost: { opt_fields: [ "pda_.*" ] }, after compute_descriptor_pod_global.
+
+Usage example:
+
+init_parameters:
+  - species
+  - pod_init: { parameters: { pod_file: "Ta_param.pod", coeff_file: "Ta_coefficients.pod" } }
+
+compute_descriptor_pod: { compute_derivative: true }
+compute_descriptor_pod_global
+write_descriptor_pod_global: { filename: "pod_global.txt" }
+
+)EOF";
+    }
 
     inline void execute() override final
     {
@@ -106,14 +133,10 @@ namespace exaStamp
       if (*compute_derivative)
       {
         const int Mdesc = eapod0.Mdesc;
-        // Widened by nelements (multi-species): a given atom's aggregate spans one slot per
-        // possible CENTRAL-atom species it was ever involved with, not just its own -- see
-        // pod_descriptor_op.h's own comment on the mk3 index for why. Mono-species (nelements==1)
-        // is the trivial special case (factor of 1), unchanged from before.
+        // one slot per CENTRAL-atom species (see pod_descriptor_op.h)
         const size_t nc3 = static_cast<size_t>(Mdesc) * eapod0.nClusters * 3 * eapod0.nelements;
-        // onika::soatl::FieldId's dynamic-field name storage is a fixed char[16] (incl. null
-        // terminator), silently strncpy-truncated -- a too-long prefix+index would alias
-        // multiple components onto the same field with no error, so check instead of guessing.
+        // dynamic field names are silently truncated to 15 characters (onika::soatl::FieldId),
+        // which would alias components: check the longest name instead
         static constexpr size_t FIELD_NAME_MAX_LEN = 16;
         const size_t max_index_digits = std::to_string(nc3-1).size();
         if( deriv_agg_field_prefix->size() + max_index_digits + 1 > FIELD_NAME_MAX_LEN )

@@ -25,10 +25,7 @@ under the License.
 
 #include "../mlip-utils/include/descriptor_writer_common.h"
 
-// Plain export of compute_descriptor_pod_global's output array. compute_descriptor_pod_global is
-// multi-rank capable and already identically MPI_Allreduce'd on every rank by the time this runs,
-// so this writer just needs to pick one rank (0) to actually write, to avoid every rank racing to
-// write the same file -- same pattern as write_descriptor_snap_global.cu.
+// Writes compute_descriptor_pod_global's array from rank 0 (the array is identical on every rank).
 namespace exaStamp
 {
   using namespace exanb;
@@ -52,19 +49,19 @@ namespace exaStamp
     {
       return R"EOF(
 
-Writes compute_descriptor_pod_global's (1+3*natoms+6) x ncoeff_all array to a single file, from
-rank 0 only (the array is already identically MPI_Allreduce'd on every rank) -- row 0 = global
-per-configuration descriptor vector, rows 1..3*natoms = its gradient w.r.t. each atom id's x/y/z,
-rows 3*natoms+1..+6 = virial (Voigt order) (see compute_descriptor_pod_global's documentation for
-the exact layout and how to use it for linear-potential fitting).
+Writes the (1+3*natoms+6) x (ncoeff_all) array of compute_descriptor_pod_global to a single file,
+from rank 0: row 0 = summed descriptor, rows 1..3*natoms = force-signed gradient, last 6 rows =
+virial (Voigt order). See compute_descriptor_pod_global for the layout.
 
-'format: npy' writes a single .npy v1.0 file, shape (1+3*natoms+6, ncoeff_all), directly loadable
-with numpy.load() -- the whole output is already one homogeneous 2-D array, no per-field splitting
-needed.
+'format: npy' writes a .npy v1.0 file of shape (1+3*natoms+6, ncoeff_all), loadable with numpy.load().
 
 Usage example:
 
-pod_init: { parameters: { pod_file: "Ta_param.pod", coeff_file: "Ta_coefficients.pod" } }
+init_parameters:
+  - species
+  - pod_init: { parameters: { pod_file: "Ta_param.pod", coeff_file: "Ta_coefficients.pod" } }
+
+compute_descriptor_pod: { compute_derivative: true }
 compute_descriptor_pod_global
 write_descriptor_pod_global: { filename: "pod_global.txt" }
 

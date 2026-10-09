@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------
    Standalone MTP (Moment Tensor Potential) engine — decoupled from LAMMPS.
    Ported from LAMMPS ML-MTP (pair_mtp.cpp, mtp_rb_chevbyshev_basis.cpp) by
-   Richard Meng et al. — see /home/lafourcadep/CODES/ATOMISTIC/FFs/lammps-mtp-kokkos.
+   Richard Meng et al. (lammps-mtp-kokkos).
 ------------------------------------------------------------------------- */
 
 #pragma once
@@ -13,9 +13,8 @@
 // linear model coefficients) and evaluates, per central atom, either the trained
 // energy/force (peratom_energyforce_soa) or the coefficient-free descriptor vector and its
 // per-neighbor position-derivative (peratom_descriptors_soa). Only RBChebyshev radial basis
-// is supported (the only type LAMMPS's own reference implementation supports). The MaxVol
-// active-learning ("#MVS_v1.1") block is intentionally not parsed — out of scope for v1, and
-// LAMMPS's own reader never looks for it either.
+// is supported, as in the reference implementation. The MaxVol active-learning ("#MVS_v1.1")
+// block is not parsed.
 class EMTP
 {
 public:

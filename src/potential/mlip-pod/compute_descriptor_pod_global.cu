@@ -33,51 +33,18 @@ under the License.
 #include "pod_params.h"
 #include "pod_config.h"
 
-// Global linear-fitting design matrix for POD -- consumes compute_descriptor_pod's already-computed
-// output (pod_descriptors + compute_derivative: true's pda_* aggregate) instead of re-running its
-// own independent neighbor pass, matching SNAP/k2b/MTP's own compute_descriptor_<family>_global
-// design exactly (see compute_descriptor_k2b_global.cu for the reference shape this mirrors).
-// Purely additive: the existing per-atom compute_descriptor_pod stays fully intact and usable alone.
-//
-// Multi-species (nelements>1) support: PodGlobalOp's old per-pair scatter placed every gradient
-// contribution's column using the CENTRAL atom's type (ti0) for BOTH the central (+=) and neighbor
-// (-=) side of a pair. pod_descriptor_op.h's pda_* aggregate now preserves that same information by
-// being WIDENED by nelements (one slot per possible central-atom species, see its own header
-// comment) instead of collapsing every central-role type into one bin -- so a given atom's own
-// aggregate row spans multiple ti0 slots (its own species for its central/self terms, plus one slot
-// per OTHER species it was ever a neighbor of). Row 0 (one-body + descriptor sum) only ever needs
-// the atom's OWN type (available directly at assembly time via field::type). The gradient rows,
-// read from pda_*, loop over every ti0 in [0,nelements) to recover all of an atom's contributions --
-// mono-species (nelements==1) is the trivial single-iteration special case of the same loop, not a
-// separately-maintained path.
-//
-// Row/column layout: row 0 = system-wide per-element summed descriptor vector (incl. the nl1
-// one-body atom-count term); rows 1..3*natoms = ALREADY FORCE-SIGNED gradient of row 0 w.r.t. atom
-// id's x/y/z (F_atom = +coeff . row, not -coeff . row -- see the finite-difference-vs-energy note
-// below, this is not what the central+=/neighbor-= scatter's naming naively suggests); rows
-// 3*natoms+1..+6 = virial, Voigt order [xx,yy,zz,yz,xz,xy], same already-force-signed convention.
-// Rows 0..3*natoms match LAMMPS compute pod/global exactly (single-rank); virial rows have no
-// LAMMPS counterpart (POD fitting there doesn't use stress) but follow the same formula
-// compute_descriptor_snap_global uses.
-//
-// Force/virial sign, verified independently (2026-09-22): compute_descriptor_pod's own
-// documentation (and this operator's own gradient/virial rows, built from the exact same pda_*
-// aggregate) previously claimed "F_atom = -coeff . row" -- a finite-difference-vs-energy check
-// (perturb a small non-periodic cluster's positions/strain, central-difference row 0 against the
-// gradient/virial rows directly, independent of any LAMMPS comparison) showed this is backwards:
-// the central+=/neighbor-= scatter in pod_descriptor_op.h computes d(rij)/dr with rij=r_neighbor-
-// r_central, so by the chain rule the stored aggregate is -dE/dr (already force-signed), not
-// +dE/dr. LAMMPS's own compute pod/global apparently uses the identical convention (that's why the
-// gradient-row VALUES still matched LAMMPS exactly in compare_global.py -- a plain values-vs-LAMMPS
-// diff can't catch an overall sign both sides happen to share). Correct usage: F_atom = +coeff .
-// row[1+3*id+xyz] directly, no extra negation. See
-// data/regression_new/compute_descriptor/test_pod_descriptors/compare_global_strain_fd.py.
-//
-// Must run AFTER compute_descriptor_pod: { compute_derivative: true } and BEFORE any
-// update_opt_from_ghost call on the pda_* fields -- this operator needs the raw, per-rank-local,
-// UN-FOLDED aggregate (real and ghost slots each carry their own partial view); update_opt_from_ghost
-// folding first would corrupt both the gradient-row and virial-row accumulation here. Same ordering
-// rule as compute_descriptor_snap_global.cu/compute_descriptor_k2b_global.cu.
+// Global linear-fitting design matrix for POD, built from the output of compute_descriptor_pod
+// (pod_descriptors + compute_derivative pda_* aggregate fields), without recomputing them.
+//   rows             : 1 + 3*natoms + 6 (natoms = total atom count, all MPI ranks)
+//   columns          : nCoeffPerElement * nelements, one block per element
+//   row 0            : summed descriptor, including the nl1 one-body atom-count term
+//   rows 1..3*natoms : force-signed gradient w.r.t. atom id's x/y/z (row = 1 + 3*id + xyz),
+//                      F = +coeff . row
+//   last 6 rows      : sum over slots of r . gradient, Voigt order [xx,yy,zz,yz,xz,xy]
+// The pda_* aggregate holds one slot per CENTRAL atom species, so the gradient rows loop over every
+// species. Each rank accumulates its owned and ghost slots (ghosts weighted by their periodic-image
+// position) before the final Allreduce: this operator must run BEFORE update_opt_from_ghost folds
+// the ghost aggregates into their owners.
 namespace exaStamp
 {
   using namespace exanb;
@@ -88,14 +55,14 @@ namespace exaStamp
     ADD_SLOT( MPI_Comm , mpi  , INPUT , REQUIRED );
     ADD_SLOT( GridT    , grid , INPUT , REQUIRED );
     ADD_SLOT( Domain   , domain , INPUT , REQUIRED );
-    ADD_SLOT( PodContext , pod_ctx , INPUT , REQUIRED , DocString{"still needed for Mdesc/nClusters/nCoeffPerElement/nl1/nelements"} );
+    ADD_SLOT( PodContext , pod_ctx , INPUT , REQUIRED , DocString{"POD context built by pod_init"} );
     ADD_SLOT( onika::memory::CudaMMVector<double> , pod_descriptors , INPUT , OPTIONAL , DocString{"see compute_descriptor_pod; required"} );
     ADD_SLOT( long     , ncoeff , INPUT , OPTIONAL , DocString{"see compute_descriptor_pod; required (= Mdesc*nClusters)"} );
     ADD_SLOT( std::string , deriv_agg_field_prefix , INPUT , std::string("pda_")
-            , DocString{"Must match compute_descriptor_pod's own deriv_agg_field_prefix. Must be read before update_opt_from_ghost runs on these fields -- see this file's header comment."} );
+            , DocString{"Must match compute_descriptor_pod's deriv_agg_field_prefix. Must run before update_opt_from_ghost on these fields."} );
 
     ADD_SLOT( onika::memory::CudaMMVector<double> , pod_global , OUTPUT
-            , DocString{"Row-major (1+3*natoms+6) x ncoeff_all global array, natoms = total atom count across every MPI rank. See this file's header comment for the exact row/column layout."} );
+            , DocString{"Row-major (1+3*natoms+6) x ncoeff_all global design matrix (natoms = total atom count, all MPI ranks). Row 0 = summed descriptor; rows 1..3*natoms = force-signed gradient (row=1+3*id+xyz); last 6 rows = virial, Voigt order [xx,yy,zz,yz,xz,xy]."} );
     ADD_SLOT( long , ncoeff_all , OUTPUT , DocString{"Number of columns = nCoeffPerElement*nelements"} );
 
   public:
@@ -162,9 +129,7 @@ namespace exaStamp
 
           if( ! is_ghost )
           {
-            // Row 0 (one-body + descriptor sum) only ever needs THIS atom's own species -- no
-            // per-contribution type ambiguity here, unlike the gradient rows below (pod_descriptors
-            // itself was never widened, see compute_descriptor_pod.cu's own comment on why not).
+            // row 0 (one-body + descriptor sum) only needs this atom's own species
             const long ti0 = pod_ctx->type_map[ cell[field::type][pi] ] - 1;
             if( nl1 > 0 ) arr[ eapod0.nCoeffPerElement*ti0 ] += 1.0; // one-body atom-count term, row 0
             const double * const src = pod_descriptors->data() + static_cast<size_t>(nc) * p;
@@ -176,24 +141,15 @@ namespace exaStamp
             }
           }
 
-          // Real-frame position of THIS slot (owned atom or ghost image): the pda_* gradients were
-          // computed on xform-applied pair vectors, so the positions must be in the same frame.
+          // real-frame position of this slot (owned atom or ghost image), same frame as the
+          // pda_* gradients, which were computed on xform-applied pair vectors
           const Vec3d r = xform * Vec3d{ cell[field::rx][pi], cell[field::ry][pi], cell[field::rz][pi] };
 
-          // Gradient rows: this atom's pda_* aggregate spans one slot per possible CENTRAL-atom
-          // species it was ever involved with (its own, for central/self terms; every OTHER species
-          // it was ever a neighbor of, for neighbor terms) -- loop every ti0 to recover all of it.
-          // Mono-species (nelements==1) is the trivial single-iteration case of this same loop.
-          //
-          // Virial rows: Σ over every slot (owned AND ghost) of r_slot . pda_slot, accumulated here
-          // per slot, BEFORE the id-collapse. A ghost slot holds the neighbor-side (-=) terms of the
-          // pairs that reached that periodic image, so it must be weighted by the IMAGE's position,
-          // not by its owner's. Collapsing by id first and multiplying by the owned atom's position
-          // (the previous implementation) is only correct without periodic images -- it silently
-          // drops the box-vector term of every boundary-crossing pair. Each pair is computed once
-          // (central = an owned atom on exactly one rank) and scattered into that rank's slots, so
-          // summing every rank's slots then Allreducing counts every pair exactly once, and the sum
-          // is origin-independent (central += / neighbor -= makes Σ_slots pda == 0 per column).
+          // Gradient rows: the pda_* aggregate has one slot per CENTRAL-atom species, loop over all.
+          // Virial rows: accumulated per slot, owned AND ghost, before the id-collapse. A ghost slot
+          // holds the neighbor-side terms of the pairs that reached that periodic image, so it is
+          // weighted by the image position: collapsing by id first would drop the box-vector term
+          // of every boundary-crossing pair.
           const long grad_row0 = 1 + 3*static_cast<long>(id);
           for( long ti0=0; ti0<nelements; ti0++ )
           for( long m=0; m<Mdesc; m++ )
@@ -226,29 +182,17 @@ namespace exaStamp
     {
       return R"EOF(
 
-Global-array analogue of LAMMPS's compute pod/global, extended with 6 virial rows LAMMPS's own
-pod/global doesn't have (POD fitting there just doesn't use stress, not a structural limitation):
-a single, row-major (1+3*natoms+6) x ncoeff_all array (ncoeff_all = nCoeffPerElement*nelements).
-Multi-species (nelements>1) supported -- see this file's header comment for the pda_* widening
-this relies on.
+Global linear-fitting design matrix for POD. Row-major (1+3*natoms+6) x ncoeff_all array,
+ncoeff_all = nCoeffPerElement*nelements (one column block per element):
 
-  row 0             -- system-wide per-element summed descriptor vector, including the nl1
-                        one-body atom-count term. Dot this with a coefficient vector to get the
-                        total configuration energy.
-  rows 1..3*natoms  -- ALREADY FORCE-SIGNED gradient of row 0 w.r.t. atom id's x/y/z (verified by
-                        finite difference against row 0, see this file's header comment). Dot row
-                        (1+3*id+xyz) with the same coefficient vector directly to get that atom's
-                        force component: F = +coeff . row (no extra negation).
-  rows 3N+1..3N+6   -- sum over every local and ghost (periodic image) particle slot of
-                        position . that slot's own gradient contribution, Voigt order
-                        [xx,yy,zz,yz,xz,xy], same already-force-signed convention. Dot with the
-                        same coefficient vector to get the virial/stress tensor component.
+  row 0             -- summed descriptor, including the one-body atom-count term.
+                       coeff . row = total energy.
+  rows 1..3*natoms  -- force-signed gradient w.r.t. atom m's x/y/z, at row 1+3*m+xyz
+                       (m = particle id, 0-indexed). coeff . row = force component.
+  rows 3N+1..3N+6   -- virial, Voigt order [xx,yy,zz,yz,xz,xy]. coeff . row = virial component.
 
-Purely additive: reads compute_descriptor_pod's existing output (pod_descriptors + compute_derivative:
-true's pda_* aggregate) rather than re-running the descriptor+derivative pass, so the existing
-per-atom descriptor capability stays fully intact and usable on its own. Must run right after
-compute_descriptor_pod (compute_derivative: true) and BEFORE any update_opt_from_ghost call on its
-aggregate fields -- this operator needs the raw, un-folded per-rank-local aggregate.
+The matrix has no reference-label column. Must run after compute_descriptor_pod
+(compute_derivative: true) and before any update_opt_from_ghost on its aggregate fields.
 
 Usage example:
 

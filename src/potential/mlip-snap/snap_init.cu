@@ -30,14 +30,8 @@ under the License.
 #include <algorithm>
 #include <string>
 
-// Early (init_parameters, before setup_system) SNAP context construction -- mirrors pod_init.cu /
-// mtp_init.cu. Moved out of compute_descriptor_snap.cu (which used to build snap_ctx lazily inside
-// its own execute(), too late for rcut_max to widen ghost/neighbor setup in time -- every .msp using
-// it needed a manual `rcut_max: X ang` workaround under `global:`). Building it here once, before
-// setup_system, sets rcut_max in time and removes that workaround, matching pod_init/mtp_init's
-// existing pattern. compute_descriptor_snap.cu's OWN alternate constant-neighbor-count mode
-// (nneigh_bispectrum/closest_bispectrum/neigh_margin) is unaffected -- those stay as standalone
-// slots on that operator, never part of SnapContext.
+// Builds the SNAP context (parameter/coefficient files, per-material tables, SNA setup) once, in
+// init_parameters, so that rcut_max is known before setup_system builds ghosts and neighbor lists.
 namespace exaStamp
 {
   using namespace exanb;
@@ -47,12 +41,30 @@ namespace exaStamp
     using RealT = double;
     using SnapContext = md::SnapXSContextRealT<RealT>;
 
-    ADD_SLOT( md::SnapParms , parameters      , INPUT , REQUIRED , DocString{"LAMMPS-format SNAP parameter/coefficient files (param/coef), see compute_descriptor_snap/snap_force"} );
-    ADD_SLOT( bool          , conv_coef_units , INPUT , false );
+    ADD_SLOT( md::SnapParms , parameters      , INPUT , REQUIRED , DocString{"SNAP parameter and coefficient files: { param: <file>, coef: <file> }"} );
+    ADD_SLOT( bool          , conv_coef_units , INPUT , false , DocString{"Convert the coefficients from eV to internal energy units"} );
     ADD_SLOT( double        , rcut_max        , INPUT_OUTPUT , 0.0 );
     ADD_SLOT( SnapContext   , snap_ctx        , OUTPUT );
 
   public:
+
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+
+Builds the SNAP context used by snap_force, snap_force_fp64 and compute_descriptor_snap from a SNAP
+parameter file and coefficient file, and raises rcut_max to the largest pair cutoff
+2*max(radelem)*rcutfac. Place it in init_parameters, after species.
+
+Usage example:
+
+init_parameters:
+  - species
+  - snap_init:
+      parameters: { param: "W.snapparam", coef: "W.snapcoeff" }
+
+)EOF";
+    }
 
     inline void execute() override final
     {
@@ -75,13 +87,8 @@ namespace exaStamp
         cnt++;
       }
 
-      // Real per-pair SNAP cutoff is (radelem[i]+radelem[j])*rcutfac (see BispectrumOpRealT's own
-      // cutij, snap_bispectrum_op.h / real LAMMPS PairSNAP::init_one), NOT the bare rcutfac scale
-      // factor -- rcutfac alone only equals the true cutoff when every material's radelem==0.5
-      // (LAMMPS's convention for potentials with no per-element radii, true of every SNAP test
-      // asset used so far -- Ta/WBe -- but not real per-element-radius potentials like InP, where
-      // this silently produced a neighbor list too narrow to ever see a real neighbor). Worst-case
-      // pair cutoff over all i,j is 2*max_i(radelem[i]) (max_i,j(r_i+r_j) = 2*max_i(r_i)).
+      // per-pair SNAP cutoff is (radelem[i]+radelem[j])*rcutfac (see snap_bispectrum_op.h), so the
+      // largest one is 2*max(radelem)*rcutfac; rcutfac alone is only right when every radelem is 0.5
       snap_ctx->m_rcut = snap_ctx->m_config.rcutfac() * 2.0 * max_radelem;
       *rcut_max = std::max( double(*rcut_max), double(snap_ctx->m_rcut) );
       ldbg << "SNAP cutoff radius: " << snap_ctx->m_rcut << std::endl;

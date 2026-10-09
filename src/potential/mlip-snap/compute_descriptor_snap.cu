@@ -44,18 +44,13 @@ under the License.
 #include <sstream>
 #include <mpi.h>
 
-// GPU-compatible bispectrum descriptor pass, lifted out of md::SnapForceRealT (snap_force.h):
-// same LAMMPS param/coef loading + SNA setup + BispectrumOpRealT compute-pair call, but
-// with the force/energy pass dropped entirely. BispectrumOpRealT only ever writes to its
-// own central particle's slot (see snap_bispectrum_op.h, "bispectrum + bispectrum_ii_offset"),
-// so unlike snap_force this needs no particle locks. coeffelem/beta/eflag/quadraticflag are
-// accepted by BispectrumOpRealT for interface parity with the force op but are never read
-// inside its operator() -- only radelem/wjelem (species radius/weight) and snaconf feed the
-// actual bispectrum values -- so the LAMMPS coefficient array itself is never populated here.
-// When compute_derivative is set, a second CSR-shaped output holds the per-neighbor-pair
-// bispectrum Jacobian, computed via md::snap_compute_neighbor_dbidrj (mono-element) or its
-// chem_flag=true sibling md::snap_compute_neighbor_dbidrj_multi (see snap_compute_dbidrj.h),
-// both faithful ports of LAMMPS ML-SNAP's SNA::compute_dbidrj().
+// GPU-compatible bispectrum descriptor pass: same SNA setup and BispectrumOpRealT compute-pair
+// call as md::SnapForceRealT (snap_force.h), without the force/energy pass. BispectrumOpRealT only
+// writes to its central particle's slot, so no particle locks are needed, and only radelem/wjelem
+// and the SNA configuration are used (the SNAP coefficients are not). With compute_derivative, a
+// CSR-shaped output holds the per-neighbor-pair bispectrum Jacobian, computed by
+// md::snap_compute_neighbor_dbidrj (mono-element) or md::snap_compute_neighbor_dbidrj_multi
+// (chem_flag, see snap_compute_dbidrj.h).
 namespace exaStamp
 {
   using namespace exanb;
@@ -294,9 +289,9 @@ namespace exaStamp
     ADD_SLOT( bool                     , closest_bispectrum, INPUT , true , DocString{"When nneigh_bispectrum>0: true (default) picks the exact Nth-nearest-neighbor distance as cutoff (sort-based, exact but O(n^2) per particle); false uses a density-scaled estimate instead -- assumes neighbor count scales as r^3 with uniform local density, so rcut = min(rcutfac, rcutfac*(nneigh_bispectrum/n_within_rcutfac)^(1/3)) with no sorting needed, cheaper but approximate."} );
 
     ADD_SLOT( bool                     , compute_derivative, INPUT , false , DocString{"If true, also computes the per-neighbor-pair bispectrum derivative Jacobian (mono-element and chem_flag=true multi-element SNAP configs both supported)."} );
-    ADD_SLOT( std::string              , deriv_agg_field_prefix, INPUT , std::string("sda_") , DocString{"compute_derivative only: name prefix for the ncoeff*3*ntypes dynamically-named generic-real grid fields ('<prefix>0'..'<prefix>{ncoeff*3*ntypes-1}', widened by ntypes -- one ncoeff*3-wide slot per possible CENTRAL atom type, mono-type is the trivial ntypes==1 case) holding the LAMMPS compute-snad/atom-equivalent aggregate. Backed by named grid fields (not a private buffer) specifically so the generic update_opt_from_ghost operator can reduce them ghost->owner across MPI ranks -- add 'update_opt_from_ghost: { opt_fields: [\"<prefix>.*\"] }' right after this operator whenever compute_derivative is used on more than one rank. KEEP THIS SHORT: dynamic field names are silently truncated to 15 characters + null (onika::soatl::FieldId's fixed char[16] m_name) -- a too-long prefix+index collides multiple components onto the same field with no error. This operator fatal_errors instead if prefix+max-index would overflow that limit."} );
+    ADD_SLOT( std::string              , deriv_agg_field_prefix, INPUT , std::string("sda_") , DocString{"compute_derivative only: name prefix for the ncoeff*3*ntypes dynamically-named generic-real grid fields ('<prefix>0'..'<prefix>{ncoeff*3*ntypes-1}', widened by ntypes -- one ncoeff*3-wide slot per possible CENTRAL atom type, mono-type is the trivial ntypes==1 case) holding the force-signed per-atom derivative aggregate. Stored as grid fields so update_opt_from_ghost can reduce them ghost->owner: add 'update_opt_from_ghost: { opt_fields: [\"<prefix>.*\"] }' after this operator on multi-rank runs (after any *_global operator). Keep it short: field names are limited to 15 characters, this operator aborts if prefix+index is longer."} );
 
-    ADD_SLOT( SnapContext              , snap_ctx          , INPUT , REQUIRED , DocString{"built once, early, by snap_init (before setup_system, so rcut_max propagates in time)"} );
+    ADD_SLOT( SnapContext              , snap_ctx          , INPUT , REQUIRED , DocString{"SNAP context built by snap_init"} );
     ADD_SLOT( onika::memory::CudaMMVector<RealT> , bispectrum , OUTPUT , DocString{"Flat per-particle bispectrum buffer: bispectrum[ ncoeff*(cell_particle_offset[cell]+particle) + component ], see grid->cell_particle_offset_data()"} );
     ADD_SLOT( long                     , ncoeff            , OUTPUT , DocString{"Number of bispectrum coefficients per particle (stride of the bispectrum buffer)"} );
     ADD_SLOT( onika::memory::CudaMMVector<long>    , bispectrum_deriv_offset , OUTPUT , DocString{"compute_derivative only: CSR row offset per particle (size total_particles+1); particle p's rows span [offset[p],offset[p+1]), row 0 of each particle's block is its own self/negative-sum term, rows 1..ninside are its neighbors in compacted order."} );
@@ -308,17 +303,13 @@ namespace exaStamp
     {
       assert( chunk_neighbors->number_of_cells() == grid->number_of_cells() );
 
-      // snap_ctx (param/coef file read, per-material factor/radelem tables, SNA setup) is now built
-      // once, early, by snap_init (init_parameters, before setup_system) -- this idempotent update
-      // just keeps this operator's own rcut_max slot in sync, snap_init already set it in time.
+      // snap_ctx (param/coef files, per-material tables, SNA setup) is built by snap_init
       *rcut_max = std::max( double(*rcut_max) , double(snap_ctx->m_rcut) );
 
       if( grid->number_of_cells() == 0 ) { *ncoeff = 0; return; }
 
-      // ncoeff (bispectrum stride) comes straight from twojmax/nelements via the SNA config
-      // itself (see sna.h's compute_coeff_count) -- it never depends on the coefficient file,
-      // so the coef file's actual coefficient values (and even their count) are irrelevant here;
-      // only its per-material header lines (name, radelem, weight) matter for this operator.
+      // ncoeff (bispectrum stride) comes from twojmax/nelements (sna.h's compute_coeff_count):
+      // only the per-material header lines (name, radelem, weight) of the coefficient file matter
       const bool quadraticflag = snap_ctx->m_config.quadraticflag();
       const int ncoeff_local = snap_ctx->sna->ncoeff;
       *ncoeff = ncoeff_local;
@@ -375,11 +366,8 @@ namespace exaStamp
             md::BispectrumOpRealT<RealT,RealT,SnapConfParamsT> bispectrum_op {
                                  snapconf, grid->cell_particle_offset_data(), nullptr, bispectrum->data(),
                                  nullptr, ncoeff_local, snap_ctx->m_factor.data(), snap_ctx->m_radelem.data(),
-                                 // BispectrumOpRealT's own `rcutfac` field is the bare per-pair SCALE
-                                 // factor (cut_ij = (radelem[i]+radelem[j])*rcutfac), not the absolute
-                                 // widened ghost/neighbor-list cutoff distance snap_ctx->m_rcut now is
-                                 // (see snap_init.cu) -- passing m_rcut here double-applies the radelem
-                                 // scaling whenever radelem isn't the same for every material.
+                                 // rcutfac is the per-pair scale factor (cut_ij = (radelem[i]+radelem[j])*rcutfac),
+                                 // not the neighbor-list cutoff snap_ctx->m_rcut
                                  nullptr, nullptr, snap_ctx->m_config.rcutfac(), false, quadraticflag,
                                  deriv_off, deriv_buf, deriv_id, count_only, do_deriv, deriv_agg_ptrs };
             compute_cell_particle_pairs2( *grid, snap_ctx->m_rcut, *ghost, optional, bs_buf, bispectrum_op, cp_fields
@@ -412,10 +400,7 @@ namespace exaStamp
           // contributions back into their real owner across MPI ranks -- see
           // deriv_agg_field_prefix's DocString. Scattered into directly by the fill pass below;
           // this operator does NOT itself do any ghost/cross-rank reduction.
-          // Widened by ntypes (multi-type support): one ncoeff*3-wide slot per possible CENTRAL
-          // atom type, mirroring LAMMPS's own compute_snad_atom.cpp/snap_peratom design (see
-          // snap_bispectrum_op.h's deriv_agg_ptrs comment) -- mono-type (ntypes==1) is the trivial
-          // single-slot special case of the same layout, unchanged from before.
+          // one ncoeff*3-wide slot per possible CENTRAL atom type (see snap_bispectrum_op.h)
           const size_t ntypes = snap_ctx->m_config.materials().size();
           const size_t nc3 = static_cast<size_t>(ncoeff_local) * 3 * ntypes;
           // onika::soatl::FieldId's dynamic-field name storage is a fixed char[16] (incl. null
@@ -473,76 +458,49 @@ namespace exaStamp
     {
       return R"EOF(
 
-GPU-compatible SNAP bispectrum descriptor pass. Reuses the same LAMMPS param/coef loading
-and SNA setup as snap_force, but only runs BispectrumOpRealT -- no force/energy pass, no
-particle locks needed. Output is a flat per-particle buffer (bispectrum) plus its
-per-particle stride (ncoeff), indexed the same way snap_force's internal bispectrum
-buffer is (see md/snap/snap_check_bispectrum.h):
+Per-atom SNAP bispectrum descriptors (GPU-compatible). Uses the SNAP context built by snap_init,
+without the force/energy pass. Output: a flat per-particle buffer and its stride,
 
   bispectrum[ ncoeff * ( cell_particle_offset[cell] + particle ) + component ]
 
-where cell_particle_offset comes from grid->cell_particle_offset_data().
+compute_derivative: true (mono-element and chem_flag multi-element configurations) also computes:
 
-Setting compute_derivative: true (mono-element and chem_flag=true multi-element SNAP configs
-both supported) additionally computes the per-neighbor-pair bispectrum Jacobian dB_k/dr_j, in
-a CSR-like layout:
+- the per-neighbor-pair Jacobian dB_k/dr_j, in a CSR layout:
+    bispectrum_deriv_offset[p] .. bispectrum_deriv_offset[p+1]-1  -- rows of particle p
+    row 0 of that range                                           -- self term
+    rows 1..ninside                                               -- one row per neighbor
+    bispectrum_deriv[ (bispectrum_deriv_offset[p]+row)*ncoeff*3 + k*3 + xyz ]
+    bispectrum_deriv_nbh_id[ bispectrum_deriv_offset[p]+row ]      -- particle id of that row
 
-  bispectrum_deriv_offset[p] .. bispectrum_deriv_offset[p+1]-1   -- row range for particle p
-  row 0 of that range                                            -- particle p's own self/negative-sum term
-  rows 1..ninside                                                -- one row per neighbor, compacted order
-  bispectrum_deriv[ (bispectrum_deriv_offset[p]+row)*ncoeff*3 + k*3 + xyz ]
-  bispectrum_deriv_nbh_id[ bispectrum_deriv_offset[p]+row ]       -- field::id of that row's atom
+- the per-atom aggregate: for atom m, minus the sum of dB_i/dr_m over every atom i that has m as a
+  neighbor (or i = m), i.e. force-signed (F = +coeff . aggregate). It is stored as
+  ncoeff*3*ntypes grid fields '<prefix>0'..'<prefix>{ncoeff*3*ntypes-1}' (default prefix "sda_"),
+  one ncoeff*3 slot per CENTRAL atom type, read by compute_descriptor_snap_global. To use the
+  per-atom aggregate itself on more than one MPI rank, reduce the ghost contributions with
 
-The same compute_derivative: true pass also fills the LAMMPS compute-snad/atom-equivalent
-aggregate (one row per particle, not per neighbor pair) -- for atom m, the sum of dB_i/dR_m
-over every atom i that has m as a neighbor (or m=i, the self term), matching what
-compute snad/atom reports for the same configuration. Unlike bispectrum/bispectrum_deriv,
-this is NOT a private output buffer: it's stored as ncoeff*3*ntypes dynamically-named
-generic-real grid fields ('<deriv_agg_field_prefix>0' .. '<deriv_agg_field_prefix>{ncoeff*3*
-ntypes-1}', default prefix "sda_"; widened by ntypes -- one ncoeff*3-wide slot per possible
-CENTRAL atom type, mono-type is the trivial ntypes==1 case, mirrors LAMMPS's own
-compute_snad_atom.cpp/snap_peratom layout), so the existing generic update_opt_from_ghost
-operator can reduce ghost contributions back into their real owner across MPI ranks. Add
-this right after compute_descriptor_snap whenever compute_derivative is used on more than one rank:
+    update_opt_from_ghost: { opt_fields: [ "sda_.*" ] }
 
-  update_opt_from_ghost: { opt_fields: [ "sda_.*" ] }
+  after compute_descriptor_snap (and after compute_descriptor_snap_global, which needs the
+  un-reduced fields).
 
-matching exactly how real force computation's ghost reduction is its own explicit pipeline
-step (update_force_energy_from_ghost), not something hidden inside the force operator.
-Component k, axis xyz, of particle p's aggregate is then
-grid->flat_array_data_nocreate(field::mk_generic_real("sda_"+std::to_string(k*3+xyz)))[ cell_particle_offset[cell]+particle ].
-
-The coefficient file's actual coefficient values (and their count) are never used --
-ncoeff is derived purely from twojmax/nelements (see sna.h's compute_ncoeff), not from
-the coefficient file. Only each material's header line (name, radelem, weight) matters,
-so the coef file can be reduced to just that, e.g. for a single-element potential:
+The coefficient values of the coefficient file are not used: ncoeff only depends on twojmax and
+the number of elements, so the file can be reduced to its per-material header lines, e.g.
 
   1 0
   Ta 0.5 1
 
-(nmat=1, 0 coefficients per material, followed by one "name radelem weight" line per
-material and no coefficient lines at all).
+By default the neighbor cutoff is the fixed rcutfac of the parameter file. nneigh_bispectrum > 0
+switches to a constant-neighbor-count mode:
 
-By default the neighbor cutoff is the fixed physical rcutfac from the param file. Setting
-nneigh_bispectrum>0 switches to a constant-neighbor-count mode instead (mirrors
-compute_local_structural_metrics.h's constant-neighbor-count modes), with two variants
-selected by closest_bispectrum:
+  - closest_bispectrum: true (default) -- exact: keeps the nneigh_bispectrum nearest neighbors
+    within rcutfac, the cutoff is set to the farthest of them plus neigh_margin.
+  - closest_bispectrum: false -- density-scaled estimate: cutoff = rcutfac*(nneigh_bispectrum/n)^(1/3)
+    for n neighbors within rcutfac, capped at rcutfac. Cheaper, approximate.
 
-  - closest_bispectrum: true (default) -- exact mode. Sorts all neighbors within rcutfac
-    by distance and keeps the nearest nneigh_bispectrum of them; the smooth cutoff radius
-    is set to their farthest distance plus neigh_margin. O(n^2) sort per particle, but exact.
+rcutfac must contain at least nneigh_bispectrum neighbors everywhere; this mode does not support
+switchinnerflag.
 
-  - closest_bispectrum: false -- density-scaled estimate. No sorting: given n neighbors
-    found within rcutfac, assumes neighbor count scales as r^3 with uniform local density
-    and sets the cutoff to rcutfac * (nneigh_bispectrum/n)^(1/3), capped at rcutfac. Cheaper,
-    but only approximate, and can end up with somewhat more or fewer than nneigh_bispectrum
-    neighbors in non-uniform/anisotropic local environments.
-
-Either way, rcutfac must be generous enough to contain at least nneigh_bispectrum neighbors
-everywhere in the system; this mode does not support switchinnerflag.
-
-Usage example (snap_ctx is built once, early, by snap_init -- see snap_init.cu -- add it under
-init_parameters, before setup_system, so rcut_max propagates in time for ghost/neighbor setup):
+Usage example:
 
 init_parameters:
   - species
@@ -552,9 +510,7 @@ init_parameters:
 compute_descriptor_snap:
   nneigh_bispectrum: 48       # optional, constant-neighbor-count mode
   closest_bispectrum: false   # optional, density-scaled estimate instead of exact sort
-  compute_derivative: false   # optional, per-neighbor-pair bispectrum Jacobian (mono- or multi-element)
-# whenever compute_derivative is used on more than one MPI rank, add right after it:
-# update_opt_from_ghost: { opt_fields: [ "sda_.*" ] }
+  compute_derivative: false   # optional, descriptor derivatives
 
 )EOF";
     }
