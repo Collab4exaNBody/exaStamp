@@ -64,12 +64,11 @@ endif()
 find_package(exaNBody)
 
 
-# yaml-cpp installation directory override -- general onika-ecosystem variable (see
-# onika/doc/yaml-build.txt), NOT specific to any one ML potential -- left untouched here.
+# yaml-cpp installation directory (general onika variable, also used by the PACE build)
 set(YAML_CPP_INSTALL_DIR "" CACHE PATH "yaml-cpp installation directory")
 
-# Machine-learning-potential build options (EXASTAMP_MLIP_<NAME>_*) now live in each potential's
-# own CMakeLists.txt (src/potential/mlip-pace, mlip-pod, mlip-mtp, n2p2, snaplmp) instead of here.
+# Machine-learning potential build options (EXASTAMP_MLIP_<NAME>_*) are defined in each
+# src/potential/mlip-<name>/CMakeLists.txt.
 
 option(USE_RSA "Add RSA Package" OFF)
 if(USE_RSA)

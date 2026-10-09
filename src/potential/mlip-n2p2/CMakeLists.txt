@@ -15,7 +15,7 @@
 # under the License.
 #
 # ===================================
-# === micro-stamp meam potential  ===
+# ===        n2p2 potential         ===
 # ===================================
 
 option(EXASTAMP_MLIP_N2P2_BUILD "Build N2P2 potential" OFF)
@@ -35,8 +35,7 @@ else()
   set(ONIKA_BUILD_exaStampMlipN2P2_DEFAULT ${EXASTAMP_MLIP_N2P2_BUILD})
 endif()
 
-# ${MPI_CXX_LIBRARIES}
-set(microStampN2P2_INCLUDE_DIRS ${EXASTAMP_MLIP_N2P2_ROOT_DIR}/include)
-set(microStampN2P2_LINK_LIBRARIES exaStampPotential ${EXASTAMP_MLIP_N2P2_ROOT_DIR}/lib/libnnp.so ${EXASTAMP_MLIP_N2P2_ROOT_DIR}/lib/libnnpif.so)
+set(exaStampMlipN2P2_INCLUDE_DIRS ${EXASTAMP_MLIP_N2P2_ROOT_DIR}/include)
+set(exaStampMlipN2P2_LINK_LIBRARIES exaStampPotential ${EXASTAMP_MLIP_N2P2_ROOT_DIR}/lib/libnnp.so ${EXASTAMP_MLIP_N2P2_ROOT_DIR}/lib/libnnpif.so)
 onika_add_plugin(exaStampMlipN2P2 ${CMAKE_CURRENT_SOURCE_DIR})
 
