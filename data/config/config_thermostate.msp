@@ -69,3 +69,33 @@ default_thermostate_compute: simulation_thermodynamic_state
 
 ######################################################################################################
 ######################################################################################################
+
+######################################################################################################
+################################# Energy / virial computation trigger ################################
+
+# Force operators compute per particle energies and virial only when trigger_thermo_state is true.
+# It is set at each iteration (begin_iteration) when the thermodynamic state, a restart, a snapshot or an
+# analysis is due, or when thermo_state_every_step is true. Schemes that need energies or virial at every
+# step (NPT, Parrinello-Rahman, FIRE, CG) call force_thermo_state.
+trigger_thermo_state_compute:
+  - thermo_state_or1:
+      rebind: { in1: trigger_thermostate_compute , in2: trigger_snapshot , result: thermo_state_tmp1 }
+      body:
+        - boolean_or
+  - thermo_state_or2:
+      rebind: { in1: thermo_state_tmp1 , in2: trigger_analysis , result: thermo_state_tmp2 }
+      body:
+        - boolean_or
+  - thermo_state_or3:
+      rebind: { in1: thermo_state_tmp2 , in2: thermo_state_every_step , result: trigger_thermo_state }
+      body:
+        - boolean_or
+
+# Energies and virial needed by the next force computations, whatever the triggers
+force_thermo_state:
+  rebind: { value: trigger_thermo_state }
+  body:
+    - boolean_set: { set: true }
+
+######################################################################################################
+######################################################################################################
