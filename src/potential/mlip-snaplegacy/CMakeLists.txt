@@ -14,7 +14,6 @@
 # specific language governing permissions and limitations
 # under the License.
 #
-# message(STATUS "XNB_BUILD_mdSnap = ${XNB_BUILD_mdSnap}")
 option(EXASTAMP_MLIP_SNAP_BUILD "Build SNAP potential (snap + snaplegacy)" OFF)
 
 if(EXASTAMP_MLIP_SNAP_BUILD AND XNB_BUILD_mdSnap)

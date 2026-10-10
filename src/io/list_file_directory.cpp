@@ -25,11 +25,8 @@ under the License.
 #include <string>
 #include <vector>
 
-// Lists the .xyz (or other suffix) files under a training-set directory tree (recursively -- a
-// real training set is organized as one subfolder per configuration category, e.g.
-// POD_DB_XYZ/Liquid/, POD_DB_XYZ/Volume_BCC/, ...), once, before a process_files_loop
-// batch{loop:true} body iterates over them via next_database_file -- see
-// create_descriptor_database_<family>.msp. Sorted by full path for reproducibility.
+// Lists the files with a given suffix under a directory tree (recursively), sorted by path, for
+// next_database_file to iterate over (see create_descriptor_database_<family>.msp).
 namespace exaStamp
 {
   using namespace exanb;
@@ -38,10 +35,38 @@ namespace exaStamp
   {
     ADD_SLOT( std::string              , xyz_database  , INPUT , REQUIRED , DocString{"Directory to search recursively"} );
     ADD_SLOT( std::string              , pattern       , INPUT , std::string(".xyz") , DocString{"Filename suffix to match"} );
-    ADD_SLOT( std::vector<std::string> , file_list     , OUTPUT );
-    ADD_SLOT( long                     , n_total_files , OUTPUT );
+    ADD_SLOT( std::vector<std::string> , file_list     , OUTPUT , DocString{"Sorted list of matching file paths"} );
+    ADD_SLOT( long                     , n_total_files , OUTPUT , DocString{"Number of matching files"} );
 
   public:
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+Lists the files whose name ends with `pattern` under the directory `xyz_database`, recursively
+(one subdirectory per configuration category is typical), sorted by path. Aborts if no file
+matches. Used with next_database_file to compute descriptors over a training database:
+
+process_files_loop:
+  loop: true
+  condition: compute_desc_continue
+  body:
+    - next_database_file
+    - grid_clear
+    - read_xyz_file_with_xform      # reads `filename`
+    - ...                           # init, compute_descriptor_<family>, compute_descriptor_<family>_global
+    - write_descriptor_<family>_global: { format: npy }   # rebind filename to output_filename
+
+global:
+  xyz_database: "Ta_DB_XYZ"
+  desc_database: "Ta_Desc_SNAP"
+  compute_desc_continue: true
+
+simulation body: ... init_prolog, list_file_directory, process_files_loop ...
+
+See data/regression_new/mlip_training/create_descriptor_database_*.msp for complete examples.
+)EOF";
+    }
+
     inline void execute() override final
     {
       namespace fs = std::filesystem;

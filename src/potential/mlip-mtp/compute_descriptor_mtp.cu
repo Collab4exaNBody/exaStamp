@@ -42,9 +42,8 @@ under the License.
 #include "include/mtp_force_op.h"       // MtpComputeBuffer, CopyParticleType
 #include "include/mtp_descriptor_op.h"  // MtpDescriptorOp
 
-// CPU/OpenMP-only descriptor-only pass, mirroring mtp_force's shape but calling EMTP's
-// coefficient-free peratom_descriptors_soa instead of the energy path -- no locks/scatter needed
-// for the descriptor itself since each particle only ever writes its own output slot.
+// Per-atom MTP descriptors (CPU/OpenMP): same neighbor pass as mtp_force, calling EMTP's
+// coefficient-free peratom_descriptors_soa instead of the energy path.
 namespace exaStamp
 {
 
@@ -69,9 +68,9 @@ namespace exaStamp
                DocString{"Stride of the mtp_descriptors buffer = alpha_scalar_moments"} );
 
     ADD_SLOT( bool , compute_derivative , INPUT , false ,
-               DocString{"If true, also computes the compact per-atom MTP descriptor-derivative aggregate: for atom a, ncoeff*3 values (k*3+xyz order), the sum over every atom i that has a as a neighbor (or i==a, the self term) of d(B_k of atom i)/d(r_a). Stored as dynamically-named generic-real grid fields (see deriv_agg_field_prefix), NOT a private buffer -- run update_opt_from_ghost on them on multi-rank runs."} );
+               DocString{"If true, also computes the per-atom derivative aggregate: for atom a, ncoeff*3 values (k*3+xyz order), minus the sum over every atom i that has a as a neighbor (or i==a) of d(B_k of atom i)/d(r_a): force-signed, F = +coeff . aggregate. Stored as grid fields (see deriv_agg_field_prefix)."} );
     ADD_SLOT( std::string , deriv_agg_field_prefix , INPUT , std::string("mda_") ,
-               DocString{"compute_derivative only: name prefix for the ncoeff*3 dynamically-named generic-real grid fields ('<prefix>0'..'<prefix>{ncoeff*3-1}') holding the derivative aggregate. KEEP THIS SHORT: dynamic field names are silently truncated to 15 characters + null (onika::soatl::FieldId's fixed char[16] m_name) -- this operator fatal_errors instead of silently colliding if prefix+max-index would overflow that limit."} );
+               DocString{"compute_derivative only: name prefix of the ncoeff*3 grid fields ('<prefix>0', '<prefix>1', ...) holding the derivative aggregate. Keep it short: field names are limited to 15 characters, this operator aborts if prefix+index is longer."} );
 
     static constexpr bool UseWeights   = false;
     static constexpr bool UseNeighbors = true;
@@ -79,6 +78,34 @@ namespace exaStamp
     static constexpr FieldSet<field::_type> compute_descriptor_field_set{};
 
   public:
+
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+
+Per-atom MTP scalar moment descriptors B_k (alpha_scalar_moments per atom). Output: a flat per-particle buffer and its stride (ncoeff = alpha_scalar_moments),
+
+  mtp_descriptors[ ncoeff * ( cell_particle_offset[cell] + particle ) + component ]
+
+compute_derivative: true also computes the per-atom derivative aggregate: for atom m, minus the
+sum of the descriptor derivatives w.r.t. r_m over every atom that has m as a neighbor (and m
+itself), i.e. force-signed (F = +coeff . aggregate). It is stored as ncoeff*3 fields named
+'<deriv_agg_field_prefix><index>' (default prefix "mda_"), read by compute_descriptor_mtp_global.
+To use the per-atom aggregate itself on more than one MPI rank, reduce the ghost contributions with
+update_opt_from_ghost: { opt_fields: [ "mda_.*" ] }, after compute_descriptor_mtp_global.
+
+Usage example:
+
+init_parameters:
+  - species
+  - mtp_init: { parameters: { mtp_file: "pot.almtp" } }
+
+compute_descriptor_mtp: { compute_derivative: true }
+compute_descriptor_mtp_global
+write_descriptor_mtp_global: { filename: "mtp_global.txt" }
+
+)EOF";
+    }
 
     inline void execute() override final
     {
@@ -106,9 +133,8 @@ namespace exaStamp
       if (*compute_derivative)
       {
         const size_t nc3 = static_cast<size_t>(stride) * 3;
-        // onika::soatl::FieldId's dynamic-field name storage is a fixed char[16] (incl. null
-        // terminator), silently strncpy-truncated -- a too-long prefix+index would alias
-        // multiple components onto the same field with no error, so check instead of guessing.
+        // dynamic field names are silently truncated to 15 characters (onika::soatl::FieldId),
+        // which would alias components: check the longest name instead
         static constexpr size_t FIELD_NAME_MAX_LEN = 16;
         const size_t max_index_digits = std::to_string(nc3-1).size();
         if( deriv_agg_field_prefix->size() + max_index_digits + 1 > FIELD_NAME_MAX_LEN )

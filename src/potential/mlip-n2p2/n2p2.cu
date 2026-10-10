@@ -85,13 +85,7 @@ namespace exaStamp
     using ComputeFields              = std::conditional_t< has_virial_field , ComputeFieldsWithVirial , ComputeFieldsWithoutVirial >;
     static constexpr ComputeFields compute_force_field_set{};
 
-    /**
-    *   N2P2 Interface class
-    *   TODO: For later, include directly the n2p2 root folder to exastamp git repository 
-    *
-    *   Note: Si jamais, la classe c++ se situe dans mon home: 
-    *   /ccc/home/cont001/ocre/lasvenesr/src_md/n2p2/src/libnnpif/ExaStamp/InterfaceExastamp.cpp
-    */
+    // one n2p2 interface (nnp::InterfaceExastamp, from the n2p2 libnnpif library) per thread
     std::vector< std::shared_ptr<nnp::InterfaceExastamp> > m_interfaces;
     
   public:
@@ -205,8 +199,8 @@ namespace exaStamp
         double& fx,
         double& fy,
         double& fz,
-        unsigned int type, // On a besoin du type de l'atome courant
-        unsigned int id, // idem pour l'identifiant de l'atome courant
+        unsigned int type, // type of the central atom
+        unsigned int id, // id of the central atom
         CellParticles* unused
 	//        ComputePairOptionalLocks<false> unused2,
 	//        ParticleLock& unused3
@@ -254,15 +248,10 @@ namespace exaStamp
           buf.d2[i] = std::sqrt( buf.d2[i] );
         }
 
-	// On définit l'atome courant comme central (cf: articles/fonctions de symétrie)
-	// en lui donnant le nombre de voisins, ainsi que leurs positions relatives 
-	// et distances.
+	// set the central atom with its neighbors' relative positions and distances
         interface.setCentralAtom(id, type, n, buf.drx, buf.dry, buf.drz, buf.d2);
 
-	// Une fois l'atome central configuré (voisins, positions, etc...)
-	// On va calculer pour cet atome, les fonctions de symétrie (groupes),
-	// l'énergie de la structure en propageant le vecteur descripteur
-	// dans le réseau, ce qui va nous donner l'énergie.
+	// compute the symmetry functions and propagate them through the network (energy)
         interface.process();
 	
 	std::vector<nnp::Vec3D> atomFbis;
@@ -284,9 +273,7 @@ namespace exaStamp
 	fz = -1. * FcentralAtom[2];
         virial += _vir;
 	  
-	// Enfin, on doit réinitialiser certains champs, comme les champs
-	// structure.hasDerivatives{Functions, FunctionGroups} pour indiquer qu'il faudra
-	// recalculer les fonctions de symétrie au prochain pas de temps.        
+	// reset the structure flags so the symmetry functions are recomputed next time
         interface.resetCentralAtom();
 
 

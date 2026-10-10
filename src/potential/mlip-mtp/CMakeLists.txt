@@ -25,11 +25,7 @@ option(EXASTAMP_MLIP_MTP_BUILD "Build MTP potential" OFF)
 set(ONIKA_BUILD_exaStampMlipMTP_DEFAULT ${EXASTAMP_MLIP_MTP_BUILD})
 set(ONIKA_BUILD_exaStampMlipMTP_FORCED ON)
 
-# Unlike POD, the core MTP math needs no BLAS/LAPACK (confirmed against the LAMMPS ML-MTP
-# reference implementation -- zero such dependency; the out-of-scope MaxVol active-learning
-# feature would need one, but even that's precomputed offline by MLIP-3, never inverted here) --
-# but still only build it when actually wanted, matching every other MLIP (nothing should compile
-# when the toggle is off, regardless of how cheap/failure-free that compilation would be).
+# MTP needs no BLAS/LAPACK; like every MLIP, nothing is compiled when the toggle is off.
 if(EXASTAMP_MLIP_MTP_BUILD)
   add_library(emtp STATIC emtp.cpp)
   target_include_directories(emtp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

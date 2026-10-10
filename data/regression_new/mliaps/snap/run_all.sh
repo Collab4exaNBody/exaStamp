@@ -2,7 +2,7 @@
 # Run every exaStamp SNAP case and diff it against its LAMMPS log.lammps.
 # usage: run_all.sh [case ...]   env: NP (default 1), EXASTAMP, extra exaStamp args in EXA_ARGS (e.g. "--nogpu true")
 here=$(cd "$(dirname "$0")" && pwd)
-EXASTAMP=${EXASTAMP:-$HOME/local/exaStampGPU/bin/exaStamp}
+EXASTAMP=${EXASTAMP:-$(command -v exaStamp)}
 cases=${*:-Mo Ni Ta W WBe InP}
 for c in $cases; do
   cd "$here/$c" || exit 1

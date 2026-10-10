@@ -15,7 +15,7 @@
 # under the License.
 #
 # ===================================
-# === micro-stamp meam potential  ===
+# ===  SNAP (external source tree) ===
 # ===================================
 
 option(EXASTAMP_MLIP_SNAPLMP_BUILD "Build SnapLMP potential" OFF)

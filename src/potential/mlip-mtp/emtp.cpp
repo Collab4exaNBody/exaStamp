@@ -407,19 +407,13 @@ void EMTP::peratom_descriptors_soa(const double* drx, const double* dry, const d
         vy += w * moment_jacobian_[jbase + 1];
         vz += w * moment_jacobian_[jbase + 2];
       }
-      // Negated: vx/vy/vz above is d(B_k)/d(r), r = r_neighbor - r_central (the RELATIVE vector
-      // moment_jacobian_ is defined against, same as the force path's temp_force). For a genuine
-      // (non-force) derivative there is no extra "F=-dE/dr" sign flip, so d(B_k)/d(r_central_abs)
-      // = -d(B_k)/d(r) and d(B_k)/d(r_neighbor_abs) = +d(B_k)/d(r) -- the OPPOSITE relationship
-      // from the force case. Storing bdd pre-negated here lets mtp_descriptor_op.h use the same
-      // central+=/neighbor-= scatter idiom as everywhere else in this codebase (matches k2b's own
-      // documented sign-convention note in k2b_descriptor_op.h; verified against a direct
-      // multi-atom finite-difference check on the total system descriptor sum -- the naive
-      // unnegated sign failed that check by O(0.1), the negated one passes to ~1e-9).
+      // d(B_k)/d(r), r = r_neighbor - r_central (the relative vector moment_jacobian_ is
+      // defined against). The descriptor op scatters it central+= / neighbor-=, which gives
+      // -d(B_k)/d(r_atom): force-signed rows, same convention as POD and SNAP.
       const size_t out = 3 * static_cast<size_t>(jj) + 3 * static_cast<size_t>(Nj) * k;
-      bdd[out + 0] = -vx;
-      bdd[out + 1] = -vy;
-      bdd[out + 2] = -vz;
+      bdd[out + 0] = vx;
+      bdd[out + 1] = vy;
+      bdd[out + 2] = vz;
     }
   }
 }

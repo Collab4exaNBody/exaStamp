@@ -118,7 +118,7 @@ namespace exaStamp
       {
         std::string lammps_param = onika::data_file_path( parameters->lammps_param );
         std::string lammps_coef = onika::data_file_path( parameters->lammps_coef ); 
-        ldbg << "Snap: read lammps files "<<lammps_param<<" and "<<lammps_coef<<std::endl;
+        ldbg << "Snap: read parameter file "<<lammps_param<<" and coefficient file "<<lammps_coef<<std::endl;
         snap_legacy_read_lammps(lammps_param, lammps_coef, m_config);
         ldbg <<"rfac0="<<m_config.rfac0() <<", rmin0="<<m_config.rmin0() <<", rcutfac="<<m_config.rcutfac() <<", twojmax="<<m_config.twojmax()<<", nmat="<<m_config.materials().size()<<std::endl;
         m_rcut = m_config.rcutfac(); // because LAMMPS uses angstrom while exastamp uses nm

@@ -67,7 +67,7 @@ add_subdirectory(mlip-pod)
 add_subdirectory(mlip-snap)
 # Spectral Neighbor Analysis Potential (Legacy version)
 add_subdirectory(mlip-snaplegacy)
-# Spectral Neighbor Analysis Potential (external source version
+# Spectral Neighbor Analysis Potential (external source version)
 add_subdirectory(mlip-snaplmp)
 # ======================================================= #
 

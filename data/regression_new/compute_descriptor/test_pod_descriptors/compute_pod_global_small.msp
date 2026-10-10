@@ -1,3 +1,4 @@
+# enable-if-EXASTAMP_MLIP_POD_BUILD
 species:
   - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
 

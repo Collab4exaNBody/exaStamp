@@ -44,8 +44,7 @@ if(EXASTAMP_MLIP_PACE_BUILD)
     message(STATUS "PACE libraries already present in ${EXASTAMP_MLIP_PACE_EXTERNAL_DIR}")
   endif()
 
-  # YAML_CPP_INSTALL_DIR is a general onika-ecosystem variable, set at the top level, forwarded
-  # implicitly to this external add_subdirectory (not PACE-specific -- do not rename/relocate it).
+  # uses YAML_CPP_INSTALL_DIR, defined in the top-level CMakeLists.txt
   add_subdirectory(${EXASTAMP_MLIP_PACE_EXTERNAL_DIR} ${CMAKE_CURRENT_BINARY_DIR}/pace-mlip)
   set(exaStampMlipPace_LINK_LIBRARIES exaStampPotential exanbParticleNeighbors pace::pace)
 endif()

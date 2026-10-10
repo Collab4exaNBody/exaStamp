@@ -1,3 +1,4 @@
+# enable-if-EXASTAMP_MLIP_SNAP_BUILD enable-if-XNB_BUILD_mdSnap
 species:
   - W:  { mass: 183.84 Da, z: 74, charge: 0 e- }
   - Be: { mass: 9.012182 Da, z: 4, charge: 0 e- }

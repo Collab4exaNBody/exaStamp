@@ -49,6 +49,25 @@ namespace exaStamp
 
   public:
 
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+
+Reads an MTP potential file and builds the MTP context used by mtp_force and compute_descriptor_mtp
+(one engine per OpenMP thread), and raises rcut_max to the MTP cutoff. The file has no species
+names: exaStamp species are mapped to MTP species by position (order of the species block).
+Place it in init_parameters, after species.
+
+Usage example:
+
+init_parameters:
+  - species
+  - mtp_init:
+      parameters: { mtp_file: "pot.almtp" }
+
+)EOF";
+    }
+
     inline void execute() override final
     {
       ldbg << "Initializing MTP potential" << std::endl;
