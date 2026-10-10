@@ -232,7 +232,7 @@ Q = normalize(Q);//NP_TEST
       MPI_Comm_rank(*mpi, &rank);
       MPI_Comm_size(*mpi, &np);
 
-      uint64_t n_particles = 0;
+      size_t n_particles = 0;
 
       std::unordered_map<std::string,unsigned int> typeMap;
       unsigned int nextTypeId = 0;

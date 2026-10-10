@@ -29,8 +29,16 @@ set(CMAKE_CXX_EXTENSIONS NO)
 # === Project ===
 # ===============
 project(exaStamp VERSION 3.8 LANGUAGES C CXX)
-set(EXASTAMP_VERSION ${CMAKE_PROJECT_VERSION}) 
+set(EXASTAMP_VERSION ${CMAKE_PROJECT_VERSION})
 message(STATUS "Project version : ${EXASTAMP_VERSION}")
+
+# without an install rpath, sibling shared libs can't be found by dlopen'd
+# plugins once installed; on Linux this is masked by LD_LIBRARY_PATH (set in
+# the generated setup-env.sh), but macOS's dyld doesn't consult that variable.
+set(CMAKE_SKIP_BUILD_RPATH FALSE)
+set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+set(CMAKE_INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/lib)
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 # ===========================
 # === CMake customization ===

@@ -57,7 +57,7 @@ namespace exaStamp
     ReadBoundsSelectionMode bounds_mode,
     GridT& grid,
     Domain& domain, // domain is IN/OUT (.m_cell_size and .m_grid_dims are used as input hints)
-    int64_t& iteration_number,
+    long& iteration_number,
     double& phys_time,
     bool pbc_adjust_xform
     )

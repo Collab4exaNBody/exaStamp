@@ -38,7 +38,7 @@ under the License.
 #include <fstream>
 #include <cstring>
 #include <iomanip>
-#include <experimental/filesystem>
+#include <filesystem>
 
 //#define XSTAMP_STAMPV4_VERBOSE_DBG 1
 
@@ -109,7 +109,7 @@ namespace exaStamp
 
       using std::ostringstream;
 
-      namespace fs = std::experimental::filesystem;
+      namespace fs = std::filesystem;
 
       using has_field_id_t     = typename GridT:: template HasField <field::_id>;
       static constexpr bool has_field_id = has_field_id_t::value;
