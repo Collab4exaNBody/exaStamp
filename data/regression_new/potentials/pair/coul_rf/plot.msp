@@ -1,0 +1,11 @@
+species:
+  - C: { mass: 12.011 Da , z: 6 , charge: 0.0 e- }
+
+coul_rf_plot:
+  rcut: 12.5 ang
+  parameters: { epsilon: 100., rc: 12.5 ang }
+
+simulation:
+  - species
+  - coul_rf_plot
+

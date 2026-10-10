@@ -1,2 +1,2 @@
-list(APPEND exp6rf_LINK_LIBRARIES exp6 exaStampReactionFieldParticleCharge)
+list(APPEND exp6rf_LINK_LIBRARIES exp6 coul_rf)
 

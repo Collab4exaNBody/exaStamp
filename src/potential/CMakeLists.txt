@@ -42,10 +42,9 @@ add_subdirectory(meam)
 
 # ======================================================= #
 # ================= Coulombic Potentials ================ #
-add_subdirectory(coul_dsf)
-add_subdirectory(coul_wolf)
-add_subdirectory(ewald)
-add_subdirectory(reaction_field)
+add_subdirectory(coulombic)
+#add_subdirectory(coul_dsf)
+#add_subdirectory(coul_wolf)
 # ======================================================= #
 
 # ======================================================= #

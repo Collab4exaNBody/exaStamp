@@ -1,0 +1,45 @@
+# Coulomb-only exaStamp counterpart of in.coul (case wolf, variant species): compared with LAMMPS dumps of the same case
+configuration:
+  nogpu: true
+  logging: { debug: false }
+
+grid_flavor: grid_flavor_full
+
+species:
+  - O: { mass: 15.999000 Da , z: 8 , charge: -1.1104 e- }
+  - U: { mass: 238.02891 Da , z: 92 , charge: 2.2208 e- }
+
+coulombic_wolf:
+  per_atom_charge: false
+  parameters: { alpha: 0.2 1/ang , rc: 10. ang }
+
+compute_force:
+  - coulombic_wolf
+
+setup_system:
+  - domain:
+      cell_size: 5.5 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_xyz_file_with_xform:
+      filename: "UO2_disturbed_ext.xyz"
+      pbc_adjust_xform: true
+  - copy_charge_species_to_particle
+
+write_snapshot:
+  - timestep_file: "exastamp_wolf+species_%09d.xyz"
+  - write_xyz:
+      fields: [ "id", "type", "force", "ep" ]
+      units: { force: "eV/ang", ep: "eV" }
+
++first_iteration:
+  - write_snapshot
+
+global:
+  max_iteration: 10
+  simulation_thermostate_screen_frequency: 1
+  simulation_thermostate_file_frequency: 1
+  thermostate_file: "thermo_exastamp_wolf+species.csv"
+  simulation_snapshot_frequency: 10
+  rcut_inc: 1.0 ang
+  dt: 0.001 ps

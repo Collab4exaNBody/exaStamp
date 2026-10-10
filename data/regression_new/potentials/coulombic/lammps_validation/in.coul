@@ -1,0 +1,90 @@
+# Coulomb-only ground truth on disturbed UO2 (12000 atoms), LAMMPS metal units.
+# Usage: lmp -in in.coul -var case <wolf|dsf|ewald_auto|ewald_fixed|ewald_tri|ewald_tri_fixed|pppm|pppm_tri|pppm_ad|
+#                                   pppm_slab|pppm_slab_auto|pppm_tri_slab|pppm_ad_slab>
+# *_tri cases use UO2_tri.lmp : same fractional coordinates in a triclinic cell (xy=5 xz=3 yz=4 ang)
+# *slab* cases use UO2_slab.lmp / UO2_slab_tri.lmp (made by mk_slab.py) : same atoms shifted by 5.75 ang in z in a box
+# of height 66 ang, z non periodic (boundary p p f), slab correction (EW3DC) ; UO2_slab_tri.lmp has an xy tilt of 5 ang
+units        metal
+dimension    3
+variable bnd string "p p p"
+if "${case} == pppm_slab || ${case} == pppm_slab_auto || ${case} == pppm_tri_slab || ${case} == pppm_ad_slab" then "variable bnd string 'p p f'"
+boundary     ${bnd}
+atom_style   charge
+atom_modify  map array
+
+variable data string UO2_disturbed_charge.lmp
+if "${case} == ewald_tri || ${case} == ewald_tri_fixed || ${case} == pppm_tri" then "variable data string UO2_tri.lmp"
+if "${case} == pppm_slab || ${case} == pppm_slab_auto || ${case} == pppm_ad_slab" then "variable data string UO2_slab.lmp"
+if "${case} == pppm_tri_slab" then "variable data string UO2_slab_tri.lmp"
+read_data    ${data}
+# the data file box (avec/bvec/cvec) is read as triclinic ; diff ad needs an orthogonal box (tilts are 0)
+if "${case} == pppm_ad" then "change_box all ortho"
+
+group  U type 1
+set group U charge 2.2208
+group  O type 2
+set group O charge -1.1104
+
+if "${case} == wolf" then &
+  "pair_style coul/wolf 0.2 10.0" &
+  "pair_coeff * *"
+if "${case} == dsf" then &
+  "pair_style coul/dsf 0.2 10.0" &
+  "pair_coeff * *"
+if "${case} == ewald_auto || ${case} == ewald_tri" then &
+  "pair_style coul/long 10.0" &
+  "pair_coeff * *" &
+  "kspace_style ewald 1.0e-5"
+if "${case} == ewald_fixed || ${case} == ewald_tri_fixed" then &
+  "pair_style coul/long 10.0" &
+  "pair_coeff * *" &
+  "kspace_style ewald 1.0e-5" &
+  "kspace_modify gewald 0.3 kmax/ewald 8 8 8"
+
+if "${case} == pppm || ${case} == pppm_tri" then &
+  "pair_style coul/long 10.0" &
+  "pair_coeff * *" &
+  "kspace_style pppm 1.0e-5" &
+  "kspace_modify diff ik order 5"
+if "${case} == pppm_slab || ${case} == pppm_tri_slab" then &
+  "pair_style coul/long 10.0" &
+  "pair_coeff * *" &
+  "kspace_style pppm 1.0e-5" &
+  "kspace_modify diff ik order 5 slab 3.0"
+if "${case} == pppm_slab_auto" then &
+  "pair_style coul/long 10.0" &
+  "pair_coeff * *" &
+  "kspace_style pppm 1.0e-5" &
+  "kspace_modify diff ik order 5 slab auto"
+# LAMMPS diff ad + slab gives wrong z forces (fieldforce_ad uses nz/zprd instead of nz/zprd_slab) : this case only
+# shows it, exaStamp's ad + slab is compared with pppm_slab (ik)
+if "${case} == pppm_ad_slab" then &
+  "pair_style coul/long 10.0" &
+  "pair_coeff * *" &
+  "kspace_style pppm 1.0e-5" &
+  "kspace_modify diff ad order 5 slab 3.0"
+if "${case} == pppm_ad" then &
+  "pair_style coul/long 10.0" &
+  "pair_coeff * *" &
+  "kspace_style pppm 1.0e-5" &
+  "kspace_modify diff ad order 5"
+
+# no tables: real-space part uses the A&S erfc polynomial, same as coulombic/ewald.h
+if "${case} != wolf && ${case} != dsf" then "pair_modify table 0"
+
+compute pe all pe/atom
+compute st all stress/atom NULL virial
+
+neighbor     1.0 bin
+neigh_modify delay 0 every 1 check yes
+
+thermo_style custom step pe ke etotal press pxx pyy pzz pxy pxz pyz
+thermo_modify format float %.12e
+thermo       1
+
+dump d all custom 10 dump_${case}.*.txt id type x y z fx fy fz c_pe c_st[1] c_st[2] c_st[3] c_st[4] c_st[5] c_st[6]
+dump_modify d sort id format float %.15e
+
+timestep     0.001
+fix 1 all nve
+run 10
