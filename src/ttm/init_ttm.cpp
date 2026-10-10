@@ -26,6 +26,7 @@ under the License.
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/source_term.h>
 
+#include <mpi.h>
 #include <memory>
 
 namespace exaStamp
@@ -35,6 +36,7 @@ namespace exaStamp
   template<class GridT>
   class InitTTM : public OperatorNode
   {
+    ADD_SLOT( MPI_Comm    , mpi          , INPUT , MPI_COMM_WORLD );
     ADD_SLOT( GridT       , grid         , INPUT , REQUIRED );
     ADD_SLOT( Domain         , domain       , INPUT , REQUIRED );
     ADD_SLOT( double         , physical_time, INPUT , REQUIRED );
@@ -64,7 +66,16 @@ namespace exaStamp
       const Mat3d xform = domain->xform();
       const double subcell_size = domain->cell_size() / subdiv;
       const IJK dims = grid->dimension();
-      
+
+      // Before the initial load balancing every rank still holds the whole domain grid, and
+      // migrate_cell_particles then merges grid cell values with a SUM: replicated values would come
+      // out multiplied by the number of ranks (Te = n*1800 K, ions ~n times too hot). Pre-scale so
+      // the merged value is right. Once a rank holds only a sub-block (dims != domain dims) the
+      // values are already local and must not be scaled.
+      int nranks = 1;
+      MPI_Comm_size( *mpi , &nranks );
+      const double te_scale = ( dims == domain->grid_dimension() ) ? 1.0 / nranks : 1.0;
+
       const auto& te_source_func = * (*te_source);
       
 #     pragma omp parallel
@@ -81,7 +92,7 @@ namespace exaStamp
 	          Vec3d scr = { ci+0.5, cj+0.5, ck+0.5 };
             const size_t j = cell_i*cell_te_data.m_stride +  grid_ijk_to_index( IJK{subdiv,subdiv,subdiv} , sc );
             const Vec3d center = xform * ( cell_origin + scr * subcell_size );
-            cell_te_data.m_data_ptr[j] = te_source_func ( center, *physical_time );
+            cell_te_data.m_data_ptr[j] = te_scale * te_source_func ( center, *physical_time );
           }
         }
         GRID_OMP_FOR_END
