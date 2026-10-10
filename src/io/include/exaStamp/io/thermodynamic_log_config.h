@@ -453,10 +453,10 @@ namespace exaStamp
     values[ThermodynamicLogConfig::POTENTIAL_E]    = sim_info.potential_energy()    / sim_info.particle_count() * conv_energy;
     values[ThermodynamicLogConfig::ELECTRON_E]     = el_energy  * conv_energy; // total, not per-particle
     values[ThermodynamicLogConfig::ION_TRANSFER_E] = ion_energy * conv_energy; // total, not per-particle
-    values[ThermodynamicLogConfig::TEMPERATURE]    = sim_info.temperature_scal() / sim_info.particle_count() * conv_temperature;
-    values[ThermodynamicLogConfig::Tx]             = sim_info.temperature().x   / sim_info.particle_count() * conv_temperature;
-    values[ThermodynamicLogConfig::Ty]             = sim_info.temperature().y   / sim_info.particle_count() * conv_temperature;
-    values[ThermodynamicLogConfig::Tz]             = sim_info.temperature().z   / sim_info.particle_count() * conv_temperature;
+    values[ThermodynamicLogConfig::TEMPERATURE]    = sim_info.temperature_scal() / sim_info.temperature_dof_count() * conv_temperature;
+    values[ThermodynamicLogConfig::Tx]             = sim_info.temperature().x   / sim_info.temperature_dof_count() * conv_temperature;
+    values[ThermodynamicLogConfig::Ty]             = sim_info.temperature().y   / sim_info.temperature_dof_count() * conv_temperature;
+    values[ThermodynamicLogConfig::Tz]             = sim_info.temperature().z   / sim_info.temperature_dof_count() * conv_temperature;
     values[ThermodynamicLogConfig::PRESSURE]       = sim_info.pressure_scal() * conv_pressure;
     // Pxx/Pyy/Pzz/Pxy/Pxz/Pyz are "the stress tensor" -- always include the kinetic contribution
     // (full_stress_tensor() = stress_tensor()+kinetic_tensor() is the true physical stress).
