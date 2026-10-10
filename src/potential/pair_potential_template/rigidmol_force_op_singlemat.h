@@ -78,10 +78,17 @@ namespace exaStamp
       double rcut = 0.0;
       double ecut = 0.0;
     };
+
+    // host-side, owning copy of user parameters (RigidMolPotentialPairParam::p only views it)
+    struct RigidMolUserPotentialPairParam
+    {
+      USTAMP_POTENTIAL_PARAMS p;
+      double rcut = 0.0;
+    };
   
     struct RigidMolPotentialParameters
     {
-      using UserPotParams = std::map< std::pair<std::string,std::string> , RigidMolPotentialPairParam >;
+      using UserPotParams = std::map< std::pair<std::string,std::string> , RigidMolUserPotentialPairParam >;
 
       static constexpr size_t MAX_TYPE_PAIR_IDS = 15; // this lets room for 5 single atom species
       static constexpr size_t MAX_RIGIDMOL_ATOM_TYPES = 6; // single atoms and rigid molecule species together

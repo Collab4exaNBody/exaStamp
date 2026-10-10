@@ -61,10 +61,17 @@ namespace exaStamp
       double rcut = 0.0;
       double ecut = 0.0;
     };
+
+    // host-side, owning copy of user parameters (PotentialPairParam::p only views it)
+    struct UserPotentialPairParam
+    {
+      USTAMP_POTENTIAL_PARAMS p;
+      double rcut = 0.0;
+    };
   
     struct PotentialMultiParameters
     {
-      using UserPotParams = std::map< std::pair<std::string,std::string> , PotentialPairParam >;
+      using UserPotParams = std::map< std::pair<std::string,std::string> , UserPotentialPairParam >;
       static constexpr size_t MAX_TYPE_PAIR_IDS = 16;
       PotentialPairParam m_pair_params[MAX_TYPE_PAIR_IDS]; // indexed by type pair id
       size_t m_nb_pair_params = 0;
@@ -277,7 +284,6 @@ namespace YAML
         auto & pair_pot = (* rmpp.m_user_pot_parameters) [ std::make_pair(type_a,type_b) ];
         pair_pot.p = pp["parameters"].as<USTAMP_POTENTIAL_PARAMS>();
         pair_pot.rcut = pp["rcut"].as<Quantity>().convert();
-        pair_pot.ecut = 0.0;
       }
       return true;
     }
