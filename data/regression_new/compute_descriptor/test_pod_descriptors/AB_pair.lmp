@@ -1,0 +1,20 @@
+# Minimal 2-atom A-B pair, synthetic 2-species POD potential (AB_param.pod/AB_coefficients.pod),
+# for verifying compute_descriptor_pod_global's multi-species (nelements>1) support against real
+# LAMMPS compute pod/global -- no multi-species .pod asset existed anywhere before this session.
+
+2 atoms
+2 atom types
+
+0.0 30.0 xlo xhi
+0.0 30.0 ylo yhi
+0.0 30.0 zlo zhi
+
+Masses
+
+1 1.0  # A
+2 1.0  # B
+
+Atoms
+
+1 1 10.0 10.0 10.0
+2 2 10.0 10.0 13.0

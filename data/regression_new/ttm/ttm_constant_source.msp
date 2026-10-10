@@ -16,6 +16,6 @@ includes:
 
 +compute_force:
   - ionic_eletronic_heat_transfer:
-      g: 0.0
+      gamma_p: 0.0
       Ke: 1.0
       splat_size: 2.1 ang

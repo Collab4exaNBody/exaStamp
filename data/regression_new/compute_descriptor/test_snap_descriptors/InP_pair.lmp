@@ -1,0 +1,20 @@
+# LAMMPS data file, minimal 2-atom In-P pair for isolating compute_descriptor_snap_global
+# chem_flag=true row-0 bug -- one In, one P, 3.0 ang apart, well inside the InP potential's
+# real (radelem-scaled) 7.6589 ang cutoff, box large enough that periodic images stay outside cutoff.
+
+2 atoms
+2 atom types
+
+0.0 30.0 xlo xhi
+0.0 30.0 ylo yhi
+0.0 30.0 zlo zhi
+
+Masses
+
+1 114.818  # In
+2 30.974   # P
+
+Atoms
+
+1 1 15.0 15.0 15.0
+2 2 15.0 15.0 18.0

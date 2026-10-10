@@ -1,0 +1,45 @@
+# exaStamp counterpart of LAMMPS examples/snap (W), see in.lammps.
+# init.xyz = LAMMPS step-0 state (lattice + velocity create), from init.dump via ../lmp2xyz.py
+includes:
+  - config_update_symmetric_forces.msp
+
+configuration:
+  profiling:
+    summary: false
+
+species:
+  - W: { mass: 183.84 Da , z: 74 , charge: 0.0 e- }
+zbl_multi_force:
+  rcut: 4.8 ang
+  parameters:
+    - { type_a: W , type_b: W , rcut: 4.8 ang , parameters: { r1: 4.0 ang , rc: 4.8 ang } }
+compute_force:
+  - zbl_multi_force
+  - snap_force_fp64:   # FP64 always: default snap_force follows SNAP_FP32_MATH (single precision)
+      parameters:
+        nt: 1
+        param: "W_2940_2017_2.snapparam"
+        coef:  "W_2940_2017_2.snapcoeff"
+
+grid_flavor: grid_flavor_full
+
+setup_system:
+  - domain:
+      cell_size: 3.1803 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_xyz_file_with_xform:
+      filename: "init.xyz"
+      bounds_mode: FILE
+      read_velocities: true
+
+numerical_scheme: verlet_nve
+
+global:
+  max_iteration: 100
+  simulation_thermostate_screen_frequency: 10
+  simulation_thermostate_file_frequency: 1
+  simulation_snapshot_frequency: -1
+  rcut_inc: 1.0 ang
+  dt: 0.5e-3 ps
+  force_flush_file: true

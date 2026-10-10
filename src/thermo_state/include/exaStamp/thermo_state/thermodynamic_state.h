@@ -27,6 +27,9 @@ namespace exaStamp
 {
   using namespace exanb;
 
+  // temperature uses COM-removed kinetic energy -> N-1 dof per axis (3N-3 total, LAMMPS convention)
+  inline double temperature_dof_count(double n) { return n > 1. ? n - 1. : 1.; }
+
   class ThermodynamicState
   {
   public:
@@ -140,6 +143,7 @@ namespace exaStamp
 
     inline void set_particle_count(size_t x) { m_particle_count = x; }
     inline size_t particle_count() const { return m_particle_count; }
+    inline double temperature_dof_count() const { return exaStamp::temperature_dof_count( m_particle_count ); }
     
   private:
     Mat3d m_virial;

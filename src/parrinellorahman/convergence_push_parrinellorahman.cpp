@@ -133,7 +133,7 @@ namespace exaStamp
       ParrinelloRahmanContext saved_prdata = data;
 
       // intialize temperature      
-      double temperature_old = sim_info.temperature_scal() / sim_info.particle_count() * conv_temperature;
+      double temperature_old = sim_info.temperature_scal() / sim_info.temperature_dof_count() * conv_temperature;
 
       // intial value over threshold
       size_t count = 0;
@@ -258,7 +258,7 @@ namespace exaStamp
         
         // final temperature computation
         Vec3d tempvec = 2. * ( kinetic_energy - 0.5 * momentum * momentum / total_mass );
-        double temperature = ( conv_temperature * ( tempvec.x + tempvec.y + tempvec.z ) / 3. ) / total_particles;
+        double temperature = ( conv_temperature * ( tempvec.x + tempvec.y + tempvec.z ) / 3. ) / temperature_dof_count( total_particles );
 
         //ldbg << "temperature : "<<temperature_old<<" => "<<temperature<<std::endl;
         olds << temperature_old;
