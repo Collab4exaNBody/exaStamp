@@ -58,27 +58,42 @@ namespace exaStamp
         make_compatible_operator< InitGridFlavorNode< GridFromFieldSet<MultiMatFieldSet> > >
         );
 
-      OperatorNodeFactory::instance()->register_factory(
+	  OperatorNodeFactory::instance()->register_factory(
+        "grid_flavor_atomic",
+        make_compatible_operator< InitGridFlavorNode< GridFromFieldSet<AtomicFieldSet> > >
+        );
+
+	  OperatorNodeFactory::instance()->register_factory(
+        "grid_flavor_atomic_charge",
+        make_compatible_operator< InitGridFlavorNode< GridFromFieldSet<AtomicChargeFieldSet> > >
+        );
+    
+	  OperatorNodeFactory::instance()->register_factory(
+        "grid_flavor_atomic_full",
+        make_compatible_operator< InitGridFlavorNode< GridFromFieldSet<AtomicFullFieldSet> > >
+        );
+    
+    OperatorNodeFactory::instance()->register_factory(
         "grid_flavor_multimat",
         make_compatible_operator< InitGridFlavorNode< GridFromFieldSet<MultiMatFieldSet> > >
         );
 
-      OperatorNodeFactory::instance()->register_factory(
+    OperatorNodeFactory::instance()->register_factory(
         "grid_flavor_full",
         make_compatible_operator< InitGridFlavorNode< GridFromFieldSet<MoleculeFieldSet> > >
         );
 
-      OperatorNodeFactory::instance()->register_factory(
+    OperatorNodeFactory::instance()->register_factory(
         "grid_flavor_full_mechanics",
         make_compatible_operator< InitGridFlavorNode< GridFromFieldSet<FullFieldMechSet> > >
         );
       
-	OperatorNodeFactory::instance()->register_factory(
+    OperatorNodeFactory::instance()->register_factory(
         "grid_flavor_multimat_mechanics",
         make_compatible_operator< InitGridFlavorNode< GridFromFieldSet<MultimatMechFieldSet> > >
         );
       
-      OperatorNodeFactory::instance()->register_factory(
+    OperatorNodeFactory::instance()->register_factory(
         "grid_flavor_rigidmol",
         make_compatible_operator< InitGridFlavorNode< GridFromFieldSet<RigidMoleculeFieldSet> > >
         );

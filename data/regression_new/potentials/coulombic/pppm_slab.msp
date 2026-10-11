@@ -1,0 +1,56 @@
+# PPPM with slab correction (EW3DC, z non periodic), extension factor computed as LAMMPS kspace_modify slab auto
+# Coulomb-only, rock salt slab (non polar (001) surfaces), 4x4x4 unit cells (512 ions) with vacuum above and below.
+
+species:
+  - Na: { mass: 22.98977 Da , z: 11 , charge: 1.0 e- }
+  - Cl: { mass: 35.453 Da , z: 17 , charge: -1.0 e- }
+
+coulombic_pppm_init:
+  accuracy_relative: 1.0e-5
+  g_ewald: 0.0
+  radius: 8.0 ang
+  order: 5
+  mesh: [ 0, 0, 0 ]
+  slab_auto: true
+
+init_parameters:
+  - coulombic_pppm_init
+
+compute_force:
+  - coulombic_ewald_short_range
+  - coulombic_pppm
+
+setup_system:
+  - particle_regions: # 4 unit cells along z
+      - SLAB:
+          bounds: [ [ -1 ang, -1 ang, 5.6 ang ], [ 23.6 ang, 23.6 ang, 28.1 ang ] ]
+  - domain: # z non periodic
+      cell_size: 5.64 ang
+      grid_dims: [ 4, 4, 6 ]
+      bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 22.56 ang, 22.56 ang, 33.84 ang ] ]
+      xform: [ [ 1, 0, 0 ], [ 0, 1, 0 ], [ 0, 0, 1 ] ]
+      periodic: [ true, true, false ]
+      expandable: false
+  - init_rcb_grid
+  - lattice: # rock salt
+      structure: CUSTOM
+      types: [ Na, Na, Na, Na, Cl, Cl, Cl, Cl ]
+      positions:
+        [
+          [ 0.0, 0.0, 0.0 ], [ 0.0, 0.5, 0.5 ], [ 0.5, 0.0, 0.5 ], [ 0.5, 0.5, 0.0 ],
+          [ 0.5, 0.0, 0.0 ], [ 0.0, 0.5, 0.0 ], [ 0.0, 0.0, 0.5 ], [ 0.5, 0.5, 0.5 ],
+        ]
+      size: [ 5.64 ang, 5.64 ang, 5.64 ang ]
+      region: SLAB
+  - gaussian_noise_r: { sigma: 0.05 ang }
+  - copy_charge_species_to_particle
+  - sum_charges
+  - coulombic_pppm_init
+
+global:
+  max_iteration: 10
+  simulation_thermostate_screen_frequency: 1
+  simulation_thermostate_file_frequency: -1
+  simulation_snapshot_frequency: -1
+  rcut_inc: 1.0 ang
+  dt: 0.001 ps

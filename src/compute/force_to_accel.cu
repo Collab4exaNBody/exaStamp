@@ -15,10 +15,6 @@ specific language governing permissions and limitations
 under the License.
 */
 
-//   // DO NOT REMOVE THIS LINE !!
-
-//   // DO NOT REMOVE THIS LINE !!
-
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exaStamp/particle_species/particle_specie_yaml.h>
 

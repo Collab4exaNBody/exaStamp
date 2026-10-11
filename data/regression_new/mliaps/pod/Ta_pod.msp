@@ -1,3 +1,4 @@
+# enable-if-EXASTAMP_MLIP_POD_BUILD
 configuration:
   profiling:
     summary: true

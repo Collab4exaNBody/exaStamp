@@ -1,2 +1,0 @@
-list(APPEND reaction_field_LINK_LIBRARIES exaStampReactionFieldParticleCharge)
-

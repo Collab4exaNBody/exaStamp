@@ -23,7 +23,7 @@ under the License.
 
 #include <exaStamp/potential_factory/pair_potential.h>
 #include <exaStamp/potential/pair_potentials/lennard_jones/lennard_jones.h>
-#include <exaStamp/potential/pair_potentials/coul_wolf_pair/coul_wolf_pair.h>
+#include <exaStamp/potential/pair_potentials/coul_wolf/coul_wolf.h>
 
 #include <onika/cuda/cuda.h>
 

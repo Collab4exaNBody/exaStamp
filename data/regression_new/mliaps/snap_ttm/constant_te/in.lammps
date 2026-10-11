@@ -1,0 +1,33 @@
+# exaStamp parity counterpart of LAMMPS examples/snap_ttm/snap_ttm_constant_te (Te-dependent SNAP, constant Te)
+variable nsteps index 100
+variable te_eV index 2.5
+units           metal
+boundary        p p p
+lattice         fcc 4.078
+region          box block 0 4 0 4 0 4
+create_box      1 box
+create_atoms    1 box
+mass            1 196.9665
+
+variable conv_K_to_eV equal 8.61732814974056e-5
+variable te_K equal ${te_eV}/${conv_K_to_eV}
+variable myte_var atom ${te_K}
+fix myte all ave/atom 1 1 1 v_myte_var
+
+pair_style hybrid/overlay zbl 2.0 3.5 snap_ttm
+pair_coeff 1 1 zbl 79 79
+pair_coeff * * snap_ttm dir.inputs/Au.snapcoeff dir.inputs/Au.snapparam dir.inputs/Au.snapbetas Au f_myte
+
+thermo          1
+thermo_style    custom step temp pe ke etotal press pxx pyy pzz pxy pxz pyz
+thermo_modify   norm yes format float %.16g
+
+timestep 1.0e-3
+neighbor 1.0 bin
+neigh_modify once no every 1 delay 0 check yes
+
+velocity all create 600.0 3423 dist gaussian
+# exact initial state (positions+velocities) for exaStamp, converted by ../../snap/lmp2xyz.py
+write_dump all custom init.dump id type x y z vx vy vz modify sort id format float %.17g
+fix 1 all nve
+run             ${nsteps}

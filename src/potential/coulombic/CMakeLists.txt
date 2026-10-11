@@ -1,0 +1,43 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements. See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership. The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License. You may obtain a copy of the License at
+#   http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied. See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
+set(exaStampCoulombic_LINK_LIBRARIES exaStampCompute exaStampPotential exanbParticleNeighbors)
+# pair kernels are header only and defined once, next to the pair potentials using them
+set(exaStampCoulombic_INCLUDE_DIRS
+  ${CMAKE_CURRENT_SOURCE_DIR}/../pair_potentials/coul_wolf/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../pair_potentials/coul_dsf/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../pair_potentials/coul_rf/include)
+# PPPM FFT : cuFFT on Cuda builds, hipFFT on HIP builds (used when a GPU is available at runtime), vendored pocketfft otherwise
+if(ONIKA_BUILD_CUDA AND NOT ONIKA_ENABLE_HIP)
+  set(exaStampCoulombic_COMPILE_DEFINITIONS EXASTAMP_PPPM_CUFFT=1)
+  set(exaStampCoulombic_LINK_DIRECTORIES ${CUDA_SDK_ROOT_DIR}/lib64)
+  list(APPEND exaStampCoulombic_LINK_LIBRARIES cufft)
+elseif(ONIKA_BUILD_CUDA AND ONIKA_ENABLE_HIP)
+  if(NOT ROCM_INSTALL_ROOT)
+    set(ROCM_INSTALL_ROOT "/opt/rocm")
+  endif()
+  find_package(hipfft CONFIG QUIET PATHS ${ROCM_INSTALL_ROOT} $ENV{ROCM_PATH})
+  if(hipfft_FOUND)
+    message(STATUS "coulombic : PPPM FFTs on GPU with hipFFT")
+    set(exaStampCoulombic_COMPILE_DEFINITIONS EXASTAMP_PPPM_HIPFFT=1)
+    list(APPEND exaStampCoulombic_LINK_LIBRARIES hip::hipfft)
+  else()
+    message(STATUS "coulombic : hipFFT not found, PPPM runs on CPU (pocketfft)")
+  endif()
+endif()
+onika_add_plugin(exaStampCoulombic ${CMAKE_CURRENT_SOURCE_DIR})
+

@@ -1,0 +1,28 @@
+# enable-if-EXASTAMP_MLIP_SNAP_BUILD enable-if-XNB_BUILD_mdSnap
+species:
+  - In: { mass: 114.818 Da, z: 49, charge: 0 e- }
+  - P:  { mass: 30.974 Da, z: 15, charge: 0 e- }
+
+init_parameters:
+  - species
+  - snap_init:
+      parameters:
+        param: "InP_param.txt"
+        coef: "InP_coeff.txt"
+
+setup_system:
+  - domain:
+      cell_size: 8.0 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_xyz_file_with_xform:
+      filename: "InP_large.xyz"
+
+global:
+  max_iteration: 1
+  dt: 1.0e-3 ps
+
+simulation_epilog:
+  - compute_descriptor_snap: { compute_derivative: true }
+  - compute_descriptor_snap_global
+  - write_descriptor_snap_global: { filename: "exastamp_snap_large_chemflag.txt" }

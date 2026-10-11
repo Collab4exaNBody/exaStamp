@@ -1,0 +1,60 @@
+# exaStamp counterpart of in.lammps (LAMMPS pair_style snap_ttm, constant Te = 2.5 eV everywhere, no TTM coupling)
+# init.xyz = LAMMPS step-0 state (lattice + velocity create), from init.dump via ../../snap/lmp2xyz.py
+includes:
+  - config_update_symmetric_forces.msp
+
+# config_update_symmetric_forces' update_force_energy_from_ghost also SUMS the ghost grid_cell_values into
+# their owner cells (UpdateGridCellValues=true): with periodic images that multiplies Te by the number of
+# images every step (x8 here). The _no_gcv variant only folds back forces/energies.
+compute_force_epilog:
+  - update_force_energy_from_ghost_no_gcv
+  - force_to_accel
+
+configuration:
+  profiling:
+    summary: false
+
+species:
+  - Au: { mass: 196.9665 Da , z: 79 , charge: 0.0 e- }
+zbl_multi_force:
+  rcut: 3.5 ang
+  parameters:
+    - { type_a: Au , type_b: Au , rcut: 3.5 ang , parameters: { r1: 2.0 ang , rc: 3.5 ang } }
+compute_force:
+  - zbl_multi_force
+  - snap_ttm_coefficients:
+      betas_file: "dir.inputs/Au.snapbetas"
+      betas_check_file: "eval_betas_exaStamp.csv"
+  - snap_force_fp64:
+      parameters:
+        nt: 1
+        param: "dir.inputs/Au.snapparam"
+        coef:  "dir.inputs/Au.snapcoeff"
+
+grid_flavor: grid_flavor_full
+
+setup_system:
+  - domain:
+      cell_size: 4.0779999 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_xyz_file_with_xform:
+      filename: "init.xyz"
+      bounds_mode: FILE
+      read_velocities: true
+  - resize_grid_cell_values
+  - init_ttm:
+      ti_source: "null"
+      te_source:
+        constant: 29011.31251541427 K   # 2.5 eV / 8.61732814974056e-5
+
+numerical_scheme: verlet_nve
+
+global:
+  max_iteration: 100
+  simulation_thermostate_screen_frequency: 10
+  simulation_thermostate_file_frequency: 1
+  simulation_snapshot_frequency: -1
+  rcut_inc: 1.0 ang
+  dt: 1.0e-3 ps
+  force_flush_file: true

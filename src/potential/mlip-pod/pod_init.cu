@@ -54,6 +54,24 @@ namespace exaStamp
 
   public:
 
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+
+Reads a POD parameter file and coefficient file and builds the POD context used by pod_force and
+compute_descriptor_pod (one engine per OpenMP thread), and raises rcut_max to the POD cutoff.
+exaStamp species are matched to POD elements by name. Place it in init_parameters, after species.
+
+Usage example:
+
+init_parameters:
+  - species
+  - pod_init:
+      parameters: { pod_file: "Ta_param.pod", coeff_file: "Ta_coefficients.pod" }
+
+)EOF";
+    }
+
     inline void execute() override final
     {
       ldbg << "Initializing POD potential" << std::endl;
