@@ -87,7 +87,11 @@ trigger_thermo_state_compute:
       body:
         - boolean_or
   - thermo_state_or3:
-      rebind: { in1: thermo_state_tmp2 , in2: thermo_state_every_step , result: trigger_thermo_state }
+      rebind: { in1: thermo_state_tmp2 , in2: trigger_restart , result: thermo_state_tmp3 }
+      body:
+        - boolean_or
+  - thermo_state_or4:
+      rebind: { in1: thermo_state_tmp3 , in2: thermo_state_every_step , result: trigger_thermo_state }
       body:
         - boolean_or
 
