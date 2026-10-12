@@ -35,6 +35,7 @@ global:
   max_iteration: 100
   simulation_thermostate_screen_frequency: 10
   simulation_thermostate_file_frequency: 1
+  log_mode: "stp;pht;prt;toe;kie;poe;tmp;pre;pxx;pyy;pzz;pxy;pxz;pyz"   # thermo quantities compared by ../compare.py
   simulation_snapshot_frequency: -1
   rcut_inc: 1.0 ang
   dt: 0.5e-3 ps

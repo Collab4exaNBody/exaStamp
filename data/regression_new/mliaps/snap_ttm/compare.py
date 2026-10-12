@@ -25,8 +25,7 @@ for l in open(sys.argv[2] if len(sys.argv) > 2 else os.path.join(d, "thermodynam
     if not t or not t[0].isdigit(): continue
     c = dict(zip(names, map(float, t)))
     r = dict(PotEng=c["Pot. E. (eV/part)"], KinEng=c["Kin. E. (eV/part)"],
-             # exaStamp T uses 3N dof, LAMMPS 3N-3 (COM removed): rescale to LAMMPS convention
-             Temp=c["Temp. (K)"] * 3 * N / (3 * N - 3))
+             Temp=c["Temp. (K)"])   # both codes use 3N-3 dof (COM removed)
     # exaStamp TotE includes the electronic energy when TTM is on, LAMMPS etotal does not
     r["TotEng"] = c["Tot. E. (eV/part)"] - c.get("Elec. E. (eV)", 0.0) / N
     if "Press. (Pa)" in c: r["Press"] = c["Press. (Pa)"]
