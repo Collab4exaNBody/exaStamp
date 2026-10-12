@@ -1,0 +1,43 @@
+# REBO C-H (rebo_manybody), hydrocarbon configuration CH216 replicated 2x2x2
+includes:
+  - ../common.yaml
+
+species:
+  - C: { z: 12, mass: 12.0107 Da, charge: 0.0 e- }
+  - H: { z: 1, mass: 1.00794 Da, charge: 0.0 e- }
+
+init_parameters:
+  - species
+  - rebo_init:
+      parameters:
+        potential_file: "CH.rebo"
+
+compute_force_prolog:
+  - zero_force_energy: { ghost: true }
+
+compute_force:
+  - rebo_bond_order
+  - ghost_update_opt: { opt_fields: [ "NijC", "NijH" ] }
+  - rebo_conjugation
+  - ghost_update_opt: { opt_fields: [ "Nconj" ] }
+  - rebo_pairwise_nobuffer
+  - rebo_manybody
+
+compute_force_epilog:
+  - update_force_from_ghost
+  - force_to_accel
+
+setup_system:
+  - domain:
+      cell_size: 10.0 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_xyz_file_with_xform:
+      filename: CH216.xyz
+      pbc_adjust_xform: true
+  - replicate_domain: [ 2, 2, 2 ]
+  - physics_regression_noise
+
++global:
+  rcut_inc: 1.0 ang
+  dt: 0.125e-3 ps

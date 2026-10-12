@@ -1,0 +1,3 @@
+# Passed after a case's run.msp by make_references.sh : write the references instead of comparing
+global:
+  pr_create_reference: true
