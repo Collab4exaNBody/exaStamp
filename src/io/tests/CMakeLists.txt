@@ -38,6 +38,13 @@ target_include_directories(stampv3_to_lammps PUBLIC ${PROJECT_SOURCE_DIR}/src/ex
 target_link_libraries(stampv3_to_lammps exaStampIO ${MPI_CXX_LIBRARIES})
 install(TARGETS stampv3_to_lammps DESTINATION bin)
 
-add_test(stampv3_to_lammps_par ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 ${MPIEXEC_PREFLAGS} ${CMAKE_CURRENT_BINARY_DIR}/stampv3_to_lammps ${CMAKE_CURRENT_SOURCE_DIR}/StampV3.MpiIO ${CMAKE_CURRENT_BINARY_DIR}/MpiIO2lammps_par_lammps.dat ${MPIEXEC_POSTFLAGS} )
-add_test(stampv3_to_lammps_mono ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 1 ${MPIEXEC_PREFLAGS} ${CMAKE_CURRENT_BINARY_DIR}/stampv3_to_lammps ${CMAKE_CURRENT_SOURCE_DIR}/StampV3.MpiIO ${CMAKE_CURRENT_BINARY_DIR}/MpiIO2lammps_mono_lammps.dat ${MPIEXEC_POSTFLAGS} )
+# input restart is not in the repository : looked up here, then in the data search path (exaStamp_DATA_DIRS)
+string(REPLACE ":" ";" _data_dirs "${exaStamp_DATA_DIRS}")
+find_file(STAMPV3_TEST_FILE StampV3.MpiIO PATHS ${CMAKE_CURRENT_SOURCE_DIR} ${_data_dirs} NO_DEFAULT_PATH)
+if(STAMPV3_TEST_FILE)
+  add_test(stampv3_to_lammps_par ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 ${MPIEXEC_PREFLAGS} ${CMAKE_CURRENT_BINARY_DIR}/stampv3_to_lammps ${STAMPV3_TEST_FILE} ${CMAKE_CURRENT_BINARY_DIR}/MpiIO2lammps_par_lammps.dat ${MPIEXEC_POSTFLAGS} )
+  add_test(stampv3_to_lammps_mono ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 1 ${MPIEXEC_PREFLAGS} ${CMAKE_CURRENT_BINARY_DIR}/stampv3_to_lammps ${STAMPV3_TEST_FILE} ${CMAKE_CURRENT_BINARY_DIR}/MpiIO2lammps_mono_lammps.dat ${MPIEXEC_POSTFLAGS} )
+else()
+  message(STATUS "StampV3.MpiIO not found (source dir, exaStamp_DATA_DIRS) : stampv3_to_lammps tests not registered")
+endif()
 

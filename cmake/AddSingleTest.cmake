@@ -10,8 +10,9 @@
 #   NUMPROCS   - Number of MPI processes
 #   NUMCORES   - Number of OpenMP threads / CPU cores
 #   INPUT_DIR  - Optional folder holding the test input files. The test then
-#                runs in a fresh copy of it, <build>/regression_runs/<TEST_NAME>,
-#                with a 'data' link to data/potentials (cmake/run_in_test_copy.sh)
+#                runs in <build>/regression_runs/<INPUT_DIR relative to data/regression_new>,
+#                shared by the tests of that folder and kept between runs, holding a copy
+#                of INPUT_DIR and a 'data' link to data/potentials (cmake/run_in_test_copy.sh)
 # ---------------------------------------------------------------------------
 function(AddSingleTest TEST_NAME CMDVAR NUMPROCS NUMCORES)
     MakeRunCommand(${CMDVAR} ${NUMPROCS} ${NUMCORES} FULL_COMMAND)
@@ -19,8 +20,12 @@ function(AddSingleTest TEST_NAME CMDVAR NUMPROCS NUMCORES)
 
     set(_wrapper "")
     if(${ARGC} GREATER 4)
+        file(RELATIVE_PATH _run_subdir "${CMAKE_SOURCE_DIR}/data/regression_new" "${ARGV4}")
+        if(_run_subdir STREQUAL "" OR _run_subdir MATCHES "^\\.\\.")
+            set(_run_subdir ${TEST_NAME})
+        endif()
         set(_wrapper bash "${CMAKE_SOURCE_DIR}/cmake/run_in_test_copy.sh"
-            "${CMAKE_BINARY_DIR}/regression_runs/${TEST_NAME}" "${ARGV4}" "${CMAKE_SOURCE_DIR}/data/potentials")
+            "${CMAKE_BINARY_DIR}/regression_runs/${_run_subdir}" "${ARGV4}" "${CMAKE_SOURCE_DIR}/data/potentials")
     endif()
 
     add_test(NAME ${TEST_NAME} COMMAND ${_wrapper} ${FULL_COMMAND})

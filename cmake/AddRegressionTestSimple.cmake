@@ -83,7 +83,7 @@ endfunction()
 # ---------------------------------------------------------------------------
 function(_RegisterMspTest PREFIX TESTCASE TESTVARIANT MSP_FILE)
     _ParseMspHeader("${MSP_FILE}")
-    get_filename_component(_input_dir "${MSP_FILE}" DIRECTORY) # tests run in a copy of it
+    get_filename_component(_input_dir "${MSP_FILE}" DIRECTORY) # tests run in a copy of it (shared by the folder)
 
     if(NOT ONIKA_RUN_WRAPPER)
         set(ONIKA_RUN_WRAPPER ${ONIKA_RUN})
@@ -131,7 +131,7 @@ endfunction()
 # ---------------------------------------------------------------------------
 function(_RegisterMspFlatTest TESTCASE TESTVARIANT MSP_FILE)
     _ParseMspHeader("${MSP_FILE}")
-    get_filename_component(_input_dir "${MSP_FILE}" DIRECTORY) # tests run in a copy of it
+    get_filename_component(_input_dir "${MSP_FILE}" DIRECTORY) # tests run in a copy of it (shared by the folder)
 
     if(NOT ONIKA_RUN_WRAPPER)
         set(ONIKA_RUN_WRAPPER ${ONIKA_RUN})
