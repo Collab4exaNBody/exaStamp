@@ -171,6 +171,7 @@ cg_trajectory_loop:
   body:
     - cg_loop_prolog
     - begin_iteration
+    - force_thermo_state                  # potential energy needed at every iteration (line search)
     - simulation_thermodynamic_state
     - cg_force_stats
     # force_max is in internal units (force/mass - see the note on force units above). Comparing

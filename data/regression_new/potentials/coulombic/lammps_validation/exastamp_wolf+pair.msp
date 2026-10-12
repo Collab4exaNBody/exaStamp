@@ -48,6 +48,7 @@ global:
   simulation_thermostate_screen_frequency: 1
   simulation_thermostate_file_frequency: 1
   thermostate_file: "thermo_exastamp_wolf+pair.csv"
+  log_mode: "stp;pht;prt;toe;kie;poe;tmp;pre;pxx;pyy;pzz;pxy;pxz;pyz"   # thermo quantities compared by compare.py
   simulation_snapshot_frequency: 10
   rcut_inc: 1.0 ang
   dt: 0.001 ps

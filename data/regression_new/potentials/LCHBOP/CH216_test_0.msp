@@ -102,7 +102,7 @@ domain:
 #   cell_size: 2.2138777985714286 ang
 
 dump_data:
-  - write_xyz_file
+  - write_xyz
 #  - copy_grid
 #  - restore_ghost_r0:
 #      rebind: { grid: grid_copy }
@@ -113,7 +113,7 @@ dump_data:
 #  - write_xyz_with_r0:
 #      rebind: { grid_t0 : grid_copy }
 #      body:
-#      - write_xyz_file:
+#      - write_xyz:
 #         rcutdef: 2.20 ang
 #         lattice: [[10.4660790, 0.0, 0.0],
 #         	   [0.0,10.4660790 , 0.0],

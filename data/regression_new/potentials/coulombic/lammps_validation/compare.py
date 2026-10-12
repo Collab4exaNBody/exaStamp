@@ -65,13 +65,21 @@ def lammps_thermo(case):
 
 
 def exastamp_thermo(case):
-    out = {}
+    # header names contain spaces and may be 1 space apart: locate the needed ones in the header line
+    known = ["Particles", "Pot. E. (eV/part)"] + [f"{c} (Pa)" for c in ("Pxx", "Pyy", "Pzz", "Pxy", "Pxz", "Pyz")]
+    out, names = {}, None
     for line in open(f"thermo_exastamp_{case}.csv"):
-        if line.startswith("#"):
-            continue
         w = line.split()
-        n = float(w[2])
-        out[int(w[0])] = (float(w[5]) * n, np.array([float(x) for x in w[7:13]]) / PA_PER_BAR)
+        if w[:1] == ["Step"]:
+            other = ["Time (ps)", "Tot. E. (eV/part)", "Kin. E. (eV/part)", "Temp. (K)", "Press. (Pa)", "sMises (Pa)",
+                     "Vol. (ang^3)", "Mass"]   # "Mv/Ext/Imb." has no value
+            names = ["Step"] + [n for _, n in sorted((line.find(n), n) for n in known + other if n in line)]
+            continue
+        if not w or not w[0].isdigit():
+            continue
+        c = dict(zip(names, map(float, w)))
+        n = c["Particles"]
+        out[int(w[0])] = (c["Pot. E. (eV/part)"] * n, np.array([c[k] for k in known[2:]]) / PA_PER_BAR)
     return out
 
 

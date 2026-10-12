@@ -11,15 +11,23 @@ for l in open(os.path.join(d, "log.lammps")):
         try: lmp[int(t[0])] = dict(zip(cols, map(float, t)))
         except ValueError: cols = None
     elif cols: cols = None
-exa = {}
+exa, names = {}, None
+KNOWN = ["Step", "Time (ps)", "Particles", "Temp. (K)", "Tot. E. (eV/part)", "Pot. E. (eV/part)", "Kin. E. (eV/part)",
+         "Press. (Pa)", "Pxx (Pa)", "Pyy (Pa)", "Pzz (Pa)", "Pxy (Pa)", "Pxz (Pa)", "Pyz (Pa)", "sMises (Pa)",
+         "Vol. (ang^3)", "Mass"]  # "Mv/Ext/Imb." has no value
 for l in open(sys.argv[2] if len(sys.argv) > 2 else os.path.join(d, "thermodynamic_state.csv")):
+    if l.split()[:1] == ["Step"]:  # header names contain spaces and may be 1 space apart: locate known names
+        names = [n for _, n in sorted((l.find(n), n) for n in KNOWN if n in l)]; continue
     t = l.split()
-    if not t or t[0].startswith("#"): continue
-    v = list(map(float, t))  # step time n TotE KinE PotE T Pxx Pyy Pzz Pxy Pxz Pyz ...
-    # exaStamp T uses 3N dof, LAMMPS 3N-3 (COM removed): rescale to LAMMPS convention
-    exa[int(v[0])] = dict(TotEng=v[3], KinEng=v[4], PotEng=v[5], Temp=v[6] * 3 * v[2] / (3 * v[2] - 3),
-                          Pxx=v[7], Pyy=v[8], Pzz=v[9], Pxy=v[10], Pxz=v[11], Pyz=v[12],
-                          Press=(v[7] + v[8] + v[9]) / 3)
+    if not t or not t[0].isdigit(): continue
+    c = dict(zip(names, map(float, t)))
+    r = dict(TotEng=c["Tot. E. (eV/part)"], KinEng=c["Kin. E. (eV/part)"], PotEng=c["Pot. E. (eV/part)"],
+             Temp=c["Temp. (K)"])   # both codes use 3N-3 dof (COM removed)
+    if "Pxx (Pa)" in c:
+        for q in ["Pxx", "Pyy", "Pzz", "Pxy", "Pxz", "Pyz"]: r[q] = c[q + " (Pa)"]
+        r["Press"] = (r["Pxx"] + r["Pyy"] + r["Pzz"]) / 3
+    elif "Press. (Pa)" in c: r["Press"] = c["Press. (Pa)"]
+    exa[int(t[0])] = r
 bar = 1e5  # LAMMPS metal pressure unit (bar) -> Pa
 # LAMMPS 'units metal' hardcodes rounded constants (update.cpp); exaStamp uses CODATA 2018.
 # Map LAMMPS thermo onto exact constants so only genuine discrepancies remain:
@@ -39,7 +47,7 @@ for r in lmp.values():
         r[q] *= nktv2p_ex / nktv2p_l   # kinetic share of components still carries mvv2e (<=6.4e-8)
 steps = sorted(set(lmp) & set(exa))
 print(f"{d}: {len(steps)} common steps ({steps[0]}..{steps[-1]})")
-for q in ["PotEng", "KinEng", "TotEng", "Temp", "Press", "Pxx", "Pyy", "Pzz", "Pxy", "Pxz", "Pyz"]:
+for q in [q for q in ["PotEng", "KinEng", "TotEng", "Temp", "Press", "Pxx", "Pyy", "Pzz", "Pxy", "Pxz", "Pyz"] if q in exa[steps[0]]]:
     s = bar if q[0] == "P" and q != "PotEng" else 1.0
     scale = max(abs(lmp[k][q] * s) for k in steps) or 1.0
     err, k = max((abs(exa[k][q] - lmp[k][q] * s) / scale, k) for k in steps)

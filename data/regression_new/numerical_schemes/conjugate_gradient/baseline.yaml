@@ -1,7 +1,7 @@
 write_snapshot:
   - message: { mesg: "Writing snapshot" }
   - timestep_file: "xyz/test_%09d.xyz"
-  - write_xyz_file:
+  - write_xyz:
       fields: [ id , type ]
 
 species:

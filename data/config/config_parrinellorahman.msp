@@ -3,6 +3,7 @@
 ######################################################################################################
 
 numerical_scheme_parrinellorahman:
+  - force_thermo_state                    # pressure (virial) needed at every step
   - simulation_thermodynamic_state
   - first_push_parrinellorahman: { dt_scale: 1.0 }
   - update_xform_parrinellorahman

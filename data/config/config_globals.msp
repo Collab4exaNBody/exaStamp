@@ -26,7 +26,8 @@ global:
   init_temperature: -1.0
   scale_temperature: -1.0
   md_loop_continue: true                         # needed for the computation loop to start
-  trigger_thermo_state: true                     # needed to get the initial thermo state
+  trigger_thermo_state: true                     # needed to get the initial thermo state (updated at each iteration, see config_thermostate.msp)
+  thermo_state_every_step: false                 # force operators compute energies and virial at every step, not only when used
 
 ######################################################################################################
 ######################################################################################################

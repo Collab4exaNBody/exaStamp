@@ -27,6 +27,7 @@ under the License.
 #include <onika/scg/operator_slot.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <onika/log.h>
+#include <fstream>
 #include <onika/cpp_utils.h>
 #include <onika/file_utils.h>
 #include <exanb/core/particle_type_id.h>
@@ -76,8 +77,11 @@ init_parameters:
     {
       ldbg << "Initializing POD potential" << std::endl;
 
-      const auto& pod_file   = parameters->pod_file;
-      const auto& coeff_file = parameters->coeff_file;
+      const std::string pod_file   = onika::data_file_path( parameters->pod_file );
+      const std::string coeff_file = onika::data_file_path( parameters->coeff_file );
+
+      if( ! std::ifstream(pod_file).good() ) { onika::fatal_error() << "POD: cannot open parameter file '" << pod_file << "'" << std::endl; }
+      if( ! std::ifstream(coeff_file).good() ) { onika::fatal_error() << "POD: cannot open coefficient file '" << coeff_file << "'" << std::endl; }
 
       // Store paths for lazy per-thread EAPOD construction in pod_force.
       pod_ctx->pod_file   = pod_file;

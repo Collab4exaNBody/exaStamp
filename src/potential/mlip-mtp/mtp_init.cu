@@ -27,6 +27,7 @@ under the License.
 #include <onika/scg/operator_slot.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <onika/log.h>
+#include <fstream>
 #include <onika/cpp_utils.h>
 #include <onika/file_utils.h>
 
@@ -72,7 +73,8 @@ init_parameters:
     {
       ldbg << "Initializing MTP potential" << std::endl;
 
-      const auto& mtp_file = parameters->mtp_file;
+      const std::string mtp_file = onika::data_file_path( parameters->mtp_file );
+      if( ! std::ifstream(mtp_file).good() ) { onika::fatal_error() << "MTP: cannot open potential file '" << mtp_file << "'" << std::endl; }
 
       // Eagerly construct one EMTP per OpenMP thread, scratch fixed to MAX_PARTICLE_NEIGHBORS
       // (not grown on demand) -- see emtp.h.

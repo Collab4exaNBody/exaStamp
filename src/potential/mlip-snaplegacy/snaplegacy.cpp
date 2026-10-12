@@ -25,6 +25,7 @@ under the License.
 #include <onika/scg/operator_slot.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <onika/log.h>
+#include <fstream>
 #include <onika/cpp_utils.h>
 #include <onika/file_utils.h>
 
@@ -118,6 +119,8 @@ namespace exaStamp
       {
         std::string lammps_param = onika::data_file_path( parameters->lammps_param );
         std::string lammps_coef = onika::data_file_path( parameters->lammps_coef ); 
+        if( ! std::ifstream(lammps_param).good() ) { onika::fatal_error() << "SNAP legacy: cannot open parameter file '" << lammps_param << "'" << std::endl; }
+        if( ! std::ifstream(lammps_coef).good() ) { onika::fatal_error() << "SNAP legacy: cannot open coefficient file '" << lammps_coef << "'" << std::endl; }
         ldbg << "Snap: read parameter file "<<lammps_param<<" and coefficient file "<<lammps_coef<<std::endl;
         snap_legacy_read_lammps(lammps_param, lammps_coef, m_config);
         ldbg <<"rfac0="<<m_config.rfac0() <<", rmin0="<<m_config.rmin0() <<", rcutfac="<<m_config.rcutfac() <<", twojmax="<<m_config.twojmax()<<", nmat="<<m_config.materials().size()<<std::endl;

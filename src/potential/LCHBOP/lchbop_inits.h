@@ -116,7 +116,7 @@ inline void VLCHBOP::initVCC(MPI_Comm comm)
 
   if (rank==0) lout << "using vCC file "<<vCC_filename<<std::endl;
   VCC=fopen(vCC_filename.c_str(),"r");
-  assert(VCC!=nullptr);
+  if( VCC == nullptr ) { onika::fatal_error() << "LCHBOP: cannot open parameter file '" << vCC_filename << "'" << std::endl; }
 
 //C Reading SR parameters
   err=fscanf(VCC,"%s\n",texte);
@@ -398,6 +398,7 @@ inline void VLCHBOP::initVHH(MPI_Comm comm)
 
   if (rank==0) lout << "using vHH file "<<vHH_filename<<std::endl;
   VHH=fopen(vHH_filename.c_str(),"r");
+  if( VHH == nullptr ) { onika::fatal_error() << "LCHBOP: cannot open parameter file '" << vHH_filename << "'" << std::endl; }
 // Reading SR parameters
   err=fscanf(VHH,"%s\n",texte);
   err=fscanf(VHH,"%s\n",texte);
@@ -582,6 +583,7 @@ inline void VLCHBOP::initVCH(MPI_Comm comm)
 
   if (rank==0) lout << "using vCH file "<<vCH_filename<<std::endl;
   VCH=fopen(vCH_filename.c_str(),"r");
+  if( VCH == nullptr ) { onika::fatal_error() << "LCHBOP: cannot open parameter file '" << vCH_filename << "'" << std::endl; }
 //C Reading SR parameters
   err=fscanf(VCH,"%s\n",texte);
   err=fscanf(VCH,"%s\n",texte);

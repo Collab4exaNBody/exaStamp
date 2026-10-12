@@ -102,7 +102,10 @@ hw_device_finalize:
 
 write_final_restart: write_restart
 
+# energies and virial of the final state (the last iteration may not have computed them)
 simulation_epilog:
+  - force_thermo_state
+  - compute_all_forces_energy
   - default_thermostate_compute
   - write_final_restart
 
@@ -131,6 +134,7 @@ begin_iteration:
   - trigger_thermostate_screen
   - trigger_thermostate_file
   - trigger_thermostate_compute
+  - trigger_thermo_state_compute
 
 # Perform compute/print/write operations if triggered
 end_iteration:

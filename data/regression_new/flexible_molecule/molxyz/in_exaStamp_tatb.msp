@@ -58,4 +58,4 @@ dump_data:
       rebind: { mesg: filename }
       body:
         - message: { endl: true }
-  - write_xyz_file
+  - write_xyz

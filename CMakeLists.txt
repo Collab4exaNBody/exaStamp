@@ -63,6 +63,15 @@ endif()
 # ======================================
 find_package(exaNBody)
 
+# Data files kept out of the repository (restarts, large configurations), in one flat folder.
+# Appended to the data search path (ONIKA_DATA_PATH) of the exaStamp wrappers when the folder exists.
+set(EXASTAMP_DATA_DIR "$ENV{HOME}/.local/exaStamp_data" CACHE PATH "Flat folder of exaStamp data files kept out of the repository")
+string(REPLACE ":" ";" _data_dirs "${exaStamp_DATA_DIRS}")
+if(EXASTAMP_DATA_DIR AND IS_DIRECTORY "${EXASTAMP_DATA_DIR}" AND NOT "${EXASTAMP_DATA_DIR}" IN_LIST _data_dirs)
+  set(exaStamp_DATA_DIRS "${exaStamp_DATA_DIRS}:${EXASTAMP_DATA_DIR}")
+endif()
+message(STATUS "exaStamp data search path : ${exaStamp_DATA_DIRS}")
+
 
 # yaml-cpp installation directory (general onika variable, also used by the PACE build)
 set(YAML_CPP_INSTALL_DIR "" CACHE PATH "yaml-cpp installation directory")
@@ -90,8 +99,7 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/exaStamp DESTINATION include)
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/data DESTINATION ${CMAKE_INSTALL_PREFIX})
 if(ONIKA_REGRESSION_TEST_ENABLE)
   #  AddRegressionTestDir("${CMAKE_SOURCE_DIR}/data/regression")
-  file(GLOB_RECURSE POTENTIAL_FILES "${CMAKE_SOURCE_DIR}/data/potentials/*")
-  file(COPY ${POTENTIAL_FILES} DESTINATION ${CMAKE_BINARY_DIR})
+  # regression tests run in a copy of their input folder, with data/potentials reachable as './data' (cmake/AddSingleTest.cmake)
   add_subdirectory(data/regression_new)
 endif()
 
