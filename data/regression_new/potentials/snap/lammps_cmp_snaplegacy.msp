@@ -53,9 +53,7 @@ global:
 
 
 simulation_epilog:
-  - compute_local_metrics:
-      per_atom_data: ["pe","f"]
-  - write_xyz_file:
-      per_atom_data: ["pe", "f"]
+  - write_xyz:
+      fields: [ "ep", "force" ]
       filename: xstamp.xyz
 
