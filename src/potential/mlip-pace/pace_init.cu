@@ -27,6 +27,7 @@ under the License.
 #include <onika/scg/operator_slot.h>
 #include <exanb/core/make_grid_variant_operator.h>
 #include <onika/log.h>
+#include <fstream>
 #include <onika/cpp_utils.h>
 #include <onika/file_utils.h>
 #include <exanb/core/particle_type_id.h>
@@ -64,7 +65,8 @@ namespace exaStamp
       pace_ctx->aceimpl->basis_set = std::make_unique<ACECTildeBasisSet>();
       pace_ctx->aceimpl->ace       = std::make_unique<ACERecursiveEvaluator>();
 
-      const auto& potential_file_name = parameters->pace_coef;
+      const std::string potential_file_name = onika::data_file_path( parameters->pace_coef );
+      if( ! std::ifstream(potential_file_name).good() ) { onika::fatal_error() << "PACE: cannot open potential file '" << potential_file_name << "'" << std::endl; }
       const auto& sp = *species;
       const int nspecies = sp.size();
       pace_ctx->nspecies = nspecies;

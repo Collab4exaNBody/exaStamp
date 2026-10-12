@@ -17,6 +17,7 @@ under the License.
 
 #include "ravelo.h"
 #include <onika/file_utils.h>
+#include <onika/yaml/yaml_utils.h>
 #include <onika/log.h>
 #include <onika/physics/units.h>
 #include <onika/physics/constants.h>
@@ -52,7 +53,7 @@ namespace YAML
     {
       file_to_load = onika::data_file_path(file_to_load);
       ldbg << "parameters and tabulated EAM data from "<<file_to_load<<std::endl;
-      node = LoadFile(file_to_load);
+      node = onika::yaml::yaml_load_file_abort_on_except(file_to_load); // clean fatal error if the file is missing
     }
 
     double fs = 1.0; // length scale factor
