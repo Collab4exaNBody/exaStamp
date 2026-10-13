@@ -323,8 +323,9 @@ namespace exaStamp
               pot_params.m_pair_params[pair_id].ecut = energy_cutoff( pot_params.m_pair_params[pair_id].p , pot_params.m_pair_params[pair_id].pair_params , pot_params.m_pair_params[pair_id].rcut ); ;
             }
             
-            //if( parameters.m_user_pot_parameters != nullptr ) delete parameters.m_user_pot_parameters;
-            parameters.m_user_pot_parameters = nullptr;
+            // user pair parameters are kept : every instance of this operator in the graph (first iteration, md loop,
+            // epilog...) builds its own table from them. Resetting the pointer here made later instances silently fall
+            // back to common_parameters and the default rcut.
             
             
             // reduce number of parameters if possible
