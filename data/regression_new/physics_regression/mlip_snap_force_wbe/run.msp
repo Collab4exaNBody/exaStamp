@@ -1,4 +1,4 @@
-# SNAP W-Be + ZBL, two species, snap_force (single precision math)
+# enable-if-EXASTAMP_MLIP_SNAP_BUILD : SNAP W-Be + ZBL, two species, snap_force (single precision math only when exaNBody is built with SNAP_FP32_MATH=ON; reference built with OFF)
 includes:
   - ../common.yaml
   - config_update_symmetric_forces.msp

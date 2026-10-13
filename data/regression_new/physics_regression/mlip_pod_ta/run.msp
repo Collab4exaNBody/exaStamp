@@ -1,4 +1,4 @@
-# POD Ta
+# enable-if-EXASTAMP_MLIP_POD_BUILD : POD Ta
 includes:
   - ../common.yaml
 

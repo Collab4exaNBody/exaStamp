@@ -1,4 +1,4 @@
-# PACE Cu (recursive evaluator)
+# enable-if-EXASTAMP_MLIP_PACE_BUILD : PACE Cu (recursive evaluator)
 includes:
   - ../common.yaml
 
