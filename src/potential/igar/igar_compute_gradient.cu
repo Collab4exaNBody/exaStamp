@@ -51,10 +51,13 @@ Produces three new fields in grid_cell_values:
 each at the same subdiv resolution as igar_ep. These fields are consumed
 by igar_force_from_gradient to apply forces to particles.
 
-This operator should typically be called once in setup_system when igar_ep
-is a static reference field (e.g. loaded from a VTK file). Calling it every
-timestep is correct but expensive: it sweeps all subdiv^3 subcells per cell
-regardless of particle count.
+The finite differences read igar_ep in the neighbouring cells, ghost cells
+included: call it once the ghost layer exists, e.g. at the end of
+init_particles when igar_ep is a static reference field (e.g. loaded from a
+VTK file). Calling it in setup_system gives a wrong gradient near the
+subdomain and periodic borders. Calling it every timestep is correct but
+expensive: it sweeps all subdiv^3 subcells per cell regardless of particle
+count.
 
 Example (LJ_igar.msp — gradient precomputed once at setup):
 
@@ -64,6 +67,7 @@ Example (LJ_igar.msp — gradient precomputed once at setup):
         field_dim: 1
         grid_subdiv: 64
         file_name: "igar_test.vtk"
+  +init_particles:
     - igar_compute_gradient
 
   compute_force:

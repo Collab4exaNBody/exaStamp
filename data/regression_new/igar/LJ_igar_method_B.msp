@@ -56,6 +56,9 @@ setup_system:
       field_dim: 1
       grid_subdiv: 32
       file_name: "igar_test.vtk"
+
+# the gradient reads igar_ep in the ghost cells : computed once the ghost layer exists
++init_particles:
   - igar_compute_gradient
   
 write_snapshot: nop
