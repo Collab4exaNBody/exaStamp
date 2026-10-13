@@ -58,9 +58,11 @@ jobs:
     - name: Build exaStamp
       run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} -j 4
 
+    # rebo_ch_mixedprec is excluded: its references come from a GPU build and the FP32 parts of the mixed-precision
+    # kernel round differently on CPU (rebo_ch_double covers REBO on CPU)
     - name: Run physics regression
       working-directory: ${{github.workspace}}/build
-      run: ctest -j 2 -R physics_regression --output-on-failure --timeout 1800
+      run: ctest -j 2 -R physics_regression -E physics_regression_rebo_ch_mixedprec --output-on-failure --timeout 1800
 
     # run folders (inputs, outputs, logs) of the cases, to inspect a failure
     - name: Upload run folders on failure
