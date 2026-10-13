@@ -10,7 +10,7 @@ species:
 coulombic_pppm_init:
   diff: ad
   accuracy_relative: 1.0e-5
-  g_ewald: 0.0
+  g_ewald: 0.4118 1/ang   # fixed: the automatic value (Newton solve, tolerance 1e-5) differs by ~5e-6 between SSE2 and AVX2 builds
   radius: 8.0 ang
   order: 5
   mesh: [ 0, 0, 0 ]

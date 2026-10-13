@@ -7,7 +7,12 @@ on:
   pull_request:
     branches:
       - main
-      
+
+# a new push to a pull request cancels the run still going on its previous commit (runs on main are never cancelled)
+concurrency:
+  group: cmake-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release

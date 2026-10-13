@@ -1,0 +1,81 @@
+name: Physics regression
+
+# Builds exaStamp with every plugin the cases need and runs data/regression_new/physics_regression (one case per
+# interatomic potential, compared to committed references): on each push to main, on every pull request, and again
+# at each push to a branch with an open pull request. cmake.yml checks the default build separately.
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    types: [ opened, synchronize, reopened ]
+  workflow_dispatch:
+
+# a new push to a pull request cancels the run still going on its previous commit (runs on main are never cancelled)
+concurrency:
+  group: physics-regression-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  physics_regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libyaml-cpp-dev mpich libopenblas-dev
+
+    - name: Get Onika
+      run: git clone --depth 1 --branch main https://github.com/Collab4exaNBody/onika.git
+    - name: Configure Onika
+      run: cmake -B ${{github.workspace}}/onika/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/onika/install
+      working-directory: ${{github.workspace}}/onika
+    - name: Build Onika
+      run: cmake --build ${{github.workspace}}/onika/build --target install --config ${{env.BUILD_TYPE}} -j 4
+
+    - name: Get exaNBody
+      run: git clone --depth 1 --branch main https://github.com/Collab4exaNBody/exaNBody.git
+    - name: Configure exaNBody
+      run: cmake -B ${{github.workspace}}/exaNBody/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -Donika_DIR=${{github.workspace}}/onika/install -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/exaNBody/install -DEXANB_BUILD_CONTRIB_MD=ON -DSNAP_CPU_USE_LOCKS=ON -DSNAP_FP32_MATH=OFF
+      working-directory: ${{github.workspace}}/exaNBody
+    - name: Build exaNBody
+      run: cmake --build ${{github.workspace}}/exaNBody/build --target install --config ${{env.BUILD_TYPE}} -j 4
+
+    # every plugin used by the physics regression cases (MLIP plugins are OFF by default)
+    - name: Configure exaStamp
+      run: >
+        cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+        -DexaNBody_DIR=${{github.workspace}}/exaNBody/install
+        -DONIKA_REGRESSION_TEST_ENABLE=ON
+        -DEXASTAMP_MLIP_SNAP_BUILD=ON
+        -DEXASTAMP_MLIP_POD_BUILD=ON -DEXASTAMP_MLIP_POD_BLAS_VENDOR=OpenBLAS
+        -DEXASTAMP_MLIP_MTP_BUILD=ON
+        -DEXASTAMP_MLIP_PACE_BUILD=ON -DEXASTAMP_MLIP_PACE_GIT_REPO=https://github.com/Collab4exaNBody/exaStamp_mlip_pace.git
+    - name: Build exaStamp
+      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} -j 4
+
+    # rebo_ch_mixedprec is excluded: its references come from a GPU build and the FP32 parts of the mixed-precision
+    # kernel round differently on CPU (rebo_ch_double covers REBO on CPU)
+    - name: Run physics regression
+      working-directory: ${{github.workspace}}/build
+      run: ctest -j 2 -R physics_regression -E physics_regression_rebo_ch_mixedprec --output-on-failure --timeout 1800
+
+    # run folders (inputs, outputs, logs) of the cases, to inspect a failure; 'data' is a link to data/potentials in
+    # every run folder, upload-artifact would copy its whole content into each case
+    - name: Upload run folders on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: physics-regression-runs
+        path: |
+          ${{github.workspace}}/build/regression_runs/physics_regression
+          !${{github.workspace}}/build/regression_runs/physics_regression/*/data
+        retention-days: 7

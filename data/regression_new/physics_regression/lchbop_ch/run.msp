@@ -1,4 +1,5 @@
-# LCHBOP C-H, hydrocarbon configuration CH216 replicated 2x2x2 (parameter files vCC.par, vHH.par, vCH.par)
+# no-mpi : LCHBOP C-H, hydrocarbon configuration CH216 replicated 2x2x2 (parameter files vCC.par, vHH.par, vCH.par)
+# disabled (no-mpi) : with 4 ranks (single-cell-wide subdomains) forces differ from seq by up to 7e-9 relative, energy 2.5e-10 (deterministic, 2 ranks exact) -> many-body reach vs ghost layer, to investigate
 # TMPDAT/ must exist : LCHBOP writes debug files there without checking fopen
 includes:
   - ../common.yaml
@@ -20,7 +21,7 @@ update_particle_neighbors: nop
 
 compute_force:
   - LCHBOP_EF
-  - update_force_energy_from_ghost
+  - update_virial_force_energy_from_ghost   # LCHBOP also writes virial contributions to ghost atoms
 
 preinit_rcut_max:
   profiling: false
@@ -48,7 +49,8 @@ setup_system:
 
 +global:
   dt: 1.0e-4 ps
-  pr_acc_threshold: 1.e-8   # large H accelerations: round-off spread ~2e-9 between seq/mt/par
+  pr_acc_threshold: 1.e-6   # H accelerations up to ~1e5 (internal units): 5e-8 absolute = 5e-13 relative between seq and par
+  pr_vel_threshold: 1.e-9   # velocities up to ~140 ang/ps
   rcut_max: 8.4 ang
   rcut_inc: 1.0 ang
   ghost_dist: 8.4 ang

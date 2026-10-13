@@ -1,4 +1,4 @@
-# PACE Cu (recursive evaluator)
+# enable-if-EXASTAMP_MLIP_PACE_BUILD : PACE Cu (recursive evaluator)
 includes:
   - ../common.yaml
 
@@ -40,4 +40,7 @@ setup_system:
 +global:
   rcut_inc: 1.0 ang
   dt: 1.0e-3 ps
-  pr_acc_threshold: 1.e-8   # PACE: thread-order summation spread ~6e-10 on accelerations
+  # PACE (accelerations ~40): seq/mt/par spread 7e-10 (AVX2 build); an SSE2 build differs from the (AVX2-made)
+  # references by 1.1e-7 on accelerations and 3.3e-10 on velocities (L2)
+  pr_acc_threshold: 1.e-6
+  pr_vel_threshold: 2.e-9

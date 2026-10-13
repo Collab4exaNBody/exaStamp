@@ -1,4 +1,4 @@
-# SNAP W-Be + ZBL, two species, snap_force_fp64
+# enable-if-EXASTAMP_MLIP_SNAP_BUILD : SNAP W-Be + ZBL, two species, snap_force_fp64
 includes:
   - ../common.yaml
   - config_update_symmetric_forces.msp

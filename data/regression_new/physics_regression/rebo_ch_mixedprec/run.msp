@@ -41,3 +41,5 @@ setup_system:
 +global:
   rcut_inc: 1.0 ang
   dt: 0.125e-3 ps
+  pr_acc_threshold: 1.e-4   # REBO: accelerations up to ~6e3 (H), seq/mt/par spread ~1.5e-5 (GPU accumulation order)
+  pr_vel_threshold: 5.e-8   # velocity spread ~4e-9

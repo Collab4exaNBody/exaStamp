@@ -1,4 +1,4 @@
-# MTP Cu
+# enable-if-EXASTAMP_MLIP_MTP_BUILD : MTP Cu
 includes:
   - ../common.yaml
 

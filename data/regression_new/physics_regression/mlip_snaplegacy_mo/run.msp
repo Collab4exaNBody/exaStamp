@@ -1,4 +1,4 @@
-# SNAP Mo (Chen 2017), snaplegacy_force
+# enable-if-EXASTAMP_MLIP_SNAP_BUILD : SNAP Mo (Chen 2017), snaplegacy_force
 includes:
   - ../common.yaml
 
