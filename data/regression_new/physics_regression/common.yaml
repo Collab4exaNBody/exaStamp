@@ -1,0 +1,38 @@
+# Shared settings of the physics regression collection (one sub-folder per potential, see README.md).
+# A case includes this file, defines species, the potential, compute_force and setup_system (domain + lattice
+# followed by physics_regression_noise), runs 10 steps and compares the final state to its committed references:
+#  - ref_values.dat  : positions, velocities, accelerations of sampled particles (check_values)
+#  - ref_thermo.yaml : energies, virial, volume, particle count (check_thermodynamic_state)
+
+global:
+  deterministic_noise: true                 # noise drawn per domain cell : same initial state for seq, mt and par
+  max_iteration: 10
+  simulation_thermostate_screen_frequency: 10
+  simulation_thermostate_file_frequency: -1
+  simulation_snapshot_frequency: -1
+  simulation_restart_frequency: -1
+  simulation_analysis_frequency: -1
+  # check thresholds, overridden by cases that need it (+global: in the case)
+  pr_pos_threshold: 1.e-10
+  pr_vel_threshold: 1.e-10
+  pr_acc_threshold: 1.e-9                  # accelerations are the largest values (exp6: ~4e-11 spread between seq/mt/par)
+  pr_thermo_threshold: 1.e-10
+  pr_create_reference: false               # true only to (re)generate references (make_references.sh)
+
+# noise on positions and velocities, appended to setup_system after the lattice
+physics_regression_noise:
+  - gaussian_noise_r: { sigma: 0.05 ang , sigma_cut: 0.15 ang }
+  - uniform_noise_v: { sigma: 2.0 ang/ps }
+
+# 'rebind' is applied only to a batch with a body, not to a registered operator name
+physics_regression_check:
+  rebind: { pos_threshold: pr_pos_threshold , vel_threshold: pr_vel_threshold , acc_threshold: pr_acc_threshold , rel_threshold: pr_thermo_threshold , create_if_missing: pr_create_reference }
+  body:
+    - check_values: { file: ref_values.dat , samples: 256 }
+    - check_thermodynamic_state: { file: ref_thermo.yaml }
+
+simulation_epilog:
+  - force_thermo_state
+  - compute_all_forces_energy
+  - default_thermostate_compute
+  - physics_regression_check

@@ -1,0 +1,33 @@
+# k2b (two-body radial basis potential, Ta weights of the k2b descriptor tests), single species, compute_force
+includes:
+  - ../common.yaml
+
+grid_flavor: grid_flavor_multimat
+
+species:
+  - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+
+k2b_compute_force:
+  rcut: 6.0 ang
+  parameters: { n_rbf: 8, r_min: 0.5, r_cut: 6.0, sigma: 0.4, delta: 1.5, w: [ -1.057, -2.0949, 0.90561, -2.56538, 0.21529, -0.80587, -2.65201, 0.04461 ] }
+
+compute_force: k2b_compute_force
+
+setup_system:
+  - domain:
+      cell_size: 7.0 ang
+      grid_dims: [ 5, 5, 5 ]
+      bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 35.0 ang, 35.0 ang, 35.0 ang ] ]
+      xform: [ [ 1, 0, 0 ], [ 0, 1, 0 ], [ 0, 0, 1 ] ]
+      periodic: [ true, true, true ]
+      expandable: false
+  - init_rcb_grid
+  - lattice:
+      structure: BCC
+      types: [ Ta, Ta ]
+      size: [ 3.5 ang, 3.5 ang, 3.5 ang ]
+  - physics_regression_noise
+
++global:
+  rcut_inc: 1.0 ang
+  dt: 1.0e-3 ps

@@ -55,6 +55,12 @@ namespace exaStamp
       return m_A==0.0 && m_C_EPSILON==0.0 && m_D_SIGMA==0.0 && m_ecut==0.0;
     }
 
+    // true when the pair has a LJ or Exp6 term (an rf-only pair has none)
+    ONIKA_HOST_DEVICE_FUNC inline bool has_pair_term() const
+    {
+      return m_A!=0.0 || m_C_EPSILON!=0.0 || m_D_SIGMA!=0.0;
+    }
+
     ONIKA_HOST_DEVICE_FUNC inline bool is_null() const
     {
       return pair_is_null() && m_rf.is_null();
@@ -140,17 +146,20 @@ namespace exaStamp
       // pair potential part
       double pair_e = 0.0;
       double pair_de = 0.0;
-      if( is_lj() )
+      if( has_pair_term() )
       {
-        lj_compute_energy( LennardJonesParms{m_C_EPSILON,m_D_SIGMA}, PairPotentialMinimalParameters{}, r, pair_e, pair_de );
+        if( is_lj() )
+        {
+          lj_compute_energy( LennardJonesParms{m_C_EPSILON,m_D_SIGMA}, PairPotentialMinimalParameters{}, r, pair_e, pair_de );
+        }
+        else
+        {
+          assert( is_exp6() );
+          exp6_compute_energy( Exp6Parms{m_A,m_B_ISEXP6,m_C_EPSILON,m_D_SIGMA}, PairPotentialMinimalParameters{}, r, pair_e, pair_de );
+        }
+        // energy shift at cutoff for pair potential
+        pair_e -= m_ecut;
       }
-      else
-      {
-        assert( is_exp6() );
-        exp6_compute_energy( Exp6Parms{m_A,m_B_ISEXP6,m_C_EPSILON,m_D_SIGMA}, PairPotentialMinimalParameters{}, r, pair_e, pair_de );
-      }
-      // energy shift at cutoff for pair potential
-      pair_e -= m_ecut;
       pair_e *= pair_weight;
       pair_de *= pair_weight;
 
@@ -173,11 +182,17 @@ namespace exaStamp
       return rf_self_e;
     }    
     
+    // energy shift of the LJ/Exp6 term at its own cutoff. Without an rcut inside the parameters (multi-species
+    // and multimat inputs give it on the pair entry) there is no shift here : the pair templates shift the energy
+    // at the pair cutoff themselves. Never evaluated at r = 0 (would give NaN).
     ONIKA_HOST_DEVICE_FUNC inline void update_ecut()
     {
       m_ecut = 0.0;
-      const auto [ de , e ] = compute_force_energy(m_rcut,0.0);
-      m_ecut = e;
+      if( m_rcut > 0.0 && has_pair_term() )
+      {
+        const auto [ de , e ] = compute_force_energy(m_rcut,0.0);
+        m_ecut = e;
+      }
     }
 
     template<class StreamT>

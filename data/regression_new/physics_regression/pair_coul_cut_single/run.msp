@@ -1,0 +1,38 @@
+# coul_cut, single species, compute_force
+# generated from potentials/pair inputs, references in ref_values.dat / ref_thermo.yaml
+includes:
+  - ../common.yaml
+
+grid_flavor: grid_flavor_multimat
+
+species:
+  - C: { mass: 12.011 Da , z: 6 , charge: 0.5 e- }
+
+coul_cut_compute_force:
+  rcut: 4.0 ang
+  parameters: { dielectric: 1.0, shift: true }
+
+compute_force: coul_cut_compute_force
+
+setup_system:
+  - particle_types:
+      particle_type_map: { C: 0 }
+  - particle_type_add_properties:
+      C: { mass: 12.011 Da , z: 6 , charge: 0.0 e- }
+  - domain:
+      cell_size: 8 ang
+      grid_dims: [5,5,5]
+      bounds: [[0 ang ,0 ang,0 ang],[40. ang, 40. ang, 40. ang]]
+      xform: [[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
+      periodic: [true,true,true]
+      expandable: false
+  - init_rcb_grid
+  - lattice:
+      structure: SC
+      types: [ C ]
+      size: [ 2.5 ang , 2.5 ang , 2.5 ang ]
+  - physics_regression_noise
+
++global:
+  rcut_inc: 1.0 ang
+  dt: 1.0e-3 ps

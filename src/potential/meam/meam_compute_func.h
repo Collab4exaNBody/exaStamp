@@ -60,6 +60,9 @@ namespace exaStamp
   using MeamExtraStorage = MeamExtraStorageT<>;
 
   // MEAM Compute functor
+  // Force updates of the central particle and of its neighbors are true atomics (ONIKA_CU_ATOMIC_ADD): the locks
+  // passed by compute_cell_particle_pairs are no-ops for this functor, and on CPU a particle's force can be
+  // updated by another thread computing a neighbor (block-level atomics are plain additions on CPU).
   template<class CellParticles, class ComputeBufferT, bool CPAA = true> // CPAA = Central particle's field requires CU atomic add intrinsic
   struct MeamForceComputeFunctor
   {
@@ -189,9 +192,9 @@ namespace exaStamp
         tab.nbh.get( i, cell_j, p_j );
         auto & cell = cells[cell_j];
         locks[cell_j][p_j].lock();
-        ONIKA_CU_BLOCK_ATOMIC_ADD( cell[field::fx][p_j] , -tab.ext.dfSx[i] );
-        ONIKA_CU_BLOCK_ATOMIC_ADD( cell[field::fy][p_j] , -tab.ext.dfSy[i] );
-        ONIKA_CU_BLOCK_ATOMIC_ADD( cell[field::fz][p_j] , -tab.ext.dfSz[i] );
+        ONIKA_CU_ATOMIC_ADD( cell[field::fx][p_j] , -tab.ext.dfSx[i] );
+        ONIKA_CU_ATOMIC_ADD( cell[field::fy][p_j] , -tab.ext.dfSy[i] );
+        ONIKA_CU_ATOMIC_ADD( cell[field::fz][p_j] , -tab.ext.dfSz[i] );
         locks[cell_j][p_j].unlock();
         tab.ext.dfSx[i] = 0.;
         tab.ext.dfSy[i] = 0.;
@@ -201,9 +204,9 @@ namespace exaStamp
       particle_lock.lock();
       if constexpr ( CPAA )
       {
-        ONIKA_CU_BLOCK_ATOMIC_ADD( _fx, Fx ); 
-        ONIKA_CU_BLOCK_ATOMIC_ADD( _fy, Fy );
-        ONIKA_CU_BLOCK_ATOMIC_ADD( _fz, Fz );
+        ONIKA_CU_ATOMIC_ADD( _fx, Fx ); 
+        ONIKA_CU_ATOMIC_ADD( _fy, Fy );
+        ONIKA_CU_ATOMIC_ADD( _fz, Fz );
       }
       if constexpr ( !CPAA )
       {
@@ -268,9 +271,9 @@ namespace exaStamp
       particle_lock.lock();
       if constexpr ( CPAA )
       {
-        ONIKA_CU_BLOCK_ATOMIC_ADD( _fx, Fx ); 
-        ONIKA_CU_BLOCK_ATOMIC_ADD( _fy, Fy );
-        ONIKA_CU_BLOCK_ATOMIC_ADD( _fz, Fz );
+        ONIKA_CU_ATOMIC_ADD( _fx, Fx ); 
+        ONIKA_CU_ATOMIC_ADD( _fy, Fy );
+        ONIKA_CU_ATOMIC_ADD( _fz, Fz );
       }
       if constexpr ( !CPAA )
       {
@@ -295,9 +298,9 @@ namespace exaStamp
         const double nbh_fz_contrib = tab.ext.dfSz[i] +
           Coeff*(rho0*tmpdG*(tmpRho0*tab.ext.drho0z[i]+tmpRho1*tab.ext.drho1z[i]+tmpRho2*tab.ext.drho2z[i]+tmpRho3*tab.ext.drho3z[i])+tmpG*tab.ext.drho0z[i]) ;
         locks[cell_j][p_j].lock();
-        ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_j][field::fx][p_j] , -nbh_fx_contrib );
-        ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_j][field::fy][p_j] , -nbh_fy_contrib );
-        ONIKA_CU_BLOCK_ATOMIC_ADD( cells[cell_j][field::fz][p_j] , -nbh_fz_contrib );
+        ONIKA_CU_ATOMIC_ADD( cells[cell_j][field::fx][p_j] , -nbh_fx_contrib );
+        ONIKA_CU_ATOMIC_ADD( cells[cell_j][field::fy][p_j] , -nbh_fy_contrib );
+        ONIKA_CU_ATOMIC_ADD( cells[cell_j][field::fz][p_j] , -nbh_fz_contrib );
         locks[cell_j][p_j].unlock();
       }
     }

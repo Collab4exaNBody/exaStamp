@@ -101,3 +101,7 @@ AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/ttm")
 # Regression tests for applied deformation using xform_function
 # Layout: potentials/eam/<testcase>/<variant>.msp
 AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/xform_function")
+# Physics regression collection: one case per interatomic potential, noisy start, 10 steps,
+# compared to committed references (check_values + check_thermodynamic_state), see physics_regression/README.md
+# Layout: physics_regression/<case>/run.msp
+AddRegressionTestSimple("${CMAKE_CURRENT_SOURCE_DIR}/physics_regression")
