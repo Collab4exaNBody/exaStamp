@@ -37,7 +37,7 @@ namespace exaStamp
   {
     ADD_SLOT(GridT, grid, INPUT_OUTPUT);
     ADD_SLOT(GridCellValues, grid_cell_values, INPUT);
-    ADD_SLOT(double, energy_factor, INPUT, REQUIRED, DocString{"Energy scale of the igar_ep field (an energy: internal units unless a unit is given, e.g. 2.0 eV). Energy = energy_factor * igar_ep, force = -energy_factor * grad(igar_ep)."});
+    ADD_SLOT(double, energy_factor, INPUT, REQUIRED);
 
   public:
     inline std::string documentation() const override final

@@ -36,7 +36,7 @@ namespace exaStamp
   {
     ADD_SLOT(GridT, grid, INPUT_OUTPUT, REQUIRED);
     ADD_SLOT(GridCellValues, grid_cell_values, INPUT, REQUIRED);
-    ADD_SLOT(double, energy_factor, INPUT, 1.0, DocString{"Energy scale of the igar_ep field (an energy: internal units unless a unit is given, e.g. 2.0 eV). Energy = energy_factor * igar_ep, force = -energy_factor * (igar_dEdx, igar_dEdy, igar_dEdz)."});
+    ADD_SLOT(double, energy_factor, INPUT, 1.0, DocString{"Prefactor applied to -igar_dEdx, -igar_dEdy and -igar_dEdz before adding them to particle forces."});
 
   public:
     inline std::string documentation() const override final

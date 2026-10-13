@@ -103,7 +103,7 @@ namespace exaStamp
                 ep_interp += wx * wy * wz * e_ptr[nbh_cell_i * e_stride + nbh_subcell_i];
               }
             }
-        en += energy_factor * ep_interp; // same scaling as the force (-energy_factor * gradient)
+        en += ep_interp;
       }
     }
   };
