@@ -1,15 +1,19 @@
 name: Physics regression
 
-# Runs data/regression_new/physics_regression (one case per interatomic potential, compared to committed references)
-# on every pull request, and again at each push to a branch with an open pull request.
+# Builds exaStamp with every plugin the cases need and runs data/regression_new/physics_regression (one case per
+# interatomic potential, compared to committed references): on each push to main, on every pull request, and again
+# at each push to a branch with an open pull request. cmake.yml checks the default build separately.
 on:
+  push:
+    branches: [ main ]
   pull_request:
     types: [ opened, synchronize, reopened ]
   workflow_dispatch:
 
+# a new push to a pull request cancels the run still going on its previous commit (runs on main are never cancelled)
 concurrency:
   group: physics-regression-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   BUILD_TYPE: Release
