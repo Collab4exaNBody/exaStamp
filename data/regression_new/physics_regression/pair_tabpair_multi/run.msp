@@ -1,5 +1,4 @@
-# no-seq no-mt no-mpi : tabpair, two species, multi_force
-# disabled (no-seq no-mt no-mpi) : tabpair_multi_force explodes (kinetic energy ~1e34 after 10 steps) with the same table/lattice that is stable with tabpair_compute_force, to investigate
+# tabpair, two species, multi_force
 # generated from potentials/pair inputs, references in ref_values.dat / ref_thermo.yaml
 includes:
   - ../common.yaml

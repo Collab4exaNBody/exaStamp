@@ -1,5 +1,4 @@
-# no-seq no-mt no-mpi : ljexp6rf_lj, two species, multi_force
-# disabled (no-seq no-mt no-mpi) : potential energy is NaN when a pair has no LJ/exp6 part (also rigidmol_ljexp6rf_h2o), to investigate
+# ljexp6rf_lj, two species, multi_force
 # generated from potentials/pair inputs, references in ref_values.dat / ref_thermo.yaml
 includes:
   - ../common.yaml

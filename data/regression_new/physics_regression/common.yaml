@@ -15,7 +15,7 @@ global:
   # check thresholds, overridden by cases that need it (+global: in the case)
   pr_pos_threshold: 1.e-10
   pr_vel_threshold: 1.e-10
-  pr_acc_threshold: 1.e-10
+  pr_acc_threshold: 1.e-9                  # accelerations are the largest values (exp6: ~4e-11 spread between seq/mt/par)
   pr_thermo_threshold: 1.e-10
   pr_create_reference: false               # true only to (re)generate references (make_references.sh)
 

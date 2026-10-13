@@ -1,5 +1,4 @@
-# no-seq no-mt no-mpi : Rigid H2O molecules (4 sites O, H, H, M), ljexp6rf_rigidmol_force
-# disabled (no-seq no-mt no-mpi) : potential energy is NaN when a pair has no LJ part (same as ljexp6rf multi-species), to investigate
+# Rigid H2O molecules (4 sites O, H, H, M), ljexp6rf_rigidmol_force
 includes:
   - ../common.yaml
   - config_rigid_molecule.msp

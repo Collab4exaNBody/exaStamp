@@ -1,5 +1,4 @@
-# no-mpi no-mt : coul_wolf, single species, symmetric computation
-# disabled (no-mpi no-mt) : race in symmetric pair kernels with OpenMP threads (also without MPI for coul_wolf): per-atom forces differ run to run -> to fix in the code
+# coul_wolf, single species, symmetric computation
 # generated from potentials/pair inputs, references in ref_values.dat / ref_thermo.yaml
 includes:
   - ../common.yaml

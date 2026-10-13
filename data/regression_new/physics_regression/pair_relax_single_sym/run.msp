@@ -1,5 +1,4 @@
-# no-mpi : relax, single species, symmetric computation
-# disabled (no-mpi) : race in symmetric pair kernels with MPI + OpenMP threads (4 ranks x 4 threads): per-atom forces differ run to run, CPU and GPU; 4x1 and 1x4 are exact -> to fix in the code
+# relax, single species, symmetric computation
 # generated from potentials/pair inputs, references in ref_values.dat / ref_thermo.yaml
 includes:
   - ../common.yaml

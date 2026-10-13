@@ -1,4 +1,4 @@
-# LCHBOP C-H, hydrocarbon configuration CH216 (parameter files vCC.par, vHH.par, vCH.par)
+# LCHBOP C-H, hydrocarbon configuration CH216 replicated 2x2x2 (parameter files vCC.par, vHH.par, vCH.par)
 # TMPDAT/ must exist : LCHBOP writes debug files there without checking fopen
 includes:
   - ../common.yaml
@@ -42,11 +42,13 @@ setup_system:
   - read_xyz_file_with_xform:
       filename: CH216.xyz
       pbc_adjust_xform: true
+  - replicate_domain: [ 2, 2, 2 ]   # the CH216 box is a single cell : replicated so that it can be split over MPI ranks
   - LCHBOP_inits
   - physics_regression_noise
 
 +global:
   dt: 1.0e-4 ps
+  pr_acc_threshold: 1.e-8   # large H accelerations: round-off spread ~2e-9 between seq/mt/par
   rcut_max: 8.4 ang
   rcut_inc: 1.0 ang
   ghost_dist: 8.4 ang
