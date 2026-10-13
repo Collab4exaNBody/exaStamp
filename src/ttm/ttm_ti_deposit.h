@@ -29,7 +29,7 @@ namespace exaStamp
   // (mass*v^2), splat-weighted over the 27-neighbor subcell stencil, into the per-subcell
   // Ti scratch buffer. GPU-portable: only reads field values + this struct's by-value grid
   // geometry (no host-side Grid member calls -- uses the grid_contains/grid_ijk_to_index free
-  // functions instead, same convention as igar_force_from_gradient.h's particle-to-grid functor).
+  // functions instead, same convention as igar_force_interp.h's particle-to-grid functor).
   struct TtmTiDepositFunctor
   {
     Vec3d grid_origin = { 0., 0., 0. };

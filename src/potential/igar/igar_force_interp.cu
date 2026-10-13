@@ -38,23 +38,33 @@ namespace exaStamp
     ADD_SLOT(GridT, grid, INPUT_OUTPUT);
     ADD_SLOT(GridCellValues, grid_cell_values, INPUT);
     ADD_SLOT(double, energy_factor, INPUT, REQUIRED, DocString{"Energy scale of the igar_ep field (an energy: internal units unless a unit is given, e.g. 2.0 eV). Energy = energy_factor * igar_ep, force = -energy_factor * grad(igar_ep)."});
+    ADD_SLOT(std::string, interpolation, INPUT, std::string("catmull_rom"), DocString{"Interpolation of the igar_ep subcell values: catmull_rom (tricubic, 4x4x4 subcells, interpolating, energy and force continuous), bspline (quadratic B-spline, 3x3x3 subcells, continuous, smooths the field) or lagrange (triquadratic, 3x3x3 subcells, energy discontinuous at subcell faces: no energy conservation)."});
 
   public:
     inline std::string documentation() const override final
     {
       return R"EOF(
 Computes per-particle potential energy and forces from the IGAR scalar energy
-field igar_ep stored in grid_cell_values, using triquadratic Lagrange
-interpolation.
+field igar_ep stored in grid_cell_values (one value per subcell, located at
+the subcell center).
 
-For each particle, a 3x3x3 stencil of neighboring subcell energy values is
-read and scaled by energy_factor. Triquadratic Lagrange basis functions
-(nodes at -1, 0, +1 in normalized subcell coordinates) are used to evaluate
-both the interpolated energy and its analytical gradient at the particle's
-exact position. Forces are accumulated as f += -grad(E).
+The energy at the particle position is interpolated from the neighboring
+subcell values and multiplied by energy_factor; the force is minus its
+analytical gradient, so forces are the exact derivative of the energy.
 
-This operator is self-contained: no gradient precomputation is required.
-Energy and forces are C1 continuous across subcell and cell boundaries.
+interpolation selects the scheme:
+  catmull_rom (default)  tricubic Catmull-Rom, 4x4x4 subcells. Interpolating,
+                         energy and force continuous: energy is conserved.
+  bspline                quadratic B-spline, 3x3x3 subcells. Energy and force
+                         continuous, cheaper, but smooths the field (energy
+                         error ~ subcell_size^2 * curvature / 8).
+  lagrange               triquadratic Lagrange, 3x3x3 subcells centered on the
+                         particle's subcell. The energy jumps when a particle
+                         crosses a subcell face: energy is not conserved.
+
+The stencil reads igar_ep up to 2 subcells (catmull_rom) or 1 subcell away
+from the particle's subcell, in neighboring cells and ghost cells included:
+the ghost layer must cover that reach (values outside the grid count as 0).
 
 Example (Lennard-Jones + IGAR, LJ_igar.msp):
 
@@ -80,7 +90,13 @@ Example (REBO + IGAR, CH_rebo_read_xyz.msp):
     {
       auto pecfunc = [self = this](auto... args) { return self->parallel_execution_context(args...); };
 
-      ParticleCellProjectionTools::get_particle_force_from_grid(ldbg, *grid, pecfunc, *grid_cell_values, *energy_factor);
+      IgarInterpolation scheme = IgarInterpolation::CatmullRom;
+      if (*interpolation == "lagrange") scheme = IgarInterpolation::Lagrange;
+      else if (*interpolation == "bspline") scheme = IgarInterpolation::BSpline;
+      else if (*interpolation == "catmull_rom") scheme = IgarInterpolation::CatmullRom;
+      else fatal_error() << "igar_force_interp: unknown interpolation '" << *interpolation << "' (lagrange, bspline or catmull_rom)" << std::endl;
+
+      ParticleCellProjectionTools::get_particle_force_from_grid(ldbg, *grid, pecfunc, *grid_cell_values, *energy_factor, scheme);
     }
   };
 

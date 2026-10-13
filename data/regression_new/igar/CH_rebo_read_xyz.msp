@@ -17,14 +17,29 @@ langevin_thermostat:
 
 numerical_scheme: verlet_lnvt
 
-compute_force:
+rebo_compute_force:
   - rebo_bond_order
   - ghost_update_opt: { opt_fields: [ "NijC", "NijH" ] }
   - rebo_conjugation
   - ghost_update_opt: { opt_fields: [ "Nconj" ] }
   - rebo_pairwise
   - rebo_manybody
+
+compute_force:
+  - rebo_compute_force
   - igar_force_interp: { energy_factor: 50000.0 }
+
+# rcut_max is computed before the IGAR field is read: igar_force_interp cannot run there
+preinit_rcut_max:
+  profiling: false
+  rebind: { grid: null_grid, chunk_neighbors: null_neighbors, domain: empty_domain }
+  body:
+    - domain:
+        cell_size: 0.0 ang
+        grid_dims: [ 0 , 0 , 0 ]
+        periodic: [ true , true , true ]
+    - rebo_compute_force
+    - nbh_dist
 
 # Update forces of non-ghost particles from their ghosts
 # before pushing total force to acceleration
@@ -50,10 +65,8 @@ setup_system:
   - read_cell_values:
       field_name: "igar_ep"
       field_dim: 1
-      grid_subdiv: 64
+      grid_subdiv: 32   # 4^3 cells x 32 = the 128^3 field written by generate_vtk_grid.py
       file_name: "igar_test.vtk"
-# Uncomment for 2nd method      
-#  - igar_compute_gradient
 
 write_snapshot:
   - timestep_file: "Paraview/test_%09d"
