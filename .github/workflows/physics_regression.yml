@@ -68,11 +68,14 @@ jobs:
       working-directory: ${{github.workspace}}/build
       run: ctest -j 2 -R physics_regression -E physics_regression_rebo_ch_mixedprec --output-on-failure --timeout 1800
 
-    # run folders (inputs, outputs, logs) of the cases, to inspect a failure
+    # run folders (inputs, outputs, logs) of the cases, to inspect a failure; 'data' is a link to data/potentials in
+    # every run folder, upload-artifact would copy its whole content into each case
     - name: Upload run folders on failure
       if: failure()
       uses: actions/upload-artifact@v4
       with:
         name: physics-regression-runs
-        path: ${{github.workspace}}/build/regression_runs/physics_regression
+        path: |
+          ${{github.workspace}}/build/regression_runs/physics_regression
+          !${{github.workspace}}/build/regression_runs/physics_regression/*/data
         retention-days: 7

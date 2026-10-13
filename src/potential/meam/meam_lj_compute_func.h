@@ -216,9 +216,9 @@ namespace exaStamp
       if( tab.ext.m_meam_lj_nb_lj_pairs > 0 )
       {
         particle_lock.lock();
-        ONIKA_CU_BLOCK_ATOMIC_ADD( _fx , tab.ext.S[0] );
-        ONIKA_CU_BLOCK_ATOMIC_ADD( _fy , tab.ext.S[1] );
-        ONIKA_CU_BLOCK_ATOMIC_ADD( _fz , tab.ext.S[2] );
+        ONIKA_CU_ATOMIC_ADD( _fx , tab.ext.S[0] );
+        ONIKA_CU_ATOMIC_ADD( _fy , tab.ext.S[1] );
+        ONIKA_CU_ATOMIC_ADD( _fz , tab.ext.S[2] );
         particle_lock.unlock();
         _ep += tab.ext.S[3];
       }
@@ -238,9 +238,9 @@ namespace exaStamp
       if( n > 0 || tab.ext.m_meam_lj_nb_lj_pairs > 0 )
       {
         particle_lock.lock();
-        ONIKA_CU_BLOCK_ATOMIC_ADD( _fx , fx );
-        ONIKA_CU_BLOCK_ATOMIC_ADD( _fy , fy );
-        ONIKA_CU_BLOCK_ATOMIC_ADD( _fz , fz );
+        ONIKA_CU_ATOMIC_ADD( _fx , fx );
+        ONIKA_CU_ATOMIC_ADD( _fy , fy );
+        ONIKA_CU_ATOMIC_ADD( _fz , fz );
         particle_lock.unlock();
         _ep += ep;
       }
