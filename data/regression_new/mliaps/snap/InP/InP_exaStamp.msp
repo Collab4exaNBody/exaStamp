@@ -7,6 +7,12 @@ configuration:
   profiling:
     summary: false
 
+# chemflag 1 with 2 elements -> generic SNAP path, whose per-atom temporary arrays are allocated from the GPU heap
+# (8 MB by default, too small for a few hundred atoms processed concurrently). The heap is reserved per MPI
+# process: keep it moderate, several ranks may share one GPU
+init_cuda:
+  device_limits: { cudaLimitMallocHeapSize: 67108864 }   # 64 MB
+
 species:
   - In: { mass: 114.76 Da , z: 49 , charge: 0.0 e- }
   - P: { mass: 30.98 Da , z: 15 , charge: 0.0 e- }
