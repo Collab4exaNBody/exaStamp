@@ -52,7 +52,7 @@ namespace exaStamp
     {
       return R"EOF(
 
-Builds the SNAP context used by snap_force, snap_force_fp64 and compute_descriptor_snap from a SNAP
+Builds the SNAP context used by snap_force_fp32, snap_force_fp64 and compute_descriptor_snap from a SNAP
 parameter file and coefficient file, and raises rcut_max to the largest pair cutoff
 2*max(radelem)*rcutfac. Place it in init_parameters, after species.
 

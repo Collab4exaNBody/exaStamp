@@ -11,7 +11,7 @@ species:
   - Mo: { mass: 183.84 Da , z: 42 , charge: 0.0 e- }   # LAMMPS example uses W mass
 
 compute_force:
-  - snap_force_fp64:   # FP64 always: default snap_force follows SNAP_FP32_MATH (single precision)
+  - snap_force_fp64:
       parameters:
         nt: 1
         param: "Mo_Chen_PRM2017.snapparam"

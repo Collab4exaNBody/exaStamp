@@ -9,11 +9,11 @@ configuration:
   profiling:
     summary: true
   debug:
-#    filter: [ ".*\\.snap_force" , ".*\\.extend_domain" , ".*\\.check_values" , ".*\\.replicate_domain" ]
+#    filter: [ ".*\\.snap_force_fp64" , ".*\\.extend_domain" , ".*\\.check_values" , ".*\\.replicate_domain" ]
     graph: false
     graph_lod: 0
 
-snap_force:
+snap_force_fp64:
   parameters:
     nt: 2
     param: "data.snapparam"
@@ -51,7 +51,7 @@ zbl_compute_force:
 
 # define potential we'll reuse later
 compute_force:
-  - snap_force
+  - snap_force_fp64
   - zbl_compute_force
 
 simulation_epilog:

@@ -5,14 +5,14 @@ configuration:
     parallel: false
     debug: false
   debug:
-#    filter: [ ".*\\.snap_force" ]
+#    filter: [ ".*\\.snap_force_fp64" ]
     graph: false
     graph_lod: 0
 
 # define potential we'll reuse later
-compute_force: snap_force
+compute_force: snap_force_fp64
 
-snap_force:
+snap_force_fp64:
   parameters:
     nt: 2
     param: "data.snapparam"

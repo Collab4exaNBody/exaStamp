@@ -24,7 +24,7 @@ zbl_multi_force:
     - { type_a: P , type_b: P , rcut: 4.2 ang , parameters: { r1: 4.0 ang , rc: 4.2 ang } }
 compute_force:
   - zbl_multi_force
-  - snap_force_fp64:   # FP64 always: default snap_force follows SNAP_FP32_MATH (single precision)
+  - snap_force_fp64:
       parameters:
         nt: 2
         param: "InP_JCPA2020.snapparam"

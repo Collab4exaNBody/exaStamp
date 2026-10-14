@@ -1,6 +1,6 @@
 # no-seq
 
-# performances should be : between 6.20e5 and 6.35e5 for snap_force time in loop block
+# performances should be : between 6.20e5 and 6.35e5 for snap_force_fp64 time in loop block
 # with -pv100 -N1 -n4 -c12
 configuration:
   profiling:
@@ -8,9 +8,9 @@ configuration:
   logging:
     debug: false
   debug:
-    filter: [ ".*snap_force" ]
+    filter: [ ".*snap_force_fp64" ]
 
-snap_force:
+snap_force_fp64:
   parameters:
     nt: 2
     param: "data.snapparam"
@@ -53,7 +53,7 @@ zbl_compute_force:
 
 # define potential we'll reuse later
 compute_force:
-  - snap_force
+  - snap_force_fp64
   - zbl_compute_force
 
 +first_iteration:
