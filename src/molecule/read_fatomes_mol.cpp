@@ -613,7 +613,9 @@ namespace exaStamp
 
         // Save box shape and dimensions
         Mat3d H = make_identity_matrix();        
-        if( angle_a_b!=90 && angle_a_c!=90 && angle_b_c!=90 )
+        // maille_angle gives (alpha, beta, gamma) = angles (b,c), (a,c), (a,b), in this order, as Deformation expects
+        // (the variable names angle_a_b, angle_a_c, angle_b_c follow the file order, not the vectors involved)
+        if( angle_a_b!=90 || angle_a_c!=90 || angle_b_c!=90 )
         {
           H = deformation_to_matrix( Deformation{ { angle_a_b*M_PI/180, angle_a_c*M_PI/180, angle_b_c*M_PI/180 } , { Lx , Ly , Lz } } );
         }

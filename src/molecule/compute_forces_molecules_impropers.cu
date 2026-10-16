@@ -36,7 +36,6 @@ under the License.
 #include <onika/thread.h>  // GridParticleLocks
 
 #include <exaStamp/molecule/impropers_potentials_parameters.h>
-#include <exaStamp/molecule/periodic_r_delta.h>
 #include <exaStamp/molecule/impropers_force_functor.h>
 
 namespace exaStamp
@@ -99,19 +98,7 @@ namespace exaStamp
       const Vec3d size_box {std::abs(domain->extent().x - domain->origin().x),
                       std::abs(domain->extent().y - domain->origin().y),
                       std::abs(domain->extent().z - domain->origin().z)};
-      const double half_min_size_box = std::min( std::min(size_box.x,size_box.y) , size_box.z) / 2.0; 
 
-#     ifndef NDEBUG
-      if( ! domain->xform_is_identity() )
-      {
-        Vec3d tmp = domain->xform() * size_box;
-        if( fabs(tmp.x) <= 1.5 || fabs(tmp.y) <= 1.5 || fabs(tmp.z) <= 1.5 )
-        {
-          lerr<<"xform="<<domain->xform()<<", size_box="<<size_box<<", tmp="<<tmp<<std::endl;
-          std::abort();
-        }
-      }
-#     endif
 
       auto compute_impropers_force_opt_virial = [&]( auto cpene, auto cpvir )
       {
@@ -122,7 +109,7 @@ namespace exaStamp
           , molecule_compute_parameters->m_func_params.data()
           , intramolecular_parameters->m_improper_param_idx.data()
           , chemical_impropers->data()
-          , size_box , half_min_size_box
+          , intramolecular_parameters->m_improper_image.data() , size_box
           , domain->xform() , domain->xform_is_identity()
           , virial_field };
 

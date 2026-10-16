@@ -26,14 +26,21 @@ under the License.
 #include <exaStamp/molecule/mol_connectivity.h>
 #include <exaStamp/molecule/molecule_compute_param.h>
 #include <exaStamp/molecule/intramolecular_pair_weight.h>
+#include <exaStamp/molecule/intramolecular_image.h>
+#include <exanb/core/grid.h>
+#include <exanb/core/domain.h>
+#include <exanb/core/make_grid_variant_operator.h>
 
 #include <mpi.h>
 
 namespace exaStamp
 {
 
+  template<class GridT>
   class IntramolecularPairPotentialList : public OperatorNode
   {
+    ADD_SLOT( GridT                       , grid          , INPUT , REQUIRED );
+    ADD_SLOT( Domain                      , domain        , INPUT , REQUIRED );
     ADD_SLOT( ParticleSpecies             , species       , INPUT , REQUIRED );
     ADD_SLOT( IdMap                       , id_map        , INPUT  );
     ADD_SLOT( IdMapGhosts                 , id_map_ghosts , INPUT  );
@@ -122,6 +129,10 @@ namespace exaStamp
       const size_t n_chemical_pairs = chemical_pair_pot_map->size();
       chemical_pairs->assign( n_chemical_pairs , ChemicalPair{0,0} );
       intramolecular_parameters->m_pair_param_idx.assign( n_chemical_pairs , -1 );
+      intramolecular_parameters->m_pair_image.assign( n_chemical_pairs , 0 );
+      static constexpr int pair_anchor[2] = { 0, 0 };
+      const IntramolecularImageBuilder image_builder( *domain );
+      auto cells = grid->cells();
 
       const int n_type_pairs = unique_pair_count( species->size() );
       size_t pair_idx = 0;
@@ -137,7 +148,13 @@ namespace exaStamp
           size_t c,p; // unused
           unsigned int ta=0, tb=0;
           decode_cell_particle( chemical_pair[0], c, p, ta );
+          const Vec3d ra = { cells[c][field::rx][p] , cells[c][field::ry][p] , cells[c][field::rz][p] };
           decode_cell_particle( chemical_pair[1], c, p, tb );
+          const Vec3d r[2] = { ra , Vec3d{ cells[c][field::rx][p] , cells[c][field::ry][p] , cells[c][field::rz][p] } };
+          if( ! image_builder.build( r, pair_anchor, 2, intramolecular_parameters->m_pair_image[pair_idx] ) )
+          {
+            fatal_error() << "intramolecular pair atoms are more than "<<IntramolecularImageCodec::MAX_SHIFT<<" periodic images apart" << std::endl;
+          }
           const int pair_id = unique_pair_id(ta,tb);
           // const auto & potparm = molecule_compute_parameters->m_pair_params[ n_type_pairs * chemicalLinkType + pair_id ];
           int param_idx = -1;
@@ -155,11 +172,13 @@ namespace exaStamp
     }
   };
 
+  template<class GridT> using IntramolecularPairPotentialListTmpl = IntramolecularPairPotentialList<GridT>;
+
   // === register factories ===
   ONIKA_AUTORUN_INIT(intramolecular_pair_list)
   {
     /* ', field::_idmol' : this ensures that only grids with idmol field will be accepted to instantiate this operator */
-    OperatorNodeFactory::instance()->register_factory( "intramolecular_pair_list", make_simple_operator< IntramolecularPairPotentialList > );
+    OperatorNodeFactory::instance()->register_factory( "intramolecular_pair_list", make_grid_variant_operator< IntramolecularPairPotentialListTmpl > );
   }
 
 }

@@ -22,7 +22,7 @@ under the License.
 #include <exaStamp/molecule/mol_connectivity.h>
 #include <exaStamp/molecule/potential_functional.h>
 #include <exaStamp/molecule/bonds_potentials_parameters.h>
-#include <exaStamp/molecule/periodic_r_delta.h>
+#include <exaStamp/molecule/intramolecular_image.h>
 #include <exaStamp/molecule/intramolecular_geometry.h>
 #include <exanb/core/concurent_add_contributions.h>
 #include <exanb/core/particle_id_codec.h>
@@ -41,8 +41,8 @@ namespace exaStamp
     const MoleculeGenericFuncParam * const __restrict__ m_func_params = nullptr;;
     const int * const __restrict__ m_improper_param_idx = nullptr;
     const ChemicalImproper * const __restrict__ m_improper_list = nullptr;
+    const IntramolecularImage * const __restrict__ m_images = nullptr;
     const Vec3d m_size_box = {0.,0.,0.};
-    const double m_half_min_size_box = 0.;
     const Mat3d m_xform = {};
     const bool m_xform_is_identity = false;
     VirialFieldT m_virial_field;
@@ -79,9 +79,9 @@ namespace exaStamp
         const Vec3d r2 = Vec3d { m_cells[cell_c][field::rx][p_c] , m_cells[cell_c][field::ry][p_c] , m_cells[cell_c][field::rz][p_c] };
         const Vec3d r3 = Vec3d { m_cells[cell_d][field::rx][p_d] , m_cells[cell_d][field::ry][p_d] , m_cells[cell_d][field::rz][p_d] };
 
-        Vec3d r10 = periodic_r_delta( r1 , r0 , m_size_box , m_half_min_size_box );
-        Vec3d r12 = periodic_r_delta( r1 , r2 , m_size_box , m_half_min_size_box );
-        Vec3d r23 = periodic_r_delta( r2 , r3 , m_size_box , m_half_min_size_box );
+        Vec3d r10 = intramolecular_delta( r1 , 1 , r0 , 0 , m_images[i] , m_size_box );
+        Vec3d r12 = intramolecular_delta( r1 , 1 , r2 , 2 , m_images[i] , m_size_box );
+        Vec3d r23 = intramolecular_delta( r2 , 2 , r3 , 3 , m_images[i] , m_size_box );
 
         if( ! m_xform_is_identity )
         {

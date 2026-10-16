@@ -28,6 +28,7 @@ under the License.
 
 #include <onika/memory/allocator.h>
 #include <onika/cuda/ro_shallow_copy.h>
+#include <exaStamp/molecule/intramolecular_image.h>
 
 namespace exaStamp
 {
@@ -182,6 +183,12 @@ namespace exaStamp
     onika::memory::CudaMMVector<int> m_torsion_param_idx;
     onika::memory::CudaMMVector<int> m_improper_param_idx;
     onika::memory::CudaMMVector<int> m_pair_param_idx;
+    // periodic image shifts of the atoms of each term, see intramolecular_image.h
+    onika::memory::CudaMMVector<IntramolecularImage> m_bond_image;
+    onika::memory::CudaMMVector<IntramolecularImage> m_angle_image;
+    onika::memory::CudaMMVector<IntramolecularImage> m_torsion_image;
+    onika::memory::CudaMMVector<IntramolecularImage> m_improper_image;
+    onika::memory::CudaMMVector<IntramolecularImage> m_pair_image;
   };
 
   struct IntramolecularParameterIndexListsRO

@@ -22,7 +22,7 @@ under the License.
 #include <exaStamp/molecule/mol_connectivity.h>
 #include <exaStamp/molecule/potential_functional.h>
 #include <exaStamp/molecule/bonds_potentials_parameters.h>
-#include <exaStamp/molecule/periodic_r_delta.h>
+#include <exaStamp/molecule/intramolecular_image.h>
 #include <exanb/core/concurent_add_contributions.h>
 #include <exanb/core/particle_id_codec.h>
 #include <exanb/compute/compute_pair_optional_args.h>
@@ -42,8 +42,8 @@ namespace exaStamp
     const int * const __restrict__ m_pair_param_idx = nullptr;
     const ChemicalPair * const __restrict__ m_pair_list = nullptr;
     const ParticleSpecie * __restrict__ m_species = nullptr;
+    const IntramolecularImage * const __restrict__ m_images = nullptr;
     const Vec3d m_size_box = {0.,0.,0.};
-    const double m_half_min_size_box = 0.;
     const Mat3d m_xform = {};
     const bool m_xform_is_identity = false;
     const bool m_per_atom_charge = false;
@@ -74,7 +74,7 @@ namespace exaStamp
         
         const Vec3d ra = Vec3d { m_cells[cell_a][field::rx][p_a] , m_cells[cell_a][field::ry][p_a] , m_cells[cell_a][field::rz][p_a] };
         const Vec3d rb = Vec3d { m_cells[cell_b][field::rx][p_b] , m_cells[cell_b][field::ry][p_b] , m_cells[cell_b][field::rz][p_b] };
-        Vec3d r = periodic_r_delta( ra , rb , m_size_box , m_half_min_size_box );
+        Vec3d r = intramolecular_delta( ra , 0 , rb , 1 , m_images[i] , m_size_box );
         if( ! m_xform_is_identity ) { r = m_xform * r; }
 
         double charge_a=0.0, charge_b=0.0;

@@ -25,15 +25,22 @@ under the License.
 #include <exaStamp/molecule/mol_connectivity.h>
 #include <exaStamp/molecule/molecule_compute_param.h>
 #include <exaStamp/molecule/intramolecular_pair_weight.h>
+#include <exaStamp/molecule/intramolecular_image.h>
+#include <exanb/core/grid.h>
+#include <exanb/core/domain.h>
+#include <exanb/core/make_grid_variant_operator.h>
 
 #include <mpi.h>
 
 namespace exaStamp
 {
 
+  template<class GridT>
   class MolOptimizeConnectivity : public OperatorNode
   {
     ADD_SLOT( MPI_Comm                    , mpi           , INPUT , MPI_COMM_WORLD );
+    ADD_SLOT( GridT                       , grid          , INPUT , REQUIRED );
+    ADD_SLOT( Domain                      , domain        , INPUT , REQUIRED );
     ADD_SLOT( ParticleSpecies             , species       , INPUT , REQUIRED );
     ADD_SLOT( IdMap                       , id_map        , INPUT  );
     ADD_SLOT( IdMapGhosts                 , id_map_ghosts , INPUT  );
@@ -59,6 +66,25 @@ namespace exaStamp
       intramolecular_parameters->m_angle_param_idx.assign( n_bends , -1 );
       intramolecular_parameters->m_torsion_param_idx.assign( n_torsions , -1 );
       intramolecular_parameters->m_improper_param_idx.assign( n_impropers , -1 );
+      intramolecular_parameters->m_bond_image.assign( n_bonds , 0 );
+      intramolecular_parameters->m_angle_image.assign( n_bends , 0 );
+      intramolecular_parameters->m_torsion_image.assign( n_torsions , 0 );
+      intramolecular_parameters->m_improper_image.assign( n_impropers , 0 );
+
+      // periodic image of each atom of a term, relative to the atom it is bonded to
+      static constexpr int bond_anchor[2]     = { 0, 0 };
+      static constexpr int angle_anchor[3]    = { 0, 0, 1 };       // a - center - b
+      static constexpr int torsion_anchor[4]  = { 0, 0, 1, 2 };    // chain 0-1-2-3
+      static constexpr int improper_anchor[4] = { 0, 0, 0, 0 };    // center bonded to the 3 others
+      const IntramolecularImageBuilder image_builder( *domain );
+      auto cells = grid->cells();
+      auto atom_position = [cells]( uint64_t atom ) -> Vec3d
+      {
+        size_t c=0, p=0;
+        decode_cell_particle( atom, c, p );
+        return Vec3d{ cells[c][field::rx][p] , cells[c][field::ry][p] , cells[c][field::rz][p] };
+      };
+      unsigned long long n_image_failures = 0;
       
       const auto & param_map = molecule_compute_parameters->m_intramol_param_map;
       const auto & null_keys = molecule_compute_parameters->m_null_param_keys;
@@ -69,7 +95,7 @@ namespace exaStamp
         size_t c,p; // unused
         unsigned int ta, tb, tc, td;
 
-#       pragma omp for schedule(static) reduction(+:n_missing_bond) nowait
+#       pragma omp for schedule(static) reduction(+:n_missing_bond,n_image_failures) nowait
         for(size_t i=0;i<n_bonds;i++)
         {
           auto& b = (*chemical_bonds)[i];
@@ -87,9 +113,11 @@ namespace exaStamp
           const auto it = param_map.find( key );
           if( it != param_map.end() ) intramolecular_parameters->m_bond_param_idx[i] = it->second;
           else if( null_keys.find( key ) == null_keys.end() ) ++ n_missing_bond;
+          const Vec3d r[2] = { atom_position(b[0]) , atom_position(b[1]) };
+          if( ! image_builder.build( r, bond_anchor, 2, intramolecular_parameters->m_bond_image[i] ) ) ++ n_image_failures;
         }
 
-#       pragma omp for schedule(static) reduction(+:n_missing_angle) nowait
+#       pragma omp for schedule(static) reduction(+:n_missing_angle,n_image_failures) nowait
         for(size_t i=0;i<n_bends;i++)
         {
           auto& b = (*chemical_angles)[i];
@@ -108,9 +136,11 @@ namespace exaStamp
           const auto it = param_map.find( key );
           if( it != param_map.end() ) intramolecular_parameters->m_angle_param_idx[i] = it->second;
           else if( null_keys.find( key ) == null_keys.end() ) ++ n_missing_angle;
+          const Vec3d r[3] = { atom_position(b[0]) , atom_position(b[1]) , atom_position(b[2]) };
+          if( ! image_builder.build( r, angle_anchor, 3, intramolecular_parameters->m_angle_image[i] ) ) ++ n_image_failures;
         }
 
-#       pragma omp for schedule(static) reduction(+:n_missing_torsion) nowait
+#       pragma omp for schedule(static) reduction(+:n_missing_torsion,n_image_failures) nowait
         for(size_t i=0;i<n_torsions;i++)
         {
           auto& t = (*chemical_torsions)[i];
@@ -132,9 +162,11 @@ namespace exaStamp
           const auto it = param_map.find( key );
           if( it != param_map.end() ) intramolecular_parameters->m_torsion_param_idx[i] = it->second;
           else if( null_keys.find( key ) == null_keys.end() ) ++ n_missing_torsion;
+          const Vec3d r[4] = { atom_position(t[0]) , atom_position(t[1]) , atom_position(t[2]) , atom_position(t[3]) };
+          if( ! image_builder.build( r, torsion_anchor, 4, intramolecular_parameters->m_torsion_image[i] ) ) ++ n_image_failures;
         }
 
-#       pragma omp for schedule(static) reduction(+:n_missing_improper) nowait
+#       pragma omp for schedule(static) reduction(+:n_missing_improper,n_image_failures) nowait
         for(size_t i=0;i<n_impropers;i++)
         {
           auto& t = (*chemical_impropers)[i];
@@ -156,7 +188,15 @@ namespace exaStamp
           const auto it = param_map.find( key );
           if( it != param_map.end() ) intramolecular_parameters->m_improper_param_idx[i] = it->second;
           else if( null_keys.find( key ) == null_keys.end() ) ++ n_missing_improper;
+          const Vec3d r[4] = { atom_position(t[0]) , atom_position(t[1]) , atom_position(t[2]) , atom_position(t[3]) };
+          if( ! image_builder.build( r, improper_anchor, 4, intramolecular_parameters->m_improper_image[i] ) ) ++ n_image_failures;
         }
+      }
+
+      if( n_image_failures > 0 )
+      {
+        fatal_error() << n_image_failures << " intramolecular terms have atoms more than "<<IntramolecularImageCodec::MAX_SHIFT
+                      << " periodic images apart" << std::endl;
       }
 
       // terms without parameters are silently skipped by force computations : warn once
@@ -179,11 +219,13 @@ namespace exaStamp
     bool m_missing_params_reported = false;
   };
 
+  template<class GridT> using MolOptimizeConnectivityTmpl = MolOptimizeConnectivity<GridT>;
+
   // === register factories ===
   ONIKA_AUTORUN_INIT(mol_optimize_connectivity)
   {
     /* ', field::_idmol' : this ensures that only grids with idmol field will be accepted to instantiate this operator */
-    OperatorNodeFactory::instance()->register_factory( "mol_optimize_connectivity", make_simple_operator< MolOptimizeConnectivity > );
+    OperatorNodeFactory::instance()->register_factory( "mol_optimize_connectivity", make_grid_variant_operator< MolOptimizeConnectivityTmpl > );
   }
 
 }

@@ -22,7 +22,7 @@ under the License.
 #include <exaStamp/molecule/mol_connectivity.h>
 #include <exaStamp/molecule/potential_functional.h>
 #include <exaStamp/molecule/bonds_potentials_parameters.h>
-#include <exaStamp/molecule/periodic_r_delta.h>
+#include <exaStamp/molecule/intramolecular_image.h>
 #include <exaStamp/molecule/intramolecular_geometry.h>
 #include <exanb/core/concurent_add_contributions.h>
 #include <exanb/core/particle_id_codec.h>
@@ -41,8 +41,8 @@ namespace exaStamp
     const MoleculeGenericFuncParam * const __restrict__ m_func_params = nullptr;;
     const int * const __restrict__ m_angle_param_idx = nullptr;
     const ChemicalAngle * const __restrict__ m_angle_list = nullptr;
+    const IntramolecularImage * const __restrict__ m_images = nullptr;
     const Vec3d m_size_box = {0.,0.,0.};
-    const double m_half_min_size_box = 0.;
     const Mat3d m_xform = {};
     const bool m_xform_is_identity = false;
     VirialFieldT m_virial_field;
@@ -77,10 +77,10 @@ namespace exaStamp
         const Vec3d rc = Vec3d { m_cells[cell_c][field::rx][p_c] , m_cells[cell_c][field::ry][p_c] , m_cells[cell_c][field::rz][p_c] };
 
         // first harm
-        Vec3d r1 = periodic_r_delta( rb , ra , m_size_box , m_half_min_size_box );
+        Vec3d r1 = intramolecular_delta( rb , 1 , ra , 0 , m_images[i] , m_size_box );
 
         // second harm
-        Vec3d r2 = periodic_r_delta( rb , rc , m_size_box , m_half_min_size_box ); // rc - rb;
+        Vec3d r2 = intramolecular_delta( rb , 1 , rc , 2 , m_images[i] , m_size_box ); // rc - rb;
         
         //ldbg << "r1 avant : " << r1 << std::endl;
         if( ! m_xform_is_identity )

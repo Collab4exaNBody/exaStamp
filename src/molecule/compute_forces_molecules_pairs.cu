@@ -107,15 +107,7 @@ namespace exaStamp
       const Vec3d size_box {std::abs(domain->extent().x - domain->origin().x),
                       std::abs(domain->extent().y - domain->origin().y),
                       std::abs(domain->extent().z - domain->origin().z)};
-      const double half_min_size_box = std::min( std::min(size_box.x,size_box.y) , size_box.z) / 2.0; 
 
-#     ifndef NDEBUG
-      Vec3d tmp = domain->xform() * size_box;
-      if( fabs(tmp.x) <= 1.5 || fabs(tmp.y) <= 1.5 || fabs(tmp.z) <= 1.5 )
-      {
-        fatal_error()<<"xform="<<domain->xform()<<", size_box="<<size_box<<", tmp="<<tmp<<std::endl;
-      }
-#     endif
 
       ldbg<<"n_pairs = "<<chemical_pairs->size()<<" , pair params = "<< molecule_compute_parameters->m_pair_params.size()<<std::endl;
 
@@ -129,7 +121,7 @@ namespace exaStamp
           , intramolecular_parameters->m_pair_param_idx.data()
           , chemical_pairs->data()
           , species->data()
-          , size_box , half_min_size_box
+          , intramolecular_parameters->m_pair_image.data() , size_box
           , domain->xform() , domain->xform_is_identity()
           , *per_atom_charge
           , charge_field, virial_field };
