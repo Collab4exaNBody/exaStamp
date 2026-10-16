@@ -26,6 +26,8 @@ under the License.
 #include <exaStamp/molecule/intramolecular_pair_weight.h>
 #include <exaStamp/molecule/iFFname.h>
 
+#include <cstring>
+
 namespace exaStamp
 {
   using namespace exanb;
@@ -34,7 +36,8 @@ namespace exaStamp
   template<class LDBGT>
   struct MoleculeOptionalHeaderIO
   {
-    static inline constexpr uint64_t header_version = 101; // Version 1.1 adds potential and weighting parameters in optional header
+    static inline constexpr uint64_t header_version = 102; // Version 1.1 adds potential and weighting parameters in optional header
+                                                           // Version 1.2 stores functional equilibrium value (x0) in double precision
   
     // since version 1.0
     IntraFFtypes& m_ffnameVector = nullptr;
@@ -62,6 +65,30 @@ namespace exaStamp
       char m_type[4][32];
       MoleculeGenericFuncParam m_params = {};
     };
+
+    // functional parameters layout of version 1.1 files, where x0 was stored in single precision
+    struct IntramolecularFunctionalIO_v101
+    {
+      char m_type[4][32];
+      double p0 = 0.0;
+      double p1 = 0.0;
+      double p2 = 0.0;
+      float x0 = 0.0;
+      float coeff = 0.0;
+      double e0 = 0.0;
+    };
+    static_assert( sizeof(IntramolecularFunctionalIO_v101) == 4*32 + 40 , "version 1.1 functional parameters layout must not change" );
+
+    template<class ReadFuncT>
+    static inline size_t read_functional_desc( ReadFuncT read_func , uint64_t version , IntramolecularFunctionalIO& descio )
+    {
+      if( version >= 102 ) return read_func( descio );
+      IntramolecularFunctionalIO_v101 desc_v101;
+      const size_t n_bytes = read_func( desc_v101 );
+      std::memcpy( descio.m_type , desc_v101.m_type , sizeof(descio.m_type) );
+      descio.m_params = { desc_v101.p0 , desc_v101.p1 , desc_v101.p2 , desc_v101.x0 , desc_v101.coeff , desc_v101.e0 };
+      return n_bytes;
+    }
 
     struct IntramolecularPairIO
     {
@@ -340,7 +367,7 @@ namespace exaStamp
           for(size_t i=0;i<n_bond_potentials;i++)
           {
             IntramolecularFunctionalIO descio;
-            n_bytes += read_func( descio );
+            n_bytes += read_functional_desc( read_func , header_version , descio );
             BondPotential pot = { "generic_bond" , {descio.m_type[0],descio.m_type[1]} , std::make_shared<IntraMolecularDumpFunctional>(descio.m_params) };
             m_potentials_for_bonds->m_bond_desc.push_back( pot );
           }
@@ -356,7 +383,7 @@ namespace exaStamp
           for(size_t i=0;i<n_angle_potentials;i++)
           {
             IntramolecularFunctionalIO descio;
-            n_bytes += read_func( descio );
+            n_bytes += read_functional_desc( read_func , header_version , descio );
             BendPotential pot = { "generic_angle" , {descio.m_type[0],descio.m_type[1],descio.m_type[2]} , std::make_shared<IntraMolecularDumpFunctional>(descio.m_params) };
             m_potentials_for_angles->m_potentials.push_back( pot );
           }
@@ -372,7 +399,7 @@ namespace exaStamp
           for(size_t i=0;i<n_torsion_potentials;i++)
           {
             IntramolecularFunctionalIO descio;
-            n_bytes += read_func( descio );
+            n_bytes += read_functional_desc( read_func , header_version , descio );
             TorsionPotential pot = { "generic_torsion" , {descio.m_type[0],descio.m_type[1],descio.m_type[2],descio.m_type[3]} , std::make_shared<IntraMolecularDumpFunctional>(descio.m_params) };
             m_potentials_for_torsions->m_potentials.push_back( pot );
           }
@@ -388,7 +415,7 @@ namespace exaStamp
           for(size_t i=0;i<n_improper_potentials;i++)
           {
             IntramolecularFunctionalIO descio;
-            n_bytes += read_func( descio );
+            n_bytes += read_functional_desc( read_func , header_version , descio );
             ImproperPotential pot = { "generic_improper" , {descio.m_type[0],descio.m_type[1],descio.m_type[2],descio.m_type[3]} , std::make_shared<IntraMolecularDumpFunctional>(descio.m_params) };
             m_potentials_for_impropers->m_potentials.push_back( pot );
           }

@@ -87,10 +87,10 @@ namespace exaStamp
     double p0 = 0.0;
     double p1 = 0.0;
     double p2 = 0.0;
-    float x0 = 0.0;
+    double x0 = 0.0;
     float coeff = 0.0;
     double e0 = 0.0;
-    ONIKA_HOST_DEVICE_FUNC inline bool is_null() const { return p0==0.0 && p1==0.0 && p2==0.0 && x0==0.0f && coeff==0.0f && e0==0.0; }
+    ONIKA_HOST_DEVICE_FUNC inline bool is_null() const { return p0==0.0 && p1==0.0 && p2==0.0 && x0==0.0 && coeff==0.0f && e0==0.0; }
     inline bool operator < (const MoleculeGenericFuncParam& m) const
     {
       if( p0 < m.p0 ) return true;
@@ -130,8 +130,8 @@ namespace exaStamp
   struct IntramolecularPairParams
   {
     LJExp6RFParms m_param;
-    float m_pair_weight = 1.0f;
-    float m_rf_weight = 1.0f;
+    double m_pair_weight = 1.0;
+    double m_rf_weight = 1.0;
     inline bool operator < (const IntramolecularPairParams& ipp) const
     {
            if( m_param < ipp.m_param ) return true;

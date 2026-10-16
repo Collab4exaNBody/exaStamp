@@ -150,7 +150,7 @@ namespace exaStamp
         }
       }
 
-      float torsion_pair_weight=1.0f, torsion_rf_weight=1.0f, angle_pair_weight=1.0f, angle_rf_weight=1.0f, bond_pair_weight=1.0f, bond_rf_weight=1.0f;
+      double torsion_pair_weight=1.0, torsion_rf_weight=1.0, angle_pair_weight=1.0, angle_rf_weight=1.0, bond_pair_weight=1.0, bond_rf_weight=1.0;
       //for( const auto & p : mol_pair_weights->m_molecule_weight )
       //{
       //  ldbg << p.first << " : bond="<<p.second.m_bond_weight<<" , bond_rf="<<p.second.m_rf_bond_weight
@@ -165,7 +165,7 @@ namespace exaStamp
       //}
 
       const unsigned int n_type_pairs = unique_pair_count( species->size() );
-      molecule_compute_parameters->m_pair_params.assign( n_type_pairs * 3 , IntramolecularPairParams{ LJExp6RFParms{}, 0.0f, 0.0f } );
+      molecule_compute_parameters->m_pair_params.assign( n_type_pairs * 3 , IntramolecularPairParams{ LJExp6RFParms{}, 0.0, 0.0 } );
       for(auto& potelem : potentials_for_pairs->m_potentials)
       {
         auto & pot = potelem.m_params;

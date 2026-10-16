@@ -164,7 +164,7 @@ namespace exaStamp
     }
   private:
     double k = 0.0;
-    float t0 = 0.0;
+    double t0 = 0.0;
   };
 
   // OPLS Bond potential
@@ -184,7 +184,7 @@ namespace exaStamp
     }
   private:
     double k = 0.0;
-    float t0 = 0.0;
+    double t0 = 0.0;
   };
 
   // Quar potential
@@ -213,7 +213,7 @@ namespace exaStamp
     double k2 = 0.0;
     double k3 = 0.0;
     double k4 = 0.0;
-    float t0 = 0.0;
+    double t0 = 0.0;
   };
 
   // Compass potential
@@ -322,7 +322,7 @@ namespace exaStamp
     }
   private:
     double k = 0.0;
-    float phi0 = 0.0;
+    double phi0 = 0.0;
   };
 
   // NCos248 fonctionnal

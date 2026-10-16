@@ -74,6 +74,9 @@ namespace exaStamp
         std::array<uint64_t, 4> neigh = cells[cell_i][field::cmol][i];
 
         // IMPROPERS CASE ---------------------------------------------------------------
+        // improper = dihedral (center, n0, n1, n2), neighbors taken in connectivity (input file) order.
+        // The angle depends on which neighbor comes last, and parameter lookup is independent of neighbor order:
+        // this is the same convention as the Stamp v4 reference code, keep it unchanged
         if(neigh[2]!=std::numeric_limits<uint64_t>::max())
         {
           impropers.emplace_back( ChemicalImproper{ p_id, neigh[0], neigh[1], neigh[2] } );
