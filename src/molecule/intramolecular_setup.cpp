@@ -312,7 +312,8 @@ namespace exaStamp
 
      
       auto& intramol_param_map = molecule_compute_parameters->m_intramol_param_map; // types to functional parameters index
-      intramol_param_map.clear();      
+      intramol_param_map.clear();
+      molecule_compute_parameters->m_null_param_keys.clear();      
       std::map< MoleculeGenericFuncParam , int > intramol_param_id_map ; // functional parameters to its index
 
       unsigned int parameter_id = 0;
@@ -325,6 +326,12 @@ namespace exaStamp
           ffnameToFFtypeId[ ffnameVector->at(iFF) ] = iFF;
         }
       }
+      auto ff_type_id = [&ffnameToFFtypeId]( const std::string& ffname ) -> int
+      {
+        const auto it = ffnameToFFtypeId.find( ffname );
+        if( it == ffnameToFFtypeId.end() ) { fatal_error() << "unknown force field type '"<<ffname<<"' in intramolecular potential description" << std::endl; }
+        return it->second;
+      };
 
 
       
@@ -333,10 +340,8 @@ namespace exaStamp
       {
         int a=0, b=0;
         // bond.species contains FFname, it is converted to FFtypeId by ffnameToFFtypeId.
-        assert( ffnameToFFtypeId.find(bond.species[0]) != ffnameToFFtypeId.end() );
-        assert( ffnameToFFtypeId.find(bond.species[1]) != ffnameToFFtypeId.end() );
-        a = ffnameToFFtypeId[ bond.species[0] ];
-        b = ffnameToFFtypeId[ bond.species[1] ];
+        a = ff_type_id( bond.species[0] );
+        b = ff_type_id( bond.species[1] );
 
         //std::cout << "read bond " << bond.species[0] << "("<< a << ")" << "," << bond.species[1] << "("<< b << ")" <<std::endl;
         const auto types = bond_key(a,b);
@@ -351,6 +356,10 @@ namespace exaStamp
           }
           intramol_param_map[ types ] = intramol_param_id_map[param];
         }
+        else
+        {
+          molecule_compute_parameters->m_null_param_keys.insert( types ); // explicitly null : term is intentionally ignored
+        }
       }
       
       if( potentials_for_angles.has_value() )
@@ -359,12 +368,9 @@ namespace exaStamp
         int a=0, b=0, c=0;
 
         // angle.species contains FFname, it is converted to FFtypeId by ffnameToFFtypeId.
-        assert( ffnameToFFtypeId.find(angle.species[0]) != ffnameToFFtypeId.end() );
-        assert( ffnameToFFtypeId.find(angle.species[1]) != ffnameToFFtypeId.end() );
-        assert( ffnameToFFtypeId.find(angle.species[2]) != ffnameToFFtypeId.end() );
-        a = ffnameToFFtypeId[ angle.species[0] ];
-        b = ffnameToFFtypeId[ angle.species[1] ];
-        c = ffnameToFFtypeId[ angle.species[2] ];
+        a = ff_type_id( angle.species[0] );
+        b = ff_type_id( angle.species[1] );
+        c = ff_type_id( angle.species[2] );
 
         const auto types = angle_key(a,b,c);
         ldbg << "read angle "<<angle.species[0]<<","<<angle.species[1]<<","<<angle.species[2]<<" -> "<<(const void*)types<<std::endl;
@@ -378,6 +384,10 @@ namespace exaStamp
           }
           intramol_param_map[ types ] = intramol_param_id_map[param];
         }
+        else
+        {
+          molecule_compute_parameters->m_null_param_keys.insert( types ); // explicitly null : term is intentionally ignored
+        }
       }
       
       if( potentials_for_torsions.has_value() )
@@ -386,14 +396,10 @@ namespace exaStamp
         int a=0, b=0, c=0, d=0;
 
         // torsion.species contains FFname, it is converted to FFtypeId by ffnameToFFtypeId.
-        assert( ffnameToFFtypeId.find(torsion.species[0]) != ffnameToFFtypeId.end() );
-        assert( ffnameToFFtypeId.find(torsion.species[1]) != ffnameToFFtypeId.end() );
-        assert( ffnameToFFtypeId.find(torsion.species[2]) != ffnameToFFtypeId.end() );
-        assert( ffnameToFFtypeId.find(torsion.species[3]) != ffnameToFFtypeId.end() );
-        a = ffnameToFFtypeId[ torsion.species[0] ];
-        b = ffnameToFFtypeId[ torsion.species[1] ];
-        c = ffnameToFFtypeId[ torsion.species[2] ];
-        d = ffnameToFFtypeId[ torsion.species[3] ];
+        a = ff_type_id( torsion.species[0] );
+        b = ff_type_id( torsion.species[1] );
+        c = ff_type_id( torsion.species[2] );
+        d = ff_type_id( torsion.species[3] );
 
         const auto types = torsion_key(a,b,c,d);
         ldbg << "read torsion "<<torsion.species[0]<<","<<torsion.species[1]<<","<<torsion.species[2]<<","<<torsion.species[3]<<" -> "<<(const void*)types<<std::endl;
@@ -407,6 +413,10 @@ namespace exaStamp
           }
           intramol_param_map[ types ] = intramol_param_id_map[param];
         }
+        else
+        {
+          molecule_compute_parameters->m_null_param_keys.insert( types ); // explicitly null : term is intentionally ignored
+        }
       }
       
       if( potentials_for_impropers.has_value() )
@@ -415,14 +425,10 @@ namespace exaStamp
         int a=0, b=0, c=0, d=0;
 
         // torsion.species contains FFname, it is converted to FFtypeId by ffnameToFFtypeId.
-        assert( ffnameToFFtypeId.find(improper.species[0]) != ffnameToFFtypeId.end() );
-        assert( ffnameToFFtypeId.find(improper.species[1]) != ffnameToFFtypeId.end() );
-        assert( ffnameToFFtypeId.find(improper.species[2]) != ffnameToFFtypeId.end() );
-        assert( ffnameToFFtypeId.find(improper.species[3]) != ffnameToFFtypeId.end() );
-        a = ffnameToFFtypeId[ improper.species[0] ];
-        b = ffnameToFFtypeId[ improper.species[1] ];
-        c = ffnameToFFtypeId[ improper.species[2] ];
-        d = ffnameToFFtypeId[ improper.species[3] ];
+        a = ff_type_id( improper.species[0] );
+        b = ff_type_id( improper.species[1] );
+        c = ff_type_id( improper.species[2] );
+        d = ff_type_id( improper.species[3] );
 
         const auto types = improper_key(a,b,c,d);
         ldbg << "read improper "<<improper.species[0]<<","<<improper.species[1]<<","<<improper.species[2]<<","<<improper.species[3]<<" -> "<<(const void*)types<<std::endl;
@@ -435,6 +441,10 @@ namespace exaStamp
             intramol_param_id_map[param] = parameter_id++;
           }
           intramol_param_map[ types ] = intramol_param_id_map[param];
+        }
+        else
+        {
+          molecule_compute_parameters->m_null_param_keys.insert( types ); // explicitly null : term is intentionally ignored
         }
       }
 

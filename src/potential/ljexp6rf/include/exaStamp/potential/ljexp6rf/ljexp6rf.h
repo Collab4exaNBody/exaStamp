@@ -141,22 +141,31 @@ namespace exaStamp
           && ! ( r < *this );
     }
 
+    // unshifted LJ or Exp6 term, regardless of cutoff
+    ONIKA_HOST_DEVICE_FUNC inline void compute_pair_term(double r, double& pair_e, double& pair_de) const
+    {
+      if( is_lj() )
+      {
+        lj_compute_energy( LennardJonesParms{m_C_EPSILON,m_D_SIGMA}, PairPotentialMinimalParameters{}, r, pair_e, pair_de );
+      }
+      else
+      {
+        assert( is_exp6() );
+        exp6_compute_energy( Exp6Parms{m_A,m_B_ISEXP6,m_C_EPSILON,m_D_SIGMA}, PairPotentialMinimalParameters{}, r, pair_e, pair_de );
+      }
+    }
+
+    // Each term only contributes below its own cutoff (m_rcut for LJ/Exp6, m_rf.rc for reaction field), since the
+    // neighbor distance cutoff is the largest of all pair and reaction field cutoffs. A zero cutoff means that the
+    // caller applies the cutoff itself.
     ONIKA_HOST_DEVICE_FUNC ForceEnergy compute_force_energy(double r, double charge_product , double pair_weight=1.0, double rf_weight=1.0 ) const
     {
       // pair potential part
       double pair_e = 0.0;
       double pair_de = 0.0;
-      if( has_pair_term() )
+      if( has_pair_term() && ( m_rcut <= 0.0 || r < m_rcut ) )
       {
-        if( is_lj() )
-        {
-          lj_compute_energy( LennardJonesParms{m_C_EPSILON,m_D_SIGMA}, PairPotentialMinimalParameters{}, r, pair_e, pair_de );
-        }
-        else
-        {
-          assert( is_exp6() );
-          exp6_compute_energy( Exp6Parms{m_A,m_B_ISEXP6,m_C_EPSILON,m_D_SIGMA}, PairPotentialMinimalParameters{}, r, pair_e, pair_de );
-        }
+        compute_pair_term( r , pair_e , pair_de );
         // energy shift at cutoff for pair potential
         pair_e -= m_ecut;
       }
@@ -166,11 +175,10 @@ namespace exaStamp
       // reaction field part
       double rf_e = 0.0;
       double rf_de = 0.0;
-      reaction_field_compute_energy_weighted( m_rf,  charge_product, r, rf_e, rf_de , rf_weight);      
-      //      printf("rf weight = %5.8f\n", rf_weight);
-      //      rf_e *= rf_weight;
-      //      rf_de *= rf_weight;
-      //      printf("r=%.5e pair_de=%.5e rf_de=%.5e\n",r,pair_de,rf_de);
+      if( m_rf.rc <= 0.0 || r < m_rf.rc )
+      {
+        reaction_field_compute_energy_weighted( m_rf,  charge_product, r, rf_e, rf_de , rf_weight);
+      }
 
       return { pair_de + rf_de , pair_e + rf_e };
     }
@@ -190,8 +198,8 @@ namespace exaStamp
       m_ecut = 0.0;
       if( m_rcut > 0.0 && has_pair_term() )
       {
-        const auto [ de , e ] = compute_force_energy(m_rcut,0.0);
-        m_ecut = e;
+        double de = 0.0;
+        compute_pair_term( m_rcut , m_ecut , de );
       }
     }
 

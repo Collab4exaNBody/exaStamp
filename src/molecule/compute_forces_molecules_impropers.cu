@@ -88,6 +88,8 @@ namespace exaStamp
         ldbg << "trigger_thermo_state missing " << std::endl;
       }
       const bool need_virial = log_energy && *compute_virial;
+      // per particle energy is only needed when thermodynamic state is computed. if unknown, keep computing it
+      const bool need_energy = trigger_thermo_state.has_value() ? *trigger_thermo_state : true;
       using VirialFieldT = decltype( grid->field_accessor( field::virial ) );
       VirialFieldT virial_field = {};
       if( need_virial ) virial_field = grid->field_accessor( field::virial );
@@ -111,10 +113,10 @@ namespace exaStamp
       }
 #     endif
 
-      auto compute_impropers_force_opt_virial = [&]( auto cpvir )
+      auto compute_impropers_force_opt_virial = [&]( auto cpene, auto cpvir )
       {
         auto cells = grid->cells_accessor();
-        ImproperForceOp<decltype(cells),VirialFieldT,cpvir.value> improper_force_op =
+        ImproperForceOp<decltype(cells),VirialFieldT,cpene.value,cpvir.value> improper_force_op =
           { cells
           , particle_locks->data()
           , molecule_compute_parameters->m_func_params.data()
@@ -128,8 +130,9 @@ namespace exaStamp
         // auto exec_ctrl_obj = parallel_execution_stream() << std::move(parallel_op) ;
       };
 
-      if( need_virial ) compute_impropers_force_opt_virial( onika::TrueType{} );
-      else              compute_impropers_force_opt_virial( onika::FalseType{} );
+      if( need_virial )      compute_impropers_force_opt_virial( onika::TrueType{}  , onika::TrueType{}  );
+      else if( need_energy ) compute_impropers_force_opt_virial( onika::TrueType{}  , onika::FalseType{} );
+      else                   compute_impropers_force_opt_virial( onika::FalseType{} , onika::FalseType{} );
 
       ldbg<<"compute_force_improper done"<<std::endl;
     }

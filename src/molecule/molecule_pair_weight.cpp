@@ -78,12 +78,19 @@ namespace exaStamp
       {
         molecule_name_map[ molecules->m_molecules[i].name() ] = i;
       }
-      std::unordered_map< uint64_t , MolecularPairWeight > molid_weight_map;
+      // indexed by molecule type, molecules without weight specification get default weights.
+      // filled before the parallel section, which only reads it
+      std::vector< MolecularPairWeight > molid_weight_map( n_molecules , MolecularPairWeight{} );
 
       ldbg << "Intramolecular pair weighting map :"<<std::endl;      
       for( const auto & p : weight->m_molecule_weight )
       {
-        molid_weight_map[ molecule_name_map[p.first] ] = p.second;
+        const auto mol_it = molecule_name_map.find( p.first );
+        if( mol_it == molecule_name_map.end() )
+        {
+          fatal_error() << "pair weighting given for unknown molecule '"<<p.first<<"'"<<std::endl;
+        }
+        molid_weight_map[ mol_it->second ] = p.second;
         ldbg << p.first << " : bond="<<p.second.m_bond_weight<<" , bond_rf="<<p.second.m_rf_bond_weight
                         <<" , bend="<<p.second.m_bend_weight<<" , bend_rf="<<p.second.m_rf_bend_weight
                         <<" , torsion="<<p.second.m_torsion_weight<<" , torsion_rf="<<p.second.m_rf_torsion_weight<<std::endl;
@@ -160,9 +167,11 @@ namespace exaStamp
                 {
                   assert( moltype_a == molecule_type_from_id( idmol_b[p_b] ) );
                 
-                  if( it->second == 0 ) pair_weight = molid_weight_map[moltype_a].m_bond_weight;
-                  else if( it->second == 1 ) pair_weight = molid_weight_map[moltype_a].m_bend_weight;
-                  else if( it->second == 2 ) pair_weight = molid_weight_map[moltype_a].m_torsion_weight;
+                  assert( moltype_a >= 0 && size_t(moltype_a) < molid_weight_map.size() );
+                  const MolecularPairWeight & mol_weight = molid_weight_map[moltype_a];
+                  if( it->second == 0 ) pair_weight = mol_weight.m_bond_weight;
+                  else if( it->second == 1 ) pair_weight = mol_weight.m_bend_weight;
+                  else if( it->second == 2 ) pair_weight = mol_weight.m_torsion_weight;
                   else
                   {
                     fatal_error() << "Internal error: inconsistent chemical link type "<<it->second<<" in chemicalMap"<<std::endl;

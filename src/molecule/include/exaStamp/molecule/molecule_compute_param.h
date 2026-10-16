@@ -17,6 +17,8 @@ under the License.
 
 #pragma once
 
+#include <set>
+#include <map>
 #include <exaStamp/molecule/molecule_species.h>
 #include <onika/math/basic_types_def.h>
 #include <exanb/core/mt_concurrent_map.h>
@@ -88,7 +90,7 @@ namespace exaStamp
     float x0 = 0.0;
     float coeff = 0.0;
     double e0 = 0.0;
-    ONIKA_HOST_DEVICE_FUNC inline bool is_null() const { return p0==0.0 && p1==0.0 && p2==0.0 && x0==0.0f && coeff==0.0f; }
+    ONIKA_HOST_DEVICE_FUNC inline bool is_null() const { return p0==0.0 && p1==0.0 && p2==0.0 && x0==0.0f && coeff==0.0f && e0==0.0; }
     inline bool operator < (const MoleculeGenericFuncParam& m) const
     {
       if( p0 < m.p0 ) return true;
@@ -105,13 +107,16 @@ namespace exaStamp
 
       if( coeff < m.coeff ) return true;
       else if( coeff > m.coeff ) return false;
+
+      if( e0 < m.e0 ) return true;
+      else if( e0 > m.e0 ) return false;
       
       return false;
     }
 
     inline bool operator == (const MoleculeGenericFuncParam& m) const
     {
-      return p0==m.p0 && p1==m.p1 && p2==m.p2 && x0==m.x0 && coeff==m.coeff;
+      return p0==m.p0 && p1==m.p1 && p2==m.p2 && x0==m.x0 && coeff==m.coeff && e0==m.e0;
     }
   };
 
@@ -150,6 +155,7 @@ namespace exaStamp
     onika::memory::CudaMMVector<double> m_energy_correction; // per atome type energy correction
     onika::memory::CudaMMVector<Mat3d> m_virial_correction; // per atom type virial correction
     std::map< uint64_t , int > m_intramol_param_map;
+    std::set< uint64_t > m_null_param_keys; // type keys whose parameters are all zero (term intentionally ignored)
   };
 
   struct MoleculeComputeParameterSetRO

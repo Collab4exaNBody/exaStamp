@@ -32,7 +32,7 @@ under the License.
 namespace exaStamp
 {
 
-  template<class CellsT, class VirialFieldT, bool ComputeVirial = false>
+  template<class CellsT, class VirialFieldT, bool ComputeEnergy = true, bool ComputeVirial = false>
   struct BondForceOp
   {
     CellsT m_cells;
@@ -99,7 +99,7 @@ namespace exaStamp
             , m_cells[cell_b][field::fx][p_b], m_cells[cell_b][field::fy][p_b], m_cells[cell_b][field::fz][p_b], m_cells[cell_b][field::ep][p_b], m_cells[cell_b][m_virial_field][p_b]
             , -F.x, -F.y, -F.z, e*0.5, virial );
         }
-        else
+        else if constexpr ( ComputeEnergy )
         {
           concurent_add_contributions<ParticleLockT,CPAA,LOCK,double,double,double,double> (
               cp_locks[cell_a][p_a]
@@ -110,6 +110,18 @@ namespace exaStamp
               cp_locks[cell_b][p_b]
             , m_cells[cell_b][field::fx][p_b], m_cells[cell_b][field::fy][p_b], m_cells[cell_b][field::fz][p_b], m_cells[cell_b][field::ep][p_b]
             , -F.x, -F.y, -F.z, e*0.5 );
+        }
+        else
+        {
+          concurent_add_contributions<ParticleLockT,CPAA,LOCK,double,double,double> (
+              cp_locks[cell_a][p_a]
+            , m_cells[cell_a][field::fx][p_a], m_cells[cell_a][field::fy][p_a], m_cells[cell_a][field::fz][p_a]
+            , F.x, F.y, F.z );
+
+          concurent_add_contributions<ParticleLockT,CPAA,LOCK,double,double,double> (
+              cp_locks[cell_b][p_b]
+            , m_cells[cell_b][field::fx][p_b], m_cells[cell_b][field::fy][p_b], m_cells[cell_b][field::fz][p_b]
+            , -F.x, -F.y, -F.z );
         }
       }
     }
@@ -122,7 +134,7 @@ namespace onika
 {
   namespace parallel
   {
-    template<class CellsT, class VirialFieldT, bool vir> struct ParallelForFunctorTraits< exaStamp::BondForceOp<CellsT,VirialFieldT,vir> >
+    template<class CellsT, class VirialFieldT, bool ene, bool vir> struct ParallelForFunctorTraits< exaStamp::BondForceOp<CellsT,VirialFieldT,ene,vir> >
     {
       static inline constexpr bool CudaCompatible = true;
     };

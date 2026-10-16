@@ -54,9 +54,11 @@ namespace exaStamp
       const size_t n_bends = chemical_angles->size();
       const size_t n_torsions = chemical_torsions->size();
 
-      // index chemical links by their extrema to rapidly find if an atom pair belongs to a chemical link
-      // ChemicalPairPotMap chemical_pair_pot_map;
-      
+      // index chemical links by their extrema to rapidly find if an atom pair belongs to a chemical link.
+      // The map is a persistent slot : it must be rebuilt from scratch, otherwise pairs whose atoms have
+      // migrated away from this MPI process accumulate and later can't be found in id_map / id_map_ghosts.
+      chemical_pair_pot_map->clear();
+
       ProfilingTimer T;
       profiling_timer_start( T );
 

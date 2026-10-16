@@ -23,6 +23,7 @@ under the License.
 #include <exaStamp/molecule/potential_functional.h>
 #include <exaStamp/molecule/bonds_potentials_parameters.h>
 #include <exaStamp/molecule/periodic_r_delta.h>
+#include <exaStamp/molecule/intramolecular_geometry.h>
 #include <exanb/core/concurent_add_contributions.h>
 #include <exanb/core/particle_id_codec.h>
 #include <exanb/compute/compute_pair_optional_args.h>
@@ -32,7 +33,7 @@ under the License.
 namespace exaStamp
 {
 
-  template<class CellsT, class VirialFieldT, bool ComputeVirial = false>
+  template<class CellsT, class VirialFieldT, bool ComputeEnergy = true, bool ComputeVirial = false>
   struct TorsionForceOp
   {
     CellsT m_cells;
@@ -91,38 +92,22 @@ namespace exaStamp
 
         //-----------------------------COMPUTE ENERGY AND FORCE----------------------------------
         // Compute energy
-        const Vec3d V = cross(r10,r12);
-        const Vec3d W = cross(r23,r12);
-
-        assert(V!=(Vec3d{0,0,0}));//case r10 and r12 aligned
-        assert(W!=(Vec3d{0,0,0}));//case r12 and r23 aligned
-
-        const double phi = signum(dot(cross(V,W), r12)) * angle(V, W);
-        const auto force_energy = intramolecular_func( m_func_params[ param_idx ], phi ); //it->second->force_energy( phi );
-        const double e = force_energy.second / 4.; //t.f_energy(phi);
+        // if a-b-c or b-c-d is collinear the dihedral angle is undefined, and torsion gives no force
+        const TorsionGeometry torsion = torsion_geometry( r10 , r12 , r23 );
+        const auto force_energy = intramolecular_func( m_func_params[ param_idx ], torsion.phi );
+        const double e = force_energy.second / 4.;
         //---------------------------------------------------------------------------------------------
-
-        const double norm_r2 = norm(r12);
-        assert(norm_r2>0);
-
-        //pa = V/norm(V)
-        const double sqr_norm_V = dot(V,V);
-        const Vec3d pa_r1sintheta1 = V * norm_r2 / sqr_norm_V;
-
-        //pd = m_W/norm(m_W)
-        const double sqr_norm_W = dot(W,W);
-        const Vec3d pd_r3sintheta2 = - W * norm_r2 / sqr_norm_W ;
 
         //---------------------------------------------------------------------------------------------
         // Compute forces
         // F = - grad(Ep)
-        const double dep_on_dphi = force_energy.first; //t.f_forces(phi);
+        const double dep_on_dphi = force_energy.first;
 
         //Force on A
-        const Vec3d Fa = -dep_on_dphi * pa_r1sintheta1;
+        const Vec3d Fa = -dep_on_dphi * torsion.dphi_dra;
         
         //Force on D
-        const Vec3d Fd = -dep_on_dphi * pd_r3sintheta2;
+        const Vec3d Fd = -dep_on_dphi * torsion.dphi_drd;
 
         //Force on C
         //-1/norm(r12)^2 ((r23 + r12) ^ FD + r1 ^ FA) ^ r12    
@@ -168,7 +153,7 @@ namespace exaStamp
             , m_cells[cell_d][field::fx][p_d], m_cells[cell_d][field::fy][p_d], m_cells[cell_d][field::fz][p_d], m_cells[cell_d][field::ep][p_d], m_cells[cell_d][m_virial_field][p_d]
             , Fd.x, Fd.y, Fd.z, e, vird );
         }
-        else
+        else if constexpr ( ComputeEnergy )
         {
           concurent_add_contributions<ParticleLockT,CPAA,LOCK,double,double,double,double> (
               cp_locks[cell_a][p_a]
@@ -190,6 +175,28 @@ namespace exaStamp
             , m_cells[cell_d][field::fx][p_d], m_cells[cell_d][field::fy][p_d], m_cells[cell_d][field::fz][p_d], m_cells[cell_d][field::ep][p_d]
             , Fd.x, Fd.y, Fd.z, e );
         }
+        else
+        {
+          concurent_add_contributions<ParticleLockT,CPAA,LOCK,double,double,double> (
+              cp_locks[cell_a][p_a]
+            , m_cells[cell_a][field::fx][p_a], m_cells[cell_a][field::fy][p_a], m_cells[cell_a][field::fz][p_a]
+            , Fa.x, Fa.y, Fa.z );
+
+          concurent_add_contributions<ParticleLockT,CPAA,LOCK,double,double,double> (
+              cp_locks[cell_b][p_b]
+            , m_cells[cell_b][field::fx][p_b], m_cells[cell_b][field::fy][p_b], m_cells[cell_b][field::fz][p_b]
+            , Fo.x, Fo.y, Fo.z );
+
+          concurent_add_contributions<ParticleLockT,CPAA,LOCK,double,double,double> (
+              cp_locks[cell_c][p_c]
+            , m_cells[cell_c][field::fx][p_c], m_cells[cell_c][field::fy][p_c], m_cells[cell_c][field::fz][p_c]
+            , Fc.x, Fc.y, Fc.z );
+
+          concurent_add_contributions<ParticleLockT,CPAA,LOCK,double,double,double> (
+              cp_locks[cell_d][p_d]
+            , m_cells[cell_d][field::fx][p_d], m_cells[cell_d][field::fy][p_d], m_cells[cell_d][field::fz][p_d]
+            , Fd.x, Fd.y, Fd.z );
+        }
       }
     }
   };
@@ -201,7 +208,7 @@ namespace onika
 {
   namespace parallel
   {
-    template<class CellsT, class VirialFieldT, bool vir> struct ParallelForFunctorTraits< exaStamp::TorsionForceOp<CellsT,VirialFieldT,vir> >
+    template<class CellsT, class VirialFieldT, bool ene, bool vir> struct ParallelForFunctorTraits< exaStamp::TorsionForceOp<CellsT,VirialFieldT,ene,vir> >
     {
       static inline constexpr bool CudaCompatible = true;
     };

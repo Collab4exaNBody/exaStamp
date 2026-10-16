@@ -499,6 +499,11 @@ namespace exaStamp
                // get the parameters of the interactions (ita, ita) and (itb, itb)
                LJExp6RFParms* params_ita = potentials_for_pairs->params_for_pair( species->at(ita).name(), species->at(ita).name() );
                LJExp6RFParms* params_itb = potentials_for_pairs->params_for_pair( species->at(itb).name(), species->at(itb).name() );
+               if( params_ita == nullptr || params_itb == nullptr )
+               {
+                 fatal_error() << "Cross pair potential " << species->at(ita).name() << " / " << species->at(itb).name() << " is not defined and cannot be built by a mixing rule, since "
+                               << ( params_ita == nullptr ? species->at(ita).name() : species->at(itb).name() ) << " has no self pair potential" << std::endl;
+               }
 
                // check that ita and itb have the same potential type (LJ ou exp6v1)
                if (params_ita->m_B_ISEXP6 == 0. && params_itb->m_B_ISEXP6 == 0. ) {
@@ -529,7 +534,7 @@ namespace exaStamp
                  } else if (mixingRule == "Lorentz-Berthelot" || mixingRule == "LB") {
                    epsilon_ab = sqrt(epsilon_a*epsilon_b);
                    sigma_ab   = 0.5*(sigma_a+sigma_b);
-                   rcut_ab    = 0.5*(rcut_a*rcut_b);
+                   rcut_ab    = 0.5*(rcut_a+rcut_b);
 
                  } else {
                    fatal_error() << "Unexpected mixing rule (" << mixingRule << ") for LJ potential for cross term (" << species->at(ita).name() << ", " << species->at(itb).name() << ")" << std::endl;
@@ -537,7 +542,7 @@ namespace exaStamp
 
                  pot.m_params.set_lj_parameters( sigma_ab, epsilon_ab, rcut_ab );
 
-               } else if (params_ita->m_B_ISEXP6 != 0. && params_ita->m_B_ISEXP6 != 0.) {
+               } else if (params_ita->m_B_ISEXP6 != 0. && params_itb->m_B_ISEXP6 != 0.) {
                  // exp6v1 potential
                  double A_a, A_b, A_ab;
                  double B_a, B_b, B_ab;

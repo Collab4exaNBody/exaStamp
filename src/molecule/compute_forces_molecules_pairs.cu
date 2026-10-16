@@ -89,6 +89,8 @@ namespace exaStamp
         ldbg << "trigger_thermo_state missing " << std::endl;
       }
       const bool need_virial = log_energy && *compute_virial;
+      // per particle energy is only needed when thermodynamic state is computed. if unknown, keep computing it
+      const bool need_energy = trigger_thermo_state.has_value() ? *trigger_thermo_state : true;
       using ChargeFieldT = decltype( grid->field_accessor( field::charge ) );
       using VirialFieldT = decltype( grid->field_accessor( field::virial ) );
       ChargeFieldT charge_field = {};
@@ -117,10 +119,10 @@ namespace exaStamp
 
       ldbg<<"n_pairs = "<<chemical_pairs->size()<<" , pair params = "<< molecule_compute_parameters->m_pair_params.size()<<std::endl;
 
-      auto compute_pair_force_opt_virial = [&]( auto cpvir )
+      auto compute_pair_force_opt_virial = [&]( auto cpene, auto cpvir )
       {
         auto cells = grid->cells_accessor();
-        IntramolecularPairForceOp<decltype(cells),ChargeFieldT,VirialFieldT,cpvir.value> pair_force_op =
+        IntramolecularPairForceOp<decltype(cells),ChargeFieldT,VirialFieldT,cpene.value,cpvir.value> pair_force_op =
           { cells
           , particle_locks->data()
           , molecule_compute_parameters->m_pair_params.data()
@@ -136,8 +138,9 @@ namespace exaStamp
         // auto exec_ctrl_obj = parallel_execution_stream() << std::move(parallel_op) ;
       };
 
-      if( need_virial ) compute_pair_force_opt_virial( onika::TrueType{} );
-      else              compute_pair_force_opt_virial( onika::FalseType{} );
+      if( need_virial )      compute_pair_force_opt_virial( onika::TrueType{}  , onika::TrueType{}  );
+      else if( need_energy ) compute_pair_force_opt_virial( onika::TrueType{}  , onika::FalseType{} );
+      else                   compute_pair_force_opt_virial( onika::FalseType{} , onika::FalseType{} );
 
       ldbg<<"intramolecular_pair_force done"<<std::endl;
     }
