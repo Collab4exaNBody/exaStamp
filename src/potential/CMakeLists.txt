@@ -33,6 +33,7 @@ add_subdirectory(eam_potentials)
 # ================== Reactive Potentials ================ #
 add_subdirectory(LCHBOP)
 add_subdirectory(rebo)
+add_subdirectory(sw)
 # ======================================================= #
 
 # ======================================================= #
