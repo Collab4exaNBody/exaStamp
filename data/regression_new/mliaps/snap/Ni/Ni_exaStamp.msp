@@ -11,7 +11,7 @@ species:
   - Ni: { mass: 34. Da , z: 28 , charge: 0.0 e- }       # LAMMPS example mass
 
 compute_force:
-  - snap_force_fp64:   # FP64 always: default snap_force follows SNAP_FP32_MATH (single precision)
+  - snap_force_fp64:
       parameters:
         nt: 1
         param: "Ni_Zuo_JPCA2020.snapparam"

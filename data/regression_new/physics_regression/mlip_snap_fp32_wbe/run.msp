@@ -1,4 +1,4 @@
-# enable-if-EXASTAMP_MLIP_SNAP_BUILD : SNAP W-Be + ZBL, two species, snap_force (single precision math only when exaNBody is built with SNAP_FP32_MATH=ON; reference built with OFF)
+# enable-if-EXASTAMP_MLIP_SNAP_BUILD : SNAP W-Be + ZBL, two species, snap_force_fp32 (single precision)
 includes:
   - ../common.yaml
   - config_update_symmetric_forces.msp
@@ -18,7 +18,7 @@ zbl_multi_force:
 
 compute_force:
   - zbl_multi_force
-  - snap_force:
+  - snap_force_fp32:
       parameters:
         nt: 2
         param: "WBe_Wood_PRB2019.snapparam"
@@ -42,3 +42,11 @@ setup_system:
 +global:
   rcut_inc: 1.0 ang
   dt: 0.5e-3 ps
+  # single precision (references made on GPU, 1 rank 1 thread). Measured spread vs references (L2):
+  # GPU 4 ranks: pos 2.7e-8, vel 1.0e-5, acc 9e-3, energy/virial 9e-9 ; CPU (AVX2) seq/mt/par: pos 9.5e-8,
+  # vel 3.4e-5, acc 2.6e-2, energy/virial 7.8e-8. Double precision differs from these references by 3.9e-7 on
+  # the energies: pr_thermo_threshold still tells the two precisions apart
+  pr_pos_threshold: 1.e-6
+  pr_vel_threshold: 5.e-4
+  pr_acc_threshold: 0.3
+  pr_thermo_threshold: 2.e-7

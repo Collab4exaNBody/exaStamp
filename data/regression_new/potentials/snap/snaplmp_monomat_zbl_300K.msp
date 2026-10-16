@@ -9,7 +9,7 @@ configuration:
   logging:
     debug: true
   debug:
-    filter: [ ".*resize_particle_locks" , ".*snap_force" , ".*snaplmp_force" ]
+    filter: [ ".*resize_particle_locks" , ".*snap_force_fp64" , ".*snaplmp_force" ]
 
 # surcharge du schema standard d'exaStamp pour forces symétriques correctes
 includes:
