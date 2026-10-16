@@ -19,6 +19,8 @@ under the License.
 
 #include <cstdint>
 #include <cmath>
+#include <limits>
+#include <algorithm>
 #include <onika/math/basic_types.h>
 #include <onika/math/basic_types_operators.h>
 #include <onika/cuda/cuda.h>
@@ -103,6 +105,35 @@ namespace exaStamp
         if( best_d2 < 0.0 || d2 < best_d2 ) { best_d2 = d2; best[0]=c[0]; best[1]=c[1]; best[2]=c[2]; }
       }
       n[0]=best[0]; n[1]=best[1]; n[2]=best[2];
+    }
+
+    // closest periodic image of the grid space vector d, any number of box lengths away
+    inline Vec3d closest_delta( const Vec3d& d ) const
+    {
+      int n[3];
+      closest_image( d , n );
+      return Vec3d{ d.x + n[0]*m_size_box.x , d.y + n[1]*m_size_box.y , d.z + n[2]*m_size_box.z };
+    }
+
+    // physical length of a grid space vector
+    inline double physical_norm( const Vec3d& d ) const
+    {
+      return m_xform_is_identity ? norm(d) : norm( m_xform * d );
+    }
+
+    // the closest image is unique for physical distances below half of the smallest width of the cell
+    // (distance between opposite faces) along periodic directions
+    inline double max_unique_distance() const
+    {
+      const Vec3d a = m_xform * Vec3d{ m_size_box.x , 0. , 0. };
+      const Vec3d b = m_xform * Vec3d{ 0. , m_size_box.y , 0. };
+      const Vec3d c = m_xform * Vec3d{ 0. , 0. , m_size_box.z };
+      const double volume = std::abs( dot( a , cross(b,c) ) );
+      double w = std::numeric_limits<double>::max();
+      if( m_periodic[0] ) w = std::min( w , volume / norm(cross(b,c)) );
+      if( m_periodic[1] ) w = std::min( w , volume / norm(cross(c,a)) );
+      if( m_periodic[2] ) w = std::min( w , volume / norm(cross(a,b)) );
+      return 0.5 * w;
     }
 
     // r : stored positions of the n_atoms atoms of the term (grid space)

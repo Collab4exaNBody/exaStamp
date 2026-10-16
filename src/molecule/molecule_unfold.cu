@@ -26,7 +26,7 @@ under the License.
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/core/particle_id_codec.h>
 #include <exaStamp/molecule/id_map.h>
-#include <exaStamp/molecule/periodic_r_delta.h>
+#include <exaStamp/molecule/intramolecular_image.h>
 
 #include <exanb/mpi/grid_update_ghosts.h>
 #include <exanb/mpi/update_ghost_functors.h>
@@ -187,11 +187,11 @@ namespace exaStamp
         }
       }
 
-      const Vec3d size_box {std::abs(domain->extent().x - domain->origin().x),
-                      std::abs(domain->extent().y - domain->origin().y),
-                      std::abs(domain->extent().z - domain->origin().z)};
-      const double half_min_size_box = std::min( std::min(size_box.x,size_box.y) , size_box.z) / 2.0; 
-      ldbg << "Number of molecules = "<< molecule_owner.size()<<" , size_box = "<<size_box<<" , half_min_size_box = "<<half_min_size_box<<std::endl;
+      // bonded atoms are unfolded to their closest periodic image (physical distance, works for triclinic cells),
+      // any number of box lengths away from the already unfolded position
+      const IntramolecularImageBuilder image_builder( *domain );
+      const double max_bond_dist = image_builder.max_unique_distance();
+      ldbg << "Number of molecules = "<< molecule_owner.size()<<" , max. unique bond distance = "<<max_bond_dist<<std::endl;
 
       // debug map to keep track of duplicated positions
       std::unordered_map<uint64_t,Vec3d> particle_pos_map;
@@ -228,12 +228,12 @@ namespace exaStamp
                     const Vec3d rj = cells[cell][ufpos_field][pos] ;
                     if( cells[cell][idmol_field][pos] == null_id ) // not unfolded bond neighbor
                     {
-                      const Vec3d rij = periodic_r_delta_loop( ri , rj , size_box , half_min_size_box );
-                      const double norm_rij = norm(rij);
-                      if( norm_rij > half_min_size_box || norm_rij == 0.0 )
+                      const Vec3d rij = image_builder.closest_delta( rj - ri );
+                      const double norm_rij = image_builder.physical_norm(rij);
+                      if( norm_rij >= max_bond_dist || norm_rij == 0.0 )
                       {
                         fatal_error() << "pre-check: in C#"<<cell_i<<"P#"<<p_i<<" (id="<<cells[cell_i][field::id][p_i]<<") bond#"<<j
-                        <<" with C#"<<cell<<"P#"<<pos<<" (id="<<cells[cell][field::id][pos]<<",ghost="<<grid->is_ghost_cell(cell)<<") bad dist. "<<norm_rij<<" not in ] 0 ; "<<half_min_size_box<<" ]"
+                        <<" with C#"<<cell<<"P#"<<pos<<" (id="<<cells[cell][field::id][pos]<<",ghost="<<grid->is_ghost_cell(cell)<<") bad dist. "<<norm_rij<<" not in ] 0 ; "<<max_bond_dist<<" ["
                         <<" , ri="<<ri<<" , rj="<<rj<< std::endl;
                       }
                       bond_max_dist = std::max( bond_max_dist , norm_rij );   
@@ -297,8 +297,8 @@ namespace exaStamp
                   const Vec3d rj = cells[cell][ufpos_field][pos] ;
                   if( cells[cell][idmol_field][pos] != null_id ) // bond neighbor already unfolded
                   {
-                    const Vec3d rij = periodic_r_delta_loop( ri , rj , size_box , half_min_size_box );
-                    const Vec3d ri_unfolded = ri - rij;
+                    const Vec3d rij = image_builder.closest_delta( rj - ri );
+                    const Vec3d ri_unfolded = rj - rij;
                     if( ri_updates > 0 )
                     {
                       if( ri_unfolded != last_ri_unfolded )

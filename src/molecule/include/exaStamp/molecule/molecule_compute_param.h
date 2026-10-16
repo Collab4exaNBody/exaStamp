@@ -157,6 +157,7 @@ namespace exaStamp
     onika::memory::CudaMMVector<Mat3d> m_virial_correction; // per atom type virial correction
     std::map< uint64_t , int > m_intramol_param_map;
     std::set< uint64_t > m_null_param_keys; // type keys whose parameters are all zero (term intentionally ignored)
+    bool m_has_improper_potentials = false;  // impropers are created for every atom with 3 neighbors : without any improper potential, none is expected to have parameters
   };
 
   struct MoleculeComputeParameterSetRO

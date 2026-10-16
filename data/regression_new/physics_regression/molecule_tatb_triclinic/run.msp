@@ -1,0 +1,43 @@
+# Flexible molecules in a triclinic cell: condensed TATB (bonds, bends, torsions, impropers, intramolecular pairs +
+# non-bonding forces), 3072 atoms.
+# tatb_triclinic_3072.MpiIO is the 2-molecule triclinic unit cell (FAtomes_tatb_condensed) replicated 4x4x4 and folded
+# back into the box, so that many molecules cross the periodic boundaries of the sheared cell. Molecules are unfolded
+# (across MPI processes in the parallel run) and folded back before the run.
+includes:
+  - ../common.yaml
+  - config_molecule.msp
+
+compute_bonding_forces:
+  - compute_force_bond:
+      compute_virial: true
+  - compute_force_bend:
+      compute_virial: true
+  - compute_force_torsion:
+      compute_virial: true
+  - compute_force_improper:
+      compute_virial: true
+  - intramolecular_pair_force:
+      compute_virial: true
+
+setup_system:
+  - read_dump_molecule:
+      filename: "tatb_triclinic_3072.MpiIO"
+  - nbh_dist
+  - move_particles
+  - load_balance_cost_model
+  - load_balance_rcb
+  - migrate_cell_particles
+  - ghost_comm_scheme
+  - ghost_update_all_impl
+  - id_map
+  - molecule_unfold
+  - move_particles
+  - load_balance_cost_model
+  - load_balance_rcb
+  - migrate_cell_particles: { ghost_dist: 0. ang }
+  - physics_regression_noise
+
++global:
+  dt: 0.5e-15 s
+  rcut_inc: 2.0 ang
+  pr_acc_threshold: 1.e-7   # accelerations up to ~1e5 (internal units): ~1e-9 absolute spread between seq and par = 1e-14 relative

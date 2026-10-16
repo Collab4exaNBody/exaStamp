@@ -313,7 +313,8 @@ namespace exaStamp
      
       auto& intramol_param_map = molecule_compute_parameters->m_intramol_param_map; // types to functional parameters index
       intramol_param_map.clear();
-      molecule_compute_parameters->m_null_param_keys.clear();      
+      molecule_compute_parameters->m_null_param_keys.clear();
+      molecule_compute_parameters->m_has_improper_potentials = potentials_for_impropers.has_value() && ! potentials_for_impropers->m_potentials.empty();      
       std::map< MoleculeGenericFuncParam , int > intramol_param_id_map ; // functional parameters to its index
 
       unsigned int parameter_id = 0;

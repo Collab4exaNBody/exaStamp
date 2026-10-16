@@ -670,7 +670,16 @@ namespace exaStamp
             file_bbox.bmin = min( file_bbox.bmin , r );
             file_bbox.bmax = max( file_bbox.bmax , r );
           }
-          r = inv_H * r; // reduced coordinates in [0;1]
+          r = inv_H * r; // reduced coordinates
+          // positions may lie outside the cell (e.g. Cartesian positions of a triclinic cell) : wrap them along periodic axes
+          // (a position outside the box along a non periodic axis is reported when the atom is inserted in the grid)
+          const bool periodic[3] = { domain->periodic_boundary_x() , domain->periodic_boundary_y() , domain->periodic_boundary_z() };
+          double* s[3] = { &r.x , &r.y , &r.z };
+          for(int i=0;i<3;i++) if( periodic[i] )
+          {
+            *s[i] -= std::floor( *s[i] );
+            if( *s[i] >= 1.0 ) *s[i] = 0.0; // -tiny - floor(-tiny) rounds to 1
+          }
 
           if( typeMol.empty() ) typeMol="MOL";
           auto it = molecule_name_map.find( typeMol );

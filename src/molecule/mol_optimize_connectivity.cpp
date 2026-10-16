@@ -88,6 +88,8 @@ namespace exaStamp
       
       const auto & param_map = molecule_compute_parameters->m_intramol_param_map;
       const auto & null_keys = molecule_compute_parameters->m_null_param_keys;
+      // impropers are created for every atom with 3 neighbors : they are only reported if the force field has impropers
+      const bool has_improper_potentials = molecule_compute_parameters->m_has_improper_potentials;
       unsigned long long n_missing_bond=0, n_missing_angle=0, n_missing_torsion=0, n_missing_improper=0;
 
 #     pragma omp parallel
@@ -187,7 +189,7 @@ namespace exaStamp
           const uint64_t key = improper_key(ta,tb,tc,td);
           const auto it = param_map.find( key );
           if( it != param_map.end() ) intramolecular_parameters->m_improper_param_idx[i] = it->second;
-          else if( null_keys.find( key ) == null_keys.end() ) ++ n_missing_improper;
+          else if( has_improper_potentials && null_keys.find( key ) == null_keys.end() ) ++ n_missing_improper;
           const Vec3d r[4] = { atom_position(t[0]) , atom_position(t[1]) , atom_position(t[2]) , atom_position(t[3]) };
           if( ! image_builder.build( r, improper_anchor, 4, intramolecular_parameters->m_improper_image[i] ) ) ++ n_image_failures;
         }
