@@ -1,0 +1,35 @@
+# Molecule numbering of 20 polybutadiene chains (5040 atoms) crossing the periodic boundaries and, in the parallel
+# run, MPI sub-domains. molecule_check_numbering stops with an error if the numbering is wrong. Checked: the numbering
+# made by read_fatomes_mol, the one recomputed by molecule_numbering after 10 steps, and that molecule_unfold and
+# molecule_restore_positions keep it.
+includes:
+  - config_molecule.msp
+
+setup_system:
+  - domain:
+      cell_size: 5.0 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_fatomes_mol:
+      filename: "FAtomes_pb_chains"
+      stampinput: "DONNEES_pb_condensed"
+
+check_pb_chains_numbering:
+  - molecule_check_numbering: { expected_molecules: 20 }
+
+simulation_epilog:
+  - check_pb_chains_numbering
+  - molecule_numbering
+  - check_pb_chains_numbering
+  - molecule_unfold
+  - check_pb_chains_numbering
+  - molecule_restore_positions
+  - check_pb_chains_numbering
+
+global:
+  dt: 1.0 fs
+  rcut_inc: 2.0 ang
+  max_iteration: 10
+  simulation_thermostate_screen_frequency: 5
+  simulation_snapshot_frequency: -1
+  simulation_restart_frequency: -1

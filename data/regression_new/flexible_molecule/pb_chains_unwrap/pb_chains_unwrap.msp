@@ -1,0 +1,48 @@
+# Polybutadiene chains (20 chains x 25 units, 5040 atoms, 50 A periodic cube) at 600 K : unwrapped trajectory output.
+# Every 100 steps, molecules are numbered (idmol), the folded positions are written, molecules are unfolded and the
+# unwrapped positions are written, then the folded positions are restored and the run continues.
+# molecule_unfold is continuous : each chain is unfolded at the periodic image closest to its previous unfolding, so the
+# pb_chains_unwrapped_*.xyz snapshots form a continuous trajectory (no chain jumps by a box vector), across restarts too
+# (see pb_chains_unwrap_restart.msp, which continues from the restart file written at step 1000).
+# FAtomes_pb_chains (data/potentials) was generated with make_pb_chains.py (numpy needed) :
+#   python make_pb_chains.py FAtomes_pb_condensed FAtomes_pb_chains 20 25 50
+includes:
+  - config_molecule.msp
+
+setup_system:
+  - domain:
+      cell_size: 5.0 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_fatomes_mol:
+      filename: "FAtomes_pb_chains"
+      stampinput: "DONNEES_pb_condensed"
+  - init_temperature_new: { T: 600. K }
+
+# Langevin thermostat keeps the chains at 600 K
+numerical_scheme: verlet_lnvt
+langevin_thermostat:
+  T: 600. K
+  gamma: 1.0 ps^-1
+
+final_dump:
+  - molecule_numbering
+  - write_xyz: { filename: "pb_chains_folded.xyz" , fields: [ "id" , "idmol" ] , units: { position: "ang" } }
+  - molecule_unfold
+  - write_xyz: { filename: "pb_chains_unwrapped.xyz" , fields: [ "id" , "idmol" ] , units: { position: "ang" } }
+
+write_snapshot:
+  - molecule_numbering
+  - write_xyz: { filename: "pb_chains_folded.xyz" , fields: [ "id" , "idmol" ] , units: { position: "ang" } }
+  - molecule_unfold
+  - timestep_file: "pb_chains_unwrapped_%05d.xyz"
+  - write_xyz: { fields: [ "id" , "idmol" ] , units: { position: "ang" } }
+  - molecule_restore_positions
+
+global:
+  dt: 1.0 fs
+  rcut_inc: 2.0 ang
+  max_iteration: 1000
+  simulation_thermostate_screen_frequency: 100
+  simulation_snapshot_frequency: 100
+  simulation_restart_frequency: 1000

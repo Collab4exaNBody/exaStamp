@@ -1,0 +1,47 @@
+# no-mpi
+# KNOWN PROBLEM: at 4 processes, replicate_domain_cmol in setup_system before load balancing gives 4x too many atoms (40320 instead of 10080).
+# Molecule numbering after replication : the 20 polybutadiene chains are unfolded and replicated 2x1x1. Replicas get
+# new atom ids but keep the molecule id of their original, so molecule_numbering must number 40 distinct molecules.
+# molecule_check_numbering stops with an error if the numbering is wrong. (Numbering across MPI processes is tested
+# by pb_chains.msp.)
+# Molecules must be unfolded before replication, otherwise a bond crossing a periodic boundary would join two atoms
+# of the same replica, half of the new box apart. Unfolding is done before load balancing : with load balancing
+# first, at 4 processes the ghost layer (3 cells) is thicker than the RCB slabs of this 10-cell box, which
+# UpdateGhosts does not support.
+includes:
+  - config_molecule.msp
+
+replicate_domain_cmol:
+  repeat: [ 2 , 1 , 1 ]
+
+setup_system:
+  - domain:
+      cell_size: 5.0 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_fatomes_mol:
+      filename: "FAtomes_pb_chains"
+      stampinput: "DONNEES_pb_condensed"
+  - nbh_dist
+  - move_particles
+  - ghost_comm_scheme
+  - ghost_update_all_impl
+  - id_map
+  - molecule_unfold
+  - replicate_domain_cmol
+  - move_particles
+  - load_balance_cost_model
+  - load_balance_rcb
+  - migrate_cell_particles: { ghost_dist: 0.0 ang }
+
+simulation_epilog:
+  - molecule_numbering
+  - molecule_check_numbering: { expected_molecules: 40 }
+
+global:
+  dt: 1.0 fs
+  rcut_inc: 2.0 ang
+  max_iteration: 5
+  simulation_thermostate_screen_frequency: 5
+  simulation_snapshot_frequency: -1
+  simulation_restart_frequency: -1

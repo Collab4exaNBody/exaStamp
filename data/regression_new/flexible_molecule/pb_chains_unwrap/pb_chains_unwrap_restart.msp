@@ -1,0 +1,41 @@
+# Continues pb_chains_unwrap.msp from its restart file at step 1000 (run pb_chains_unwrap.msp first, in the same
+# folder), up to step 1500. The restart file keeps the unfolded position of each chain, so the unwrapped snapshots
+# pb_chains_unwrapped_01001.xyz ... continue the trajectory of the first run without jumps.
+includes:
+  - config_molecule.msp
+
+setup_system:
+  - domain:
+      cell_size: 5.0 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_dump_molecule:
+      filename: "molecule_000001000.MpiIO"
+
+# Langevin thermostat keeps the chains at 600 K
+numerical_scheme: verlet_lnvt
+langevin_thermostat:
+  T: 600. K
+  gamma: 1.0 ps^-1
+
+final_dump:
+  - molecule_numbering
+  - write_xyz: { filename: "pb_chains_folded.xyz" , fields: [ "id" , "idmol" ] , units: { position: "ang" } }
+  - molecule_unfold
+  - write_xyz: { filename: "pb_chains_unwrapped.xyz" , fields: [ "id" , "idmol" ] , units: { position: "ang" } }
+
+write_snapshot:
+  - molecule_numbering
+  - write_xyz: { filename: "pb_chains_folded.xyz" , fields: [ "id" , "idmol" ] , units: { position: "ang" } }
+  - molecule_unfold
+  - timestep_file: "pb_chains_unwrapped_%05d.xyz"
+  - write_xyz: { fields: [ "id" , "idmol" ] , units: { position: "ang" } }
+  - molecule_restore_positions
+
+global:
+  dt: 1.0 fs
+  rcut_inc: 2.0 ang
+  max_iteration: 1500
+  simulation_thermostate_screen_frequency: 100
+  simulation_snapshot_frequency: 100
+  simulation_restart_frequency: -1
