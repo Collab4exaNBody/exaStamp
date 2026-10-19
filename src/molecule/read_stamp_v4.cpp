@@ -31,6 +31,7 @@ under the License.
 #include <onika/physics/units.h>
 
 #include <exaStamp/molecule/read_stamp_v4.h>
+#include <exaStamp/molecule/molecule_numbering.h>
 
 #include <mpi.h>
 #include <fstream>
@@ -56,6 +57,7 @@ namespace exaStamp
     ADD_SLOT(bool                   , pbc_adjust_xform , INPUT , false                             , DocString{"Adjust xform to preserve sizes in directions with periodic boundary conditions"} );
     ADD_SLOT(long                   , version       , INPUT , -1                                   , DocString{"force file version (ignore version number in file) ex: 41 for 4.1, 42 for 4.2"} );
     ADD_SLOT(bool                   , molrig42      , INPUT , true                                 , DocString{"force short (without orientation) 4.2 rigid molecule structures"} );
+    ADD_SLOT(MoleculeSpeciesVector  , molecules     , INPUT_OUTPUT , MoleculeSpeciesVector{}       , DocString{"Molecule descriptions, receives the type of each molecule instance"} );
 
     // -----------------------------------------------
     // ----------- Operator documentation ------------
@@ -73,6 +75,21 @@ namespace exaStamp
       read_stamp_v4( ldbg, *mpi,file_name,*enlarge_bounds,*bounds_mode,*grid,*domain
                    , *timestep,*dt,*physical_time,*species
                    , *enable_xform_scale , *pbc_adjust_xform , *version , *molrig42 );
+
+      // the reader stores Stamp's molecule number and type in idmol as number + (type << 48) :
+      // turn it into a dense molecule index, and keep the type of each molecule
+      if( grid->has_allocated_field( field::idmol ) )
+      {
+        auto cells = grid->cells_accessor();
+        const auto idmol_field = grid->field_accessor( field::idmol );
+        static constexpr uint64_t number_mask = ( uint64_t(1) << 48 ) - 1;
+        molecules->m_molecule_type = densify_molecule_ids( *mpi , *grid , [cells,idmol_field](size_t c, size_t p) -> std::pair<uint64_t,uint64_t>
+          {
+            const uint64_t v = cells[c][idmol_field][p];
+            return { v & number_mask , v >> 48 };
+          } );
+        ldbg << "read_stamp_v4: "<<molecules->m_molecule_type.size()<<" molecules"<<std::endl;
+      }
     }
 
     inline void yaml_initialize(const YAML::Node& node) override final

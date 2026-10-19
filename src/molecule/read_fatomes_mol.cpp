@@ -37,6 +37,7 @@ under the License.
 #include <onika/file_utils.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exaStamp/molecule/molecule_species.h>
+#include <exaStamp/molecule/molecule_numbering.h>
 #include <exaStamp/molecule/bonds_potentials_parameters.h>
 #include <exaStamp/molecule/bends_potentials_parameters.h>
 #include <exaStamp/molecule/torsions_potentials_parameters.h>
@@ -643,6 +644,7 @@ namespace exaStamp
         AABB file_bbox = { {0.0,0.0,0.0} , {0.0,0.0,0.0} };
 
         std::map< std::string , int > molecule_name_map;
+        std::vector<std::string> atom_molecule_name; // molecule type name of each atom
         std::vector<MoleculeTupleIO> atom_data;
         atom_data.reserve( count );
         std::string typeAtom;
@@ -702,6 +704,7 @@ namespace exaStamp
 
           MoleculeTupleIO tp( r.x, r.y, r.z , 0.0, 0.0, 0.0, at_id, itypeAtom, 0, AtomBondConnectivity{uint64_t(-1),uint64_t(-1),uint64_t(-1),uint64_t(-1)} , charge );
           atom_data.push_back( tp );     
+          atom_molecule_name.push_back( typeMol );
         }
         ldbg << "file bbox = " << file_bbox << " , size = " << ( file_bbox.bmax - file_bbox.bmin ) << std::endl;       
        
@@ -1183,6 +1186,10 @@ namespace exaStamp
         ldbg << "xform angle a.c = " << (180/M_PI) * acos( dot(xform_a,xform_c) / ( xform_Lx*xform_Lz ) ) << std::endl;        
         ldbg << "xform angle b.c = " << (180/M_PI) * acos( dot(xform_b,xform_c) / ( xform_Ly*xform_Lz ) ) << std::endl;        
                                     
+        // dense molecule numbering from bond connectivity, and molecule type of each molecule
+        molecules->m_molecule_type = number_molecules_of_atoms( atom_data , atom_molecule_name , molecule_name_map );
+        ldbg << molecules->m_molecule_type.size() << " molecules" << std::endl;
+
         grid->set_offset( IJK{0,0,0} );
         grid->set_origin( domain->bounds().bmin );
         grid->set_cell_size( domain->cell_size() );

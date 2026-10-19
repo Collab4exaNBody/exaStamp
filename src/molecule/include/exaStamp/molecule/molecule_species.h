@@ -19,9 +19,11 @@ under the License.
 
 #include <string>
 #include <cstdint>
+#include <vector>
 
 #include <exaStamp/particle_species/particle_specie.h>
 #include <onika/log.h>
+#include <onika/math/basic_types.h>
 
 #include <onika/memory/allocator.h>
 #include <onika/cuda/ro_shallow_copy.h>
@@ -127,6 +129,37 @@ namespace exaStamp
   {
     onika::memory::CudaMMVector<MoleculeSpecies> m_molecules;
     onika::memory::CudaMMVector<MoleculeSpecies> m_bridge_molecules;  
+
+    // molecule instances : each particle's idmol field is a dense molecule index, 0 <= idmol < number of molecules.
+    // m_molecule_type[idmol] is the type of the molecule (index in m_molecules). An empty table means type 0 for all.
+    std::vector<uint8_t> m_molecule_type;
+
+    // continuous unfolding (molecule_unfold) : position of the anchor atom (smallest atom id) of each molecule at the
+    // last unfolding, in grid space, indexed by idmol. m_unfold_anchor_id[idmol] is the anchor atom id + 1, 0 if unknown.
+    std::vector<uint64_t> m_unfold_anchor_id;
+    std::vector<onika::math::Vec3d> m_unfold_anchor_pos;
+
+    inline size_t number_of_molecule_instances() const { return m_molecule_type.size(); }
+    inline unsigned int molecule_type( uint64_t idmol ) const
+    {
+      if( m_molecule_type.empty() ) return 0;
+      if( idmol >= m_molecule_type.size() )
+      {
+        fatal_error() << "molecule id "<<idmol<<" out of range (number of molecules = "<<m_molecule_type.size()<<")" << std::endl;
+      }
+      return m_molecule_type[idmol];
+    }
+    inline int molecule_type_index( const std::string& name ) const
+    {
+      for(size_t i=0;i<m_molecules.size();i++) if( m_molecules[i].name() == name ) return i;
+      return -1;
+    }
+  };
+
+  // folded positions saved by molecule_unfold, restored by molecule_restore_positions (owned particles, cell order)
+  struct MoleculeFoldedPositions
+  {
+    std::vector<double> m_rx, m_ry, m_rz;
   };
 
   struct MoleculeSpeciesVectorRO
@@ -148,25 +181,6 @@ namespace exaStamp
   
   //using MoleculeSpeciesVector = std::vector<MoleculeSpecies>; // onika::memory::CudaMMVector<MoleculeSpecies>;
   
-  static inline uint8_t molecule_type_from_id( uint64_t idmol )
-  {
-    return idmol & 0xFF ;
-  }
-
-  static inline uint8_t molecule_place_from_id( uint64_t idmol )
-  {
-    return (idmol>>8) & 0xFF ;
-  }
-
-  static inline uint64_t molecule_instance_from_id( uint64_t idmol )
-  {
-    return idmol >> 16 ;
-  }
-
-  static inline uint64_t make_molecule_id( uint64_t mol_instance, unsigned int mol_place, unsigned int mol_type )
-  {
-    return ( mol_instance << 16 ) | ( (mol_place&0xFF) << 8 ) | ( mol_type&0xFF ) ;
-  }
 
 }
 

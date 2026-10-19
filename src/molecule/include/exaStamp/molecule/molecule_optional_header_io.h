@@ -36,8 +36,10 @@ namespace exaStamp
   template<class LDBGT>
   struct MoleculeOptionalHeaderIO
   {
-    static inline constexpr uint64_t header_version = 102; // Version 1.1 adds potential and weighting parameters in optional header
+    static inline constexpr uint64_t header_version = 104; // Version 1.1 adds potential and weighting parameters in optional header
                                                            // Version 1.2 stores functional equilibrium value (x0) in double precision
+                                                           // Version 1.3 stores the type of each molecule instance (idmol is a dense index)
+                                                           // Version 1.4 stores the unfolded anchor position of each molecule (continuous molecule_unfold)
   
     // since version 1.0
     IntraFFtypes& m_ffnameVector = nullptr;
@@ -208,6 +210,22 @@ namespace exaStamp
         n_bytes += write_func( m_molecules->m_molecules.at(i) );
       }
 
+      // since version 1.3 : type of each molecule instance
+      const size_t n_mol_instances = ( m_molecules != nullptr ) ? m_molecules->m_molecule_type.size() : 0;
+      n_bytes += write_func( n_mol_instances );
+      for(size_t i=0;i<n_mol_instances;i++) n_bytes += write_func( m_molecules->m_molecule_type[i] );
+      if(verbose) lout << "mol. instances= "<<n_mol_instances<<std::endl;
+
+      // since version 1.4 : unfolded anchor position of each molecule instance
+      const size_t n_anchors = ( m_molecules != nullptr && m_molecules->m_unfold_anchor_id.size() == n_mol_instances
+                              && m_molecules->m_unfold_anchor_pos.size() == n_mol_instances ) ? n_mol_instances : 0;
+      n_bytes += write_func( n_anchors );
+      for(size_t i=0;i<n_anchors;i++)
+      {
+        n_bytes += write_func( m_molecules->m_unfold_anchor_id[i] );
+        n_bytes += write_func( m_molecules->m_unfold_anchor_pos[i] );
+      }
+
       if( header_version >= 101 )
       {
         const size_t n_bond_potentials = ( m_potentials_for_bonds != nullptr ) ? m_potentials_for_bonds->m_bond_desc.size() : 0 ;
@@ -353,6 +371,43 @@ namespace exaStamp
       for(size_t i=0;i<n_molecules;i++)
       {
         n_bytes += read_func( m_molecules->m_molecules.at(i) );
+      }
+
+      if( m_molecules!=nullptr )
+      {
+        m_molecules->m_molecule_type.clear();
+        m_molecules->m_unfold_anchor_id.clear();
+        m_molecules->m_unfold_anchor_pos.clear();
+      }
+      if( header_version >= 103 )
+      {
+        size_t n_mol_instances = 0;
+        n_bytes += read_func( n_mol_instances );
+        if( n_mol_instances>0 && m_molecules==nullptr ) fatal_error() << "Missing molecules container to read molecule instance types" << std::endl;
+        if( m_molecules!=nullptr ) m_molecules->m_molecule_type.resize( n_mol_instances );
+        for(size_t i=0;i<n_mol_instances;i++) n_bytes += read_func( m_molecules->m_molecule_type[i] );
+        if(verbose) lout << "mol. instances= "<<n_mol_instances<<std::endl;
+      }
+      if( header_version >= 104 )
+      {
+        size_t n_anchors = 0;
+        n_bytes += read_func( n_anchors );
+        if( n_anchors>0 && m_molecules==nullptr ) fatal_error() << "Missing molecules container to read molecule unfold anchors" << std::endl;
+        if( m_molecules!=nullptr )
+        {
+          m_molecules->m_unfold_anchor_id.resize( n_anchors );
+          m_molecules->m_unfold_anchor_pos.resize( n_anchors );
+        }
+        for(size_t i=0;i<n_anchors;i++)
+        {
+          n_bytes += read_func( m_molecules->m_unfold_anchor_id[i] );
+          n_bytes += read_func( m_molecules->m_unfold_anchor_pos[i] );
+        }
+        if(verbose && n_anchors>0) lout << "mol. unfold anchors = "<<n_anchors<<std::endl;
+      }
+      if( header_version < 103 && verbose )
+      {
+        lout << "mol. instances= unknown (header older than v1.3), use molecule_numbering to number molecules" << std::endl;
       }
 
       if( header_version >= 101 )

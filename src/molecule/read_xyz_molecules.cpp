@@ -39,6 +39,7 @@ under the License.
 #include <onika/file_utils.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exaStamp/molecule/molecule_species.h>
+#include <exaStamp/molecule/molecule_numbering.h>
 
 #include <exanb/core/check_particles_inside_cell.h>
 #include <onika/math/math_utils.h>
@@ -169,6 +170,7 @@ namespace exaStamp
         std::string typeMol;
         std::string typeAtom;
         std::vector<MoleculeTupleIO> atom_data;
+        std::vector<std::string> atom_molecule_name; // molecule type name of each atom
         atom_data.reserve( count );
 
         AABB phys_bbox = { {0.0,0.0,0.0} , {0.0,0.0,0.0} };
@@ -219,6 +221,7 @@ namespace exaStamp
           const Vec3d v = { 0., 0., 0. }; // not read from file by now
           MoleculeTupleIO tp( r.x, r.y, r.z , v.x, v.y, v.z, at_id, itypeAtom, 0, AtomBondConnectivity{uint64_t(c0),uint64_t(c1),uint64_t(c2),uint64_t(c3)} , charge );
           atom_data.push_back( tp );     
+          atom_molecule_name.push_back( typeMol );
         }
         file.close();
 
@@ -302,6 +305,10 @@ namespace exaStamp
         }
         ldbg << "dom_bbox=" << dom_bbox <<std::endl;
 
+        // dense molecule numbering from bond connectivity (the molecule id column of the file is not used)
+        molecules->m_molecule_type = number_molecules_of_atoms( atom_data , atom_molecule_name , molecule_name_map );
+        ldbg << molecules->m_molecule_type.size() << " molecules" << std::endl;
+
         for(const auto& tp : atom_data)
         {
           Vec3d r = { tp[field::rx] , tp[field::ry] , tp[field::rz] };
@@ -326,6 +333,10 @@ namespace exaStamp
       molecules->m_bridge_molecules.clear();
       molecules->m_molecules.resize( nmol );
       MPI_Bcast( molecules->m_molecules.data() , sizeof(MoleculeSpecies)*nmol , MPI_CHARACTER , 0 , *mpi );
+      unsigned long n_mol_instances = molecules->m_molecule_type.size();
+      MPI_Bcast( &n_mol_instances, 1, MPI_UNSIGNED_LONG, 0, *mpi );
+      molecules->m_molecule_type.resize( n_mol_instances );
+      MPI_Bcast( molecules->m_molecule_type.data() , n_mol_instances , MPI_UNSIGNED_CHAR , 0 , *mpi );
 
       // Broadcast domain parameters computed on MPI rank 0
       MPI_Bcast( domain.get_pointer() , sizeof(Domain), MPI_CHARACTER, 0, *mpi);

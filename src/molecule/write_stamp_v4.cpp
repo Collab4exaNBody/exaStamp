@@ -65,6 +65,7 @@ namespace exaStamp
     ADD_SLOT(bool               , xsv2_compatibility  , INPUT , false         , DocString{"set to true to read dump with exaStampV2, false to read it with StampV4"} );
     ADD_SLOT(long               , version             , INPUT , 42            , DocString{"variant to use (41 or 42)"} );
     ADD_SLOT(bool               , gen_user_input      , INPUT , false         , DocString{"print user input to include in order to read file"} );
+    ADD_SLOT(MoleculeSpeciesVector , molecules        , INPUT , OPTIONAL      , DocString{"Molecule descriptions, gives the type of each molecule"} );
 
     // -----------------------------------------------
     // ----------- Operator documentation ------------
@@ -479,6 +480,7 @@ namespace exaStamp
         // ---------------------------------
         // --------- molecules -------------
         IOMolecules * molecules = new IOMolecules[*block_size];
+        const MoleculeSpeciesVector * mol_species = this->molecules.has_value() ? this->molecules.get_pointer() : nullptr;
         pcounter = 0;
         tcounter = 0;
         file.increment_offset( molecules, particle_offset_start ); //displace the offset to the beginning of the specific location assigned to this process
@@ -491,8 +493,8 @@ namespace exaStamp
 	          const auto& sp = species->at(pt[field::type]);
 	          auto molid = pt[field::idmol];
             strncpy( molecules[pcounter].typeAtomeFF, sp.m_name, 16 );
-            molecules[pcounter].typeMolecule    = molecule_type_from_id( molid );
-            molecules[pcounter].numeroMolecule  = molecule_instance_from_id( molid );
+            molecules[pcounter].typeMolecule    = ( mol_species != nullptr ) ? mol_species->molecule_type( molid ) : 0;
+            molecules[pcounter].numeroMolecule  = molid;
             molecules[pcounter].Connectivite[0] = pt[field::cmol][0] ;
             molecules[pcounter].Connectivite[1] = pt[field::cmol][1] ;
             molecules[pcounter].Connectivite[2] = pt[field::cmol][2] ;

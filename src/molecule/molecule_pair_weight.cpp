@@ -111,6 +111,7 @@ namespace exaStamp
       // index chemical links by their extrema to rapidly find if an atom pair belongs to a chemical link
       const auto & chemPotMap = *chemical_pair_pot_map;
       const auto & mcp = *molecule_compute_parameters;
+      const MoleculeSpeciesVector & mol_species = *molecules;
 
 #     pragma omp parallel
       {
@@ -133,7 +134,7 @@ namespace exaStamp
           const auto& sp = *species;
   
           apply_cell_particle_neighbors(*grid, *chunk_neighbors, cell_a, loc_a, std::false_type() /* not symetric */,
-            [cells,cell_a,no_intramolecular,field_idmol,&cgpw,idmol_a,id_a,type_a,&molid_weight_map,&sp ,&n_total_nbh, &n_positive_weights, &chemPotMap, &mcp]
+            [cells,cell_a,no_intramolecular,field_idmol,&cgpw,idmol_a,id_a,type_a,&molid_weight_map,&sp ,&n_total_nbh, &n_positive_weights, &chemPotMap, &mcp, &mol_species]
             ( unsigned int p_a, size_t cell_b, unsigned int p_b , size_t p_nbh_index )
             {
 #             ifndef NDEBUG            
@@ -161,11 +162,11 @@ namespace exaStamp
               }
               else
               {
-                const int moltype_a = molecule_type_from_id( idmol_a[p_a] );
+                const int moltype_a = mol_species.molecule_type( idmol_a[p_a] );
                 // Third case : we check weights----------------------------------------------
                 if( it != chemPotMap.end() )
                 {
-                  assert( moltype_a == molecule_type_from_id( idmol_b[p_b] ) );
+                  assert( moltype_a == int(mol_species.molecule_type( idmol_b[p_b] )) );
                 
                   assert( moltype_a >= 0 && size_t(moltype_a) < molid_weight_map.size() );
                   const MolecularPairWeight & mol_weight = molid_weight_map[moltype_a];
