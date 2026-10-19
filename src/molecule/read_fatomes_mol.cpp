@@ -1360,6 +1360,9 @@ namespace exaStamp
       MPI_Bcast( domain.get_pointer() , sizeof(Domain), MPI_CHARACTER, 0, *mpi);
       assert( check_domain(*domain) );
 
+      // pair potential cutoff, computed on rank 0 only : every process must derive the same ghost distance from it
+      MPI_Bcast( rcut_max.get_pointer() , 1 , MPI_DOUBLE , 0 , *mpi );
+
       grid->set_offset( IJK{0,0,0} );
       grid->set_origin( domain->bounds().bmin );
       grid->set_cell_size( domain->cell_size() );
