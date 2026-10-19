@@ -17,6 +17,10 @@ under the License.
 
 #pragma once
 
+#include <algorithm>
+#include <vector>
+#include <string>
+
 #include <yaml-cpp/yaml.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <onika/physics/units.h>
@@ -42,6 +46,10 @@ namespace YAML
       {
         node[atom.name()]["molecule"] = atom.molecule_name();
       }
+      if( ! atom.FFname().empty() && atom.FFname() != atom.name() )
+      {
+        node[atom.name()]["ff"] = atom.FFname();
+      }
       return node;
     }
     
@@ -62,6 +70,8 @@ namespace YAML
       if(params["charge"]  ) { atom.m_charge = params["charge"].as<Quantity>().convert(); }
       if(params["z"]       ) { atom.m_z = params["z"].as<int>(); }
       if(params["molecule"]) { atom.set_molecule_name( params["molecule"].as<std::string>() ); }
+      // force field type of flexible molecule atoms (several species may share one), species name by default
+      atom.set_FFname( params["ff"] ? params["ff"].as<std::string>() : atom.name() );
       if(params["rigid_molecule"])
       {
         if( ! params["rigid_molecule"].IsSequence() )
@@ -115,6 +125,14 @@ namespace YAML
       if( ! node.IsSequence() ) return false;
       v.clear();
       for(auto i: node) v.push_back( i.as<exaStamp::ParticleSpecie>() );
+      // force field type ids, numbered in order of first appearance of the force field type names
+      std::vector<std::string> ff_names;
+      for(auto& sp : v)
+      {
+        const auto it = std::find( ff_names.begin() , ff_names.end() , sp.FFname() );
+        sp.m_FFtypeId = std::distance( ff_names.begin() , it );
+        if( it == ff_names.end() ) ff_names.push_back( sp.FFname() );
+      }
       return true;
     }
   };

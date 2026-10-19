@@ -82,6 +82,7 @@ namespace exaStamp
     ADD_SLOT( GridT           , grid         , INPUT_OUTPUT );
     ADD_SLOT( ParticleSpecies , species      , INPUT ); // optional. if no species given, type ids are allocated automatically
     ADD_SLOT( MoleculeSpeciesVector , molecules , INPUT_OUTPUT, MoleculeSpeciesVector{} , DocString{"Molecule descriptions"} );
+    ADD_SLOT( std::string     , molecule_name , INPUT , OPTIONAL , DocString{"if set, molecule type name of every atom, instead of the first column of the file"} );
 
   public:
     inline void execute () override final
@@ -185,6 +186,7 @@ namespace exaStamp
 
           assert( ! file.eof() && file.good() );
           file >> typeMol >> typeAtom >> moleculeid >> at_id >> x >> y >> z >> c0 >> c1 >> c2 >> c3 >> c4 >> charge;
+          if( molecule_name.has_value() ) typeMol = *molecule_name;
           //lout <<"eof="<<file.eof()<<" good="<<file.good()<<" typeMol="<<typeMol<<" typeAtom="<<typeAtom<<" moleculeid="<<moleculeid<<" at_id="<<at_id<<" r="<<x<<","<<y<<","<<z<<" con="<<c0<<","<<c1<<","<<c2<<","<<c3 << std::endl;
 
           if( c4 != -1 )

@@ -108,7 +108,8 @@ namespace exaStamp
       const int t = std::distance( molecule_name_map.begin() , it );
       if( mol_type[ mol_index[i] ] != -1 && mol_type[ mol_index[i] ] != t )
       {
-        fatal_error() << "atom #"<<ids[i]<<" ("<<atom_molecule_name[i]<<") is bonded to atoms of another molecule type"<<std::endl;
+        fatal_error() << "atom #"<<ids[i]<<" ("<<atom_molecule_name[i]<<") is bonded to atoms of another molecule type"
+                      <<" (with read_xyz_molecules, molecule_name sets a single molecule type for all atoms)"<<std::endl;
       }
       mol_type[ mol_index[i] ] = t;
       atom_data[i][field::idmol] = mol_index[i];

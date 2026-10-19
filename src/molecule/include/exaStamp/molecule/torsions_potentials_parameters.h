@@ -172,7 +172,9 @@ namespace YAML
                          +               k2 * sin(2*phi)
                          -        1.5  * k3 * sin(3*phi);};
 */
-        b.m_potential_function = std::make_shared<IntraMolecularCosOPLSFunctional>(k1,k2,k3);
+        // optional constant energy offset e0 (e.g. GAFF torsions written in OPLS form)
+        const double e0 = node["parameters"]["e0"] ? node["parameters"]["e0"].as<Quantity>().convert() : 0.0;
+        b.m_potential_function = std::make_shared<IntraMolecularCosOPLSFunctional>(k1,k2,k3,e0);
       }
     else if(b.type=="cos_two")
       {
