@@ -1,0 +1,29 @@
+# TATB crystal, triclinic cell replicated 4x4x1 (32 molecules, 768 atoms, periodic), read with read_xyz_molecules,
+# force field given in the input file (tatb_ff.cfg). tatb_triclinic_4x4x1.xyz was generated with
+# tools/create_tatb_xyz_file_replicate.py 4 4 1.
+includes:
+  - config_molecule.msp
+  - tatb_ff.cfg
+
+setup_system:
+  - domain:
+      cell_size: 8. ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_xyz_molecules:
+      filename: "tatb_triclinic_4x4x1.xyz"
+  - molecule_force_field
+
+simulation_epilog:
+  - force_thermo_state
+  - compute_all_forces_energy
+  - default_thermostate_compute
+  - check_values: { file: tatb_triclinic_xyz.dat , samples: 256 , pos_threshold: 1.e-10 , vel_threshold: 1.e-10 , acc_threshold: 1.e-7 }
+
+global:
+  dt: 0.5e-15 s
+  rcut_inc: 2.0 ang
+  max_iteration: 10
+  simulation_thermostate_screen_frequency: 5
+  simulation_snapshot_frequency: -1
+  simulation_restart_frequency: -1

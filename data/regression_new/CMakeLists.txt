@@ -38,10 +38,9 @@ AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/domain")
 
 # Regression tests for flexible molecules
 # Layout: flexible_molecule/<testcase>/<variant>.msp
-#AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/flexible_molecule/molbonds")
 #AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/flexible_molecule/molperf")
 #AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/flexible_molecule/molstampv4")
-#AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/flexible_molecule/molxyz")
+AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/flexible_molecule/molxyz")
 AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/flexible_molecule/molecule_numbering")
 AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/flexible_molecule/polybutadiene")
 AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/flexible_molecule/tetrahydrofurane")

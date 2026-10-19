@@ -1,0 +1,7 @@
+date: '19-10-2026 17:22:36'
+length_unit: 1.0 ang
+values:
+- [1, 0x1.201b2bcfcefdap+3, 0x1.1fffece2a1f8ep+3, 0x1.4p+3, 0x1.77f3c2fa5ee1p+8, -0x1.011dc2095ffedp-1, 0x0p+0, 0x1.a09c50b2f027ep+0, -0x1.079a11e29bfd1p-8, 0x0p+0]
+- [2, 0x1.4fe4d43031026p+3, 0x1.201b294082382p+3, 0x1.4p+3, -0x1.77f3c2fa5ee1p+8, 0x1.7719ebf477f82p+8, 0x0p+0, -0x1.a09c50b2f027fp+0, 0x1.a04e28fb096f2p+0, 0x0p+0]
+- [3, 0x1.4fe4d43031026p+3, 0x1.4fe4d6bf7dc7ep+3, 0x1.4p+3, -0x1.77f3c2fa5ee1p+8, -0x1.7719ebf477f83p+8, 0x0p+0, -0x1.a09c50b2f027ep+0, -0x1.a04e28fb096f2p+0, 0x0p+0]
+- [4, 0x1.201b2bcfcefdap+3, 0x1.5000131d5e072p+3, 0x1.4p+3, 0x1.77f3c2fa5ee1p+8, 0x1.011dc2095ffedp-1, 0x0p+0, 0x1.a09c50b2f027ep+0, 0x1.079a11e29bfd1p-8, 0x0p+0]

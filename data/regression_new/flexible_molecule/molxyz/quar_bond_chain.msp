@@ -1,0 +1,42 @@
+# Chain of 4 carbon atoms (quar_bond_chain.xyz) : quartic bonds, no angle or torsion potential, Lennard-Jones + reaction
+# field pair potential with intramolecular pair weights (1-2 and 1-3 pairs at 0.5, 1-4 pairs at 0).
+includes:
+  - config_molecule.msp
+
+species:
+  - C: { mass: 12. g/mol, charge: 0. e-, molecule: CHAIN }
+
+molecule_force_field:
+  potentials_for_bonds:
+    - { types: [C, C], potential: quar_bond, parameters: { r0: 1.4 ang, k2: 100 kcal/mol/ang^2, k3: -100 kcal/mol/ang^3, k4: 100 kcal/mol/ang^4 } }
+  potentials_for_angles:
+    - { types: [C, C, C], potential: no_potential }
+  potentials_for_torsions:
+    - { types: [C, C, C, C], potential: no_potential }
+  mol_pair_weights:
+    C_C: { bond: 0.5, bend: 0.5, torsion: 0.0, bond_rf: 0.5, bend_rf: 0.5, torsion_rf: 0.0 }
+  potentials_for_pairs:
+    - { type_a: C, type_b: C, potential: { rcut: 6.75 ang, lj: { epsilon: 2.0e-24 J, sigma: 2.7 ang }, rf: { epsilon: 80., rc: 12.5 ang } } }
+
+setup_system:
+  - domain:
+      cell_size: 4. ang
+      periodic: [ false, false, false ]
+      expandable: false
+  - read_xyz_molecules:
+      filename: "quar_bond_chain.xyz"
+  - molecule_force_field
+
+simulation_epilog:
+  - force_thermo_state
+  - compute_all_forces_energy
+  - default_thermostate_compute
+  - check_values: { file: quar_bond_chain.dat , samples: 4 , pos_threshold: 1.e-10 , vel_threshold: 1.e-10 , acc_threshold: 1.e-7 }
+
+global:
+  dt: 0.1 fs
+  rcut_inc: 0.3 ang
+  max_iteration: 40
+  simulation_thermostate_screen_frequency: 10
+  simulation_snapshot_frequency: -1
+  simulation_restart_frequency: -1

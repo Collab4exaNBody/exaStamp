@@ -1,0 +1,29 @@
+# One TATB molecule read with read_xyz_molecules, force field given in the input file (tatb_ff.cfg, molecule_force_field).
+# Same molecule, positions and force field as triaminotrinitrobenzene/tatb_gas.msp (FAtomes_tatb_gas) : at step 0 both
+# give the same energy, virial and forces (5e-16 relative).
+includes:
+  - config_molecule.msp
+  - tatb_ff.cfg
+
+setup_system:
+  - domain:
+      cell_size: 4. ang
+      periodic: [ false, false, false ]
+      expandable: false
+  - read_xyz_molecules:
+      filename: "tatb_isolated_molecule.xyz"
+  - molecule_force_field
+
+simulation_epilog:
+  - force_thermo_state
+  - compute_all_forces_energy
+  - default_thermostate_compute
+  - check_values: { file: tatb_isolated_xyz.dat , samples: 24 , pos_threshold: 1.e-10 , vel_threshold: 1.e-10 , acc_threshold: 1.e-7 }
+
+global:
+  dt: 0.5e-15 s
+  rcut_inc: 2.0 ang
+  max_iteration: 100
+  simulation_thermostate_screen_frequency: 10
+  simulation_snapshot_frequency: -1
+  simulation_restart_frequency: -1

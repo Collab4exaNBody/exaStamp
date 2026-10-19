@@ -1,85 +1,28 @@
-includes: [ config_molecule.msp ]
-
-configuration:
-  logging:
-    debug: true
-  debug:
-    filter:
-      - ".*read_fatomes_mol"
-      - ".*read_dump_molecule"
-      - ".*id_map"
-      - ".*molecule_unfold"
-      - ".*replicate_domain_cmol"
-      - ".*move_particles"
-      - ".*write_dump_molecule"
-      - ".*ljexp6rf_pc"
-      - ".*intramolecular_setup"
-      - ".*compute_force_improper"
-      - ".*compute_force_torsion"
-      - ".*compute_force_bend"
-      - ".*compute_force_bond"
-      - ".*intramolecular_pair_force"
-      - ".*intramolecular_pair_list"
-      - ".*mol_optimize_connectivity"
-  profiling:
-    summary: true
+# Polymer (24696 atoms) read from a molecule dump (molecule_polymere_dump.MpiIO in the exaStamp data directory, written
+# from molecule_polymere.FAtomes : the dump holds the force field), cell size scaled by 2, replicated 2x1x1 by
+# replicate_molecule_domain (config_molecule.msp), 12 steps.
+includes:
+  - config_molecule.msp
 
 replicate_domain_cmol:
-  repeat: [ 1 , 1 , 1 ]
+  repeat: [ 2 , 1 , 1 ]
 
-input_data:
+setup_system:
   - read_dump_molecule:
-      filename: molecule_polymere.MpiIO
+      filename: molecule_polymere_dump.MpiIO
       scale_cell_size: 2.0
-      bond_max_dist: 4.0 ang
-      bond_max_stretch: 1.0
-  - message: "*************** before replication **********"
-  - nbh_dist: { verbose: true }
-  - move_particles
-  - load_balance_cost_model
-  - load_balance_rcb
-  - migrate_cell_particles
-  - ghost_comm_scheme
-  - ghost_update_all_impl
-  - grid_stats
-  - message: "************** start replication ************"
-  - id_map
-  - molecule_unfold
-  - replicate_domain_cmol
-  - move_particles
-  - load_balance_cost_model
-  - load_balance_rcb
-  - migrate_cell_particles: { ghost_dist: 0.0 ang }
-  - ghost_comm_scheme
-  - ghost_update_all_impl
-  - message: "************** end replicatin **************"
+  - replicate_molecule_domain
 
-+first_iteration:
-  - memory_stats
-  - grid_stats
-  - chunk_neighbors_stats
+simulation_epilog:
+  - force_thermo_state
+  - compute_all_forces_energy
+  - default_thermostate_compute
+  - check_values: { file: polymere_from_dump.dat , samples: 256 , pos_threshold: 1.e-10 , vel_threshold: 1.e-10 , acc_threshold: 1.e-7 }
 
-# user-specified global values
 global:
   dt: 0.1 fs
-  rcut_inc: 0.8 ang   # additional distance so that we don't have to rebuild neighbor list each time step
-  simulation_end_iteration: 12
-  simulation_log_frequency: 10
-  simulation_dump_frequency: 10
-  simulation_dump_thermo_frequency: -1
-
-langevin_thermostat:
-  T: 300.0 K
-  gamma: 0.1 ps^-1
-
-thermostat: langevin_thermostat
-
-#final_dump: nop
-
-xx_simulation_epilog:
-  - check_values:
-      file: molxyz_polymere.dat
-      acc_threshold: 1.e-8
-      pos_threshold: 1.e-12
-
-
+  rcut_inc: 4.0 ang
+  max_iteration: 12
+  simulation_thermostate_screen_frequency: 6
+  simulation_snapshot_frequency: -1
+  simulation_restart_frequency: -1

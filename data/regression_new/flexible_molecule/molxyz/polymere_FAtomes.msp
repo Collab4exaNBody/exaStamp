@@ -1,65 +1,31 @@
-includes: [ config_molecule.msp ]
-
-configuration:
-  logging:
-    debug: true
-  debug:
-    filter:
-      - ".*read_fatomes_mol"
-      - ".*read_dump_molecule"
-      - ".*write_dump_molecule"
-      - ".*ljexp6rf_pc"
-      - ".*intramolecular_setup"
-      - ".*compute_force_improper"
-      - ".*compute_force_torsion"
-      - ".*compute_force_bend"
-      - ".*compute_force_bond"
-      - ".*intramolecular_pair_force"
-      - ".*intramolecular_pair_list"
-      - ".*mol_optimize_connectivity"
-  profiling:
-    summary: true
+# Polymer (24696 atoms, molecule_polymere.FAtomes in the exaStamp data directory) read with read_fatomes_mol and
+# replicated 2x1x1 by replicate_molecule_domain (config_molecule.msp), 10 steps.
+includes:
+  - config_molecule.msp
 
 replicate_domain_cmol:
-  repeat: [ 1 , 1 , 1 ]
+  repeat: [ 2 , 1 , 1 ]
 
-replicate_molecule_domain:
-  - ghost_comm_scheme
-  - id_map
-  - molecule_unfold
-  - replicate_domain_cmol
-  - move_particles
-  - load_balance_cost_model
-  - load_balance_rcb
-  - migrate_cell_particles
-
-input_data:
+setup_system:
+  - domain:
+      cell_size: 8. ang
+      periodic: [ true, true, true ]
+      expandable: false
   - read_fatomes_mol:
       filename: molecule_polymere.FAtomes
       stampinput: molecule_polymere.init
-#  - replicate_molecule_domain
-
-# user-specified global values
-global:
-  dt: 1.0e-16 s
-  rcut_inc: 4.0 ang   # additional distance so that we don't have to rebuild neighbor list each time step
-  simulation_end_iteration: 10
-  simulation_log_frequency: 1
-  simulation_dump_frequency: 5
-  simulation_dump_thermo_frequency: -1
-
-langevin_thermostat:
-  T: 300.0 K
-  gamma: 0.1 ps^-1
-
-# thermostat: langevin_thermostat
-
-final_dump: nop
+  - replicate_molecule_domain
 
 simulation_epilog:
-  - check_values:
-      file: molxyz_polymere.dat
-      acc_threshold: 1.e-8
-      pos_threshold: 1.e-12
+  - force_thermo_state
+  - compute_all_forces_energy
+  - default_thermostate_compute
+  - check_values: { file: polymere_FAtomes.dat , samples: 256 , pos_threshold: 1.e-10 , vel_threshold: 1.e-10 , acc_threshold: 1.e-7 }
 
-
+global:
+  dt: 0.1 fs
+  rcut_inc: 4.0 ang
+  max_iteration: 10
+  simulation_thermostate_screen_frequency: 5
+  simulation_snapshot_frequency: -1
+  simulation_restart_frequency: -1
