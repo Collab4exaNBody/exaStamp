@@ -47,14 +47,19 @@ namespace exaStamp
 {
   using namespace exanb;
 
-  template<class CellsT, class FieldIdAccT>
+  template<class CellsT, class FieldIdAccT, class FieldIdMolAccT>
   struct ExtraMolecularNeighborFilter
   {
     CellsT m_cells = {};
     const ChemicalPairPotMap & chemPotMap;
     FieldIdAccT m_field_id = {};
+    FieldIdMolAccT m_field_idmol = {};
     inline bool operator () (double d2, double rcut2,size_t cell_a,size_t p_a,size_t cell_b,size_t p_b) const
     {
+      if( !( d2 > 0.0 && d2 < rcut2 ) ) return false;
+      // intramolecular pairs (removed from the neighbor lists) join atoms of the same molecule, and all atoms of a molecule
+      // have the same idmol : atoms with different idmol need no lookup
+      if( m_cells[cell_a][m_field_idmol][p_a] != m_cells[cell_b][m_field_idmol][p_b] ) return true;
       const uint64_t id_a = m_cells[cell_a][m_field_id][p_a];
       const uint64_t id_b = m_cells[cell_b][m_field_id][p_b];
       onika::oarray_t<uint64_t,2> pair = { id_a , id_b };
@@ -63,8 +68,7 @@ namespace exaStamp
         pair = { id_b , id_a };
       }
       assert( pair[0] != pair[1] );
-      const auto it = chemPotMap.find( pair );
-      return ( it == chemPotMap.end() ) && ( d2 > 0.0 ) && ( d2 < rcut2 );
+      return chemPotMap.find( pair ) == chemPotMap.end();
     }
   };
 
@@ -104,7 +108,8 @@ namespace exaStamp
       ldbg << "build extramolecular neighbors using id field" << std::endl;
       auto cells = grid->cells_accessor();
       auto field_id = grid->field_const_accessor( field::id );
-      ExtraMolecularNeighborFilter< decltype(cells) , decltype(field_id) > nbh_filter = { cells , chemical_pair_pot_map.has_value() ? (*chemical_pair_pot_map) : empty_pair_pot_map , field_id };
+      auto field_idmol = grid->field_const_accessor( field::idmol );
+      ExtraMolecularNeighborFilter< decltype(cells) , decltype(field_id) , decltype(field_idmol) > nbh_filter = { cells , chemical_pair_pot_map.has_value() ? (*chemical_pair_pot_map) : empty_pair_pot_map , field_id , field_idmol };
       chunk_neighbors_execute(ldbg,*chunk_neighbors,*grid,*amr,*amr_grid_pairs,*config,*chunk_neighbors_scratch,cs,cs_log2,*nbh_dist_lab, xform_filter, gpu_enabled, no_zorder, nbh_filter );
     }
 
