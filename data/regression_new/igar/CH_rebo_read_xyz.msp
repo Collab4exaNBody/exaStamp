@@ -43,14 +43,9 @@ preinit_rcut_max:
 
 # Update forces of non-ghost particles from their ghosts
 # before pushing total force to acceleration
-# Do not upate the gcv that needs to stay constant
 compute_force_epilog:
-  - update_force_from_ghost_no_gcv
+  - update_force_from_ghost
   - force_to_accel
-
-check_and_update_particles:
-  - trigger_move_particles
-  - update_particles_full_body
 
 setup_system:
   - domain:
@@ -62,11 +57,10 @@ setup_system:
       bounds_mode: FILE
   - init_temperature_new:
       T: 5000. K
-  - read_cell_values:
-      field_name: "igar_ep"
-      field_dim: 1
-      grid_subdiv: 32   # 4^3 cells x 32 = the 128^3 field written by generate_vtk_grid.py
-      file_name: "igar_test.vtk"
+  - igar_read_field:
+      file_name: "igar_test.vtk"   # 128^3 8-bit field (BINARY) written by generate_vtk_grid.py
+      storage: uint8
+      value_scale: 0.00392156862745098   # 1/255: levels 0-255 -> field in [0,1]
 
 write_snapshot:
   - timestep_file: "Paraview/test_%09d"

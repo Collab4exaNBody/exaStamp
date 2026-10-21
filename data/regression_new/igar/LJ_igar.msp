@@ -51,16 +51,11 @@ setup_system:
       sigma: 0.2 ang
   - init_temperature_new:
       T: 2000. K
-  - read_cell_values:
-      field_name: "igar_ep"
-      field_dim: 1
-      grid_subdiv: 32
-      file_name: "igar_test.vtk"
+  - igar_read_field: { file_name: "igar_test.vtk", storage: uint8, value_scale: 0.00392156862745098 }   # 1/255
   
 write_snapshot: nop
 
 global:
-  enable_cell_values: true
   max_iteration: 200
   simulation_thermostate_screen_frequency: 1
   simulation_thermostate_file_frequency: -1

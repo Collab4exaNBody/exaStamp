@@ -21,19 +21,21 @@ under the License.
 #include <exanb/compute/compute_cell_particles.h>
 #include <exanb/core/grid_particle_field_accessor.h>
 #include <exanb/core/parallel_grid_algorithm.h>
-#include <exanb/grid_cell_particles/grid_cell_values.h>
-#include <exanb/grid_cell_particles/grid_cell_values_utils.h>
+#include <exanb/core/domain.h>
+#include <onika/math/basic_types_operators.h>
 #include <onika/cuda/cuda.h>
 #include <onika/math/quaternion_operators.h>
+
+#include "igar_field.h"
 
 namespace exaStamp
 {
 
   using namespace exanb;
 
-  // Interpolation schemes of the igar_ep subcell values (values sit at the subcell centers).
-  //  - Lagrange   : triquadratic Lagrange on the 3x3x3 stencil centered on the particle's subcell. Interpolating, but the
-  //                 stencil moves when the particle crosses a subcell face: energy discontinuous there.
+  // Interpolation schemes of the IGAR field (values sit at the voxel centers).
+  //  - Lagrange   : triquadratic Lagrange on the 3x3x3 stencil centered on the particle's voxel. Interpolating, but the
+  //                 stencil moves when the particle crosses a voxel face: energy discontinuous there.
   //  - BSpline    : quadratic B-spline on the same 3x3x3 stencil. Energy and force continuous (C1), force = exact
   //                 derivative of the energy. Not interpolating: smooths the field (error ~ h^2/8 * curvature).
   //  - CatmullRom : tricubic Catmull-Rom on a 4x4x4 stencil. Interpolating and C1, force = exact derivative.
@@ -46,7 +48,7 @@ namespace exaStamp
 
   template <IgarInterpolation Scheme> struct IgarInterpolationWeights;
 
-  // t in [-1/2, 1/2]: offset from the particle's subcell center, in subcell units. Nodes at -1, 0, +1.
+  // t in [-1/2, 1/2]: offset from the particle's voxel center, in voxel units. Nodes at -1, 0, +1.
   template <> struct IgarInterpolationWeights<IgarInterpolation::Lagrange>
   {
     static inline constexpr int N = 3;
@@ -78,7 +80,7 @@ namespace exaStamp
   };
 
   // The particle lies between nodes 0 and 1 of the 4 nodes -1, 0, 1, 2 (s in [0,1] from node 0): node 0 is the
-  // particle's subcell (t >= 0) or the one below it (t < 0).
+  // particle's voxel (t >= 0) or the one below it (t < 0).
   template <> struct IgarInterpolationWeights<IgarInterpolation::CatmullRom>
   {
     static inline constexpr int N = 4;
@@ -98,80 +100,74 @@ namespace exaStamp
     }
   };
 
-  template <IgarInterpolation Scheme> struct CellScalarEnergyToParticleForceFunctor
+  // Wraps a stencil node index along one axis: periodic axes wrap around, nodes outside a non-periodic axis are -1
+  ONIKA_HOST_DEVICE_FUNC inline ssize_t igar_wrap_index(ssize_t n, ssize_t dim, bool periodic)
+  {
+    if (periodic) return ((n % dim) + dim) % dim;
+    return (n >= 0 && n < dim) ? n : -1;
+  }
+
+  template <IgarInterpolation Scheme, class ValueT> struct IgarFieldToParticleForceFunctor
   {
     using Weights = IgarInterpolationWeights<Scheme>;
     static inline constexpr int N = Weights::N;
 
-    Vec3d grid_origin = {0., 0., 0.};
-    IJK grid_offset = {0, 0, 0};
-    IJK grid_dims = {0, 0, 0};
-    ssize_t subdiv = 0;
+    // the field, the voxels and the particle positions live in grid space (real position = xform * grid position)
+    Vec3d origin = {0., 0., 0.};    // domain origin, where voxel (0,0,0) starts
+    Vec3d inv_h = {0., 0., 0.};     // 1 / voxel size, per axis
+    Mat3d inv_xform_t = {1., 0., 0., 0., 1., 0., 0., 0., 1.}; // transpose(inv_xform): grid-space gradient -> real-space gradient
+    IJK dims = {0, 0, 0};           // field dimensions
+    bool periodic_x = true, periodic_y = true, periodic_z = true;
+    double energy_factor = 0.0;     // includes the field value_scale
+    const ValueT *__restrict__ field = nullptr;
 
-    double cell_size = 0.0;
-    double subcell_size = 0.0;
-    double inv_subcell_size = 0.0;
-
-    double energy_factor = 0.0;
-
-    const double *__restrict__ e_ptr = nullptr;
-
-    size_t e_stride = 0;
-
-    ONIKA_HOST_DEVICE_FUNC inline void operator()(size_t cell_i, size_t p_i, double rx, double ry, double rz, double &fx, double &fy, double &fz, double &en) const
+    ONIKA_HOST_DEVICE_FUNC inline void operator()(double rx, double ry, double rz, double &fx, double &fy, double &fz, double &en) const
     {
-      using GridCellValuesUtils::localize_subcell;
-      using GridCellValuesUtils::subcell_neighbor;
-      const IJK cell_loc = grid_index_to_ijk(grid_dims, cell_i);
-      const Vec3d cell_origin = grid_origin + ((grid_offset + cell_loc) * cell_size);
-      const Vec3d rco = {rx - cell_origin.x, ry - cell_origin.y, rz - cell_origin.z};
+      // position in voxel units; the particle's voxel is c, u is the offset from its center (in [-1/2, 1/2[)
+      const double gx = (rx - origin.x) * inv_h.x;
+      const double gy = (ry - origin.y) * inv_h.y;
+      const double gz = (rz - origin.z) * inv_h.z;
+      const double cx = floor(gx), cy = floor(gy), cz = floor(gz);
+      const double u = gx - cx - 0.5;
+      const double v = gy - cy - 0.5;
+      const double w = gz - cz - 0.5;
 
-      // between two neighbor list updates, a particle may lie outside its cell: localize_subcell then returns
-      // the cell it actually lies in, relative to cell_loc
-      IJK rel_cell_loc, center_subcell_loc;
-      localize_subcell(rco, cell_size, subcell_size, subdiv, rel_cell_loc, center_subcell_loc);
-      const IJK center_cell_loc = rel_cell_loc + cell_loc;
+      double wu[N], wv[N], ww[N], dwu[N], dwv[N], dww[N];
+      Weights::weights(u, wu, dwu);
+      Weights::weights(v, wv, dwv);
+      Weights::weights(w, ww, dww);
 
-      if (grid_contains(grid_dims, center_cell_loc))
+      ssize_t ix[N], iy[N], iz[N];
+      for (int n = 0; n < N; n++)
       {
-        // offset from the center of the particle's subcell, in subcell units (in [-1/2, 1/2])
-        const Vec3d rsc = rco - (rel_cell_loc * cell_size);
-        const double u = rsc.x * inv_subcell_size - (center_subcell_loc.i + 0.5);
-        const double v = rsc.y * inv_subcell_size - (center_subcell_loc.j + 0.5);
-        const double w = rsc.z * inv_subcell_size - (center_subcell_loc.k + 0.5);
-
-        double wu[N], wv[N], ww[N], dwu[N], dwv[N], dww[N];
-        Weights::weights(u, wu, dwu);
-        Weights::weights(v, wv, dwv);
-        Weights::weights(w, ww, dww);
-        const IJK first = {Weights::first_node(u), Weights::first_node(v), Weights::first_node(w)};
-
-        // stencil values read through subcell_neighbor (crosses cell boundaries), out-of-grid values count as 0
-        double ep_interp = 0.0;
-        double dEdx = 0.0, dEdy = 0.0, dEdz = 0.0;
-        for (int k = 0; k < N; k++)
-          for (int j = 0; j < N; j++)
-            for (int i = 0; i < N; i++)
-            {
-              IJK nbh_cell_loc, nbh_subcell_loc;
-              subcell_neighbor(center_cell_loc, center_subcell_loc, subdiv, first + IJK{i, j, k}, nbh_cell_loc, nbh_subcell_loc);
-              if (grid_contains(grid_dims, nbh_cell_loc))
-              {
-                const ssize_t nbh_cell_i = grid_ijk_to_index(grid_dims, nbh_cell_loc);
-                const ssize_t nbh_subcell_i = grid_ijk_to_index(IJK{subdiv, subdiv, subdiv}, nbh_subcell_loc);
-                const double e = e_ptr[nbh_cell_i * e_stride + nbh_subcell_i];
-                ep_interp += wu[i] * wv[j] * ww[k] * e;
-                dEdx += dwu[i] * wv[j] * ww[k] * e;
-                dEdy += wu[i] * dwv[j] * ww[k] * e;
-                dEdz += wu[i] * wv[j] * dww[k] * e;
-              }
-            }
-
-        en += energy_factor * ep_interp;
-        fx += -energy_factor * dEdx * inv_subcell_size;
-        fy += -energy_factor * dEdy * inv_subcell_size;
-        fz += -energy_factor * dEdz * inv_subcell_size;
+        ix[n] = igar_wrap_index(ssize_t(cx) + Weights::first_node(u) + n, dims.i, periodic_x);
+        iy[n] = igar_wrap_index(ssize_t(cy) + Weights::first_node(v) + n, dims.j, periodic_y);
+        iz[n] = igar_wrap_index(ssize_t(cz) + Weights::first_node(w) + n, dims.k, periodic_z);
       }
+
+      // nodes outside a non-periodic domain count as 0
+      double ep_interp = 0.0;
+      double dEdx = 0.0, dEdy = 0.0, dEdz = 0.0;
+      for (int k = 0; k < N; k++)
+        for (int j = 0; j < N; j++)
+          for (int i = 0; i < N; i++)
+          {
+            if (ix[i] >= 0 && iy[j] >= 0 && iz[k] >= 0)
+            {
+              const double e = static_cast<double>(field[ix[i] + dims.i * (iy[j] + dims.j * iz[k])]);
+              ep_interp += wu[i] * wv[j] * ww[k] * e;
+              dEdx += dwu[i] * wv[j] * ww[k] * e;
+              dEdy += wu[i] * dwv[j] * ww[k] * e;
+              dEdz += wu[i] * wv[j] * dww[k] * e;
+            }
+          }
+
+      // force = -dE/dR with R = xform * r : -transpose(inv_xform) * dE/dr
+      const Vec3d f = inv_xform_t * Vec3d{dEdx * inv_h.x, dEdy * inv_h.y, dEdz * inv_h.z};
+      en += energy_factor * ep_interp;
+      fx += -energy_factor * f.x;
+      fy += -energy_factor * f.y;
+      fz += -energy_factor * f.z;
     }
   };
 
@@ -179,7 +175,7 @@ namespace exaStamp
 
 namespace exanb
 {
-  template <exaStamp::IgarInterpolation Scheme> struct ComputeCellParticlesTraits<exaStamp::CellScalarEnergyToParticleForceFunctor<Scheme>>
+  template <exaStamp::IgarInterpolation Scheme, class ValueT> struct ComputeCellParticlesTraits<exaStamp::IgarFieldToParticleForceFunctor<Scheme, ValueT>>
   {
     static inline constexpr bool CudaCompatible = true;
   };
@@ -187,51 +183,38 @@ namespace exanb
 
 namespace exaStamp
 {
-  namespace ParticleCellProjectionTools
+  // Per-particle interpolation of the IGAR field (scheme chosen at run time, see IgarInterpolation): energy and its
+  // analytical gradient at the particle position.
+  template <class GridT, class PECFuncT>
+  inline void igar_field_force(GridT &grid, const Domain &domain, const PECFuncT &parallel_execution_context, const IgarField &igar_field, double energy_factor, IgarInterpolation scheme)
   {
-    using namespace GridCellValuesUtils;
+    const Vec3d size = bounds_size(domain.bounds());
+    const IJK dims = igar_field.m_dims;
+    const Vec3d inv_h = {dims.i / size.x, dims.j / size.y, dims.k / size.z};
+    const double scaled_energy_factor = energy_factor * igar_field.m_value_scale;
+    const Mat3d inv_xform_t = transpose(domain.inv_xform());
 
-    // Per-particle interpolation of igar_ep (scheme chosen at run time, see IgarInterpolation): energy and its
-    // analytical gradient at the particle position.
-    template <class LDBGT, class GridT, class PECFuncT>
-    inline void get_particle_force_from_grid(LDBGT &ldbg, GridT &grid, const PECFuncT &parallel_execution_context, const GridCellValues &grid_cell_values, double energy_factor, IgarInterpolation scheme)
+    auto cp_fields = onika::make_flat_tuple(grid.field_accessor(field::rx), grid.field_accessor(field::ry), grid.field_accessor(field::rz), grid.field_accessor(field::fx), grid.field_accessor(field::fy), grid.field_accessor(field::fz), grid.field_accessor(field::ep));
+
+    auto run = [&](auto scheme_tag, const auto *values)
     {
-      static constexpr const char *e_name = "igar_ep";
-
-      if (!grid_cell_values.has_field(e_name))
-      {
-        ldbg << "get_particle_force_from_grid: no '" << e_name << "' in grid_cell_values, skip" << std::endl;
-        return;
-      }
-
-      const GridCellField &e_field = grid_cell_values.field(e_name);
-      const ssize_t subdiv = static_cast<ssize_t>(e_field.m_subdiv);
-
-      const double cell_size = grid.cell_size();
-      const double subcell_size = cell_size / subdiv;
-      const double inv_subcell_size = 1.0 / subcell_size;
-
-      auto e_accessor = grid_cell_values.field_data(e_name);
-      const double *__restrict__ e_ptr = e_accessor.m_data_ptr;
-      const size_t e_stride = e_accessor.m_stride;
-
-      auto cp_fields = onika::make_flat_tuple(grid.field_accessor(field::rx), grid.field_accessor(field::ry), grid.field_accessor(field::rz), grid.field_accessor(field::fx), grid.field_accessor(field::fy), grid.field_accessor(field::fz), grid.field_accessor(field::ep));
-
-      auto run = [&](auto scheme_tag)
-      {
-        constexpr IgarInterpolation S = decltype(scheme_tag)::value;
-        CellScalarEnergyToParticleForceFunctor<S> func = {grid.origin(), grid.offset(), grid.dimension(), subdiv, cell_size, subcell_size, inv_subcell_size, energy_factor, e_ptr, e_stride};
-        compute_cell_particles(grid, false, func, cp_fields, parallel_execution_context());
-      };
-
+      constexpr IgarInterpolation S = decltype(scheme_tag)::value;
+      using ValueT = std::remove_cv_t<std::remove_pointer_t<decltype(values)>>;
+      IgarFieldToParticleForceFunctor<S, ValueT> func = {domain.origin(), inv_h, inv_xform_t, dims, domain.periodic_boundary_x(), domain.periodic_boundary_y(), domain.periodic_boundary_z(), scaled_energy_factor, values};
+      compute_cell_particles(grid, false, func, cp_fields, parallel_execution_context());
+    };
+    auto run_scheme = [&](const auto *values)
+    {
       switch (scheme)
       {
-        case IgarInterpolation::Lagrange: run(std::integral_constant<IgarInterpolation, IgarInterpolation::Lagrange>{}); break;
-        case IgarInterpolation::BSpline: run(std::integral_constant<IgarInterpolation, IgarInterpolation::BSpline>{}); break;
-        case IgarInterpolation::CatmullRom: run(std::integral_constant<IgarInterpolation, IgarInterpolation::CatmullRom>{}); break;
+        case IgarInterpolation::Lagrange: run(std::integral_constant<IgarInterpolation, IgarInterpolation::Lagrange>{}, values); break;
+        case IgarInterpolation::BSpline: run(std::integral_constant<IgarInterpolation, IgarInterpolation::BSpline>{}, values); break;
+        case IgarInterpolation::CatmullRom: run(std::integral_constant<IgarInterpolation, IgarInterpolation::CatmullRom>{}, values); break;
       }
-    }
+    };
 
-  } // namespace ParticleCellProjectionTools
+    if (igar_field.is_uint8()) run_scheme(igar_field.m_u8.data());
+    else run_scheme(igar_field.m_f64.data());
+  }
 
 } // namespace exaStamp

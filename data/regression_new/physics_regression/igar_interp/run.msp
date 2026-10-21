@@ -42,14 +42,9 @@ setup_system:
       types: [ Ar ]
       size: [ 2.1 ang, 2.1 ang, 2.1 ang ]
   - physics_regression_noise
-  - read_cell_values:
-      field_name: "igar_ep"
-      field_dim: 1
-      grid_subdiv: 4
-      file_name: "igar_field.vtk"
+  - igar_read_field: { file_name: "igar_field.vtk", storage: double }
 
 
 +global:
-  enable_cell_values: true
   rcut_inc: 1.0 ang
   dt: 0.5 fs

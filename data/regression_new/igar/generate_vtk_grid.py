@@ -1,8 +1,6 @@
 #!/usr/bin/python3
 
 import numpy as np
-import vtk
-from vtk.util.numpy_support import numpy_to_vtk
 
 def write_ovito_grid(filename, data_array, origin=(0.0, 0.0, 0.0), spacing=(1.0, 1.0, 1.0), ordering='F'):
     """
@@ -36,39 +34,39 @@ def write_ovito_grid(filename, data_array, origin=(0.0, 0.0, 0.0), spacing=(1.0,
         ofile.write('%5.8f\n' %(data))
     ofile.close()
 
-def write_vtk_structured_points(filename, data_array, origin=(0.0, 0.0, 0.0), spacing=(1.0, 1.0, 1.0), ordering='F'):
+def write_vtk_structured_points(filename, data_array, origin=(0.0, 0.0, 0.0), spacing=(1.0, 1.0, 1.0), ordering='F', binary=True):
     """
-    Writes a 3D NumPy array to a VTK structured points file.
+    Writes a 3D NumPy array to a legacy VTK structured points file.
 
     Parameters:
         filename (str): The output VTK file name (e.g., 'points.vtk').
-        data_array (np.ndarray): A 3D NumPy array of shape (Nx, Ny, Nz).
+        data_array (np.ndarray): A 3D NumPy array of shape (Nx, Ny, Nz). Its dtype is kept in the file:
+            uint8 -> unsigned_char (1 byte per value, read by igar_read_field with storage: uint8), otherwise double.
         origin (tuple): The origin of the grid (default is (0.0, 0.0, 0.0)).
         spacing (tuple): The spacing between grid points (default is (1.0, 1.0, 1.0)).
+        ordering (str): 'F' (x fastest, default) or 'C' (z fastest).
+        binary (bool): BINARY file (default, much smaller and faster to read) or ASCII.
     """
     if len(data_array.shape) != 3:
         raise ValueError("Input array must be 3D.")
 
     Nx, Ny, Nz = data_array.shape
+    is_uint8 = data_array.dtype == np.uint8
+    values = data_array.ravel(order=ordering)
 
-    # Create the structured points
-    structured_points = vtk.vtkImageData()
-    structured_points.SetDimensions(Nx, Ny, Nz)
-    structured_points.SetOrigin(origin)
-    structured_points.SetSpacing(spacing)
-
-    # Convert the NumPy array to a VTK array
-    vtk_data_array = numpy_to_vtk(data_array.ravel(order=ordering), deep=True)
-    vtk_data_array.SetName("ScalarData")
-
-    # Add the data to the structured points
-    structured_points.GetPointData().SetScalars(vtk_data_array)
-
-    # Write the structured points to a file
-    writer = vtk.vtkStructuredPointsWriter()
-    writer.SetFileName(filename)
-    writer.SetInputData(structured_points)
-    writer.Write()
+    # header written by hand: the VTK writer turns uint8 point data into COLOR_SCALARS (values / 255 in ASCII files)
+    with open(filename, 'wb') as f:
+        f.write(("# vtk DataFile Version 3.0\nvtk output\n%s\nDATASET STRUCTURED_POINTS\n"
+                 "DIMENSIONS %d %d %d\nSPACING %g %g %g\nORIGIN %g %g %g\nPOINT_DATA %d\n"
+                 "SCALARS ScalarData %s\nLOOKUP_TABLE default\n"
+                 % ("BINARY" if binary else "ASCII", Nx, Ny, Nz, *spacing, *origin, values.size,
+                    "unsigned_char" if is_uint8 else "double")).encode())
+        if binary:
+            # legacy VTK binary data is big-endian
+            f.write(values.astype(">u1" if is_uint8 else ">f8").tobytes())
+            f.write(b"\n")
+        else:
+            np.savetxt(f, values, fmt="%d" if is_uint8 else "%.17g")
 
 import numpy as np
 
@@ -128,6 +126,17 @@ def populate_3d_array_with_spheres(Nx, Ny, Nz, num_spheres, mean_radius, radius_
     return array
 
 
+def to_uint8(data_array, val_min=0.0, val_max=1.0):
+    """
+    Maps [val_min, val_max] onto the 256 levels of an 8-bit image: level = rint(255 * (value - val_min) / (val_max - val_min)).
+    With igar_read_field, use value_scale = (val_max - val_min) / 255 to get back values in [0, val_max - val_min].
+    """
+    levels = np.rint(255.0 * (data_array - val_min) / (val_max - val_min))
+    if levels.min() < 0 or levels.max() > 255:
+        raise ValueError("values outside [val_min, val_max]")
+    return levels.astype(np.uint8)
+
+
 def populate_3d_array_with_sinusoid(Nx, Ny, Nz, val_min, val_max, n_periods, direction='x'):
     """
     Create a 3D numpy array with a periodic sinusoidal pattern along one direction.
@@ -170,12 +179,13 @@ if __name__ == "__main__":
     Nx, Ny, Nz = 128,128,128
     ordering = 'F'
 
-    # Sinusoidal grid: 3 periods along x, values in [0.5, 2.0]
+    # Sinusoidal grid: 18 periods along z, values in [0, 1], written as an 8-bit image (levels 0-255) in a BINARY file:
+    # read it with igar_read_field { storage: uint8, value_scale: 0.00392156862745098 } (1/255)
     data_sin = populate_3d_array_with_sinusoid(Nx, Ny, Nz, val_min=0., val_max=1.0, n_periods=18, direction='z')
     write_vtk_structured_points(
 #        "sinusoid_%dx%dx%d_%sorder.vtk" % (Nx, Ny, Nz, ordering),
         "igar_test.vtk",
-        data_sin, origin=(0.0, 0.0, 0.0), spacing=(1.0, 1.0, 1.0), ordering=ordering)
+        to_uint8(data_sin, 0.0, 1.0), origin=(0.0, 0.0, 0.0), spacing=(1.0, 1.0, 1.0), ordering=ordering, binary=True)
 
     # # Sphere grid (original)
     # num_spheres = 4

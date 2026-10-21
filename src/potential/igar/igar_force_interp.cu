@@ -16,7 +16,7 @@ under the License.
 */
 #include <exanb/core/grid.h>
 #include <exanb/core/make_grid_variant_operator.h>
-#include <exanb/grid_cell_particles/grid_cell_values.h>
+#include <exanb/core/domain.h>
 #include <onika/scg/operator.h>
 #include <onika/scg/operator_factory.h>
 #include <onika/scg/operator_slot.h>
@@ -36,53 +36,48 @@ namespace exaStamp
   template <class GridT, class = AssertGridHasFields<GridT, field::_rx, field::_ry, field::_rz, field::_ep, field::_fx, field::_fy, field::_fz>> class IgarForceInterp : public OperatorNode
   {
     ADD_SLOT(GridT, grid, INPUT_OUTPUT);
-    ADD_SLOT(GridCellValues, grid_cell_values, INPUT);
-    ADD_SLOT(double, energy_factor, INPUT, REQUIRED, DocString{"Energy scale of the igar_ep field (an energy: internal units unless a unit is given, e.g. 2.0 eV). Energy = energy_factor * igar_ep, force = -energy_factor * grad(igar_ep)."});
-    ADD_SLOT(std::string, interpolation, INPUT, std::string("catmull_rom"), DocString{"Interpolation of the igar_ep subcell values: catmull_rom (tricubic, 4x4x4 subcells, interpolating, energy and force continuous), bspline (quadratic B-spline, 3x3x3 subcells, continuous, smooths the field) or lagrange (triquadratic, 3x3x3 subcells, energy discontinuous at subcell faces: no energy conservation)."});
+    ADD_SLOT(Domain, domain, INPUT, REQUIRED);
+    ADD_SLOT(IgarField, igar_field, INPUT, REQUIRED, DocString{"IGAR field, read by igar_read_field."});
+    ADD_SLOT(double, energy_factor, INPUT, REQUIRED, DocString{"Energy scale of the IGAR field (an energy: internal units unless a unit is given, e.g. 2.0 eV). Energy = energy_factor * field, force = -energy_factor * grad(field)."});
+    ADD_SLOT(std::string, interpolation, INPUT, std::string("catmull_rom"), DocString{"Interpolation of the field values: catmull_rom (tricubic, 4x4x4 voxels, interpolating, energy and force continuous), bspline (quadratic B-spline, 3x3x3 voxels, continuous, smooths the field) or lagrange (triquadratic, 3x3x3 voxels, energy discontinuous at voxel faces: no energy conservation)."});
 
   public:
     inline std::string documentation() const override final
     {
       return R"EOF(
-Computes per-particle potential energy and forces from the IGAR scalar energy
-field igar_ep stored in grid_cell_values (one value per subcell, located at
-the subcell center).
+Computes per-particle potential energy and forces from the IGAR scalar field
+read by igar_read_field (one value per voxel, located at the voxel center, the
+voxels splitting the simulation domain evenly).
 
-The energy at the particle position is interpolated from the neighboring
-subcell values and multiplied by energy_factor; the force is minus its
+The field value at the particle position is interpolated from the neighboring
+voxel values and multiplied by energy_factor; the force is minus its
 analytical gradient, so forces are the exact derivative of the energy.
 
 interpolation selects the scheme:
-  catmull_rom (default)  tricubic Catmull-Rom, 4x4x4 subcells. Interpolating,
+  catmull_rom (default)  tricubic Catmull-Rom, 4x4x4 voxels. Interpolating,
                          energy and force continuous: energy is conserved.
-  bspline                quadratic B-spline, 3x3x3 subcells. Energy and force
+  bspline                quadratic B-spline, 3x3x3 voxels. Energy and force
                          continuous, cheaper, but smooths the field (energy
-                         error ~ subcell_size^2 * curvature / 8).
-  lagrange               triquadratic Lagrange, 3x3x3 subcells centered on the
-                         particle's subcell. The energy jumps when a particle
-                         crosses a subcell face: energy is not conserved.
+                         error ~ voxel_size^2 * curvature / 8).
+  lagrange               triquadratic Lagrange, 3x3x3 voxels centered on the
+                         particle's voxel. The energy jumps when a particle
+                         crosses a voxel face: energy is not conserved.
 
-The stencil reads igar_ep up to 2 subcells (catmull_rom) or 1 subcell away
-from the particle's subcell, in neighboring cells and ghost cells included:
-the ghost layer must cover that reach (values outside the grid count as 0).
+The field is attached to the simulation box: its voxels split the domain in
+grid coordinates, so a deformed box (xform) deforms the field with it. Forces
+are real-space derivatives of the energy (gradient times transpose(inv_xform)).
 
-Example (Lennard-Jones + IGAR, LJ_igar.msp):
+The stencil wraps around periodic boundaries; along a non-periodic axis, voxels
+outside the domain count as 0. The field is held by every MPI process: no
+ghost exchange of the field is needed, whatever the particle update scheme.
+
+Example (REBO + IGAR, 8-bit image):
 
   setup_system:
-    - read_cell_values:
-        field_name: "igar_ep"
-        field_dim: 1
-        grid_subdiv: 64
-        file_name: "igar_test.vtk"
+    - igar_read_field: { file_name: "image_1024.vtk", storage: uint8 }
 
   compute_force:
-    - lj_compute_force
-    - igar_force_interp: { energy_factor: 20000.0 }
-
-Example (REBO + IGAR, CH_rebo_read_xyz.msp):
-
-  compute_force:
-    - rebo_force
+    - rebo_compute_force
     - igar_force_interp: { energy_factor: 50000.0 }
 )EOF";
     }
@@ -96,7 +91,8 @@ Example (REBO + IGAR, CH_rebo_read_xyz.msp):
       else if (*interpolation == "catmull_rom") scheme = IgarInterpolation::CatmullRom;
       else fatal_error() << "igar_force_interp: unknown interpolation '" << *interpolation << "' (lagrange, bspline or catmull_rom)" << std::endl;
 
-      ParticleCellProjectionTools::get_particle_force_from_grid(ldbg, *grid, pecfunc, *grid_cell_values, *energy_factor, scheme);
+      if (igar_field->empty()) fatal_error() << "igar_force_interp: empty IGAR field (missing igar_read_field?)" << std::endl;
+      igar_field_force(*grid, *domain, pecfunc, *igar_field, *energy_factor, scheme);
     }
   };
 
