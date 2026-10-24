@@ -25,6 +25,11 @@ xnb_add_python_package(
   LINK_LIBRARIES onika
   VERSION ${EXASTAMP_VERSION}
   DEPENDENCIES pyonika pyexanbody
+  # MCP server helping LLM agents write input files: pip install <prefix>/python[mcp]
+  EXTRA_PACKAGES ${CMAKE_CURRENT_SOURCE_DIR}/exastamp_mcp
+  EXTRA_NAME mcp
+  EXTRA_DEPENDENCIES "mcp>=2" pyyaml
+  SCRIPTS exastamp-mcp=exastamp_mcp.server:main
   DESCRIPTION "Python interface to the exaStamp molecular dynamics code")
 
 file(GLOB PYEXASTAMP_EXAMPLES ${CMAKE_CURRENT_SOURCE_DIR}/examples/*.py)
