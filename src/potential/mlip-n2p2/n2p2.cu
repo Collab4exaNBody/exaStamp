@@ -63,7 +63,7 @@ namespace exaStamp
     ADD_SLOT( NNPParams             , parameters        , INPUT        , REQUIRED );
     ADD_SLOT( double                , rcut_max          , INPUT_OUTPUT , 0.0      );
     ADD_SLOT( ParticleSpecies       , species           , INPUT        , REQUIRED );
-    ADD_SLOT( int64_t               , timestep          , INPUT        , REQUIRED );
+    ADD_SLOT( long                  , timestep          , INPUT        , REQUIRED );
     ADD_SLOT( GridChunkNeighbors    , chunk_neighbors   , INPUT        , GridChunkNeighbors{} , DocString{"neighbor list"} );
     ADD_SLOT( bool                  , ghost             , INPUT        , false    );
     ADD_SLOT( GridT                 , grid              , INPUT_OUTPUT            );
