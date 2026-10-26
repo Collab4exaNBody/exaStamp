@@ -112,6 +112,15 @@ def test_includes_are_merged(catalog, tmp_path):
     assert [i for i in check_input(rest, catalog, str(tmp_path)) if i["level"] != "info"] == []
 
 
+def test_parent_include_builds(catalog, tmp_path):
+    # physics_regression layout: <case>/run.msp includes ../common.yaml
+    (tmp_path / "base.yaml").write_text(EXAMPLE.split("eam_alloy_force:")[0])
+    (tmp_path / "case").mkdir()
+    rest = "includes:\n  - ../base.yaml\neam_alloy_force:" + EXAMPLE.split("eam_alloy_force:")[1]
+    report = validate_input(rest, catalog, str(tmp_path / "case"), level="build")
+    assert report["ok"], report["issues"]
+
+
 # --------------------------------------------------------------------------- renderer + validation
 
 SPECS = {

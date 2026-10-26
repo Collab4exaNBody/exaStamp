@@ -1,0 +1,49 @@
+# Ta BCC relaxed at 300 K and zero pressure with an isotropic Nose-Hoover barostat
+includes:
+  - config_nose_hoover.msp
+
+species:
+  - Ta: { mass: 180.948 Da , z: 73 , charge: 0 e- }
+
+eam_alloy_force:
+  rcut: 5.3 ang
+  parameters:
+    file: Ta1_Ravelo_2013.eam.alloy
+compute_force: [ eam_alloy_force ]
+
+setup_system:
+  - domain:
+      cell_size: 6.6052 ang
+      grid_dims: [ 5, 5, 5 ]
+      bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 33.026 ang, 33.026 ang, 33.026 ang ] ]
+      periodic: [ true, true, true ]
+      expandable: false
+  - init_rcb_grid
+  - lattice:
+      structure: BCC
+      types: [ Ta, Ta ]
+      size: [ 3.3026 ang, 3.3026 ang, 3.3026 ang ]
+      shift: [ 0.003303 ang, 0.003303 ang, 0.003303 ang ]
+  - init_temperature_new:
+      T: 300 K
+
+numerical_scheme: verlet_nhnpt
+
+init_nose_hoover:
+  algo: NPT
+  Tstart: 300. K
+  Tend: 300. K
+  Tdamp: 0.1 ps
+  tchain: 3
+  Pstart: 0.0
+  Pend: 0.0
+  Pdamp: 1.0 ps
+  pchain: 3
+  Pmode: ISO
+
+global:
+  max_iteration: 1000
+  dt: 1.0e-3 ps
+  rcut_inc: 2.0 ang
+  simulation_thermostate_screen_frequency: 10
+  simulation_snapshot_frequency: -1

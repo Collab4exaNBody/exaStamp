@@ -20,6 +20,7 @@ import os
 import re
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+from fnmatch import fnmatch
 
 import yaml
 
@@ -29,6 +30,19 @@ __all__ = ["Corpus"]
 
 EXAMPLE_CATEGORIES = ("samples", "tutorial", "regression_new")
 _FORCE_HINT = re.compile(r"(force|potential)$")
+
+# shipped but obsolete inputs (operators or data removed upstream, no
+# replacement): kept in the repository, never offered as examples
+EXCLUDED_EXAMPLES = (
+    "samples/molecule_archive/*",
+    "tutorial/sample[123].msp",
+    "samples/task/task_*.msp",
+    "samples/task/microjet_meam_insitu.msp",
+    "samples/tools/stampv3_to_grid_vtklegacy.msp",
+    "regression_new/flexible_molecule/molstampv4/PB_rf_large_intramolecular_compute*.msp",
+    "regression_new/flexible_molecule/molxyz/in_exaStamp_polymere.msp",
+    "samples/droplet_tin_meam.msp",
+)
 
 
 def _first_line_flags(text):
@@ -179,7 +193,8 @@ class Corpus:
                 root = os.path.join(self.data_dir, cat)
                 for dirpath, _, files in os.walk(root):
                     for f in sorted(files):
-                        if f.endswith(".msp"):
+                        rel = os.path.relpath(os.path.join(dirpath, f), self.data_dir)
+                        if f.endswith(".msp") and not any(fnmatch(rel, p) for p in EXCLUDED_EXAMPLES):
                             self._examples.append(self._index_example(os.path.join(dirpath, f)))
             self._examples.sort(key=lambda e: e["path"])
         return self._examples

@@ -1,0 +1,37 @@
+# Ta BCC with the Ta06A SNAP potential (Thompson et al. 2015)
+species:
+  - Ta: { mass: 180.948 Da , z: 73 , charge: 0 e- }
+
+grid_flavor: grid_flavor_multimat
+
+compute_force:
+  - snap_force_fp64:
+      parameters:
+        nt: 1
+        param: Ta06A.snapparam
+        coef: Ta06A.snapcoeff
+
+setup_system:
+  - domain:
+      cell_size: 6.632 ang
+      grid_dims: [ 3, 3, 3 ]
+      bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 19.896 ang, 19.896 ang, 19.896 ang ] ]
+      periodic: [ true, true, true ]
+      expandable: false
+  - init_rcb_grid
+  - lattice:
+      structure: BCC
+      types: [ Ta, Ta ]
+      size: [ 3.316 ang, 3.316 ang, 3.316 ang ]
+      shift: [ 0.0033 ang, 0.0033 ang, 0.0033 ang ]
+  - init_temperature_new:
+      T: 300 K
+
+numerical_scheme: verlet_nve
+
+global:
+  max_iteration: 200
+  dt: 0.5e-3 ps
+  rcut_inc: 1.0 ang
+  simulation_thermostate_screen_frequency: 10
+  simulation_snapshot_frequency: -1

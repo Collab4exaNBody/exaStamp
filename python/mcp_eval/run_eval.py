@@ -11,6 +11,12 @@ must save its input as input.msp with write_input; ``grade(case, workspace)``
 then validates it (smoke run) and checks the expectations. Another agent
 framework (any model) can reuse ``grade`` on the workspaces it produced.
 
+Cases outside build_input give a hand-written ``reference_input`` (in
+references/) instead of a SimulationSpec, and may list ``workspace_files``
+(fixtures/ or the installed data) copied into the workspace before the agent
+starts. A ``refusal`` case passes when the agent writes no input and its reply
+names the missing feature.
+
 Reported per case: pass, first try (one build/validate call before the write),
 number of tool calls, failed expectations.
 
@@ -60,14 +66,35 @@ def _names(items):
     return out
 
 
+def _walk(node):
+    """(key, value) of every mapping entry and every string, at any depth."""
+    if isinstance(node, dict):
+        for k, v in node.items():
+            yield k, v
+            yield from _walk(v)
+    elif isinstance(node, list):
+        for v in node:
+            if isinstance(v, str):
+                yield None, v
+            yield from _walk(v)
+
+
+def _words(doc):
+    """Keys and string values of the input: operator names, files, region names..."""
+    out = set()
+    for k, v in _walk(doc):
+        if isinstance(k, str):
+            out.add(k.lstrip("+"))
+        if isinstance(v, str):
+            out.add(v)
+    return out
+
+
+_TEMPERATURE_KEYS = ("T", "Tstart", "Tstop", "Tend")
+
+
 def _kelvins(doc):
-    temps = []
-    for item in doc.get("setup_system") or []:
-        if isinstance(item, dict) and isinstance(item.get("init_temperature_new"), dict):
-            temps.append(item["init_temperature_new"].get("T"))
-    for block in ("langevin_thermostat", "berendsen_thermostat"):
-        if isinstance(doc.get(block), dict):
-            temps += [doc[block].get(k) for k in ("T", "Tstart", "Tstop")]
+    temps = [v for k, v in _walk(doc) if k in _TEMPERATURE_KEYS]
     out = []
     for t in temps:
         try:
@@ -77,9 +104,17 @@ def _kelvins(doc):
     return out
 
 
-def grade(case, workspace, catalog):
-    """{"pass", "failed": [...], "validation": report} for the input the agent wrote."""
+def grade(case, workspace, catalog, reply=None):
+    """{"pass", "failed": [...], "validation": report} for the input the agent wrote.
+    ``reply`` (the agent's final text) is needed by refusal cases only."""
     path = os.path.join(workspace, INPUT_NAME)
+    e = case["expect"]
+    if e.get("refusal"):
+        failed = [f"{INPUT_NAME} written instead of a refusal"] if os.path.isfile(path) else []
+        words = [w for w in e.get("mentions", []) if w.lower() not in (reply or "").lower()]
+        if words:
+            failed.append(f"reply does not mention {words}")
+        return {"pass": not failed, "failed": failed}
     if not os.path.isfile(path):
         return {"pass": False, "failed": [f"no {INPUT_NAME} written"]}
     with open(path) as f:
@@ -87,9 +122,19 @@ def grade(case, workspace, catalog):
     report = validate_input(text, catalog, workspace)
     failed = [] if report["ok"] else ["validation: " + "; ".join(i["message"][:120] for i in report["issues"] if i["level"] == "error")]
     doc = yaml.safe_load(text) or {}
-    e = case["expect"]
-    if "potential" in e and e["potential"] not in _names(doc.get("compute_force")):
+    # potential: one force operator name, or a list of acceptable ones
+    potentials = e["potential"] if isinstance(e.get("potential"), list) else [e.get("potential")]
+    if "potential" in e and not set(potentials) & set(_names(doc.get("compute_force"))):
         failed.append(f"potential {e['potential']} not in compute_force")
+    # operators: names that must appear as a key or a value anywhere ("a|b": either)
+    words = _words(doc)
+    for alts in e.get("operators", []):
+        if not set(alts.split("|")) & words:
+            failed.append(f"{alts} not used")
+    # files: data files the input must reference (by name)
+    for name in e.get("files", []):
+        if not any(w.endswith(name) for w in words):
+            failed.append(f"file {name} not referenced")
     if "scheme" in e and doc.get("numerical_scheme", "verlet_nve") != e["scheme"]:
         failed.append(f"numerical_scheme {doc.get('numerical_scheme')} != {e['scheme']}")
     if "species" in e and set(e["species"]) - set(_names(doc.get("species"))):
@@ -103,6 +148,9 @@ def grade(case, workspace, catalog):
         failed.append(f"atoms {(report.get('thermo_after_smoke') or {}).get('particle_count')} != {e['atoms']}")
     if "temperature" in e and not any(abs(t - e["temperature"]) < 1e-6 for t in _kelvins(doc)):
         failed.append(f"temperature {e['temperature']} K not set")
+    pe = (report.get("thermo_after_smoke") or {}).get("potential_energy")
+    if "max_potential_energy" in e and (pe is None or pe > e["max_potential_energy"]):
+        failed.append(f"potential energy {pe} > {e['max_potential_energy']} eV/atom")
     if "steps" in e and (doc.get("global") or {}).get("max_iteration") != e["steps"]:
         failed.append(f"max_iteration {(doc.get('global') or {}).get('max_iteration')} != {e['steps']}")
     if "snapshot" in e and doc.get("write_snapshot") != e["snapshot"]:
@@ -113,10 +161,30 @@ def grade(case, workspace, catalog):
 # --------------------------------------------------------------------------- agents
 
 def run_reference(case, workspace, catalog):
-    text, _ = render_input(case["reference"], catalog.data_dirs, catalog.find_data_file)
+    if case["expect"].get("refusal"):
+        missing = [op for op in case.get("missing_operators", []) if op in catalog.names()]
+        if missing:
+            raise RuntimeError(f"refusal case, but {missing} exist in this install")
+        return {"tool_calls": 0, "first_try": True, "reply": " ".join(case["expect"].get("mentions", []))}
+    if "reference_input" in case:
+        with open(os.path.join(HERE, case["reference_input"])) as f:
+            text = f.read()
+    else:
+        text, _ = render_input(case["reference"], catalog.data_dirs, catalog.find_data_file)
     with open(os.path.join(workspace, INPUT_NAME), "w") as f:
         f.write(text)
     return {"tool_calls": 0, "first_try": True}
+
+
+def copy_workspace_files(case, workspace, catalog):
+    """Files the user 'already has': from fixtures/, else from the installed data."""
+    for name in case.get("workspace_files", []):
+        src = os.path.join(HERE, "fixtures", name)
+        if not os.path.isfile(src):
+            src = next((os.path.join(d, name) for d in catalog.data_dirs if os.path.isfile(os.path.join(d, name))), None)
+        if src is None:
+            raise RuntimeError(f"workspace file {name} not found in fixtures/ or the data directories")
+        shutil.copy(src, os.path.join(workspace, os.path.basename(name)))
 
 
 # environment variables that would make the Claude Code CLI bill an API account
@@ -158,7 +226,7 @@ def run_claude_code(case, workspace, model=None, max_turns=30, timeout=1800):
         raise RuntimeError(f"claude: {result.get('result') or result.get('subtype')}")
     checks = [c for c in calls if c in ("build_input", "validate_input", "write_input")]
     return {"tool_calls": len(calls), "calls": calls, "first_try": len(checks) <= 2,
-            "turns": result.get("num_turns")}
+            "turns": result.get("num_turns"), "reply": result.get("result") or ""}
 
 
 async def run_claude(case, workspace, model, max_iterations):
@@ -169,7 +237,7 @@ async def run_claude(case, workspace, model, max_iterations):
 
     server = StdioServerParameters(command=sys.executable, args=["-m", "exastamp_mcp", "--workspace", workspace],
                                    env=dict(os.environ))
-    calls = []
+    calls, reply = [], ""
     async with stdio_client(server) as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()
@@ -182,10 +250,11 @@ async def run_claude(case, workspace, model, max_iterations):
             )
             async for message in runner:
                 calls += [b.name for b in message.content if b.type == "tool_use"]
+                reply = "".join(b.text for b in message.content if b.type == "text") or reply
     # first try: one build/validate call, then the write (no fix-and-retry round)
     checks = [c for c in calls if c in ("build_input", "validate_input", "write_input")]
     first = len(checks) <= 2
-    return {"tool_calls": len(calls), "calls": calls, "first_try": first}
+    return {"tool_calls": len(calls), "calls": calls, "first_try": first, "reply": reply}
 
 
 def main(argv=None):
@@ -209,20 +278,22 @@ def main(argv=None):
         keep = set(args.only.split(","))
         cases = [c for c in cases if c["id"] in keep]
     catalog = Catalog("pyexastamp")
-    root = args.workspaces or tempfile.mkdtemp(prefix="exastamp-mcp-eval-")
+    # absolute: the agent and the server run with the workspace as current directory
+    root = os.path.abspath(args.workspaces) if args.workspaces else tempfile.mkdtemp(prefix="exastamp-mcp-eval-")
     results = []
     for case in cases:
         ws = os.path.join(root, case["id"])
         os.makedirs(ws, exist_ok=True)
         start = time.monotonic()
         try:
+            copy_workspace_files(case, ws, catalog)
             if args.reference:
                 run = run_reference(case, ws, catalog)
             elif args.claude_code:
                 run = run_claude_code(case, ws, args.model, args.max_iterations)
             else:
                 run = asyncio.run(run_claude(case, ws, args.api_model, args.max_iterations))
-            g = grade(case, ws, catalog)
+            g = grade(case, ws, catalog, run.get("reply"))
         except Exception as e:  # report and go on with the other cases
             run, g = {}, {"pass": False, "failed": [f"{type(e).__name__}: {e}"]}
         r = {"id": case["id"], **g, **run, "seconds": round(time.monotonic() - start, 1)}

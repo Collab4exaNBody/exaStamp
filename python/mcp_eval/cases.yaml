@@ -10,8 +10,16 @@
 #   temperature   target or initial temperature (K) that must appear
 #   steps         global.max_iteration
 #   snapshot      write_snapshot value
-# reference: a SimulationSpec reaching the expectations (run_eval.py --reference
-# checks that every case is feasible with this install, without any LLM).
+#   operators     names that must appear as a key or value anywhere in the input ("a|b": either)
+#   files         data files the input must reference
+#   max_potential_energy   upper bound (eV/atom) after the smoke run
+#   refusal       the request cannot be done with this install: no input, reply mentions `mentions`
+# potential may be a list of acceptable force operators.
+# reference: a SimulationSpec reaching the expectations, or reference_input: a
+# hand-written input (references/) for the cases outside build_input
+# (run_eval.py --reference checks that every case is feasible with this install,
+# without any LLM). workspace_files: files the user already has (fixtures/, or
+# the installed data), copied into the workspace first.
 
 - id: ta_bcc_eam_nvt
   prompt: "Ta BCC, 20x20x20 unit cells, EAM potential of Ravelo 2013 (Ta1), Langevin NVT at 300 K for 10 ps with a 1 fs time step, xyz snapshot every 1 ps."
@@ -224,3 +232,69 @@
     initial_temperature: 5000 K
     timestep: 2.0e-4 ps
     steps: 2000
+
+# --------------------------------------------------------------------------
+# Outside build_input: the agent has to start from an example or the docs.
+
+- id: cuzn_multimat_lj
+  prompt: "Cu-Zn mixture on an FCC lattice (a = 3.7 A, cubic cell sites Cu, Zn, Cu, Zn), 8x8x8 cells. Lennard-Jones for each species pair: Cu-Cu epsilon 0.4093 eV sigma 2.338 A, Zn-Zn 0.1574 eV 2.44 A, Cu-Zn 0.30 eV 2.36 A, cutoff 6 A for all pairs. NVE from 300 K, 500 steps."
+  expect: {potential: [compute_force_pair_multimat, lj_multi_force], species: [Cu, Zn], structure: FCC, atoms: 2048, temperature: 300, steps: 500}
+  reference_input: references/cuzn_multimat_lj.msp
+
+- id: ta_snap
+  prompt: "Ta BCC (a = 3.316 A), 6x6x6 cells, with the Ta06A SNAP potential (Thompson et al. 2015). NVE from 300 K, 200 steps of 0.5 fs."
+  expect: {potential: [snap_force_fp64, snap_force_fp32, snap_force_generic], files: [Ta06A.snapcoeff, Ta06A.snapparam], structure: BCC, atoms: 432, temperature: 300, steps: 200}
+  reference_input: references/ta_snap.msp
+
+- id: ta_npt
+  prompt: "Relax Ta BCC (a = 3.3026 A, 10x10x10 cells, Ta1 Ravelo EAM) at 300 K and zero pressure with an isotropic Nose-Hoover barostat, 1000 steps."
+  expect: {potential: eam_alloy_force, scheme: verlet_nhnpt, operators: [init_nose_hoover], atoms: 2000, temperature: 300, steps: 1000}
+  reference_input: references/ta_npt.msp
+
+- id: nacl_lj_wolf
+  prompt: "NaCl rock salt (a = 5.64 A), 4x4x4 conventional cells, charges +1 and -1. Lennard-Jones per pair (Na-Na 0.0115 eV 2.35 A, Cl-Cl 0.0046 eV 4.40 A, Na-Cl 0.0073 eV 3.375 A) plus Coulomb with the Wolf summation (alpha 0.25 1/A, cutoff 10 A). NVE from 300 K, 200 steps."
+  expect:
+    species: [Na, Cl]
+    atoms: 512
+    temperature: 300
+    steps: 200
+    operators: ["ljwolf|ljwolf_multi_force|ljwolf_compute_force|coul_wolf|coul_wolf_multi_force|coulombic_wolf"]
+    max_potential_energy: -1.0
+  reference_input: references/nacl_lj_wolf.msp
+
+- id: water_rigid
+  prompt: "Box of 216 rigid TIP4P-like water molecules (use the water model shipped with exaStamp), simple cubic start with 3.1 A spacing, Lennard-Jones + reaction field, Langevin thermostat at 300 K, 1000 steps of 1 fs."
+  expect:
+    operators: ["ljrf_rigidmol_force|compute_force_pair_rigidmol", langevin_thermostat_rigidmol, grid_flavor_rigidmol]
+    atoms: 216
+    temperature: 300
+    steps: 1000
+  reference_input: references/water_rigid.msp
+
+- id: si_sw_xyz
+  prompt: "Run my silicon structure init.xyz (extended XYZ, the cell and the velocities are in the file) with the Stillinger-Weber potential, NVE, 1000 steps of 1 fs."
+  workspace_files: [regression_new/potentials/sw/Si/init.xyz]
+  expect: {potential: sw_force, operators: ["read_xyz_file_with_xform"], files: [Si.sw, init.xyz], atoms: 512, steps: 1000}
+  reference_input: references/si_sw_xyz.msp
+
+- id: ta_region_thermostat
+  prompt: "Ta BCC 20x10x10 cells (a = 3.3026 A, Ta1 Ravelo EAM), starting at 0 K. NVE everywhere, except a Langevin heat bath at 300 K applied only to the atoms with x < 10 A. 2000 steps."
+  expect: {potential: eam_alloy_force, operators: [particle_regions, thermostat_region, langevin_thermostat], atoms: 4000, temperature: 300, steps: 2000}
+  reference_input: references/ta_region_thermostat.msp
+
+- id: ta_restart
+  # the restart file stores iteration 500: max_iteration is not checked (2000 or 2500 both defensible)
+  prompt: "Continue my Ta simulation from the restart file ta_restart.MpiIO (written by exaStamp with write_dump_atoms), Ta1 Ravelo EAM, Langevin at 300 K, 2000 more steps, restart files every 500 steps."
+  workspace_files: [ta_restart.MpiIO]
+  expect: {potential: eam_alloy_force, scheme: verlet_lnvt, operators: [read_dump_atoms], files: [ta_restart.MpiIO], atoms: 1024, temperature: 300}
+  reference_input: references/ta_restart.msp
+
+- id: cu_histogram
+  prompt: "Cu FCC 10x10x10 cells (3.615 A), Cu EAM, NVE from 600 K for 1000 steps. At the end of the run, write the histogram of the x velocities (100 bins) to vx_hist.csv."
+  expect: {potential: eam_alloy_force, operators: ["histogram_vx|histogram_generic", write_histogram], files: [vx_hist.csv], atoms: 4000, temperature: 600, steps: 1000}
+  reference_input: references/cu_histogram.msp
+
+- id: rsa_unavailable
+  prompt: "Fill a 100 A cubic box with Ta atoms by random sequential addition (init_rsa, minimum distance 2.5 A), then run NVE for 1000 steps."
+  missing_operators: [init_rsa]
+  expect: {refusal: true, mentions: [rsa]}

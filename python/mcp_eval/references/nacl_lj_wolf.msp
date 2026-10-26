@@ -1,0 +1,44 @@
+# NaCl rock salt: Lennard-Jones per species pair plus Wolf-summed Coulomb
+species:
+  - Na: { mass: 22.98977 Da , z: 11 , charge: 1.0 e- }
+  - Cl: { mass: 35.453 Da , z: 17 , charge: -1.0 e- }
+
+grid_flavor: grid_flavor_multimat
+
+compute_force_pair_multimat:
+  potentials:
+    - { type_a: Na , type_b: Na , potential: ljwolf , rcut: 10.0 ang , parameters: { cw: { alpha: 0.25 1/ang , rc: 10.0 ang } , lj_rcut: 10.0 ang , lj: { epsilon: 0.0115 eV , sigma: 2.35 ang } } }
+    - { type_a: Cl , type_b: Cl , potential: ljwolf , rcut: 10.0 ang , parameters: { cw: { alpha: 0.25 1/ang , rc: 10.0 ang } , lj_rcut: 10.0 ang , lj: { epsilon: 0.0046 eV , sigma: 4.40 ang } } }
+    - { type_a: Na , type_b: Cl , potential: ljwolf , rcut: 10.0 ang , parameters: { cw: { alpha: 0.25 1/ang , rc: 10.0 ang } , lj_rcut: 10.0 ang , lj: { epsilon: 0.0073 eV , sigma: 3.375 ang } } }
+
+compute_force: compute_force_pair_multimat
+
+setup_system:
+  - particle_types:
+      particle_type_map: { Na: 0, Cl: 1 }
+  - domain:
+      cell_size: 5.64 ang
+      grid_dims: [ 4, 4, 4 ]
+      bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 22.56 ang, 22.56 ang, 22.56 ang ] ]
+      periodic: [ true, true, true ]
+      expandable: false
+  - init_rcb_grid
+  - lattice:
+      structure: CUSTOM
+      types: [ Na, Na, Na, Na, Cl, Cl, Cl, Cl ]
+      positions:
+        [ [ 0.0, 0.0, 0.0 ], [ 0.0, 0.5, 0.5 ], [ 0.5, 0.0, 0.5 ], [ 0.5, 0.5, 0.0 ],
+          [ 0.5, 0.0, 0.0 ], [ 0.0, 0.5, 0.0 ], [ 0.0, 0.0, 0.5 ], [ 0.5, 0.5, 0.5 ] ]
+      size: [ 5.64 ang, 5.64 ang, 5.64 ang ]
+      shift: [ 0.00564 ang, 0.00564 ang, 0.00564 ang ]
+  - init_temperature_new:
+      T: 300 K
+
+numerical_scheme: verlet_nve
+
+global:
+  max_iteration: 200
+  dt: 1.0e-3 ps
+  rcut_inc: 1.0 ang
+  simulation_thermostate_screen_frequency: 10
+  simulation_snapshot_frequency: -1
