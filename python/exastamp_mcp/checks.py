@@ -322,6 +322,24 @@ def _check_thermostat(rep, doc):
                     suggestion=f"numerical_scheme: {want}", block="numerical_scheme")
 
 
+# grid flavors without the virial field, and the closest flavor that has it
+_NO_VIRIAL = {"grid_flavor_multimat": "grid_flavor_multimat_mechanics", "grid_flavor_minimal": "grid_flavor_multimat_mechanics",
+              "grid_flavor_atomic": "grid_flavor_multimat_mechanics", "grid_flavor_atomic_charge": "grid_flavor_atomic_full",
+              "grid_flavor_rigidmol": None}
+_NPT_SCHEMES = ("verlet_nhnpt", "numerical_scheme_parrinellorahman")
+
+
+def _check_pressure(rep, doc):
+    """A barostat on a grid without virial sees the kinetic pressure only, silently."""
+    scheme, flavor = doc.get("numerical_scheme"), doc.get("grid_flavor")
+    if scheme in _NPT_SCHEMES and isinstance(flavor, str) and flavor in _NO_VIRIAL:
+        better = _NO_VIRIAL[flavor]
+        rep.add("error", "grid_flavor", f"{flavor} has no virial field: the pressure is kinetic only and "
+                f"{scheme} would drive the wrong pressure",
+                suggestion=f"grid_flavor: {better}" if better else "constant pressure is not available for rigid molecules",
+                block="grid_flavor")
+
+
 def _check_global(rep, params, catalog):
     if not isinstance(params, dict):
         return
@@ -474,4 +492,5 @@ def check_input(text, catalog, workdir=None):
         rep.add("warning", "compute_force", "no interatomic potential: compute_force is 'nop' by default",
                 suggestion=SCHEMAS["eam_alloy_force"]["snippet"], block="compute_force")
     _check_thermostat(rep, doc)
+    _check_pressure(rep, doc)
     return rep.issues

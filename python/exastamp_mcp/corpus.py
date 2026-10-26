@@ -273,18 +273,20 @@ class Corpus:
         with open(path, errors="replace") as f:
             text = f.read()
         text = re.sub(r"\A---\n.*?\n---\n", "", text, flags=re.S)   # front matter
-        sections, title, buf = [], rel, []
+        sections, titles, buf = [], [], []
         for line in text.splitlines():
             m = re.match(r"^(#{1,3})\s+(.*)", line)
-            if m and buf:
-                sections.append((title, "\n".join(buf)))
-                buf = []
+            # a heading directly followed by another one (a page title) stays with the next section
+            if m and any(l.strip() and not re.match(r"^#{1,6}\s", l) for l in buf):
+                sections.append((" > ".join(titles) or rel, "\n".join(buf)))
+                titles, buf = [], []
             if m:
-                title = m.group(2).strip()
+                titles.append(m.group(2).strip().strip("*`").strip())
             buf.append(line)
         if buf:
-            sections.append((title, "\n".join(buf)))
-        return [{"page": rel, "section": t, "url": _doc_url(rel), "_text": b,
+            sections.append((" > ".join(titles) or rel, "\n".join(buf)))
+        outline = [t for t, _ in sections]
+        return [{"page": rel, "section": t, "url": _doc_url(rel), "outline": outline, "_text": b,
                  "_head": _tokens(rel + " " + t), "_body": _tokens(b)} for t, b in sections if b.strip()]
 
     def search_docs(self, query, limit=5):
@@ -297,8 +299,15 @@ class Corpus:
             if score is not None:
                 hits.append((score, s))
         hits.sort(key=lambda h: -h[0])
-        return [{"page": s["page"], "section": s["section"], "url": s["url"], "text": s["_text"][:2500]}
-                for _, s in hits[:limit]]
+        out = []
+        for _, s in hits[:limit]:
+            hit = {"page": s["page"], "section": s["section"], "url": s["url"], "text": s["_text"][:2500],
+                   "page_sections": s["outline"]}
+            if len(s["_text"]) > 2500 or len(s["outline"]) > 1:
+                hit["more"] = ("section truncated; " if len(s["_text"]) > 2500 else "") + \
+                    f"get_doc('{s['page']}') returns the whole page (syntax, parameters, examples)"
+            out.append(hit)
+        return out
 
     def get_doc(self, page):
         if not self.doc_dir:

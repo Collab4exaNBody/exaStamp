@@ -2,11 +2,12 @@
 exaStamp MCP server (stdio): tools that let an LLM agent write exaStamp input
 files that run the first time.
 
-    exastamp-mcp [--workspace DIR] [--doc-dir doc_exaStamp/docs]
+    exastamp-mcp [--workspace DIR] [--doc-dir doc_exaStamp/docs] [--max-run-steps N]
     exastamp-mcp --index-examples      # build every example once, cache the status
 
 The workspace (default: the current directory) is where inputs are written
-and run; paths outside it are refused.
+and run; paths outside it are refused. --max-run-steps caps every run_input
+to N time steps (evaluations: an agent's run only checks that the input starts).
 """
 
 import argparse
@@ -16,6 +17,7 @@ import sys
 import threading
 from typing import Any, Literal, Optional
 
+import yaml as _yaml
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
@@ -43,7 +45,8 @@ exaStamp input files (.msp) are YAML. Follow these steps to get an input that ru
    the server derives the domain, the lattice types, the grid flavor and the block order, and
    validates the result. Prefer this path.
 3. Otherwise start from a working example: search_examples (prefer results with builds: true),
-   get_example, and describe_block for every block you change. search_docs explains concepts.
+   get_example, and describe_block for every block you change. For an operator's meaning,
+   parameters and units, or a feature no example shows: search_docs, then get_doc on the page.
 4. validate_input before handing over an input; fix every error it reports (each issue has a
    path, a message and often a suggestion) and validate again. Warnings deserve a look.
 5. write_input saves the file in the workspace (refused while validation fails);
@@ -72,9 +75,10 @@ def _resolve(workspace, path):
 class _State:
     """Lazy catalog and corpus (the first catalog load starts exaStamp once)."""
 
-    def __init__(self, workspace, doc_dir):
+    def __init__(self, workspace, doc_dir, max_run_steps=None):
         self.workspace = os.path.realpath(workspace)
         self.doc_dir = doc_dir
+        self.max_run_steps = max_run_steps
         self.catalog = Catalog(PACKAGE)
         self.jobs = JobManager(PACKAGE)
         self._corpus = None
@@ -90,8 +94,8 @@ class _State:
             return self._corpus
 
 
-def build_server(workspace=".", doc_dir=None):
-    state = _State(workspace, doc_dir or os.environ.get("EXASTAMP_DOC_DIR"))
+def build_server(workspace=".", doc_dir=None, max_run_steps=None):
+    state = _State(workspace, doc_dir or os.environ.get("EXASTAMP_DOC_DIR"), max_run_steps)
     server = MCPServer("exastamp", title="exaStamp input builder", instructions=WORKFLOW,
                        description="Write, check and run exaStamp molecular dynamics input files")
     ro = ToolAnnotations(read_only_hint=True, open_world_hint=False)
@@ -182,14 +186,17 @@ def build_server(workspace=".", doc_dir=None):
 
     @tool(ro)
     def search_docs(query: str, limit: int = 5) -> list[dict[str, Any]]:
-        """Sections of the exaStamp documentation matching the query words."""
+        """Sections of the exaStamp documentation matching the query words, each with the list of
+        sections of its page. Use get_doc for the whole page when a hit is truncated or when the
+        syntax, parameters or examples are in another section."""
         if not state.corpus.doc_dir:
             raise ValueError("documentation not installed: start the server with --doc-dir or EXASTAMP_DOC_DIR")
         return state.corpus.search_docs(query, limit)
 
     @tool(ro)
     def get_doc(page: str) -> dict[str, Any]:
-        """Full markdown of a documentation page (page as returned by search_docs)."""
+        """Full markdown of a documentation page (page as returned by search_docs): operator
+        syntax, parameter tables with defaults and units, usage examples."""
         return state.corpus.get_doc(page)
 
     @tool(ro)
@@ -245,9 +252,19 @@ def build_server(workspace=".", doc_dir=None):
         full = _resolve(state.workspace, path)
         if not os.path.isfile(full):
             raise FileNotFoundError(f"no file '{path}' in the workspace")
+        note = None
+        if state.max_run_steps:
+            with open(full) as f:
+                g = (_yaml.safe_load(f) or {}).get("global")
+            start = int((g.get("start_iteration") if isinstance(g, dict) else 0) or 0)
+            capped = start + state.max_run_steps
+            if not max_iteration or max_iteration > capped:
+                max_iteration = capped
+                note = f"this server caps runs to {state.max_run_steps} step(s): max_iteration set to {capped}"
         overrides = {"global": {"max_iteration": max_iteration}} if max_iteration else None
         job = state.jobs.start(full, nprocs=nprocs, overrides=overrides, omp_threads=omp_threads)
-        return state.jobs.status(job, tail=5)
+        status = state.jobs.status(job, tail=5)
+        return dict(status, note=note) if note else status
 
     @tool(ro)
     def job_status(job_id: str, tail: int = 40) -> dict[str, Any]:
@@ -297,8 +314,10 @@ def main(argv=None):
                         help="doc_exaStamp/docs directory (markdown), for search_docs")
     parser.add_argument("--index-examples", action="store_true",
                         help="build every example once, cache which ones work, and exit")
+    parser.add_argument("--max-run-steps", type=int, default=os.environ.get("EXASTAMP_MCP_MAX_RUN_STEPS"),
+                        help="cap every run_input to this number of time steps (evaluations)")
     args = parser.parse_args(argv)
-    server = build_server(args.workspace, args.doc_dir)
+    server = build_server(args.workspace, args.doc_dir, args.max_run_steps)
     if args.index_examples:
         built, failed = server.state.corpus.index_build_status(
             lambda text, d: check_build(PACKAGE, text, d, timeout=120))

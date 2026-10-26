@@ -191,9 +191,9 @@ particle_type_add_properties:
 
 grid_flavor:
   kind: choice
-  summary: Per-particle field set. grid_flavor_full (default) has virial and charge; multimat is lighter; rigidmol is required for rigid molecules.
+  summary: "Per-particle field set. grid_flavor_full (default) has virial and charge; multimat, minimal, atomic and atomic_charge are lighter but have no virial (pressure is kinetic only: not for NPT); multimat_mechanics and atomic_full add the virial; rigidmol is required for rigid molecules."
   doc: User/E_Grids/flavors.md
-  values: [grid_flavor_full, grid_flavor_multimat, grid_flavor_minimal, grid_flavor_full_mechanics, grid_flavor_multimat_mechanics, grid_flavor_rigidmol]
+  values: [grid_flavor_full, grid_flavor_multimat, grid_flavor_minimal, grid_flavor_atomic, grid_flavor_atomic_charge, grid_flavor_atomic_full, grid_flavor_full_mechanics, grid_flavor_multimat_mechanics, grid_flavor_rigidmol]
   default: grid_flavor_full
 
 compute_force:

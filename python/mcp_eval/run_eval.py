@@ -5,6 +5,7 @@ Evaluation of the exaStamp MCP server on the requests of cases.yaml.
     python run_eval.py --claude-code       # Claude Code (claude -p) drives the server: subscription
     python run_eval.py --claude-code --only ta_bcc_eam_nvt,ar_lj_nve --out results.json
     python run_eval.py --api-model claude-opus-5-5   # Anthropic API: billed per token
+    python run_eval.py --opencode opencode/glm-5.3-flash-free   # opencode, any provider/model
 
 Each case runs in its own workspace (default: a temporary directory). The agent
 must save its input as input.msp with write_input; ``grade(case, workspace)``
@@ -26,12 +27,23 @@ key variables are removed from its environment so that it cannot fall back to
 API billing. Only the exastamp MCP tools are available to it.
 --api-model needs ``pip install "anthropic[mcp]"`` and an API key: every
 request is billed per token.
+--opencode runs the opencode CLI with a private server per case (its own
+config: the exastamp MCP server only, the user's other MCP servers disabled;
+shell, edit, web and paths outside the workspace denied; read/glob/grep kept
+because opencode's free models refuse requests without them). opencode calls MCP tools from its
+``execute`` code tool ("code mode"); calls are counted from that code.
+
+The server gets --doc-dir (search_docs) and --max-run-steps (default 1: an
+agent's run_input only checks that the input starts).
 """
 
 import argparse
 import asyncio
 import json
 import os
+import re
+import signal
+import socket
 import shutil
 import subprocess
 import sys
@@ -192,12 +204,26 @@ _API_AUTH_VARS = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_U
                   "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY")
 
 
-def run_claude_code(case, workspace, model=None, max_turns=30, timeout=1800):
+def server_args(workspace, doc_dir, max_run_steps):
+    args = ["-m", "exastamp_mcp", "--workspace", workspace]
+    if doc_dir:
+        args += ["--doc-dir", doc_dir]
+    if max_run_steps:
+        args += ["--max-run-steps", str(max_run_steps)]
+    return args
+
+
+def _checks(calls):
+    # first try: one build/validate call, then the write (no fix-and-retry round)
+    return len([c for c in calls if c in ("build_input", "validate_input", "write_input")]) <= 2
+
+
+def run_claude_code(case, workspace, model=None, max_turns=30, timeout=1800, doc_dir=None, max_run_steps=None):
     claude = shutil.which("claude")
     if not claude:
         raise RuntimeError("the claude CLI is not in PATH (install Claude Code and sign in with 'claude')")
     mcp_config = {"mcpServers": {"exastamp": {
-        "command": sys.executable, "args": ["-m", "exastamp_mcp", "--workspace", workspace]}}}
+        "command": sys.executable, "args": server_args(workspace, doc_dir, max_run_steps)}}}
     argv = [claude, "-p", case["prompt"],
             "--mcp-config", json.dumps(mcp_config), "--strict-mcp-config",
             "--tools", "",                          # no built-in tools: only the MCP server
@@ -224,9 +250,103 @@ def run_claude_code(case, workspace, model=None, max_turns=30, timeout=1800):
         raise RuntimeError(f"claude exited with code {proc.returncode}: {(proc.stderr or proc.stdout)[-500:]}")
     if result.get("is_error"):
         raise RuntimeError(f"claude: {result.get('result') or result.get('subtype')}")
-    checks = [c for c in calls if c in ("build_input", "validate_input", "write_input")]
-    return {"tool_calls": len(calls), "calls": calls, "first_try": len(checks) <= 2,
+    return {"tool_calls": len(calls), "calls": calls, "first_try": _checks(calls),
             "turns": result.get("num_turns"), "reply": result.get("result") or ""}
+
+
+# built-in opencode tools the agent may not use. read/glob/grep stay: opencode's free
+# models refuse requests without them (reported as "Free usage limit reached")
+_OPENCODE_DENY = ("bash", "edit", "task", "webfetch", "websearch", "question", "external_directory")
+_MCP_CALL = re.compile(r"tools\.exastamp\.(\w+)\s*\(")
+
+
+def _free_port():
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def run_opencode(case, workspace, model, timeout=1800, doc_dir=None, max_run_steps=None):
+    """opencode run against a private server started in the workspace with its own config
+    (the shared background service ignores per-run configuration)."""
+    opencode = shutil.which("opencode")
+    if not opencode:
+        raise RuntimeError("the opencode CLI is not in PATH")
+    cfgdir = tempfile.mkdtemp(prefix="opencode-eval-")
+    with open(os.path.join(cfgdir, "system.md"), "w") as f:
+        f.write(SYSTEM + "\n")
+    mcp = {name: {"enabled": False} for name in _opencode_user_mcp()}
+    mcp["exastamp"] = {"type": "local", "enabled": True, "timeout": 600000,
+                       "command": [sys.executable] + server_args(workspace, doc_dir, max_run_steps)}
+    # small_model (titles, summaries) = the model under test: the user's own small_model
+    # may be a local server that is down or busy, and opencode run then never exits
+    config = {"$schema": "https://opencode.ai/config.json", "mcp": mcp, "model": model, "small_model": model,
+              "instructions": [os.path.join(cfgdir, "system.md")],
+              "permission": {name: "deny" for name in _OPENCODE_DENY}}
+    with open(os.path.join(cfgdir, "opencode.json"), "w") as f:
+        json.dump(config, f)
+    port = _free_port()
+    env = dict(os.environ, OPENCODE_CONFIG=os.path.join(cfgdir, "opencode.json"),
+               OPENCODE_PASSWORD=f"eval-{port}")
+    serve = subprocess.Popen([opencode, "serve", "--hostname", "127.0.0.1", "--port", str(port)],
+                             cwd=workspace, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             start_new_session=True)
+    try:
+        url = f"http://127.0.0.1:{port}"
+        deadline = time.monotonic() + 60
+        while True:
+            try:
+                socket.create_connection(("127.0.0.1", port), timeout=1).close()
+                break
+            except OSError:
+                if time.monotonic() > deadline or serve.poll() is not None:
+                    raise RuntimeError("opencode serve did not start")
+                time.sleep(0.5)
+        proc = subprocess.run([opencode, "run", "--server", url, "--format", "json", "--auto", "-m", model,
+                               case["prompt"]],
+                              cwd=workspace, env=env, capture_output=True, text=True, timeout=timeout)
+    finally:
+        try:
+            os.killpg(serve.pid, signal.SIGTERM)    # the server and its MCP children
+        except (ProcessLookupError, PermissionError):     # already gone
+            pass
+        serve.wait(timeout=30)
+        shutil.rmtree(cfgdir, ignore_errors=True)
+    with open(os.path.join(workspace, "opencode-events.jsonl"), "w") as f:    # for diagnosis
+        f.write(proc.stdout)
+    calls, texts, errors, steps = [], [], [], 0
+    for line in proc.stdout.splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        part = event.get("part") or {}
+        if event.get("type") == "tool_use":
+            tool = part.get("tool", "")
+            if tool == "execute":
+                calls += _MCP_CALL.findall((part.get("state") or {}).get("input", {}).get("code", ""))
+            else:
+                calls.append(tool.removeprefix("exastamp_"))
+        elif event.get("type") == "text":
+            texts.append(part.get("text") or "")
+        elif event.get("type") == "step_start":
+            steps += 1
+        elif event.get("type") == "error":
+            errors.append((event.get("error") or {}).get("message") or str(event.get("error")))
+    if errors and not calls:
+        raise RuntimeError(f"opencode: {errors[0][:300]}")
+    return {"tool_calls": len(calls), "calls": calls, "first_try": _checks(calls), "turns": steps,
+            "reply": texts[-1] if texts else "", **({"errors": errors} if errors else {})}
+
+
+def _opencode_user_mcp():
+    """MCP servers of the user's opencode config, to disable them during the evaluation."""
+    path = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "opencode", "opencode.json")
+    try:
+        with open(path) as f:
+            return [k for k in (json.load(f).get("mcp") or {}) if k not in ("servers", "timeout")]
+    except (OSError, ValueError):
+        return []
 
 
 async def run_claude(case, workspace, model, max_iterations):
@@ -235,7 +355,7 @@ async def run_claude(case, workspace, model, max_iterations):
     from mcp import ClientSession
     from mcp.client.stdio import StdioServerParameters, stdio_client
 
-    server = StdioServerParameters(command=sys.executable, args=["-m", "exastamp_mcp", "--workspace", workspace],
+    server = StdioServerParameters(command=sys.executable, args=server_args(workspace, None, None),
                                    env=dict(os.environ))
     calls, reply = [], ""
     async with stdio_client(server) as (read, write):
@@ -251,10 +371,7 @@ async def run_claude(case, workspace, model, max_iterations):
             async for message in runner:
                 calls += [b.name for b in message.content if b.type == "tool_use"]
                 reply = "".join(b.text for b in message.content if b.type == "text") or reply
-    # first try: one build/validate call, then the write (no fix-and-retry round)
-    checks = [c for c in calls if c in ("build_input", "validate_input", "write_input")]
-    first = len(checks) <= 2
-    return {"tool_calls": len(calls), "calls": calls, "first_try": first, "reply": reply}
+    return {"tool_calls": len(calls), "calls": calls, "first_try": _checks(calls), "reply": reply}
 
 
 def main(argv=None):
@@ -264,7 +381,12 @@ def main(argv=None):
     mode.add_argument("--claude-code", action="store_true",
                       help="Claude Code CLI with your Claude account (subscription, no API billing)")
     mode.add_argument("--api-model", metavar="MODEL", help="Anthropic API, billed per token")
+    mode.add_argument("--opencode", metavar="PROVIDER/MODEL", help="opencode CLI with this model")
     parser.add_argument("--model", help="with --claude-code: model alias or name (default: Claude Code's)")
+    parser.add_argument("--doc-dir", default=os.environ.get("EXASTAMP_DOC_DIR"),
+                        help="doc_exaStamp/docs, for the server's search_docs (default: $EXASTAMP_DOC_DIR)")
+    parser.add_argument("--max-run-steps", type=int, default=1,
+                        help="the server caps run_input to this number of steps (0: no cap)")
     parser.add_argument("--cases", default=os.path.join(HERE, "cases.yaml"))
     parser.add_argument("--only")
     parser.add_argument("--workspaces", help="keep each case's workspace under this directory")
@@ -290,7 +412,10 @@ def main(argv=None):
             if args.reference:
                 run = run_reference(case, ws, catalog)
             elif args.claude_code:
-                run = run_claude_code(case, ws, args.model, args.max_iterations)
+                run = run_claude_code(case, ws, args.model, args.max_iterations,
+                                      doc_dir=args.doc_dir, max_run_steps=args.max_run_steps)
+            elif args.opencode:
+                run = run_opencode(case, ws, args.opencode, doc_dir=args.doc_dir, max_run_steps=args.max_run_steps)
             else:
                 run = asyncio.run(run_claude(case, ws, args.api_model, args.max_iterations))
             g = grade(case, ws, catalog, run.get("reply"))

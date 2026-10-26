@@ -97,6 +97,7 @@ def test_schema_snippets_are_clean(catalog):
     ("  - init_rcb_grid\n", "", "setup_system[1].lattice", "init_rcb_grid must be called"),
     ("Ta1_Ravelo_2013.eam.alloy", "Ta1_Ravelo.eam.alloy", "eam_alloy_force.parameters.file", "not found"),
     ("numerical_scheme: verlet_lnvt", "numerical_scheme: verlet_lnvtt", "numerical_scheme", "is not one of"),
+    ("numerical_scheme: verlet_lnvt", "numerical_scheme: verlet_nhnpt\ngrid_flavor: grid_flavor_multimat", "grid_flavor", "no virial"),
     ("- Ta: { mass", "- Tantalum: { mass", "setup_system[2].lattice.types", "not a declared species"),
 ])
 def test_static_rule(catalog, old, new, path, message):
@@ -104,6 +105,17 @@ def test_static_rule(catalog, old, new, path, message):
     assert bad != EXAMPLE
     errors = _errors(bad, catalog)
     assert any(p == path and message in m for p, m in errors), errors
+
+
+def test_doc_sections(tmp_path):
+    from exastamp_mcp.corpus import Corpus
+    (tmp_path / "sw.md").write_text("# **Stillinger-Weber**\n\n## **Description**\n\nThree-body silicon.\n\n"
+                                    "## Parameters\n\nfile: parameter file\n")
+    hits = Corpus(str(tmp_path), str(tmp_path)).search_docs("stillinger silicon")
+    # the page title stays with its first section instead of being an empty hit
+    assert hits[0]["section"] == "Stillinger-Weber > Description"
+    assert hits[0]["page_sections"] == ["Stillinger-Weber > Description", "Parameters"]
+    assert "get_doc('sw.md')" in hits[0]["more"]
 
 
 def test_includes_are_merged(catalog, tmp_path):
@@ -214,5 +226,26 @@ def test_server_tools(tmp_path):
             assert os.path.isfile(tmp_path / "ar" / "ar.msp")
             r = await c.call_tool("write_input", {"path": "../outside.msp", "yaml": "species: []"})
             assert r.is_error and "outside the workspace" in r.content[0].text
+
+    asyncio.run(run())
+
+
+def test_run_input_step_cap(tmp_path):
+    from mcp import Client
+    from exastamp_mcp.server import build_server
+
+    async def run():
+        async with Client(build_server(str(tmp_path), max_run_steps=1)) as c:
+            r = await c.call_tool("build_input", {"spec": SPECS["ar_lj_nve"][0]})
+            await c.call_tool("write_input", {"path": "ar.msp", "yaml": r.structured_content["yaml"]})
+            r = await c.call_tool("run_input", {"path": "ar.msp"})
+            assert "max_iteration set to 1" in r.structured_content["note"]
+            job = r.structured_content["job_id"]
+            for _ in range(600):
+                status = (await c.call_tool("job_status", {"job_id": job})).structured_content
+                if status["state"] != "running":
+                    break
+                await asyncio.sleep(0.5)
+            assert status["state"] == "finished", status
 
     asyncio.run(run())
