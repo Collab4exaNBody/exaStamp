@@ -22,7 +22,7 @@ replicate_domain:
 
 input_data:
   - read_stamp_v3:
-      file: mo_300K_746496_particles.MpiIO
+      filename: mo_300K_746496_particles.MpiIO
       bounds_mode: FILE
   - replicate_domain
 

@@ -1,7 +1,7 @@
 # override parameters with user file :
 # ------------------------------------
 
-includes: [ stampv4_to_rigidmol_dump.msp ]
+includes: [ ../../tutorial/stampv4_to_rigidmol_dump.msp ]
 
 # Domain properties (some will be overwritten by data reader)
 domain:

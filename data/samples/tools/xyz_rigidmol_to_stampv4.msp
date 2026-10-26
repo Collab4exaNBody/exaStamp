@@ -1,8 +1,9 @@
 includes:
   - config_species.msp
+  - config_rigid_molecule.msp
 
 simulation:
-  - grid_flavor_multimat
+  - grid_flavor_rigidmol
   - global
   - domain
   - generate_default_species

@@ -43,7 +43,7 @@ compute_force:
 #  - compute_force_lj
 #  - compute_force_ljrf
   - ljrf_rigidmol_force
-  - wall_v2:
+  - plane_wall:
       normal: [ 1.0, 0.0, 0.0 ]
       offset: -360.0 ang
       cutoff: 2.4 ang

@@ -157,7 +157,6 @@ input_data:
             structure: SC
             types: [ H2O ]
             size: [ 3.103 ang, 3.103 ang, 3.103 ang ]
-            noise: 0.1 ang
             noise_cutoff: 0.2 ang
             region: SPHERE
         #            user_function:

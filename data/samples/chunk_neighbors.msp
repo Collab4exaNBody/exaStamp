@@ -12,7 +12,7 @@ species:
 
 input_data:
   - read_stamp_v3:
-      file: microjet.mpio
+      filename: microjet.mpio
       bounds_mode: FILE
 #  - grid_stats
 
@@ -30,8 +30,7 @@ global:
 # define potential we'll reuse later
 compute_force: lj_compute_force
 
-lj_compute_force_symetric:
-  task_graph: true
+lj_compute_force:
   parameters: { epsilon: 9.340E-20 J , sigma: 0.227E-09 m }
   rcut: 5.68 ang
 
@@ -42,7 +41,5 @@ lj_compute_force:
 update_particle_neighbors:
   - compute_primary_neighbors
   - compute_dual_neighbors
-  - chunk_neighbors:
-      chunk_size: 8
-#      chunk_size: 32 # maximum tested
+  - chunk_neighbors
 

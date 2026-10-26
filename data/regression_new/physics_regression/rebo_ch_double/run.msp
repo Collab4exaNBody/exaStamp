@@ -34,7 +34,6 @@ setup_system:
       expandable: false
   - read_xyz_file_with_xform:
       filename: CH216.xyz
-      pbc_adjust_xform: true
   - replicate_domain: [ 2, 2, 2 ]
   - physics_regression_noise
 

@@ -4,7 +4,7 @@ includes:
   - legacy_monomat.msp
 
 read_stamp_v3:
-  file: Mo_conf_300K.MpiIO
+  filename: Mo_conf_300K.MpiIO
 
 zbl_compute_force:
   parameters: { r1: 0.1 ang , rc: 4.615858 ang }

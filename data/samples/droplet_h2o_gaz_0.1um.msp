@@ -4,7 +4,7 @@
 
 # enable-if-XSTAMP_BUILD_PAIR_zero enable-if-XSTAMP_BUILD_PAIR_lennard_jones
 includes:
-  - config_rigidmol.msp
+  - config_rigid_molecule.msp
 
 configuration:
   profiling:
@@ -146,7 +146,6 @@ input_data:
             structure: SC
             types: [ Air ]
             size: [ 34 ang , 34 ang , 34 ang ]
-            noise: 0.1 ang
             noise_cutoff: 0.2 ang
             region: not HOLE7
         - grid_stats
@@ -157,7 +156,6 @@ input_data:
             structure: SC
             types: [ H2O ]
             size: [ 3.104 ang , 3.104 ang , 3.104 ang ]
-            noise: 0.1 ang
             noise_cutoff: 0.2 ang
             region: FILL7
         - repartition_domain
