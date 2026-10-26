@@ -5,12 +5,12 @@ ljrf_rigidmol_force:
   type: TIP4P
   rcut: 13 ang
   parameters:
-    - { type_a: O , type_b: O , rcut: 13 ang , parameters: { rf_rcut: 13 ang , rf: { epsilon: 100 , rc: 13 ang } , lj_rcut: 10 ang , lj: { epsilon: 1.286776984E-21 J , sigma: 0.31589E-09 m } } }
-    - { type_a: O , type_b: M , rcut: 13 ang , parameters: { rf_rcut: 13 ang , rf: { epsilon: 100 , rc: 13 ang } } }
-    - { type_a: O , type_b: H , rcut: 13 ang , parameters: { rf_rcut: 13 ang , rf: { epsilon: 100 , rc: 13 ang } } }
-    - { type_a: H , type_b: M , rcut: 13 ang , parameters: { rf_rcut: 13 ang , rf: { epsilon: 100 , rc: 13 ang } } }
-    - { type_a: M , type_b: M , rcut: 13 ang , parameters: { rf_rcut: 13 ang , rf: { epsilon: 100 , rc: 13 ang } } }
-    - { type_a: H , type_b: H , rcut: 13 ang , parameters: { rf_rcut: 13 ang , rf: { epsilon: 100 , rc: 13 ang } } }
+    - { type_a: O , type_b: O , rcut: 13 ang , parameters: { rf: { epsilon: 100 , rc: 13 ang } , lj_rcut: 10 ang , lj: { epsilon: 1.286776984E-21 J , sigma: 0.31589E-09 m } } }
+    - { type_a: O , type_b: M , rcut: 13 ang , parameters: { rf: { epsilon: 100 , rc: 13 ang } } }
+    - { type_a: O , type_b: H , rcut: 13 ang , parameters: { rf: { epsilon: 100 , rc: 13 ang } } }
+    - { type_a: H , type_b: M , rcut: 13 ang , parameters: { rf: { epsilon: 100 , rc: 13 ang } } }
+    - { type_a: M , type_b: M , rcut: 13 ang , parameters: { rf: { epsilon: 100 , rc: 13 ang } } }
+    - { type_a: H , type_b: H , rcut: 13 ang , parameters: { rf: { epsilon: 100 , rc: 13 ang } } }
 
 compute_force: ljrf_rigidmol_force
 

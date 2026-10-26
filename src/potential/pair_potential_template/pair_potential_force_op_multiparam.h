@@ -25,6 +25,7 @@ under the License.
 #include <string>
 
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 #include <onika/physics/units.h>
 #include <onika/math/basic_types_yaml.h>
 
@@ -270,6 +271,7 @@ namespace YAML
           lerr << "PotentialMultiParameters item is not a map as expected"<<std::endl;
           return false;
         }
+        exaStamp::check_yaml_keys( pp , { "type_a", "type_b", "rcut", "parameters" } , "pair potential parameters" );
         if( ! pp["type_a"] || ! pp["type_b"] || ! pp["rcut"] || ! pp["parameters"] )
         {
           lerr << "PotentialMultiParameters : missing informations. required information keys are : type_a, type_b, rcut and parameters."<<std::endl;

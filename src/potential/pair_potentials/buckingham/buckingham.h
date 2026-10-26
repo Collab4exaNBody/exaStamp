@@ -19,6 +19,7 @@ under the License.
 
 #include <cmath>
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 
 #include <onika/physics/units.h>
 #include <onika/cuda/cuda.h>
@@ -61,6 +62,7 @@ namespace YAML
     static bool decode(const Node& node, BuckinghamParms& v)
     {
       if( !node.IsMap() ) { return false; }
+      exaStamp::check_yaml_keys( node , { "A", "Rho", "C" } , "buckingham parameters" );
       v.A = node["A"].as<Quantity>().convert();
       v.Rho = node["Rho"].as<Quantity>().convert();
       v.C = node["C"].as<Quantity>().convert();

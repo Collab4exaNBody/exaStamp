@@ -18,6 +18,7 @@ under the License.
 #pragma once
 
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 #include <onika/physics/units.h>
 #include <onika/physics/constants.h>
 
@@ -52,6 +53,7 @@ namespace YAML
     static inline bool decode(const Node& node, NNPParams& v)
     {
       if( !node.IsMap()       ) { return false; }
+      exaStamp::check_yaml_keys( node , { "dir", "showew", "resetew", "showewsum", "maxew", "cflength", "cfenergy", "cutoff", "dump_out" } , "n2p2 parameters" );
       
       if( ! node["dir"      ] ) { return false; }
       if( ! node["showew"   ] ) { return false; }
