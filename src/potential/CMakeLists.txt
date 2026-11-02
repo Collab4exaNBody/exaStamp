@@ -55,6 +55,8 @@ add_subdirectory(ljexp6rf)
 
 # ======================================================= #
 # ======= Machine Learning Interatomic Potentials ======= #
+# DeePMD, native kernels (no external library)
+add_subdirectory(mlip-deepmd)
 # Moment Tensor Potential
 add_subdirectory(mlip-mtp)
 # Neural Network Potential
