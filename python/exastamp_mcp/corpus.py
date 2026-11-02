@@ -24,12 +24,16 @@ from fnmatch import fnmatch
 
 import yaml
 
+from onika_mcp.units import _N, UnitError, _dimension_name, parse_quantity
+
 from .knowledge import doc_url as _doc_url
 
 __all__ = ["Corpus"]
 
 EXAMPLE_CATEGORIES = ("samples", "tutorial", "regression_new")
 _FORCE_HINT = re.compile(r"(force|potential)$")
+# onika's error for an operator name that no loaded plugin registers
+_MISSING_OPERATOR = re.compile(r"\.(\w+) is not a list but does not contain a 'body' entry")
 
 # shipped but obsolete inputs (operators or data removed upstream, no
 # replacement): kept in the repository, never offered as examples
@@ -127,6 +131,117 @@ def _score(words, head, body, head_weight, body_cap):
 
 
 
+# ---------------------------------------------------------------------------
+# parameters observed in the examples: one tree per operator, a node per key
+# (nested maps, and lists of maps such as per-pair potential tables, whose
+# items are grouped by their 'potential' key when they have one)
+# ---------------------------------------------------------------------------
+
+_MAX_DEPTH = 5
+
+
+def _new_node():
+    return {"n": 0, "values": Counter(), "dims": Counter(), "keys": {}}
+
+
+def is_open(node):
+    """A map whose keys are data, not parameter names (e.g. a species -> type map):
+    many different keys, none of them used in most cases."""
+    keys = node["keys"]
+    return len(keys) >= 4 and max(c["n"] for c in keys.values()) <= node["n"] / 2
+
+
+def item_key(item):
+    """Key of a list item in an observed tree."""
+    return f"[potential={item['potential']}]" if isinstance(item.get("potential"), str) else "[]"
+
+
+def is_map_list(value):
+    return isinstance(value, list) and bool(value) and all(isinstance(x, dict) for x in value)
+
+
+def quantity_dimension(value):
+    """Dimension name of a quantity with units ('3.3 ang' -> 'length'), else None."""
+    if not isinstance(value, str):
+        return None
+    try:
+        _, dim, has_units = parse_quantity(value)
+    except UnitError:
+        return None
+    if not has_units:
+        return None
+    name = _dimension_name(dim)
+    if name.startswith("(") and dim[_N] < 0:   # molar form (kcal/mol): the dimension per particle
+        molar = _dimension_name(tuple(e + 1.0 if i == _N else e for i, e in enumerate(dim)))
+        name = name if molar.startswith("(") else molar
+    return name
+
+
+def _value_text(value):
+    if isinstance(value, list):
+        if any(isinstance(x, (dict, list)) for x in value):
+            return None
+        text = "[ " + ", ".join(str(x) for x in value) + " ]"
+    elif isinstance(value, bool):
+        text = str(value).lower()
+    else:
+        text = str(value)
+    return text if len(text) <= 60 else None
+
+
+def _observe(node, value, depth=0):
+    node["n"] += 1
+    if depth >= _MAX_DEPTH:
+        return
+    if isinstance(value, dict):
+        for k, v in value.items():
+            _observe(node["keys"].setdefault(str(k), _new_node()), v, depth + 1)
+    elif is_map_list(value):
+        for item in value:
+            _observe(node["keys"].setdefault(item_key(item), _new_node()), item, depth + 1)
+    elif value is not None:
+        text = _value_text(value)
+        if text is not None:
+            node["values"][text] += 1
+        for q in value if isinstance(value, list) else [value]:
+            dim = quantity_dimension(q)
+            if dim:
+                node["dims"][dim] += 1
+
+
+def operator_uses(value, operators, found):
+    """(operator, parameters) for every 'operator: {parameters}' at any depth."""
+    if isinstance(value, dict):
+        for k, v in value.items():
+            if k in operators and isinstance(v, dict):
+                found.append((k, v))
+            operator_uses(v, operators, found)
+    elif isinstance(value, list):
+        for v in value:
+            operator_uses(v, operators, found)
+
+
+def _flatten(node, prefix, out, limit):
+    """'path.to.key' -> 'N uses; e.g. v1 | v2; dimension' for every key under node."""
+    for k, child in sorted(node["keys"].items(), key=lambda kv: -kv[1]["n"]):
+        if len(out) >= limit:
+            return
+        path = prefix + k if k.startswith("[") or not prefix else f"{prefix}.{k}"
+        if is_open(child):
+            some = sorted(child["keys"], key=lambda c: -child["keys"][c]["n"])[:4]
+            out[path] = f"{child['n']}x; map with free keys, e.g. {', '.join(some)}"
+            continue
+        desc = [f"{child['n']}x"]
+        values = [v for v, _ in child["values"].most_common(3)]
+        if values:
+            desc.append("e.g. " + " | ".join(values))
+        if child["dims"]:
+            desc.append(child["dims"].most_common(1)[0][0])
+        if values or not child["keys"]:
+            out[path] = "; ".join(desc)
+        _flatten(child, path, out, limit)
+
+
 class Corpus:
     def __init__(self, data_dir, doc_dir=None):
         self.data_dir = os.path.abspath(data_dir)
@@ -135,6 +250,7 @@ class Corpus:
         self._docs = None
         self._status = {}
         self.status_file = None
+        self._observed = None
 
     # ------------------------------------------------------------------ build status
     def load_build_status(self, status_file):
@@ -168,6 +284,7 @@ class Corpus:
         with ThreadPoolExecutor(workers) as ex:
             for rel, st in ex.map(one, todo):
                 self._status[rel] = st
+        self._observed = None
         if self.status_file:
             os.makedirs(os.path.dirname(self.status_file), exist_ok=True)
             with open(self.status_file, "w") as f:
@@ -210,7 +327,7 @@ class Corpus:
         comments = [l.lstrip("# ").strip() for l in text.splitlines()[:15] if l.startswith("#")]
         entry = {"path": rel, "category": rel.split(os.sep, 1)[0], "flags": _first_line_flags(text),
                  "tags": _tags(doc), "comment": " ".join(c for c in comments if c and not c.startswith(("no-", "enable-if")))[:300],
-                 "_text": text, "_body": _tokens(text)}
+                 "_text": text, "_doc": doc, "_body": _tokens(text)}
         entry["_head"] = _tokens(rel + " " + " ".join(v for vs in entry["tags"].values() for v in vs) + " " + entry["comment"])
         return entry
 
@@ -248,6 +365,62 @@ class Corpus:
                     out["files_next_to_it"] = files[:30]
                 return out
         raise FileNotFoundError(f"no example '{path}' (use search_examples)")
+
+    def observed_parameters(self, operators):
+        """{operator: tree of the parameters given to it} over the examples that build
+        (``operators``: the registered operator names). Computed once."""
+        if self._observed is None:
+            trees = {}
+            for e in self.examples:
+                if not (self.build_status(e["path"]) or {}).get("builds", True):
+                    continue
+                found = []
+                for doc in [e["_doc"]] + self._included(e):
+                    operator_uses(doc, operators, found)
+                for name, params in found:
+                    tree = trees.setdefault(name, dict(_new_node(), examples=[]))
+                    _observe(tree, params)
+                    if e["path"] not in tree["examples"]:
+                        tree["examples"].append(e["path"])
+            self._observed = trees
+        return self._observed
+
+    def _included(self, e):
+        """Parsed files of the example's ``includes:`` found next to it (not the default configuration)."""
+        includes = e["_doc"].get("includes") if isinstance(e["_doc"], dict) else None
+        docs = []
+        for name in includes if isinstance(includes, list) else []:
+            path = os.path.join(self.data_dir, os.path.dirname(e["path"]), str(name))
+            try:
+                with open(path, errors="replace") as f:
+                    doc = yaml.safe_load(f)
+            except (OSError, yaml.YAMLError):
+                continue
+            if isinstance(doc, dict):
+                docs.append(doc)
+        return docs
+
+    def describe_observed(self, name, operators, limit=60):
+        """Summary of the parameters of ``name`` seen in the examples, or None."""
+        tree = self.observed_parameters(operators).get(name)
+        if not tree:
+            return None
+        paths = sorted(tree["examples"], key=lambda p: (not p.startswith("regression_new/physics_regression"), len(p)))
+        params = {}
+        _flatten(tree, "", params, limit)
+        return {"examples": len(tree["examples"]), "example_paths": paths[:3], "parameters": params, "note": "uses in the shipped examples that build; 'Nx' = how often"}
+
+    def missing_operators(self):
+        """{operator: number of examples} for operators used by shipped examples but not
+        part of this build (plugin not compiled), from the indexed build errors."""
+        missing = Counter()
+        for e in self.examples:
+            st = self.build_status(e["path"])
+            if st and not st["builds"]:
+                m = _MISSING_OPERATOR.search(st.get("error") or "")
+                if m:
+                    missing[m.group(1)] += 1
+        return dict(missing.most_common())
 
     def tag_values(self, key):
         values = {}

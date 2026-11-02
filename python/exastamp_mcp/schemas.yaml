@@ -31,10 +31,10 @@ global:
     enable_grid_compact: {type: bool, default: true}
     trigger_cost_model_fitting: {type: bool, default: false}
     cost_model_coefs: {type: list, default: [0.0, 0.0, 1.0, 0.0]}
-    init_temperature: {type: float, default: -1.0}
-    scale_temperature: {type: float, default: -1.0}
+    init_temperature: {type: quantity, dimension: temperature, default: -1.0}
+    scale_temperature: {type: quantity, dimension: temperature, default: -1.0}
     timestep: {type: int, default: 0}
-    physical_time: {type: float, default: 0.0}
+    physical_time: {type: quantity, dimension: time, default: 0.0}
     md_loop_continue: {type: bool, default: true}
     trigger_thermo_state: {type: bool, default: true}
     thermo_state_every_step: {type: bool, default: false}
@@ -200,7 +200,7 @@ compute_force:
   kind: choice
   summary: "Potential(s) used for forces: the name of a force operator defined at top level, or a list of them."
   doc: Beginner/StarterPack/5_force.md
-  operators: [lj_compute_force, eam_alloy_force, meam_force]
+  operators: [lj_compute_force, eam_alloy_force, meam_force, compute_force_pair_multimat, snap_force_fp64]
 
 lj_compute_force:
   kind: potential
@@ -239,9 +239,98 @@ meam_force:
     rcut: {type: quantity, dimension: length, required: true}
     parameters: {type: map, required: true}
 
+compute_force_pair_multimat:
+  kind: potential
+  summary: "Pair potentials per species pair (alloys, Lennard-Jones mixtures, LJ + Coulomb). Needs grid_flavor_multimat (no virial: not for NPT; grid_flavor_multimat_mechanics has it) and a particle_types map listing every species in setup_system. One potentials item per unordered pair (Cu-Zn covers Zn-Cu). Pair styles: lj, ljwolf (Wolf Coulomb under 'cw', not 'coul_wolf'), ljrf, ljexp6rf, exp6, exp6rf, buckingham, zbl, coul_cut, coul_rf, coul_wolf (no self energy), tabpair. describe_block's observed_parameters lists the keys of each style."
+  doc: User/G_ForceFields/Pair/Strategies/index.md
+  keys:
+    potentials: {type: list, required: true}
+  snippet: |
+    grid_flavor: grid_flavor_multimat
+    compute_force_pair_multimat:
+      potentials:
+        - { type_a: Cu , type_b: Cu , potential: lj , rcut: 6.0 ang , parameters: { epsilon: 0.4093 eV , sigma: 2.338 ang } }
+        - { type_a: Zn , type_b: Zn , potential: lj , rcut: 6.0 ang , parameters: { epsilon: 0.1574 eV , sigma: 2.44 ang } }
+        - { type_a: Cu , type_b: Zn , potential: lj , rcut: 6.0 ang , parameters: { epsilon: 0.30 eV , sigma: 2.36 ang } }
+    compute_force: compute_force_pair_multimat
+    # in setup_system, before the lattice:  - particle_types: { particle_type_map: { Cu: 0, Zn: 1 } }
+
+snap_force_fp64:
+  kind: potential
+  summary: "SNAP machine-learning potential (snap_force_fp32: single precision). parameters.param / parameters.coef are the LAMMPS .snapparam / .snapcoeff files; nt is the number of species; species names must match the .snapcoeff elements. The cutoff comes from the files (rcutfac)."
+  doc: User/G_ForceFields/MLIP/snap.md
+  keys:
+    parameters: {type: map, required: true, keys: {nt: {type: int, required: true}, param: {type: string, required: true, data_file: true}, coef: {type: string, required: true, data_file: true}}}
+  file_pattern: "*.snapcoeff"
+  snippet: |
+    grid_flavor: grid_flavor_multimat
+    compute_force:
+      - snap_force_fp64:
+          parameters:
+            nt: 1
+            param: Ta06A.snapparam
+            coef: Ta06A.snapcoeff
+
+init_nose_hoover:
+  kind: definition
+  summary: "Nose-Hoover thermostat / barostat parameters for numerical_scheme verlet_nhnvt (algo: NVT) or verlet_nhnpt (algo: NPT). Both schemes need 'includes: [ config_nose_hoover.msp ]'. Pressures are bare numbers in Pa (no units: the value is divided by 1e5 to get bar). Pmode: ISO (one pressure), ANISO (Pxx/Pyy/Pzz start/end/damp), TRI (also shear). NPT needs a grid flavor with the virial (grid_flavor_full, the default)."
+  doc: User/H_EnsemblesConstraints/npt_ensemble.md
+  keys:
+    algo: {type: string, values: [NVT, NPT], default: NVT}
+    Tstart: {type: quantity, dimension: temperature, required: true}
+    Tend: {type: quantity, dimension: temperature}
+    Tdamp: {type: quantity, dimension: time, default: 0.1}
+    tchain: {type: int, default: 3}
+    Pstart: {type: float, doc: "Pa, bare number"}
+    Pend: {type: float, doc: "Pa, bare number"}
+    Pdamp: {type: quantity, dimension: time}
+    pchain: {type: int, default: 3}
+    Pmode: {type: string, values: [ISO, ANISO, TRI, OTHER], default: OTHER}
+    Pcouple: {type: string, default: NONE}
+    Pdrag: {type: float}
+    mtkcorr: {type: bool}
+  snippet: |
+    includes:
+      - config_nose_hoover.msp
+    numerical_scheme: verlet_nhnpt
+    init_nose_hoover:
+      algo: NPT
+      Tstart: 300. K
+      Tend: 300. K
+      Tdamp: 0.1 ps
+      Pstart: 0.0
+      Pend: 0.0
+      Pdamp: 1.0 ps
+      Pmode: ISO
+
+particle_regions:
+  kind: operator
+  summary: "Named regions, used by name in thermostats (langevin_thermostat thermostat_region, berendsen_thermostat region), filters, analyses and gaussian_noise_* region. Put it first in setup_system. A region is a box (bounds) or a quadric; a region expression combines names (e.g. 'BATH and not CORE')."
+  doc: User/D_DomainRegions/regions/geometric.md
+  keys:
+    particle_regions: {type: list}
+    verbose: {type: bool}
+  snippet: |
+    setup_system:
+      - particle_regions:
+          - BATH:
+              bounds: [ [ 0 ang, -1 ang, -1 ang ], [ 10 ang, 34 ang, 34 ang ] ]
+    compute_force:
+      - eam_alloy_force
+      - langevin_thermostat: { T: 300 K, gamma: 0.1 ps^-1, thermostat_region: BATH }
+
+simulation_epilog:
+  kind: definition
+  summary: "Batch run once after the last step: end-of-run analyses such as histograms (histogram_vx/vy/vz, histogram_vnorm, histogram_energy, histogram_charge, histogram_fnorm, ...) followed by write_histogram, which writes the last histogram to a .csv file."
+  doc: User/F_Particles/analysis.md
+  snippet: |
+    simulation_epilog:
+      - histogram_vx: { samples: 100 }
+      - write_histogram: { filename: vx_hist.csv }
+
 numerical_scheme:
   kind: choice
-  summary: Time integrator. verlet_lnvt / verlet_bnvt need langevin_thermostat / berendsen_thermostat parameters.
+  summary: "Time integrator. verlet_lnvt / verlet_bnvt need langevin_thermostat / berendsen_thermostat parameters; verlet_nhnvt / verlet_nhnpt need 'includes: [ config_nose_hoover.msp ]' and init_nose_hoover parameters."
   doc: Beginner/StarterPack/6_numerical_scheme.md
   values: [verlet_nve, verlet_lnvt, verlet_bnvt, verlet_nhnvt, verlet_nhnpt]
   default: verlet_nve

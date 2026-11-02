@@ -16,8 +16,10 @@ import os
 
 import yaml
 
-from onika_mcp.units import check_quantity, parse_quantity, UnitError
+from onika_mcp.units import DIMENSIONS, check_quantity, parse_quantity, UnitError
 
+from .corpus import is_map_list, is_open, item_key, operator_uses, quantity_dimension
+from .data import FILE_PARAMETERS, POTENTIAL_FORMATS, potential_file_info
 from .knowledge import SCHEMAS, doc_url
 
 __all__ = ["check_input", "has_errors"]
@@ -28,8 +30,9 @@ def has_errors(issues):
 
 
 class _Report:
-    def __init__(self):
+    def __init__(self, observed=None):
         self.issues = []
+        self.observed = observed or {}   # operator -> parameters seen in the examples (corpus)
 
     def add(self, level, path, message, suggestion=None, block=None):
         issue = {"level": level, "path": path, "message": message}
@@ -93,6 +96,10 @@ def _check_value(rep, path, spec, value, block):
     elif t == "int":
         if isinstance(value, bool) or not isinstance(value, int):
             rep.add("error", path, f"expected an integer, got {value!r}", block=block)
+    elif t == "float":
+        if isinstance(value, bool) or not isinstance(value, (int, float)) and not _is_number(value):
+            unit = f" in {spec['doc']}" if spec.get("doc") else ""
+            rep.add("error", path, f"expected a plain number{unit} (no unit), got {value!r}", block=block)
     elif t == "bool":
         if not isinstance(value, bool):
             rep.add("error", path, f"expected true or false, got {value!r}", block=block)
@@ -105,6 +112,15 @@ def _check_value(rep, path, spec, value, block):
     sub = spec.get("keys")
     if sub and isinstance(value, dict):
         _check_keys(rep, path, sub, value, block, closed=True)
+
+
+def _is_number(text):
+    """yaml-cpp reads '1.0e9' as a number; PyYAML (YAML 1.1) leaves it a string."""
+    try:
+        float(text)
+        return True
+    except (TypeError, ValueError):
+        return False
 
 
 def _unit_hint(dim):
@@ -149,14 +165,47 @@ def _check_operator(rep, path, name, params, catalog, definition=False):
         return
     if params is None:
         params = {}
-    if schema.get("open_keys"):
-        return
     if not isinstance(params, dict):
         # short form: a scalar or a list given for the operator's main slot
         # (e.g. particle_regions: [...], langevin_thermostat: 300 K)
         return
+    if name in rep.observed:
+        _check_observed(rep, path, params, rep.observed[name], name)
+    if schema.get("open_keys"):
+        return
     _check_keys(rep, path, schema.get("keys", {}), params, name, closed=bool(schema) and slots is None,
                 catalog_slots=slots, definition=definition)
+
+
+def _check_observed(rep, path, value, node, block, depth=0):
+    """Soft checks against the parameters seen in the shipped examples: nested keys
+    never used there (top-level keys are checked against the operator slots), and
+    quantities whose dimension differs from every example."""
+    if isinstance(value, dict):
+        if is_open(node):
+            return
+        for k, v in value.items():
+            child = node["keys"].get(str(k))
+            if child is not None:
+                _check_observed(rep, f"{path}.{k}", v, child, block, depth + 1)
+            elif depth > 0 and node["n"] >= 2 and node["keys"] and k not in _STRUCTURAL_KEYS:
+                seen = sorted(node["keys"], key=lambda c: -node["keys"][c]["n"])
+                rep.add("warning", f"{path}.{k}", f"'{k}' is never used here in the shipped examples of {block} "
+                        f"({node['n']} uses): misspelled or misplaced? The key may be ignored",
+                        suggestion=_closest(k, seen) or f"keys used here: {', '.join(seen[:12])}", block=block)
+    elif is_map_list(value):
+        for i, item in enumerate(value):
+            child = node["keys"].get(item_key(item))
+            if child is not None:
+                _check_observed(rep, f"{path}[{i}]", item, child, block, depth + 1)
+    elif node["dims"] and len(node["dims"]) == 1:
+        expected = next(iter(node["dims"]))
+        for q in value if isinstance(value, list) else [value]:
+            dim = quantity_dimension(q)
+            # named dimensions only; check_quantity also accepts molar forms (kcal/mol for an energy)
+            if dim and expected in DIMENSIONS and check_quantity(q, expected):
+                rep.add("warning", path, f"'{q}' is a {dim}; every shipped example gives {'an' if expected[0] in 'aeiou' else 'a'} {expected} here", block=block)
+                break
 
 
 # ---------------------------------------------------------------------------
@@ -184,11 +233,25 @@ def _check_batch(rep, path, items, catalog, known_names):
         _check_operator(rep, f"{p}.{name}", name, params, catalog)
 
 
+def _batch_items(doc):
+    """(batch, operator, params) for every item of every batch (top-level list) of doc."""
+    for key, value in doc.items():
+        if isinstance(value, list):
+            for item in value:
+                name, params = _op_name_and_params(item)
+                if name:
+                    yield key, name, params
+
+
 def _species_names(doc):
+    """Species of the species block, or of a species operator in any batch (e.g. a molecule generator)."""
+    lists = [doc.get("species") or []]
+    lists += [p.get("species") or [] for b, n, p in _batch_items(doc) if n == "species" and isinstance(p, dict)]
     names = []
-    for item in doc.get("species") or []:
-        if isinstance(item, dict) and len(item) == 1:
-            names.append(next(iter(item)))
+    for items in lists:
+        for item in items if isinstance(items, list) else []:
+            if isinstance(item, dict) and len(item) == 1:
+                names.append(next(iter(item)))
     return names
 
 
@@ -273,32 +336,42 @@ def _check_lattice(rep, path, params, species, ops_before, domain):
                         suggestion=f"box size {round(b / s) * s:g} ang", block="lattice")
 
 
-def _check_eam_file(rep, path, params, species, catalog, workdir):
-    fname = (params.get("parameters") or {}).get("file") if isinstance(params.get("parameters"), dict) else None
-    if not fname:
-        return
-    found = None
-    if workdir and os.path.isfile(os.path.join(workdir, fname)):
-        found = os.path.join(workdir, fname)
-    found = found or catalog.find_data_file(fname)
-    if not found:
-        available = sorted({os.path.basename(f) for d in catalog.data_dirs if os.path.isdir(d)
-                            for f in os.listdir(d) if f.endswith(".eam.alloy")})
-        close = difflib.get_close_matches(fname, available, n=3, cutoff=0.5)
-        rep.add("error", f"{path}.parameters.file", f"potential file '{fname}' not found in the data directories",
-                suggestion=(f"one of: {', '.join(close)}" if close else f"available: {', '.join(available)}")
-                + " (list_potential_files gives elements and cutoffs)", block="eam_alloy_force")
-        return
-    try:
-        with open(found) as f:
-            header = [next(f) for _ in range(4)]
-        elements = header[3].split()[1:]
-    except (OSError, StopIteration, IndexError):
-        return
-    for s in species:
-        if s not in elements:
-            rep.add("error", f"{path}.parameters.file", f"species '{s}' is not in {os.path.basename(found)} (elements: {', '.join(elements)})",
-                    suggestion="name the species like the file's elements", block="eam_alloy_force")
+def _check_potential_files(rep, doc, species, catalog, workdir):
+    """Potential files named in the parameters of the operators reading them: the file
+    exists, and the species are elements it defines."""
+    uses = []
+    operator_uses(doc, set(FILE_PARAMETERS), uses)
+    for op, params in uses:
+        files = params.get("parameters") if isinstance(params.get("parameters"), dict) else {}
+        for key in FILE_PARAMETERS[op]:
+            fname = files.get(key)
+            if not isinstance(fname, str):
+                continue
+            path = f"{op}.parameters.{key}"
+            found = os.path.join(workdir, fname) if workdir and os.path.isfile(os.path.join(workdir, fname)) else None
+            found = found or catalog.find_data_file(fname)
+            if not found:
+                ext = next((e for e in POTENTIAL_FORMATS if fname.endswith(e)), os.path.splitext(fname)[1])
+                available = sorted({os.path.basename(f) for d in catalog.data_dirs if os.path.isdir(d)
+                                    for f in os.listdir(d) if ext and f.endswith(ext)})
+                close = difflib.get_close_matches(fname, available, n=3, cutoff=0.5)
+                rep.add("error", path, f"potential file '{fname}' not found in the workspace nor in the data directories",
+                        suggestion=(f"one of: {', '.join(close)}" if close else f"available: {', '.join(available) or 'none'}")
+                        + " (list_potential_files gives elements and cutoffs)", block=op)
+                continue
+            try:
+                info = potential_file_info(found)
+            except (OSError, StopIteration, ValueError, IndexError, KeyError):
+                continue
+            elements = info.get("elements")
+            for s in species if elements else []:
+                if s not in elements:
+                    rep.add("error", path, f"species '{s}' is not in {os.path.basename(found)} (elements: {', '.join(elements)})",
+                            suggestion="name the species like the file's elements", block=op)
+            count = info.get("species_count")
+            if count and species and len(species) != count:
+                rep.add("warning", path, f"{os.path.basename(found)} is fitted for {count} species, the input declares {len(species)}",
+                        block=op)
 
 
 def _check_thermostat(rep, doc):
@@ -320,6 +393,23 @@ def _check_thermostat(rep, doc):
             want = [s for s, b in req.items() if b == block][0]
             rep.add("warning", block, f"'{block}' is defined but numerical_scheme is {scheme or 'verlet_nve (default)'}: it has no effect",
                     suggestion=f"numerical_scheme: {want}", block="numerical_scheme")
+
+
+def _check_nose_hoover(rep, doc):
+    scheme = doc.get("numerical_scheme")
+    if scheme not in ("verlet_nhnvt", "verlet_nhnpt"):
+        return
+    if not any(n == "init_nose_hoover" for _, n, _ in _batch_items(doc)):
+        rep.add("error", "includes", f"numerical_scheme {scheme} needs the Nose-Hoover configuration file",
+                suggestion="includes:\n  - config_nose_hoover.msp", block="init_nose_hoover")
+    params = doc.get("init_nose_hoover")
+    if not isinstance(params, dict):
+        rep.add("error", "init_nose_hoover", f"numerical_scheme {scheme} needs an 'init_nose_hoover' block (Tstart, ...)",
+                suggestion=SCHEMAS["init_nose_hoover"]["snippet"], block="init_nose_hoover")
+        return
+    algo = "NPT" if scheme == "verlet_nhnpt" else "NVT"
+    if params.get("algo", "NVT") != algo:
+        rep.add("error", "init_nose_hoover.algo", f"numerical_scheme {scheme} runs with algo: {algo}", block="init_nose_hoover")
 
 
 # grid flavors without the virial field, and the closest flavor that has it
@@ -403,8 +493,10 @@ def _with_includes(rep, doc, base_dir, catalog, seen=None):
     return _merge(merged, rest)
 
 
-def check_input(text, catalog, workdir=None):
-    rep = _Report()
+def check_input(text, catalog, workdir=None, observed=None):
+    """Static checks. ``observed``: operator -> parameters seen in the shipped
+    examples (``Corpus.observed_parameters``), for the soft checks."""
+    rep = _Report(observed)
     try:
         doc = yaml.safe_load(text)
     except yaml.YAMLError as e:
@@ -420,10 +512,13 @@ def check_input(text, catalog, workdir=None):
     if not isinstance(doc, dict):
         rep.add("error", "", "an input file is a YAML map of top-level blocks")
         return rep.issues
+    own_keys = set(doc)
+    own_species = _species_names(doc)   # an included file may declare every element (config_species.msp)
     doc = _with_includes(rep, doc, workdir, catalog)
 
     defaults = catalog.defaults
     known_names = set(defaults) | set(doc)   # names defined by the configuration or the input itself
+    referenced = {n for _, n, _ in _batch_items(doc)}
 
     # top-level blocks
     for key, value in doc.items():
@@ -466,6 +561,10 @@ def check_input(text, catalog, workdir=None):
         elif key in defaults or key in SCHEMAS:
             if key in SCHEMAS and isinstance(value, dict):
                 _check_operator(rep, key, key, value, catalog, definition=SCHEMAS.get(key, {}).get("kind") != "potential")
+        elif key.startswith("+") and key[1:] in known_names:
+            continue   # appends to an existing batch
+        elif key not in own_keys or key in referenced:
+            continue   # a batch defined by an included file, or used by another batch
         elif isinstance(value, (list, dict)):
             rep.add("info", key, f"'{key}' is not a known operator or configuration block: it defines a new batch, used only if referenced",
                     suggestion=_closest(key, list(catalog.names()) + list(defaults)))
@@ -474,7 +573,7 @@ def check_input(text, catalog, workdir=None):
 
     # cross-block rules
     species = _species_names(doc)
-    if "species" not in doc and not any(n in ("read_dump_atoms", "read_extended_xyz_file") for n, _ in _setup_ops(doc)):
+    if not species and not any(n in ("read_dump_atoms", "read_extended_xyz_file") for n, _ in _setup_ops(doc)):
         rep.add("warning", "species", "no species block: species must come from particle_types or a restart file",
                 suggestion=SCHEMAS["species"]["snippet"], block="species")
     ops = _setup_ops(doc)
@@ -485,12 +584,11 @@ def check_input(text, catalog, workdir=None):
             _check_domain(rep, f"setup_system[{i}].domain", params)
         if name == "lattice":
             _check_lattice(rep, f"setup_system[{i}].lattice", params, species, [n for n, _ in ops[:i]], domain or doc.get("domain"))
-    for key, value in doc.items():
-        if key == "eam_alloy_force" and isinstance(value, dict):
-            _check_eam_file(rep, key, value, species, catalog, workdir)
+    _check_potential_files(rep, doc, own_species, catalog, workdir)
     if "compute_force" not in doc:
         rep.add("warning", "compute_force", "no interatomic potential: compute_force is 'nop' by default",
                 suggestion=SCHEMAS["eam_alloy_force"]["snippet"], block="compute_force")
     _check_thermostat(rep, doc)
+    _check_nose_hoover(rep, doc)
     _check_pressure(rep, doc)
     return rep.issues

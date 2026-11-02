@@ -99,6 +99,12 @@ def test_schema_snippets_are_clean(catalog):
     ("numerical_scheme: verlet_lnvt", "numerical_scheme: verlet_lnvtt", "numerical_scheme", "is not one of"),
     ("numerical_scheme: verlet_lnvt", "numerical_scheme: verlet_nhnpt\ngrid_flavor: grid_flavor_multimat", "grid_flavor", "no virial"),
     ("- Ta: { mass", "- Tantalum: { mass", "setup_system[2].lattice.types", "not a declared species"),
+    ("numerical_scheme: verlet_lnvt", "numerical_scheme: verlet_nhnpt\ninit_nose_hoover: { algo: NPT, Tstart: 300 K }",
+     "includes", "Nose-Hoover configuration"),
+    ("numerical_scheme: verlet_lnvt", "includes: [ config_nose_hoover.msp ]\nnumerical_scheme: verlet_nhnpt\ninit_nose_hoover: { Tstart: 300 K }",
+     "init_nose_hoover.algo", "algo: NPT"),
+    ("numerical_scheme: verlet_lnvt", "includes: [ config_nose_hoover.msp ]\nnumerical_scheme: verlet_nhnpt\n"
+     "init_nose_hoover: { algo: NPT, Tstart: 300 K, Pstart: 1 GPa }", "init_nose_hoover.Pstart", "plain number"),
 ])
 def test_static_rule(catalog, old, new, path, message):
     bad = EXAMPLE.replace(old, new)
@@ -122,6 +128,85 @@ def test_includes_are_merged(catalog, tmp_path):
     (tmp_path / "base.yaml").write_text(EXAMPLE.split("eam_alloy_force:")[0])
     rest = "includes:\n  - base.yaml\neam_alloy_force:" + EXAMPLE.split("eam_alloy_force:")[1]
     assert [i for i in check_input(rest, catalog, str(tmp_path)) if i["level"] != "info"] == []
+
+
+def test_batches_without_false_notes(catalog, tmp_path):
+    # '+batch' appends, batches defined by an include or used by another batch, species from a generator batch
+    (tmp_path / "base.yaml").write_text("my_included_batch:\n  - nop\n")
+    species = EXAMPLE.split("setup_system:")[0].replace("species:\n", "")
+    text = ("includes:\n  - base.yaml\n" + "+init_epilog:\n  - nop\n"
+            + "my_generator:\n  - species:\n      species:\n" + species.replace("  - ", "        - ")
+            + "setup_system:" + EXAMPLE.split("setup_system:")[1].replace("  - init_rcb_grid\n", "  - init_rcb_grid\n  - my_generator\n"))
+    issues = [(i["path"], i["message"]) for i in check_input(text, catalog, str(tmp_path)) if i["level"] != "error"]
+    assert issues == []
+    # an unused batch is still noted
+    assert any(i["path"] == "my_unused" for i in check_input(text + "my_unused:\n  - nop\n", catalog, str(tmp_path)))
+
+
+def test_observed_parameters(catalog):
+    from exastamp_mcp.corpus import Corpus
+    corpus = Corpus(catalog.paths["XSP_DATA_DIR"])
+    names = set(catalog.names())
+    ljwolf = corpus.describe_observed("ljwolf_compute_force", names)
+    assert "parameters.cw.alpha" in ljwolf["parameters"]
+    multimat = corpus.describe_observed("compute_force_pair_multimat", names)["parameters"]
+    assert "energy" in multimat["potentials[potential=lj].parameters.epsilon"]
+
+    observed = corpus.observed_parameters(names)
+    def soft(text):
+        return [(i["path"], i["message"]) for i in check_input(text, catalog, None, observed) if "shipped example" in i["message"]]
+    wolf = "ljwolf_compute_force:\n  rcut: 12.5 ang\n  parameters:\n    lj: { epsilon: 0.01 kcal/mol, sigma: 3.8 ang }\n" \
+           "    WOLF: { alpha: 0.2 1/ang, rc: 12.5 ang }\n"
+    assert soft(wolf.replace("WOLF", "cw")) == []
+    assert [p for p, _ in soft(wolf.replace("WOLF", "coul_wolf"))] == ["ljwolf_compute_force.parameters.coul_wolf"]
+    pair = "compute_force_pair_multimat:\n  potentials:\n" \
+           "    - { type_a: Cu, type_b: Cu, potential: lj, rcut: 6 ang, parameters: { epsilon: EPS, sigma: 2.3 ang } }\n"
+    assert soft(pair.replace("EPS", "0.4 eV")) == [] and soft(pair.replace("EPS", "0.2 kcal/mol")) == []
+    assert [p for p, _ in soft(pair.replace("EPS", "0.4 ang"))] == ["compute_force_pair_multimat.potentials[0].parameters.epsilon"]
+    # maps keyed by data (species names) are not checked key by key
+    types = "setup_system:\n  - particle_types:\n      particle_type_map: { Xx: 0, Yy: 1 }\n"
+    assert soft(types) == []
+
+
+@pytest.mark.parametrize("text,path,message", [
+    ("species:\n  - W: { mass: 183.84 Da, z: 74, charge: 0 e- }\ncompute_force:\n  - snap_force_fp64:\n"
+     "      parameters: { nt: 1, param: Ta06A.snapparam, coef: Ta06A.snapcoeff }\n",
+     "snap_force_fp64.parameters.coef", "species 'W' is not in Ta06A.snapcoeff"),
+    ("species:\n  - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }\ncompute_force:\n  - snap_force_fp64:\n"
+     "      parameters: { nt: 1, param: Ta06A.snapparam, coef: Ta6A.snapcoeff }\n",
+     "snap_force_fp64.parameters.coef", "not found"),
+    ("species:\n  - Ge: { mass: 72.63 Da, z: 32, charge: 0 e- }\ninit_parameters:\n  - species\n"
+     "  - sw_init:\n      parameters: { file: Si.sw }\n", "sw_init.parameters.file", "species 'Ge' is not in Si.sw"),
+    ("species:\n  - Cu: { mass: 63.546 Da, z: 29, charge: 0 e- }\ninit_parameters:\n  - species\n"
+     "  - pace_init:\n      parameters: { coef: CH_ACE_Willman_JCP2024.yace }\n", "pace_init.parameters.coef", "species 'Cu' is not in"),
+])
+def test_potential_files(catalog, text, path, message):
+    issues = [(i["path"], i["message"]) for i in check_input(text, catalog) if i["level"] == "error"]
+    assert any(p == path and message in m for p, m in issues), issues
+
+
+def test_missing_operators(tmp_path):
+    import json
+    from exastamp_mcp.corpus import Corpus
+    (tmp_path / "regression_new").mkdir()
+    example = tmp_path / "regression_new" / "rsa.msp"
+    example.write_text("setup_system:\n  - init_rsa\n")
+    status = {"regression_new/rsa.msp": {"mtime": int(example.stat().st_mtime), "builds": False,
+              "error": "YAML node for batch simulation.setup_system.init_rsa is not a list but does not contain a 'body' entry"}}
+    (tmp_path / "status.json").write_text(json.dumps(status))
+    corpus = Corpus(str(tmp_path))
+    corpus.load_build_status(str(tmp_path / "status.json"))
+    assert corpus.missing_operators() == {"init_rsa": 1}
+
+
+def test_potential_file_info(catalog):
+    from exastamp_mcp.data import potential_file_info
+    info = {os.path.basename(f): potential_file_info(f) for f in map(catalog.find_data_file,
+            ["WBe_Wood_PRB2019.snapcoeff", "GaN.sw", "Ta_param.pod", "pot.almtp", "Cu-PBE-core-rep.ace", "Ta06A.snapparam"])}
+    assert info["WBe_Wood_PRB2019.snapcoeff"]["elements"] == ["W", "Be"]
+    assert info["GaN.sw"]["elements"] == ["Ga", "N"]
+    assert info["Ta_param.pod"]["elements"] == ["Ta"] and info["pot.almtp"]["species_count"] == 1
+    assert info["Cu-PBE-core-rep.ace"]["elements"] == ["Cu"] and info["Ta06A.snapparam"]["rcutfac"] > 4
 
 
 def test_parent_include_builds(catalog, tmp_path):
@@ -219,6 +304,12 @@ def test_server_tools(tmp_path):
             assert {"build_input", "validate_input", "describe_block", "search_examples", "write_input", "run_input"} <= names
             r = await c.call_tool("describe_block", {"name": "langevin_thermostatt"})
             assert r.is_error and "did you mean langevin_thermostat" in r.content[0].text
+            # defaults exported, wiring slots hidden, parameters seen in the examples
+            r = (await c.call_tool("describe_block", {"name": "gaussian_noise_v"})).structured_content
+            params = {p["name"]: p for p in r["operator_parameters"]}
+            assert params["sigma"]["default"] == 1 and params["ghost"]["default"] is False
+            assert "grid" not in params and "domain" not in params and "region" in params
+            assert "sigma" in r["observed_parameters"]["parameters"]
             r = await c.call_tool("build_input", {"spec": SPECS["ar_lj_nve"][0]})
             assert r.structured_content["ok"], r.structured_content
             r = await c.call_tool("write_input", {"path": "ar/ar.msp", "yaml": r.structured_content["yaml"]})

@@ -22,7 +22,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
-from onika_mcp.catalog import Catalog
+from onika_mcp.catalog import Catalog, is_scalar_type
 from onika_mcp.jobs import JobManager
 from onika_mcp.smoke import check_build
 
@@ -93,6 +93,20 @@ class _State:
                 self._corpus = c
             return self._corpus
 
+    @property
+    def observed(self):
+        """Operator parameters seen in the examples (soft checks of validate_input)."""
+        return self.corpus.observed_parameters(set(self.catalog.names()))
+
+    @functools.cached_property
+    def user_slot_types(self):
+        """Slot types that some example sets in YAML, for any operator (e.g. a region expression)."""
+        types = set()
+        for name, tree in self.observed.items():
+            slots = {s["name"]: s["type"] for s in (self.catalog.get(name) or {}).get("slots", [])}
+            types |= {slots[k] for k in tree["keys"] if k in slots}
+        return types
+
 
 def build_server(workspace=".", doc_dir=None, max_run_steps=None):
     state = _State(workspace, doc_dir or os.environ.get("EXASTAMP_DOC_DIR"), max_run_steps)
@@ -139,6 +153,8 @@ def build_server(workspace=".", doc_dir=None, max_run_steps=None):
             "snapshot_writers": SCHEMAS["write_snapshot"]["values"],
             "grid_flavors": SCHEMAS["grid_flavor"]["values"],
             "documentation": bool(corp.doc_dir),
+            # operators of shipped examples whose plugin is not compiled in this build
+            "not_in_this_build": {n: {"examples": c} for n, c in corp.missing_operators().items() if cat.get(n) is None},
         }
 
     @tool(ro)
@@ -156,15 +172,31 @@ def build_server(workspace=".", doc_dir=None, max_run_steps=None):
             out.update({k: v for k, v in schema.items() if k != "doc"})
             if schema.get("doc"):
                 out["doc"] = doc_url(schema["doc"])
+        observed = state.corpus.describe_observed(name, set(state.catalog.names())) if op else None
         if op:
             if op.get("documentation"):
                 out["operator_documentation"] = op["documentation"][:3000]
-            slots = [s for s in op.get("slots", []) if s["direction"] != "out"]
-            out["operator_parameters"] = [
-                {k: v for k, v in s.items() if k in ("name", "type", "required", "documentation") and v not in ("", None)}
-                for s in slots if not s["type"].startswith(("Grid", "onika::", "exanb::Grid", "ompi_"))]
+            # wiring slots (grid, domain, neighbor lists, MPI...) are connected by the graph: a slot of a
+            # non-scalar type is listed only if an example, default definition or schema sets it, or
+            # its type is set in YAML for some operator
+            given = {p.split(".")[0].split("[")[0] for p in (observed or {}).get("parameters", {})}
+            definition = state.catalog.defaults.get(name)
+            given |= set(definition) if isinstance(definition, dict) else set()
+            given |= set((schema or {}).get("keys", {}))
+            params = []
+            for s in op.get("slots", []):
+                if s["direction"] == "out" or not (is_scalar_type(s["type"]) or s["name"] in given
+                                                   or s["type"] in state.user_slot_types):
+                    continue
+                p = {k: s[k] for k in ("name", "type", "required", "documentation") if s.get(k) not in ("", None)}
+                if s.get("value") is not None:
+                    p["default"] = s["value"]
+                params.append(p)
+            out["operator_parameters"] = params
         if name in state.catalog.defaults:
             out["default_definition"] = state.catalog.defaults[name]
+        if observed:
+            out["observed_parameters"] = observed
         return out
 
     @tool(ro)
@@ -218,7 +250,7 @@ def build_server(workspace=".", doc_dir=None, max_run_steps=None):
             return {"ok": False, "error": str(e)}
         out = {"ok": True, "yaml": text, "notes": notes}
         if validate != "none":
-            report = _validate(text, state.catalog, state.workspace, level=validate)
+            report = _validate(text, state.catalog, state.workspace, level=validate, observed=state.observed)
             out["ok"] = report["ok"]
             out["validation"] = report
         return out
@@ -229,14 +261,14 @@ def build_server(workspace=".", doc_dir=None, max_run_steps=None):
         build: exaStamp builds the operator graph in strict mode. smoke: runs `steps` time steps with
         outputs disabled and checks the result (finite energies, no temperature explosion, atom count).
         Each layer runs only if the previous one passed. Relative file names resolve in the workspace."""
-        return _validate(yaml, state.catalog, state.workspace, level=level, steps=steps)
+        return _validate(yaml, state.catalog, state.workspace, level=level, steps=steps, observed=state.observed)
 
     @tool(ToolAnnotations(destructive_hint=False, idempotent_hint=True, open_world_hint=False))
     def write_input(path: str, yaml: str, force: bool = False) -> dict[str, Any]:
         """Save an input file in the workspace after validating it (smoke level); refused while
         errors remain, unless force is true."""
         full = _resolve(state.workspace, path)
-        report = _validate(yaml, state.catalog, os.path.dirname(full), level="smoke")
+        report = _validate(yaml, state.catalog, os.path.dirname(full), level="smoke", observed=state.observed)
         if not report["ok"] and not force:
             return {"written": False, "reason": "validation failed", "validation": report}
         os.makedirs(os.path.dirname(full), exist_ok=True)

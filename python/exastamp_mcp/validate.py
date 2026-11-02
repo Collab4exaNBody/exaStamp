@@ -146,10 +146,10 @@ def _sanity(thermo, doc):
     return issues
 
 
-def validate_input(text, catalog, workdir=None, level="smoke", steps=2, timeout=300):
+def validate_input(text, catalog, workdir=None, level="smoke", steps=2, timeout=300, observed=None):
     if level not in LEVELS:
         raise ValueError(f"level must be one of {LEVELS}")
-    issues = [dict(i, stage="static") for i in check_input(text, catalog, workdir)]
+    issues = [dict(i, stage="static") for i in check_input(text, catalog, workdir, observed)]
     report = {"ok": False, "stage_reached": "static", "issues": issues}
     if has_errors(issues) or level == "static":
         report["ok"] = not has_errors(issues)
