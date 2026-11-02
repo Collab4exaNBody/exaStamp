@@ -59,6 +59,7 @@ under the License.
 
 #if defined(XSTAMP_DEEPMD_BLAS) && defined(__APPLE__)
 extern "C" void vvexp(double* y, const double* x, const int* n);   // Accelerate vForce
+extern "C" void vvtanh(double* y, const double* x, const int* n);
 #endif
 #ifdef XSTAMP_DEEPMD_BLAS
 extern "C" void cblas_dgemm(int layout, int transa, int transb, int M, int N, int K, double alpha, const double* A, int lda,
@@ -81,6 +82,21 @@ namespace exaStamp
     {
       double* c = C + size_t(i) * ldc;
       if( beta == 0.0 ) for(int j = 0; j < N; j++) c[j] = 0.0; else if( beta != 1.0 ) for(int j = 0; j < N; j++) c[j] *= beta;
+      // A row times B rows or a B column: dot products, vectorized
+      if( !ta && ( tb || N == 1 ) )
+      {
+        const double* a = A + size_t(i) * lda;
+        for(int j = 0; j < N; j++)
+        {
+          const double* b = tb ? B + size_t(j) * ldb : B;
+          const size_t st = tb ? 1 : ldb;
+          double s = 0.0;
+#         pragma omp simd reduction(+:s)
+          for(int k = 0; k < K; k++) s += a[k] * b[k * st];
+          c[j] += alpha * s;
+        }
+        continue;
+      }
       for(int k = 0; k < K; k++)
       {
         const double a = alpha * ( ta ? A[ size_t(k) * lda + i ] : A[ size_t(i) * lda + k ] );
@@ -213,6 +229,19 @@ namespace exaStamp
             if( a ) a[k] = t + m.act_const;
             if( d ) d[k] = m.act_slope * ( 1.0 - t*t );
           }
+      return;
+    }
+    if( m.act == DPA3_TANH )
+    {
+      static thread_local std::vector<double> t;
+      if( t.size() < n ) t.resize(n);
+#     if defined(XSTAMP_DEEPMD_BLAS) && defined(__APPLE__)
+      { const int nn = int(n); vvtanh( t.data(), z, &nn ); }
+#     else
+      for(size_t k = 0; k < n; k++) t[k] = std::tanh( z[k] );
+#     endif
+      if( a ) for(size_t k = 0; k < n; k++) a[k] = t[k];
+      if( d ) for(size_t k = 0; k < n; k++) d[k] = 1.0 - t[k] * t[k];
       return;
     }
     for(size_t k = 0; k < n; k++) { if( a ) a[k] = dpa3_act( m, z[k] ); if( d ) d[k] = dpa3_dact( m, z[k] ); }

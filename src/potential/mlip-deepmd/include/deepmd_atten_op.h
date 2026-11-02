@@ -52,6 +52,7 @@ under the License.
 
 #include "deepmd_model.h"
 #include "deepmd_force_op.h"
+#include "deepmd_dpa3.h"
 
 namespace exaStamp
 {
@@ -77,7 +78,28 @@ namespace exaStamp
     DPEmbeddingWork emb;
     std::vector<double> fg0, fg1;
     int nd = 0;                              // descriptor size
+    // embeddings of all neighbors, batched per network: per group and layer, outputs [c][nout] then derivatives [c][nout]
+    std::vector<int> eo, es;                 // neighbors in group order, group starts
+    std::vector<const DPNet*> en;            // network of the groups
+    std::vector<size_t> ee;                  // end offset of the groups in eb
+    std::vector<double> eb, ez, ex, eg0, eg1, eds;
   };
+
+  // activations and derivatives of an array (one tanh per value, batched with Accelerate vForce on macOS)
+  inline void dp_activation_batch(int act, const double* z, size_t n, double* a, double* d)
+  {
+    if( act == DP_ACT_TANH )
+    {
+#     if defined(XSTAMP_DEEPMD_BLAS) && defined(__APPLE__)
+      { const int nn = int(n); vvtanh( a, z, &nn ); }
+#     else
+      for(size_t k = 0; k < n; k++) a[k] = std::tanh( z[k] );
+#     endif
+      for(size_t k = 0; k < n; k++) d[k] = 1.0 - a[k] * a[k];
+      return;
+    }
+    for(size_t k = 0; k < n; k++) { a[k] = dp_activation( act, z[k] ); d[k] = dp_activation_grad( act, z[k] ); }
+  }
 
   // attention model view
   struct DeepmdAttenView
@@ -164,18 +186,68 @@ namespace exaStamp
         for(int c = 0; c < 3; c++) W.u[q*3 + c] = e.rh[1 + c] * inv;
         W.sw[q] = e.w;
         W.dsw[q] = e.dw;
-        double* G = W.X.data() + size_t(q) * ng;
-        if( !a.strip )
+      }
+
+      // ---- embeddings, batched per network (per neighbor type; one network in strip mode)
+      W.eo.clear(); W.es.clear(); W.en.clear(); W.ee.clear();
+      size_t eb_size = 0;
+      for(int t = 0; t < ( a.strip ? 1 : nt ); t++)
+      {
+        const int s0 = W.eo.size();
+        for(int q = 0; q < n; q++) if( a.strip || W.tj[q] == t ) W.eo.push_back( q );
+        const int cnt = int( W.eo.size() ) - s0;
+        if( cnt == 0 ) continue;
+        const DPNet& net = a.strip ? m.embedding[0] : base.embedding_net(ti, t);
+        W.es.push_back( s0 ); W.en.push_back( &net );
+        for(int l = 0; l < net.nlayers; l++) eb_size += size_t(cnt) * 2 * m.layers[net.first_layer + l].nout;
+        W.ee.push_back( eb_size );
+      }
+      grow(W.eb, eb_size);
+      W.es.push_back( n );
+      {
+        size_t off = 0;
+        for(size_t gr = 0; gr < W.en.size(); gr++)
         {
-          const double* g = dp_mlp_forward( base.embedding_net(ti, tj), m.layers, m.weights, e.rh, W.emb );
-          for(int c = 0; c < ng; c++) G[c] = g[c];
-        }
-        else
-        {
-          const double* g = dp_mlp_forward( m.embedding[0], m.layers, m.weights, e.rh, W.emb );
-          const double* T = a.strip_table + size_t( m.type_one_side ? tj : ti * nt + tj ) * ng;
-          const double f = a.smooth ? e.w : 1.0;
-          for(int c = 0; c < ng; c++) { W.gs[size_t(q)*ng + c] = g[c]; G[c] = g[c] * ( 1.0 + T[c] * f ); }
+          const DPNet& net = *W.en[gr];
+          const int s0 = W.es[gr], cnt = W.es[gr+1] - s0;
+          const int nin0 = m.layers[net.first_layer].nin;
+          grow(W.ex, size_t(cnt) * nin0);
+          for(int r = 0; r < cnt; r++) for(int k = 0; k < nin0; k++) W.ex[size_t(r)*nin0 + k] = W.rh[ W.eo[s0 + r] * 4 + k ];
+          const double* x = W.ex.data();
+          for(int l = 0; l < net.nlayers; l++)
+          {
+            const DPLayer& L = m.layers[net.first_layer + l];
+            const size_t rows = size_t(cnt) * L.nout;
+            grow(W.ez, rows);
+            const double* b = m.weights + L.b;
+            for(int r = 0; r < cnt; r++) for(int o = 0; o < L.nout; o++) W.ez[size_t(r)*L.nout + o] = b[o];
+            dpa3_gemm( false, false, cnt, L.nout, L.nin, 1.0, x, L.nin, m.weights + L.w, L.nout, 1.0, W.ez.data(), L.nout );
+            double* Y = W.eb.data() + off;
+            double* D = Y + rows;
+            dp_activation_batch( L.activation, W.ez.data(), rows, Y, D );
+            if( L.idt != size_t(-1) )
+            {
+              const double* idt = m.weights + L.idt;
+              for(int r = 0; r < cnt; r++) for(int o = 0; o < L.nout; o++) { Y[size_t(r)*L.nout + o] *= idt[o]; D[size_t(r)*L.nout + o] *= idt[o]; }
+            }
+            if( L.resnet == 1 ) for(int r = 0; r < cnt; r++) for(int o = 0; o < L.nout; o++) Y[size_t(r)*L.nout + o] += x[size_t(r)*L.nin + o];
+            else if( L.resnet == 2 ) for(int r = 0; r < cnt; r++) for(int o = 0; o < L.nout; o++) Y[size_t(r)*L.nout + o] += x[size_t(r)*L.nin + o % L.nin];
+            x = Y;
+            off += 2 * rows;
+          }
+          for(int r = 0; r < cnt; r++)
+          {
+            const int q = W.eo[s0 + r];
+            const double* g = x + size_t(r) * ng;
+            double* G = W.X.data() + size_t(q) * ng;
+            if( !a.strip ) { for(int c = 0; c < ng; c++) G[c] = g[c]; }
+            else
+            {
+              const double* T = a.strip_table + size_t( m.type_one_side ? W.tj[q] : ti * nt + W.tj[q] ) * ng;
+              const double f = a.smooth ? W.env[q].w : 1.0;
+              for(int c = 0; c < ng; c++) { W.gs[size_t(q)*ng + c] = g[c]; G[c] = g[c] * ( 1.0 + T[c] * f ); }
+            }
+          }
         }
       }
 
@@ -466,36 +538,55 @@ namespace exaStamp
 
       // ---- embeddings backward, forces
       const double conv = m.conv_energy;
-      double g0[DP_MAX_EMB_WIDTH], g1[DP_MAX_EMB_WIDTH];
+      grow(W.eds, n);
+      for(size_t gr = 0; gr < W.en.size(); gr++)
+      {
+        const DPNet& net = *W.en[gr];
+        const int s0 = W.es[gr], cnt = W.es[gr+1] - s0;
+        size_t widest = ng;
+        for(int l = 0; l < net.nlayers; l++) widest = std::max( widest, size_t( m.layers[net.first_layer + l].nin ) );
+        grow(W.eg0, size_t(cnt) * widest); grow(W.eg1, size_t(cnt) * widest); grow(W.ez, size_t(cnt) * widest);
+        for(int r = 0; r < cnt; r++)
+        {
+          const int q = W.eo[s0 + r];
+          const double* dG = W.dX.data() + size_t(q) * ng;
+          double* y = W.eg0.data() + size_t(r) * ng;
+          if( !a.strip ) { for(int c = 0; c < ng; c++) y[c] = dG[c]; }
+          else
+          {
+            const double* T = a.strip_table + size_t( m.type_one_side ? W.tj[q] : ti * nt + W.tj[q] ) * ng;
+            const double* gs = W.gs.data() + size_t(q) * ng;
+            const double f = a.smooth ? W.env[q].w : 1.0;
+            for(int c = 0; c < ng; c++)
+            {
+              y[c] = dG[c] * ( 1.0 + T[c] * f );
+              if( a.smooth ) W.dsw_acc[q] += dG[c] * gs[c] * T[c];
+            }
+          }
+        }
+        double* dy = W.eg0.data();
+        double* dx = W.eg1.data();
+        size_t off = W.ee[gr];
+        for(int l = net.nlayers - 1; l >= 0; l--)
+        {
+          const DPLayer& L = m.layers[net.first_layer + l];
+          const size_t rows = size_t(cnt) * L.nout;
+          off -= 2 * rows;
+          const double* D = W.eb.data() + off + rows;
+          for(size_t x = 0; x < rows; x++) W.ez[x] = dy[x] * D[x];
+          dpa3_gemm( false, true, cnt, L.nin, L.nout, 1.0, W.ez.data(), L.nout, m.weights + L.w, L.nout, 0.0, dx, L.nin );
+          if( L.resnet == 1 ) for(int r = 0; r < cnt; r++) for(int i = 0; i < L.nin; i++) dx[size_t(r)*L.nin + i] += dy[size_t(r)*L.nout + i];
+          else if( L.resnet == 2 ) for(int r = 0; r < cnt; r++) for(int i = 0; i < L.nin; i++) dx[size_t(r)*L.nin + i] += dy[size_t(r)*L.nout + i] + dy[size_t(r)*L.nout + i + L.nin];
+          std::swap( dy, dx );
+        }
+        for(int r = 0; r < cnt; r++) W.eds[ W.eo[s0 + r] ] = dy[ size_t(r) * m.layers[net.first_layer].nin ];
+      }
       for(int q = 0; q < n; q++)
       {
         const int jj = W.nb[q], tj = W.tj[q];
         const DeepmdForceOp::EnvRow& e = W.env[q];
-        const double* dG = W.dX.data() + size_t(q) * ng;
         double* drh = W.drh.data() + q * 4;
-        double ds = 0.0;
-        if( !a.strip )
-        {
-          const DPNet& emb = base.embedding_net(ti, tj);
-          dp_mlp_forward( emb, m.layers, m.weights, e.rh, W.emb );
-          for(int c = 0; c < ng; c++) g0[c] = dG[c];
-          dp_mlp_backward( emb, m.layers, m.weights, e.rh, W.emb, g0, &ds, g0, g1 );
-        }
-        else
-        {
-          const DPNet& emb = m.embedding[0];
-          dp_mlp_forward( emb, m.layers, m.weights, e.rh, W.emb );
-          const double* T = a.strip_table + size_t( m.type_one_side ? tj : ti * nt + tj ) * ng;
-          const double* gs = W.gs.data() + size_t(q) * ng;
-          const double f = a.smooth ? e.w : 1.0;
-          for(int c = 0; c < ng; c++)
-          {
-            g0[c] = dG[c] * ( 1.0 + T[c] * f );
-            if( a.smooth ) W.dsw_acc[q] += dG[c] * gs[c] * T[c];
-          }
-          dp_mlp_backward( emb, m.layers, m.weights, e.rh, W.emb, g0, &ds, g0, g1 );
-        }
-        drh[0] += ds;
+        drh[0] += W.eds[q];
         // u = Rh[1:4] / max( |Rh[1:4]| , 1e-12 ) (below the floor, near rcut: u = Rh[1:4] / 1e-12)
         if( a.dotr )
         {

@@ -141,6 +141,8 @@ Per-atom energy : the atomic energy of the model.
         const DPA2Model& M = *c.dpa2;
         DPA2Buffers& BB = *c.dpa2_buf;
         const size_t n_nodes = grid->number_of_particles();
+        DPA2Timer TW;
+        dpa2_prof().evals ++;
         BB.D0.assign( n_nodes * M.dim0, 0.0 );
         DPA2BlockOp op;
         op.rep = DeepmdAttenOp{ DeepmdForceOp{ DeepmdModelView( *M.rep, conv_energy ) }, atten_view( *M.rep ) };
@@ -150,11 +152,14 @@ Per-atom energy : the atomic energy of the model.
         op.D0 = BB.D0.data();
         const double rc0 = std::max( M.rep->rcut, M.three ? M.three->rcut : 0.0 );
         compute_cell_particle_pairs2( *grid, rc0, *ghost, optional, force_buf, op, cp_fields, DefaultPositionFields{}, parallel_execution_context() );
+        TW.mark(0);
         dpa2_compute( *grid, *chunk_neighbors, *domain, M, DeepmdModelView( c, conv_energy ),
                       ghost_comm_scheme.has_value() ? ghost_comm_scheme.get_pointer() : nullptr, *mpi, BB );
+        TW = DPA2Timer();
         op.backward = true;
         op.dD0 = BB.dD0.data();
         compute_cell_particle_pairs2( *grid, rc0, *ghost, optional, force_buf, op, cp_fields, DefaultPositionFields{}, parallel_execution_context() );
+        TW.mark(5);
         return;
       }
       if( c.descriptor == DP_HYBRID )

@@ -61,6 +61,30 @@ namespace exaStamp
     std::shared_ptr<DeepmdContext> rep, three;
   };
 
+  // stage profile (DPA2_PROF=1): wall time per evaluation; 'inner' stages are measured on OpenMP thread 0
+  struct DPA2Prof
+  {
+    bool on = std::getenv("DPA2_PROF") != nullptr;
+    int evals = 0;
+    double t[24] = {};
+    ~DPA2Prof()
+    {
+      if( !on || evals == 0 ) return;
+      static const char* names[24] = { "pass A (repinit, 3-body)", "CSR, g1_0, g2 store", "forward layers", "fitting", "reverse layers", "pass C (backward)", "forces",
+                                       "", "inner geometry+inputs", "inner fwd g1", "inner fwd linear2", "inner fwd attn maps", "inner fwd attn weights", "inner fwd head+LN",
+                                       "inner vjp g1", "inner vjp linear2+LN", "inner vjp attn weights", "inner vjp attn maps", "inner vjp bonds+scatter", "inner repinit fwd", "inner 3-body fwd", "inner repinit bwd", "inner 3-body bwd", "" };
+      std::fprintf( stderr, "[DPA2] profile, ms per evaluation (%d evaluations):\n", evals );
+      for(int k = 0; k < 24; k++) if( t[k] > 0 ) std::fprintf( stderr, "  %-26s %10.3f\n", names[k], 1e3 * t[k] / evals );
+    }
+  };
+  inline DPA2Prof& dpa2_prof() { static DPA2Prof p; return p; }
+  struct DPA2Timer
+  {
+    bool on; double t0;
+    inline DPA2Timer() : on( dpa2_prof().on && omp_get_thread_num() == 0 ), t0( on ? omp_get_wtime() : 0.0 ) {}
+    inline void mark(int k) { if( on ) { const double t = omp_get_wtime(); dpa2_prof().t[k] += t - t0; t0 = t; } }
+  };
+
   // ------------------------------------------------------------------ one atom of the repformers
 
   struct DPA2Geom
@@ -84,6 +108,8 @@ namespace exaStamp
     std::vector<DPA2Work> L;
     std::vector<int> order;
     std::vector<double> dg1, dg2, dg1_in, dg2_in, dgg1, gh2, gw, gs, tmp, tmp2, tmp3;
+    std::vector<double> hh, ww, hw, aq, ak, av, ao, am, ad, dqh, dkh, dvh, dqk, dS, dHH, mx;   // attention, symmetrization
+    std::vector<double> du, dz1, dmlp, dc, dM, gx;
   };
 
   inline void dpa2_geometry(const DPA2Model& M, int i, int ti, const int64_t* offset, const int* nbh, const double* rij, DPA2Scratch& S)
@@ -127,6 +153,34 @@ namespace exaStamp
     }
   }
 
+  // y[n] = exp( y[n] )
+  inline void dpa2_exp(double* y, size_t n)
+  {
+#   if defined(XSTAMP_DEEPMD_BLAS) && defined(__APPLE__)
+    { const int nn = int(n); vvexp( y, y, &nn ); }
+#   else
+    for(size_t k = 0; k < n; k++) y[k] = std::exp( y[k] );
+#   endif
+  }
+  // y[nout] (+)= x[nin] W, b added when given
+  inline void dpa2_lin(const DPA3Model& m, const DPA3Lin& L, const double* x, double* y)
+  {
+    for(int o = 0; o < L.nout; o++) y[o] = L.b != size_t(-1) ? m.W[L.b + o] : 0.0;
+    dpa3_gemm( false, false, 1, L.nout, L.nin, 1.0, x, L.nin, m.W.data() + L.w, L.nout, 1.0, y, L.nout );
+  }
+  // dx[nin] += W dy[nout]
+  inline void dpa2_lin_t(const DPA3Model& m, const DPA3Lin& L, const double* dy, double* dx)
+  {
+    dpa3_gemm( false, false, L.nin, 1, L.nout, 1.0, m.W.data() + L.w, L.nout, dy, 1, 1.0, dx, 1 );
+  }
+  // sums over the neighbors: hw[n][3] = h2 sw s_sym
+  inline void dpa2_hw(const DPA2Model& M, DPA2Scratch& S)
+  {
+    const DPA2Geom& g = S.g;
+    dpa3_grow(S.hw, size_t(g.n) * 3);
+    for(int k = 0; k < g.n; k++) { const double f = g.w[k] * M.s_sym; for(int x = 0; x < 3; x++) S.hw[3*k + x] = g.h2[3*k + x] * f; }
+  }
+
   // initial g2 of the atom (into S.L[0].g2)
   inline void dpa2_init_g2(const DPA2Model& M, DPA2Scratch& S)
   {
@@ -154,13 +208,19 @@ namespace exaStamp
     const double* W = m.W.data();
     const double* g1 = w.g1.data();
     const double* g2 = w.g2.data();
+    DPA2Timer T;
     std::vector<const double*> upd;   // updates of g1 in deepmd's order
+    dpa2_hw( M, S );
+    // g1 of the neighbors
+    std::vector<double>& Xg = S.tmp2; dpa3_grow(Xg, size_t(n) * g1d);
+    for(int k = 0; k < n; k++) { const double* nj = Nl + size_t( g.j[k] ) * g1d; std::copy( nj, nj + g1d, Xg.data() + size_t(k) * g1d ); }
+    const double* X1 = Xg.data();
     // self mlp
     if( M.out_mlp )
     {
       dpa3_grow(w.a_self, g1d); dpa3_grow(w.d_self, g1d);
       std::vector<double>& z = S.tmp; dpa3_grow(z, g1d);
-      dpa3_lin( m, P.self_mlp, g1, z.data() );
+      dpa2_lin( m, P.self_mlp, g1, z.data() );
       dpa3_actd( m, z.data(), g1d, w.a_self.data(), w.d_self.data() );
       upd.push_back( w.a_self.data() );
     }
@@ -177,9 +237,7 @@ namespace exaStamp
       if( M.out_conv ) dpa3_gemm( false, false, n, g1d, g2d, 1.0, g2, g2d, W + P.proj.w, g1d, 0.0, w.P.data(), g1d );
       else
       {
-        std::vector<double>& X = S.tmp2; dpa3_grow(X, size_t(n) * g1d);
-        for(int k = 0; k < n; k++) for(int c = 0; c < g1d; c++) X[size_t(k)*g1d + c] = Nl[ size_t( g.j[k] ) * g1d + c ];
-        dpa3_gemm( false, false, n, g2d, g1d, 1.0, X.data(), g1d, W + P.proj.w, g2d, 0.0, w.P.data(), g2d );
+        dpa3_gemm( false, false, n, g2d, g1d, 1.0, X1, g1d, W + P.proj.w, g2d, 0.0, w.P.data(), g2d );
       }
       dpa3_grow(w.c, pw);
       std::fill( w.c.begin(), w.c.begin() + pw, 0.0 );
@@ -187,7 +245,7 @@ namespace exaStamp
       {
         const double f = g.w[k] / M.nnei;
         const double* pk = w.P.data() + size_t(k) * pw;
-        const double* xk = M.out_conv ? Nl + size_t( g.j[k] ) * g1d : g2 + size_t(k) * g2d;
+        const double* xk = M.out_conv ? X1 + size_t(k) * g1d : g2 + size_t(k) * g2d;
         for(int c = 0; c < pw; c++) w.c[c] += pk[c] * xk[c] * f;
       }
       if( M.out_conv ) upd.push_back( w.c.data() );
@@ -196,30 +254,21 @@ namespace exaStamp
     if( M.grrg )
     {
       dpa3_grow(w.hg2, size_t(3) * g2d);
-      std::fill( w.hg2.begin(), w.hg2.begin() + 3 * g2d, 0.0 );
-      for(int k = 0; k < n; k++)
-      {
-        const double f = g.w[k] * M.s_sym;
-        for(int x = 0; x < 3; x++) { const double hs = g.h2[3*k + x] * f; for(int c = 0; c < g2d; c++) w.hg2[x*g2d + c] += hs * g2[size_t(k)*g2d + c]; }
-      }
+      dpa3_gemm( true, false, 3, g2d, n, 1.0, S.hw.data(), 3, g2, g2d, 0.0, w.hg2.data(), g2d );
+      if( n == 0 ) std::fill( w.hg2.begin(), w.hg2.begin() + 3 * g2d, 0.0 );
       dpa3_grrg( w.hg2.data(), g2d, ax, w.mlp.data() + off ); off += ax * g2d;
     }
     if( M.drrd )
     {
       dpa3_grow(w.hg1, size_t(3) * g1d);
-      std::fill( w.hg1.begin(), w.hg1.begin() + 3 * g1d, 0.0 );
-      for(int k = 0; k < n; k++)
-      {
-        const double f = g.w[k] * M.s_sym;
-        const double* nj = Nl + size_t( g.j[k] ) * g1d;
-        for(int x = 0; x < 3; x++) { const double hs = g.h2[3*k + x] * f; for(int c = 0; c < g1d; c++) w.hg1[x*g1d + c] += hs * nj[c]; }
-      }
+      dpa3_gemm( true, false, 3, g1d, n, 1.0, S.hw.data(), 3, X1, g1d, 0.0, w.hg1.data(), g1d );
+      if( n == 0 ) std::fill( w.hg1.begin(), w.hg1.begin() + 3 * g1d, 0.0 );
       dpa3_grrg( w.hg1.data(), g1d, ax, w.mlp.data() + off ); off += ax * g1d;
     }
     dpa3_grow(w.a1, g1d); dpa3_grow(w.d1, g1d);
     {
       std::vector<double>& z = S.tmp; dpa3_grow(z, g1d);
-      dpa3_lin( m, P.linear1, w.mlp.data(), z.data() );
+      dpa2_lin( m, P.linear1, w.mlp.data(), z.data() );
       dpa3_actd( m, z.data(), g1d, w.a1.data(), w.d1.data() );
     }
     upd.push_back( w.a1.data() );
@@ -231,6 +280,7 @@ namespace exaStamp
     }
     // g2 update
     o.g2.assign( g2, g2 + size_t(n) * g2d );
+    T.mark(9);
     if( !P.chnnl2 ) return;
     dpa3_grow(w.a2, size_t(n) * g2d); dpa3_grow(w.d2, size_t(n) * g2d);
     {
@@ -241,53 +291,73 @@ namespace exaStamp
     }
     const double* r0 = W + P.g2_res[0];
     for(size_t x = 0; x < size_t(n) * g2d; x++) o.g2[x] += r0[x % g2d] * w.a2[x];
+    T.mark(10);
     if( !P.attn ) return;
     // attention: q, k (hid x 2 nh per edge), v (g2d x nh), weights per head
     const int nq = hid * 2 * nh, nv = g2d * nh;
     dpa3_grow(w.qk, size_t(n) * nq); dpa3_grow(w.v, size_t(n) * nv);
     dpa3_gemm( false, false, n, nq, g2d, 1.0, g2, g2d, W + P.mapqk.w, nq, 0.0, w.qk.data(), nq );
     dpa3_gemm( false, false, n, nv, g2d, 1.0, g2, g2d, W + P.mapv.w, nv, 0.0, w.v.data(), nv );
+    T.mark(11);
     const size_t nn2 = size_t(n) * n;
     dpa3_grow(w.L0, size_t(nh) * nn2); dpa3_grow(w.Ab, size_t(nh) * nn2); dpa3_grow(w.out, size_t(n) * nv);
     std::fill( w.out.begin(), w.out.begin() + size_t(n) * nv, 0.0 );
     const int npad = M.nnei - n;
     const double ish = 1.0 / std::sqrt( double(hid) ), is3 = 1.0 / std::sqrt( 3.0 );
+    // per pair: h2_a . h2_b, sw_a sw_b; per head: Q, K, V matrices of the head
+    dpa3_grow(S.hh, nn2); dpa3_grow(S.ww, nn2); dpa3_grow(S.aq, size_t(n) * hid); dpa3_grow(S.ak, size_t(n) * hid);
+    dpa3_grow(S.av, size_t(n) * g2d); dpa3_grow(S.ao, size_t(n) * g2d); dpa3_grow(S.am, nn2); dpa3_grow(S.mx, n);
+    dpa3_gemm( false, true, n, n, 3, 1.0, g.h2.data(), 3, g.h2.data(), 3, 0.0, S.hh.data(), n );
+    for(int a = 0; a < n; a++) for(int b = 0; b < n; b++) S.ww[size_t(a)*n + b] = g.w[a] * g.w[b];
+    const double* hh = S.hh.data();
+    const double* ww = S.ww.data();
     for(int h = 0; h < nh; h++)
     {
       double* L0 = w.L0.data() + size_t(h) * nn2;
       double* Ab = w.Ab.data() + size_t(h) * nn2;
+      double* Am = S.am.data();
       for(int a = 0; a < n; a++)
       {
         const double* qa = w.qk.data() + size_t(a) * nq;
+        const double* va = w.v.data() + size_t(a) * nv;
+        double* Qa = S.aq.data() + size_t(a) * hid;
+        double* Ka = S.ak.data() + size_t(a) * hid;
+        double* Va = S.av.data() + size_t(a) * g2d;
+        for(int c = 0; c < hid; c++) { Qa[c] = qa[c*2*nh + h]; Ka[c] = qa[c*2*nh + nh + h]; }
+        for(int c = 0; c < g2d; c++) Va[c] = va[c*nh + h];
+      }
+      dpa3_gemm( false, true, n, n, hid, ish, S.aq.data(), hid, S.ak.data(), hid, 0.0, L0, n );
+      if( M.gate ) for(size_t x = 0; x < nn2; x++) Ab[x] = ( L0[x] * hh[x] + M.shift ) * ww[x] - M.shift;
+      else for(size_t x = 0; x < nn2; x++) Ab[x] = ( L0[x] + M.shift ) * ww[x] - M.shift;
+      for(int a = 0; a < n; a++)
+      {
+        double* r = Ab + size_t(a) * n;
         double mx = npad > 0 ? -M.shift : -1e300;
-        for(int b = 0; b < n; b++)
-        {
-          const double* kb = w.qk.data() + size_t(b) * nq;
-          double s = 0.0;
-          for(int c = 0; c < hid; c++) s += qa[c*2*nh + h] * kb[c*2*nh + nh + h];
-          s *= ish;
-          L0[size_t(a)*n + b] = s;
-          const double hh = g.h2[3*a]*g.h2[3*b] + g.h2[3*a+1]*g.h2[3*b+1] + g.h2[3*a+2]*g.h2[3*b+2];
-          const double lg = M.gate ? s * hh : s;
-          const double lp = ( lg + M.shift ) * g.w[a] * g.w[b] - M.shift;
-          Ab[size_t(a)*n + b] = lp;
-          mx = std::max( mx , lp );
-        }
-        double z = 0.0;
-        for(int b = 0; b < n; b++) { Ab[size_t(a)*n + b] = std::exp( Ab[size_t(a)*n + b] - mx ); z += Ab[size_t(a)*n + b]; }
-        z += npad * std::exp( -M.shift - mx );
-        for(int b = 0; b < n; b++) Ab[size_t(a)*n + b] /= z;
-        // out[a][c nh + h] = sum_b A_ab v_b[c nh + h], A = Ab sw_a sw_b (h2_a . h2_b) / sqrt(3)
+        for(int b = 0; b < n; b++) mx = std::max( mx , r[b] );
+        S.mx[a] = mx;
+        for(int b = 0; b < n; b++) r[b] -= mx;
+      }
+      dpa2_exp( Ab, nn2 );
+      for(int a = 0; a < n; a++)
+      {
+        double* r = Ab + size_t(a) * n;
+        double z = npad > 0 ? npad * std::exp( -M.shift - S.mx[a] ) : 0.0;
+#       pragma omp simd reduction(+:z)
+        for(int b = 0; b < n; b++) z += r[b];
+        const double iz = 1.0 / z;
+        for(int b = 0; b < n; b++) r[b] *= iz;
+      }
+      // out[a][c nh + h] = sum_b A_ab v_b[c nh + h], A = Ab sw_a sw_b (h2_a . h2_b) / sqrt(3)
+      for(size_t x = 0; x < nn2; x++) Am[x] = Ab[x] * ww[x] * hh[x] * is3;
+      dpa3_gemm( false, false, n, g2d, n, 1.0, Am, n, S.av.data(), g2d, 0.0, S.ao.data(), g2d );
+      for(int a = 0; a < n; a++)
+      {
         double* oa = w.out.data() + size_t(a) * nv;
-        for(int b = 0; b < n; b++)
-        {
-          const double hh = g.h2[3*a]*g.h2[3*b] + g.h2[3*a+1]*g.h2[3*b+1] + g.h2[3*a+2]*g.h2[3*b+2];
-          const double A = Ab[size_t(a)*n + b] * g.w[a] * g.w[b] * hh * is3;
-          const double* vb = w.v.data() + size_t(b) * nv;
-          for(int c = 0; c < g2d; c++) oa[c*nh + h] += A * vb[c*nh + h];
-        }
+        const double* Oa = S.ao.data() + size_t(a) * g2d;
+        for(int c = 0; c < g2d; c++) oa[c*nh + h] = Oa[c];
       }
     }
+    T.mark(12);
     // head map, layer norm
     dpa3_grow(w.zh, size_t(n) * g2d); dpa3_grow(w.xh, size_t(n) * g2d); dpa3_grow(w.sig, n);
     for(int k = 0; k < n; k++) for(int c = 0; c < g2d; c++) w.zh[size_t(k)*g2d + c] = W[P.head_map.b + c];
@@ -297,8 +367,10 @@ namespace exaStamp
     {
       const double* z = w.zh.data() + size_t(k) * g2d;
       double mu = 0.0, var = 0.0;
+#     pragma omp simd reduction(+:mu)
       for(int c = 0; c < g2d; c++) mu += z[c];
       mu /= g2d;
+#     pragma omp simd reduction(+:var)
       for(int c = 0; c < g2d; c++) var += ( z[c] - mu ) * ( z[c] - mu );
       var /= g2d;
       const double sg = std::sqrt( var + P.lneps );
@@ -310,6 +382,7 @@ namespace exaStamp
         o.g2[size_t(k)*g2d + c] += r1[c] * ( xh * W[P.lnw + c] + W[P.lnb + c] );
       }
     }
+    T.mark(13);
   }
 
   // VJP of layer l: S.dg1 (g1d), S.dg2 (n x g2d) of the outputs -> S.dg1_in, S.dg2_in (inputs), S.dgg1 (n x g1d, dE/dg1 of
@@ -329,38 +402,42 @@ namespace exaStamp
     double* dg1_in = S.dg1_in.data();
     double* dg2_in = S.dg2_in.data();
     double* dgg1 = S.dgg1.data();
+    DPA2Timer T;
     for(int c = 0; c < g1d; c++) dg1_in[c] = dg1[c];
     for(size_t x = 0; x < size_t(n) * g2d; x++) dg2_in[x] = P.chnnl2 ? dg2[x] : dg2[x];
     std::fill( dgg1, dgg1 + size_t(n) * g1d, 0.0 );
     // residual weights of the g1 updates, in deepmd's order
     int ui = 0;
     auto res = [&](int u) { return W + P.g1_res[u]; };
-    std::vector<double> du( g1d );
+    std::vector<double>& du = S.du; dpa3_grow(du, g1d);
+    // g1 of the neighbors, symmetrization weights
+    std::vector<double>& Xg = S.gx; dpa3_grow(Xg, size_t(n) * g1d);
+    for(int k = 0; k < n; k++) { const double* nj = Nl + size_t( g.j[k] ) * g1d; std::copy( nj, nj + g1d, Xg.data() + size_t(k) * g1d ); }
+    const double* X1 = Xg.data();
     // self mlp
     if( M.out_mlp )
     {
       const double* r = res(ui++);
       for(int c = 0; c < g1d; c++) du[c] = r[c] * dg1[c] * w.d_self[c];
-      dpa3_lin_rows_t( m, P.self_mlp, 0, g1d, du.data(), dg1_in );
+      dpa2_lin_t( m, P.self_mlp, du.data(), dg1_in );
     }
     // conv as an update (out_conv)
-    std::vector<double> dc;
+    std::vector<double>& dc = S.dc; dpa3_grow(dc, std::max( g1d, g2d ));
     if( M.conv && M.out_conv )
     {
       const double* r = res(ui++);
-      dc.assign( g1d, 0.0 );
       for(int c = 0; c < g1d; c++) dc[c] = r[c] * dg1[c];
     }
     // linear1
     const double* r1 = res(ui++);
-    std::vector<double> dz1( g1d );
+    std::vector<double>& dz1 = S.dz1; dpa3_grow(dz1, g1d);
     for(int c = 0; c < g1d; c++) dz1[c] = r1[c] * dg1[c] * w.d1[c];
     const int dmlp = ( M.out_mlp ? 0 : g1d ) + ( M.conv && !M.out_conv ? g2d : 0 ) + ( M.grrg ? ax * g2d : 0 ) + ( M.drrd ? ax * g1d : 0 );
-    std::vector<double> dmlpv( dmlp, 0.0 );
-    dpa3_lin_rows_t( m, P.linear1, 0, dmlp, dz1.data(), dmlpv.data() );
+    std::vector<double>& dmlpv = S.dmlp; dmlpv.assign( dmlp, 0.0 );
+    dpa2_lin_t( m, P.linear1, dz1.data(), dmlpv.data() );
     int off = 0;
     if( !M.out_mlp ) { for(int c = 0; c < g1d; c++) dg1_in[c] += dmlpv[c]; off += g1d; }
-    if( M.conv && !M.out_conv ) { dc.assign( dmlpv.begin() + off, dmlpv.begin() + off + g2d ); off += g2d; }
+    if( M.conv && !M.out_conv ) { std::copy( dmlpv.begin() + off, dmlpv.begin() + off + g2d, dc.begin() ); off += g2d; }
     // conv backward: c = sum_k P_k x_k w_k / nnei
     if( M.conv )
     {
@@ -370,9 +447,10 @@ namespace exaStamp
       {
         const double f = g.w[k] / M.nnei;
         const double* pk = w.P.data() + size_t(k) * pw;
-        const double* xk = M.out_conv ? Nl + size_t( g.j[k] ) * g1d : g2 + size_t(k) * g2d;
+        const double* xk = M.out_conv ? X1 + size_t(k) * g1d : g2 + size_t(k) * g2d;
         double* dx = M.out_conv ? dgg1 + size_t(k) * g1d : dg2_in + size_t(k) * g2d;
         double gwk = 0.0;
+#       pragma omp simd reduction(+:gwk)
         for(int c = 0; c < pw; c++)
         {
           dP[size_t(k)*pw + c] = dc[c] * xk[c] * f;
@@ -396,28 +474,28 @@ namespace exaStamp
         for(int x = 0; x < 3; x++) { dM[x*width + c] += gv * Mh[x*width + a]; dM[x*width + a] += gv * Mh[x*width + c]; }
       }
     };
+    // hg[3][width] = hw^T X: dX += hw dM, gh[n][3] = X dM^T
+    double gh3[3 * 256];
+    std::vector<double> ghv;
     auto sym_bwd = [&](const std::vector<double>& dM, int width, bool nei)
     {
+      const double* X = nei ? X1 : g2;
+      double* dX = nei ? dgg1 : dg2_in;
+      dpa3_gemm( false, false, n, width, 3, 1.0, S.hw.data(), 3, dM.data(), width, 1.0, dX, width );
+      if( !geom ) return;
+      double* gh = size_t(n) <= 256 ? gh3 : ( ghv.resize( size_t(n) * 3 ), ghv.data() );
+      dpa3_gemm( false, true, n, 3, width, 1.0, X, width, dM.data(), width, 0.0, gh, 3 );
       for(int k = 0; k < n; k++)
       {
         const double f = g.w[k] * M.s_sym;
-        const double* xk = nei ? Nl + size_t( g.j[k] ) * g1d : g2 + size_t(k) * g2d;
-        double* dx = nei ? dgg1 + size_t(k) * g1d : dg2_in + size_t(k) * g2d;
         double gsw = 0.0;
-        for(int x = 0; x < 3; x++)
-        {
-          const double* dm = dM.data() + x * width;
-          const double hs = g.h2[3*k + x];
-          double gh = 0.0;
-          for(int c = 0; c < width; c++) { dx[c] += dm[c] * hs * f; gh += dm[c] * xk[c]; }
-          if( geom ) S.gh2[3*k + x] += gh * f;
-          gsw += gh * hs;
-        }
-        if( geom ) S.gw[k] += gsw * M.s_sym;
+        for(int x = 0; x < 3; x++) { S.gh2[3*k + x] += gh[3*k + x] * f; gsw += gh[3*k + x] * g.h2[3*k + x]; }
+        S.gw[k] += gsw * M.s_sym;
       }
     };
-    if( M.grrg ) { std::vector<double> dM; grrg_bwd( w.hg2.data(), g2d, dmlpv.data() + off, dM ); sym_bwd( dM, g2d, false ); off += ax * g2d; }
-    if( M.drrd ) { std::vector<double> dM; grrg_bwd( w.hg1.data(), g1d, dmlpv.data() + off, dM ); sym_bwd( dM, g1d, true ); off += ax * g1d; }
+    if( M.grrg ) { grrg_bwd( w.hg2.data(), g2d, dmlpv.data() + off, S.dM ); sym_bwd( S.dM, g2d, false ); off += ax * g2d; }
+    if( M.drrd ) { grrg_bwd( w.hg1.data(), g1d, dmlpv.data() + off, S.dM ); sym_bwd( S.dM, g1d, true ); off += ax * g1d; }
+    T.mark(14);
     if( !P.chnnl2 ) return;
     // g2 updates: linear2
     {
@@ -436,61 +514,78 @@ namespace exaStamp
       const double* xh = w.xh.data() + size_t(k) * g2d;
       double* dz = dzh.data() + size_t(k) * g2d;
       double m1 = 0.0, m2 = 0.0;
+#     pragma omp simd reduction(+:m1,m2)
       for(int c = 0; c < g2d; c++) { const double gg = r1g[c] * dg2[size_t(k)*g2d + c] * W[P.lnw + c]; dz[c] = gg; m1 += gg; m2 += gg * xh[c]; }
       m1 /= g2d; m2 /= g2d;
       for(int c = 0; c < g2d; c++) dz[c] = ( dz[c] - m1 - xh[c] * m2 ) / w.sig[k];
     }
     std::vector<double>& dout = S.tmp2; dpa3_grow(dout, size_t(n) * nv);
     dpa3_gemm( false, true, n, nv, g2d, 1.0, dzh.data(), g2d, W + P.head_map.w, g2d, 0.0, dout.data(), nv );
-    std::vector<double>& dv = S.tmp3; dv.assign( size_t(n) * nv, 0.0 );
-    std::vector<double> dqk( size_t(n) * nq, 0.0 );
+    T.mark(15);
+    std::vector<double>& dv = S.tmp3; dpa3_grow(dv, size_t(n) * nv);
+    std::vector<double>& dqk = S.dqk; dpa3_grow(dqk, size_t(n) * nq);
     const size_t nn2 = size_t(n) * n;
     const double ish = 1.0 / std::sqrt( double(hid) ), is3 = 1.0 / std::sqrt( 3.0 );
-    std::vector<double> dS( nn2, 0.0 ), dHH( nn2, 0.0 ), dAb( n );
+    S.dS.assign( nn2, 0.0 ); S.dHH.assign( nn2, 0.0 );
+    double* dS = S.dS.data();
+    double* dHH = S.dHH.data();
+    // Q, K, V, dE/dout of the head; ad: dE/dA, am: A, then dE/dL0 (with hh, ww of the forward)
+    dpa3_grow(S.ad, nn2); dpa3_grow(S.dqh, size_t(n) * hid); dpa3_grow(S.dkh, size_t(n) * hid); dpa3_grow(S.dvh, size_t(n) * g2d);
+    const double* hh = S.hh.data();
+    const double* ww = S.ww.data();
+    double* Am = S.am.data();
+    double* dA = S.ad.data();
+    double* Qh = S.aq.data();
+    double* Kh = S.ak.data();
+    double* Vh = S.av.data();
+    double* Dh = S.ao.data();
     for(int h = 0; h < nh; h++)
     {
       const double* L0 = w.L0.data() + size_t(h) * nn2;
       const double* Ab = w.Ab.data() + size_t(h) * nn2;
       for(int a = 0; a < n; a++)
       {
-        const double* da = dout.data() + size_t(a) * nv;
-        double t = 0.0;
-        for(int b = 0; b < n; b++)
-        {
-          const double* vb = w.v.data() + size_t(b) * nv;
-          double* dvb = dv.data() + size_t(b) * nv;
-          const double hh = g.h2[3*a]*g.h2[3*b] + g.h2[3*a+1]*g.h2[3*b+1] + g.h2[3*a+2]*g.h2[3*b+2];
-          const double S2 = g.w[a] * g.w[b];
-          const double ab = Ab[size_t(a)*n + b];
-          const double A = ab * S2 * hh * is3;
-          double dA = 0.0;
-          for(int c = 0; c < g2d; c++) { dA += da[c*nh + h] * vb[c*nh + h]; dvb[c*nh + h] += A * da[c*nh + h]; }
-          dS[size_t(a)*n + b] += dA * ab * hh * is3;
-          dHH[size_t(a)*n + b] += dA * ab * S2 * is3;
-          dAb[b] = dA * S2 * hh * is3;      // dE/dAbar
-          t += dAb[b] * ab;
-        }
         const double* qa = w.qk.data() + size_t(a) * nq;
+        const double* va = w.v.data() + size_t(a) * nv;
+        const double* da = dout.data() + size_t(a) * nv;
+        for(int c = 0; c < hid; c++) { Qh[size_t(a)*hid + c] = qa[c*2*nh + h]; Kh[size_t(a)*hid + c] = qa[c*2*nh + nh + h]; }
+        for(int c = 0; c < g2d; c++) { Vh[size_t(a)*g2d + c] = va[c*nh + h]; Dh[size_t(a)*g2d + c] = da[c*nh + h]; }
+      }
+      for(size_t x = 0; x < nn2; x++) Am[x] = Ab[x] * ww[x] * hh[x] * is3;
+      dpa3_gemm( false, true, n, n, g2d, 1.0, Dh, g2d, Vh, g2d, 0.0, dA, n );                     // dE/dA
+      dpa3_gemm( true, false, n, g2d, n, 1.0, Am, n, Dh, g2d, 0.0, S.dvh.data(), g2d );           // dE/dv of the head
+      for(int a = 0; a < n; a++)
+      {
+        const size_t ra = size_t(a) * n;
+        double t = 0.0;
+#       pragma omp simd reduction(+:t)
+        for(int b = 0; b < n; b++) t += dA[ra + b] * ww[ra + b] * hh[ra + b] * is3 * Ab[ra + b];
+#       pragma omp simd
         for(int b = 0; b < n; b++)
         {
-          const double ab = Ab[size_t(a)*n + b];
-          const double dlp = ab * ( dAb[b] - t );                      // dE/dL'
-          const double S2 = g.w[a] * g.w[b];
-          const double l0 = L0[size_t(a)*n + b];
-          const double hh = g.h2[3*a]*g.h2[3*b] + g.h2[3*a+1]*g.h2[3*b+1] + g.h2[3*a+2]*g.h2[3*b+2];
-          const double lg = M.gate ? l0 * hh : l0;
-          dS[size_t(a)*n + b] += dlp * ( lg + M.shift );
+          const size_t x = ra + b;
+          const double dAx = dA[x], ab = Ab[x], S2 = ww[x], hx = hh[x], l0 = L0[x];
+          dS[x] += dAx * ab * hx * is3;
+          dHH[x] += dAx * ab * S2 * is3;
+          const double dlp = ab * ( dAx * S2 * hx * is3 - t );                   // dE/dL'
+          const double lg = M.gate ? l0 * hx : l0;
+          dS[x] += dlp * ( lg + M.shift );
           const double dlg = dlp * S2;
-          double dl0 = dlg;
-          if( M.gate ) { dl0 = dlg * hh; dHH[size_t(a)*n + b] += dlg * l0; }
-          dl0 *= ish;
-          const double* kb = w.qk.data() + size_t(b) * nq;
-          double* dqa = dqk.data() + size_t(a) * nq;
-          double* dkb = dqk.data() + size_t(b) * nq;
-          for(int c = 0; c < hid; c++) { dqa[c*2*nh + h] += dl0 * kb[c*2*nh + nh + h]; dkb[c*2*nh + nh + h] += dl0 * qa[c*2*nh + h]; }
+          dHH[x] += M.gate ? dlg * l0 : 0.0;
+          dA[x] = ( M.gate ? dlg * hx : dlg ) * ish;                             // dE/dL0, from here on
         }
       }
+      dpa3_gemm( false, false, n, hid, n, 1.0, dA, n, Kh, hid, 0.0, S.dqh.data(), hid );          // dE/dQ
+      dpa3_gemm( true, false, n, hid, n, 1.0, dA, n, Qh, hid, 0.0, S.dkh.data(), hid );           // dE/dK
+      for(int a = 0; a < n; a++)
+      {
+        double* dqa = dqk.data() + size_t(a) * nq;
+        double* dva = dv.data() + size_t(a) * nv;
+        for(int c = 0; c < hid; c++) { dqa[c*2*nh + h] = S.dqh[size_t(a)*hid + c]; dqa[c*2*nh + nh + h] = S.dkh[size_t(a)*hid + c]; }
+        for(int c = 0; c < g2d; c++) dva[c*nh + h] = S.dvh[size_t(a)*g2d + c];
+      }
     }
+    T.mark(16);
     dpa3_gemm( false, true, n, g2d, nv, 1.0, dv.data(), nv, W + P.mapv.w, nv, 1.0, dg2_in, g2d );
     dpa3_gemm( false, true, n, g2d, nq, 1.0, dqk.data(), nq, W + P.mapqk.w, nq, 1.0, dg2_in, g2d );
     if( geom )
@@ -501,6 +596,7 @@ namespace exaStamp
         const double dh = dHH[size_t(a)*n + b];
         for(int x = 0; x < 3; x++) { S.gh2[3*a + x] += dh * g.h2[3*b + x]; S.gh2[3*b + x] += dh * g.h2[3*a + x]; }
       }
+    T.mark(17);
   }
 
   // VJP of the initial g2 into the geometry gradients (S.gs)
@@ -572,8 +668,11 @@ namespace exaStamp
       static thread_local std::vector<ComputeBufferT> b3;
       if( b3.empty() ) b3.resize(1);
       const size_t i = poff[buf.cell] + buf.part;
+      DPA2Timer T;
       rep.forward( nn, buf, type, W );
+      T.mark(19);
       if( has_three ) { b3[0] = buf; three.forward_desc( nn, b3[0], type ); }
+      T.mark(20);
       if( !backward )
       {
         double* out = D0 + i * dim0;
@@ -586,11 +685,13 @@ namespace exaStamp
       Vec3d fi = { 0.0, 0.0, 0.0 };
       Mat3d vir = { 0.,0.,0., 0.,0.,0., 0.,0.,0. };
       rep.template backward<compute_virial>( buf, type, cells, W, fi, vir );
+      T.mark(21);
       if( has_three )
       {
         auto& x = b3[0].ext;
         for(int c = 0; c < dim_3b; c++) x.desc[c] = g[dim_rep + c];
         three.template backward_desc<compute_virial>( b3[0], type, cells );
+        T.mark(22);
         fi = fi + Vec3d{ x.fi[0], x.fi[1], x.fi[2] };
         if constexpr ( compute_virial ) vir = vir + Mat3d{ x.vir[0], x.vir[1], x.vir[2], x.vir[3], x.vir[4], x.vir[5], x.vir[6], x.vir[7], x.vir[8] };
       }
@@ -631,6 +732,7 @@ namespace exaStamp
     const bool identity = domain.xform_is_identity();
     const double rc2 = M.rc * M.rc;
     const int g1d = M.g1d, g2d = M.g2d, NL = M.layers.size();
+    DPA2Timer TW;
 
     // CSR bonds within the repformer cutoff
     B.type.resize( n_nodes );
@@ -734,6 +836,7 @@ namespace exaStamp
       else w.g2.assign( BB.SG2[l].begin() + BB.goff[q], BB.SG2[l].begin() + BB.goff[q+1] );
     };
 
+    TW.mark(1);
     // forward layers
     for(int l = 0; l < NL; l++)
     {
@@ -744,7 +847,9 @@ namespace exaStamp
         for(int q = 0; q < inum; q++)
         {
           const int i = B.ilist[q];
+          DPA2Timer T;
           inputs( q, l, S );
+          T.mark(8);
           dpa2_layer_forward( M, l, B.N[l].data(), S );
           for(int c = 0; c < g1d; c++) B.N[l+1][size_t(i)*g1d + c] = S.L[l+1].g1[c];
           if( l + 1 < NL ) std::copy( S.L[l+1].g2.begin(), S.L[l+1].g2.begin() + ( BB.goff[q+1] - BB.goff[q] ), BB.SG2[l+1].begin() + BB.goff[q] );
@@ -753,6 +858,7 @@ namespace exaStamp
       exchange( B.N[l+1], true );
     }
 
+    TW.mark(2);
     // fitting
     B.eatom.assign( n_nodes, 0.0 );
     B.G[NL].assign( n_nodes * g1d, 0.0 );
@@ -775,6 +881,7 @@ namespace exaStamp
       }
     }
 
+    TW.mark(3);
     // reverse phases, down to dE/dg1 of layer 0
     B.gb.assign( 3 * nbonds, 0.0 );
     if( B.locks.size() != n_nodes ) B.locks.assign( n_nodes, 0 );
@@ -788,7 +895,9 @@ namespace exaStamp
         for(int q = 0; q < inum; q++)
         {
           const int i = B.ilist[q];
+          DPA2Timer T;
           inputs( q, L, S );
+          T.mark(8);
           dpa2_layer_forward( M, L, B.N[L].data(), S );
           const int n = S.g.n;
           S.gh2.assign( size_t(n) * 3, 0.0 ); S.gw.assign( n, 0.0 ); S.gs.assign( n, 0.0 );
@@ -797,6 +906,7 @@ namespace exaStamp
           if( L < NL - 1 ) std::copy( BB.dSG2.begin() + BB.goff[q], BB.dSG2.begin() + BB.goff[q+1], S.dg2.begin() );
           else std::fill( S.dg2.begin(), S.dg2.begin() + size_t(n) * g2d, 0.0 );
           dpa2_layer_vjp( M, L, B.N[L].data(), S, true );
+          T = DPA2Timer();
           {
             DPA3RowLock lk( &B.locks[i] );
             double* gi = B.G[L].data() + size_t(i) * g1d;
@@ -813,11 +923,13 @@ namespace exaStamp
           if( L > 0 ) std::copy( S.dg2_in.begin(), S.dg2_in.begin() + size_t(n) * g2d, BB.dSG2.begin() + BB.goff[q] );
           else dpa2_init_g2_vjp( M, S.dg2_in.data(), S );
           dpa2_geom_to_bonds( M, S, B.gb.data() );
+          T.mark(18);
         }
       }
       exchange( B.G[L], false );
     }
 
+    TW.mark(4);
     // dE/dD0 = T^T ( dE/dg1_0 act'(z0) ) of the central atoms
     BB.dD0.assign( n_nodes * M.dim0, 0.0 );
 #   pragma omp parallel for schedule(static)
@@ -827,7 +939,7 @@ namespace exaStamp
       std::vector<double> dz( g1d );
       for(int c = 0; c < g1d; c++) dz[c] = B.G[0][size_t(i)*g1d + c] * dpa3_dact( m, BB.z0[size_t(i)*g1d + c] );
       double* dD = BB.dD0.data() + size_t(i) * M.dim0;
-      if( M.shape.valid() ) dpa3_lin_rows_t( m, M.shape, 0, M.dim0, dz.data(), dD ); else for(int c = 0; c < g1d; c++) dD[c] = dz[c];
+      if( M.shape.valid() ) dpa2_lin_t( m, M.shape, dz.data(), dD ); else for(int c = 0; c < g1d; c++) dD[c] = dz[c];
     }
 
     // repformer forces, per-atom virials, energies into the grid
@@ -870,6 +982,7 @@ namespace exaStamp
         }
       }
     }
+    TW.mark(6);
   }
 
 }
