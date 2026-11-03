@@ -80,6 +80,7 @@ namespace exaStamp
     DP_SE_T_TEBD,    // se_e3_tebd / se_t_tebd : three-body angles over a mixed neighbor list, type embeddings
     DP_HYBRID,       // hybrid : concatenation of sub-descriptors (DeepmdContext::subs)
     DP_DPA3,         // dpa3 (repflows) : message passing between atoms, host (DeepmdContext::dpa3)
+    DP_DPA4,         // dpa4 (SeZM) : SO(3) message passing between atoms, host (DeepmdContext::dpa4)
     DP_DPA2          // dpa2 (repinit + three-body + repformers) : message passing between atoms, host (DeepmdContext::dpa2)
   };
 
@@ -87,6 +88,8 @@ namespace exaStamp
   struct DPA3Buffers;
   struct DPA2Model;
   struct DPA2Buffers;
+  struct DPA4Model;
+  struct DPA4Buffers;
 
   enum DPActivation : int
   {
@@ -169,6 +172,8 @@ namespace exaStamp
     std::shared_ptr<DPA3Buffers> dpa3_buf;               // dpa3 per-run buffers, kept between runs
     std::shared_ptr<DPA2Model> dpa2;                     // dpa2 model (repinit / three-body contexts inside)
     std::shared_ptr<DPA2Buffers> dpa2_buf;               // dpa2 per-run buffers
+    std::shared_ptr<DPA4Model> dpa4;                     // dpa4 model (with its own fitting network)
+    std::shared_ptr<DPA4Buffers> dpa4_buf;               // dpa4 per-run buffers
   };
 
   // ------------------------------------------------------------------ activations

@@ -32,6 +32,7 @@ under the License.
 #include "deepmd_hybrid_op.h"
 #include "deepmd_dpa3_driver.h"
 #include "deepmd_dpa2.h"
+#include "deepmd_dpa4.h"
 #include "deepmd_model.h"
 
 namespace exaStamp
@@ -74,7 +75,7 @@ namespace exaStamp
     {
       return R"EOF(
 
-DeePMD machine-learning potential (se_e2_a, se_e2_r, se_e3, se_atten, se_t_tebd, hybrid, dpa3, dpa2 descriptors), evaluated natively: no DeePMD-kit or
+DeePMD machine-learning potential (se_e2_a, se_e2_r, se_e3, se_atten, se_t_tebd, hybrid, dpa3, dpa2, dpa4 descriptors), evaluated natively: no DeePMD-kit or
 libtorch library at run time. The model comes from deepmd_init. On GPU, one block of threads
 computes one atom (neighbors over threads for the embedding networks, neurons over threads for the
 fitting network); model sizes are bounded by the XSTAMP_DEEPMD_MAX_* build options. Forces on neighbors are atomically
@@ -100,7 +101,7 @@ Per-atom energy : the atomic energy of the model.
       assert( chunk_neighbors->number_of_cells() == grid->number_of_cells() );
       if( grid->number_of_cells() == 0 ) return;
 
-      if( deepmd_ctx->ntypes <= 0 || deepmd_ctx->fitting.empty() )
+      if( deepmd_ctx->ntypes <= 0 || ( deepmd_ctx->fitting.empty() && deepmd_ctx->descriptor != DP_DPA4 ) )
       {
         fatal_error() << "deepmd_force: the DeePMD model is empty, deepmd_init must run first" << std::endl;
       }
@@ -108,6 +109,12 @@ Per-atom energy : the atomic energy of the model.
       static constexpr double conv_energy = EXASTAMP_CONST_QUANTITY( 1. * eV );
       DeepmdForceOp force_op{ DeepmdModelView( *deepmd_ctx, conv_energy ) };
       const DeepmdContext& c = *deepmd_ctx;
+      if( c.descriptor == DP_DPA4 )
+      {
+        dpa4_compute( *grid, *chunk_neighbors, *domain, *c.dpa4, DeepmdModelView( c, conv_energy ),
+                      ghost_comm_scheme.has_value() ? ghost_comm_scheme.get_pointer() : nullptr, *mpi, *c.dpa4_buf );
+        return;
+      }
       if( c.descriptor == DP_DPA3 )
       {
         dpa3_compute( *grid, *chunk_neighbors, *domain, *c.dpa3, DeepmdModelView( c, conv_energy ),

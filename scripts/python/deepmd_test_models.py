@@ -98,7 +98,39 @@ DESCRIPTORS = {
 # averages only where padded neighbor slots stay type independent (strip mode, smooth)
 MIXED = {"se_t_tebd": True, "se_t_tebd_strip": True, "dpa1_sel40": False, "dpa1": False, "dpa1_strip": True, "dpa1_nosmooth": False, "se_atten_v2": True}
 
+def _dpa4_base(**kw):
+    d = dict(type="dpa4", sel=120, rcut=6.0, n_radial=16, use_env_seed=True, mmax=1, radial_so2_mode="degree_channel", focus_dim=0, n_atten_head=1,
+             message_node_so3=True, ffn_neurons=0, ffn_so3_grid=True, grid_mlp=False, grid_branch=[0, 0, 1], ffn_blocks=1, so3_readout="mlp",
+             precision="float64", channels=32, lmax=2, n_blocks=2, mixing_layers=3, radial_so2_rank=1, n_focus=1)
+    d.update(kw)
+    return d
+
+
+DPA4 = {"dpa4_mini": _dpa4_base(),                                                     # the grade 'mini' of deepmd's presets
+        "dpa4_nano": _dpa4_base(lmax=1, radial_so2_mode="none"),                       # the grade 'nano'
+        "dpa4_b": _dpa4_base(channels=16, n_blocks=3, mixing_layers=2, rcut=5.0),      # other sizes
+        "dpa4_s": _dpa4_base(channels=8),                                              # small: physics regressions
+        "dpa4_s1": _dpa4_base(channels=8, lmax=1, radial_so2_mode="none")}
+
+
+def build_dpa4(name, seed=1):
+    """DPA4: fresh models zero-initialize their output layers: random weights (reference with `dp convert-backend x.dp x.pt2`)."""
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from deepmd_dpa4 import randomize
+    d = dict(DPA4[name], seed=seed)
+    params = {"type_map": ["O", "H"], "descriptor": d, "fitting_net": {"type": "dpa4_ener", "neuron": [0], "precision": "float64", "seed": seed}}
+    m = get_model(params)
+    randomize(m.atomic_model.descriptor, seed + 6)
+    randomize(m.atomic_model.fitting_net, seed + 7)
+    data = m.serialize()
+    data["@variables"]["out_bias"] = np.array([[[-90.0], [-180.0]]])
+    return {"model": data, "model_def_script": params, "@variables": {}, "backend": "DPModel", "software": "deepmd-kit"}
+
+
 def build(name, seed=1):
+    if name in DPA4:
+        return build_dpa4(name, seed)
     rng = np.random.default_rng(seed)
     d = dict(DESCRIPTORS[name])
     if d["type"] in ("dpa3", "dpa2"):

@@ -281,6 +281,13 @@ def export(model_file):
     from deepmd.backend.backend import Backend
     data = Backend.detect_backend_by_model(model_file)().serialize_hook(model_file)
     m = data["model"]
+    if str(m.get("descriptor", {}).get("type", "")).lower() in ("dpa4", "sezm"):
+        import os
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from deepmd_dpa4 import export_dpa4
+        desc, bias = export_dpa4(m)
+        return {"format": "exastamp-deepmd", "version": 1, "type_map": list(m["type_map"]), **desc, "fitting_mixed_types": True,
+                "fitting": [], "energy_bias": bias.tolist(), "units": {"energy": "eV", "length": "angstrom"}}
     if m.get("type", "standard") != "standard" or m.get("@class") != "Model":
         fail(f"model type '{m.get('type')}' is not supported (standard energy models only)")
     if m.get("atom_exclude_types") or m.get("pair_exclude_types"):

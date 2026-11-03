@@ -32,6 +32,7 @@ under the License.
 #include "deepmd_model.h"
 #include "deepmd_dpa3_driver.h"
 #include "deepmd_dpa2.h"
+#include "deepmd_dpa4.h"
 
 namespace exaStamp
 {
@@ -112,7 +113,7 @@ Reads a DeePMD model exported by exaStamp/scripts/python/deepmd_export.py (from 
 model: .pth, .pt2, .dp, .yaml) and builds the tables used by deepmd_force, then raises rcut_max
 to the model cutoff. exaStamp species are matched to the model's type_map by name.
 Supported descriptors: se_e2_a, se_e2_r, se_e3, se_atten (DPA1, se_atten_v2; host only), se_t_tebd (se_e3_tebd), hybrid
-(host only), dpa3 (repflows) and dpa2 (repinit + three-body + repformers), message passing: host only, need a ghost update
+(host only), dpa3 (repflows), dpa2 (repinit + three-body + repformers) and dpa4 (SeZM), message passing: host only, need a ghost update
 before deepmd_force. Energies are in eV and lengths in Angstrom in the model file.
 
 Place it in init_parameters, after species.
@@ -384,6 +385,84 @@ init_parameters:
       return fit_nin;
     }
 
+    // DPA4 descriptor of node dn, with its GLU fitting network; returns the descriptor size
+    int read_dpa4(const YAML::Node& dn, DeepmdContext& ctx, int nt)
+    {
+      auto mp = std::make_shared<DPA4Model>();
+      DPA4Model& M = *mp;
+      M.nt = nt;
+      M.C = dn["channels"].as<int>(); M.lmax = dn["lmax"].as<int>();
+      if( M.lmax < 1 || M.lmax > 2 ) fail("DPA4: lmax must be 1 or 2");
+      M.L = M.lmax + 1; M.D = M.L * M.L; M.Dm = M.L + 2 * M.lmax;
+      M.nnei = dn["sel"].as< std::vector<int> >().at(0);
+      M.rc = dn["rcut"].as<double>(); M.eps = dn["eps"].as<double>(); M.weps = dn["wigner_eps"].as<double>(); M.deg_floor = dn["deg_floor"].as<double>();
+      M.K = dn["frames"].as<int>(); M.Ng = dn["ng"].as<int>(); M.Ch = dn["ffn_channels"].as<int>(); M.Ce = M.K * M.Ch; M.rhid = dn["rhid"].as<int>();
+      M.nk = dn["nk"].as<int>(); M.emb = dn["emb"].as<int>(); M.axis = dn["axis"].as<int>(); M.tdim = dn["tdim"].as<int>();
+      M.hrf = dn["hrf"].as<int>(); M.s_r = dn["s_r"].as<int>(); M.s_gh = dn["s_gh"].as<int>(); M.fit_h = dn["fit_h"].as<int>();
+      M.seed_eps = dn["seed_eps"].as<double>(); M.film_scale = dn["film_scale"].as<double>(); M.film_shift = dn["film_shift"].as<double>();
+      M.fout_b = dn["fout_b"].as<double>();
+      const int C = M.C, L = M.L, D = M.D, DK = D * M.K, K = M.K, Ch = M.Ch, Ce = M.Ce, lmax = M.lmax, LC = L * C, mC = lmax * C;
+      auto arr = [&](const YAML::Node& x, size_t n, const char* what) { auto v = x.as< std::vector<double> >(); if( v.size() != n ) fail("DPA4 ", what, ": ", v.size(), " values, expected ", n); return v; };
+      auto iarr = [&](const char* what, size_t n) { auto v = dn[what].as< std::vector<int> >(); if( n != size_t(-1) && v.size() != n ) fail("DPA4 ", what, ": ", v.size(), " values, expected ", n); return v; };
+      M.env_c = dn["env_series"].as< std::vector<double> >(); M.rbf_c = dn["rbf_series"].as< std::vector<double> >();
+      M.freq = dn["freq"].as< std::vector<double> >(); M.nrad = M.freq.size();
+      const auto te = dn["te"].as< std::vector<double> >(), tt = dn["tt"].as< std::vector<double> >();
+      if( te.size() < size_t(nt) * C || tt.size() < size_t(nt) * M.tdim ) fail("DPA4: type embeddings too small");
+      M.te = te; M.tt = tt;
+      M.rf1 = arr( dn["rf1"], size_t(M.nrad) * M.hrf, "rf1" ); M.rf2 = arr( dn["rf2"], size_t(M.hrf) * LC, "rf2" );
+      M.rf_norm.scale = arr( dn["rf_scale"], M.hrf, "rf_scale" ); M.rf_norm.eps = dn["rf_eps"].as<double>();
+      const int Sc = M.s_r + 2 * M.tdim;
+      M.s_r1 = arr( dn["s_r1"], size_t(M.nrad) * M.s_r, "s_r1" ); M.s_r2 = arr( dn["s_r2"], size_t(M.s_r) * M.s_r, "s_r2" );
+      M.s_g1 = arr( dn["s_g1"], size_t(Sc) * M.s_gh, "s_g1" ); M.s_g2 = arr( dn["s_g2"], size_t(M.s_gh) * M.emb, "s_g2" );
+      M.s_out = arr( dn["s_out"], size_t(M.emb) * M.axis * 2 * C, "s_out" );
+      { const auto a = dn["s_act"].as< std::vector<bool> >(); for(int k = 0; k < 5; k++) M.s_a[k] = a.at(k); }
+      M.film_s.scale = arr( dn["film_s"], C, "film_s" ); M.film_s.eps = dn["film_s_eps"].as<double>();
+      M.film_f.scale = arr( dn["film_f"], C, "film_f" ); M.film_f.eps = dn["film_f_eps"].as<double>();
+      M.C_l2 = arr( dn["C_l2"], 25 * 35, "C_l2" ); M.mono = iarr( "mono", 35 * 4 );
+      M.T = arr( dn["to_grid"], size_t(M.Ng) * DK, "to_grid" ); M.F = arr( dn["from_grid"], size_t(DK) * M.Ng, "from_grid" );
+      M.rescale = arr( dn["rescale"], D, "rescale" ); M.sweight = arr( dn["sweight"], DK, "sweight" );
+      M.coeff = iarr( "coeff", M.Dm ); M.deg_m = iarr( "deg_m", M.Dm ); M.sign_g = iarr( "gate_group", M.Dm );
+      M.deg.resize( D ); for(int l = 0; l <= lmax; l++) for(int m = l*l; m < (l+1)*(l+1); m++) M.deg[m] = l;
+      M.mix_c = iarr( "mix_compact", -1 ); M.mix_r = iarr( "mix_r", M.mix_c.size() ); M.mix_s = iarr( "mix_s", M.mix_c.size() );
+      M.z_col = iarr( "z_offset", D - 1 ); M.z_slot = iarr( "z_slot", D - 1 );
+      M.rot_r = iarr( "rot_r", -1 ); M.rot_d = iarr( "rot_d", M.rot_r.size() ); M.rot_o = iarr( "rot_o", M.rot_r.size() );
+      auto eqn = [&](const YAML::Node& x, DPA4EqRms& N)
+      {
+        N.scale = arr( x["scale"], size_t(L) * C, "norm scale" ); N.bias = arr( x["bias"], C, "norm bias" ); N.bw = arr( x["bw"], D, "norm balance" ); N.eps = x["eps"].as<double>();
+      };
+      for(const auto& x : dn["blocks"])
+      {
+        DPA4Block P;
+        P.pre_mix = arr( x["pre_mix"], size_t(L) * C * C, "pre_mix" ); P.post_mix = arr( x["post_mix"], size_t(L) * C * C, "post_mix" );
+        for(const auto& w : x["lin0"]) P.lin0.push_back( arr( w, size_t(LC) * LC, "lin0" ) );
+        for(const auto& w : x["linm"]) P.linm.push_back( arr( w, size_t(mC) * 2 * mC, "linm" ) );
+        for(const auto& w : x["gate"]) P.gate.push_back( arr( w, size_t(C) * mC, "gate" ) );
+        if( P.gate.size() + 1 != P.lin0.size() || P.linm.size() != P.lin0.size() ) fail("DPA4: inconsistent SO(2) layers");
+        if( M.nk > 0 ) { P.mixw = arr( x["mixw"], size_t(LC) * M.nk, "mixw" ); P.mixb = arr( x["mixb"], C, "mixb" ); }
+        P.qk_norm.scale = arr( x["qk_scale"], C, "qk_scale" ); P.qk_norm.eps = x["qk_eps"].as<double>();
+        P.gate_norm.scale = arr( x["gate_scale"], C, "gate_scale" ); P.gate_norm.eps = x["gate_eps"].as<double>();
+        P.q = arr( x["q"], size_t(C) * C, "q" ); P.k = arr( x["k"], size_t(C) * C, "k" );
+        P.logit_w = arr( x["logit_w"], C, "logit_w" ); P.gate_w = arr( x["gate_w"], C, "gate_w" ); P.log_null = x["log_null"].as<double>();
+        P.gexp = arr( x["gexp"], size_t(L) * C * K * C, "gexp" ); P.gcon = arr( x["gcon"], size_t(L) * K * C * C, "gcon" );
+        P.ggate = arr( x["ggate"], size_t(2 * C) * C, "ggate" ); P.gres = arr( x["gres"], C, "gres" );
+        eqn( x["post_norm"], P.post_norm ); eqn( x["ffn_norm"], P.ffn_norm );
+        P.flin1 = arr( x["flin1"], size_t(L) * C * 2 * Ce, "flin1" ); P.flin2 = arr( x["flin2"], size_t(L) * Ce * C, "flin2" );
+        P.fl = arr( x["fl"], size_t(Ch) * Ch, "fl" ); P.fr = arr( x["fr"], size_t(Ch) * Ch, "fr" ); P.fo = arr( x["fo"], size_t(Ch) * Ch, "fo" );
+        P.fgate = arr( x["fgate"], size_t(2 * Ch) * Ch, "fgate" );
+        M.blocks.push_back( std::move(P) );
+      }
+      M.rlin1 = arr( dn["rlin1"], size_t(L) * C * 2 * Ce, "rlin1" );
+      M.rl = arr( dn["rl"], size_t(2 * Ch) * M.rhid, "rl" ); M.rr = arr( dn["rr"], size_t(2 * Ch) * M.rhid, "rr" ); M.ro = arr( dn["ro"], size_t(M.rhid) * Ch, "ro" );
+      M.rgate = arr( dn["rgate"], size_t(2 * Ch) * Ch, "rgate" ); M.rlin2 = arr( dn["rlin2"], size_t(Ch) * C, "rlin2" );
+      M.fw = arr( dn["fw"], size_t(C) * 2 * M.fit_h, "fw" ); M.fb = arr( dn["fb"], 2 * M.fit_h, "fb" ); M.fout = arr( dn["fout"], M.fit_h, "fout" );
+      ctx.dpa4 = mp;
+      ctx.dpa4_buf = std::make_shared<DPA4Buffers>();
+      ctx.descriptor = DP_DPA4;
+      ctx.ntypes = nt;
+      ctx.rcut = M.rc; ctx.nnei = M.nnei; ctx.sel = { M.nnei };
+      return C;
+    }
+
     // DPA2 descriptor of node dn (repinit and three-body sub-blocks read as se_atten / se_t_tebd contexts); returns the
     // descriptor size
     int read_dpa2(const YAML::Node& dn, DeepmdContext& ctx, int nt)
@@ -537,6 +616,7 @@ init_parameters:
       }
       else if( desc == "dpa3" ) dim = read_dpa3( doc, ctx, nt );
       else if( desc == "dpa2" ) dim = read_dpa2( doc, ctx, nt );
+      else if( desc == "dpa4" ) dim = read_dpa4( doc, ctx, nt );
       else dim = read_descriptor( doc, ctx, nt );
       ctx.dim = dim;
 
@@ -546,7 +626,7 @@ init_parameters:
       if( int(bias.size()) != nt ) fail("energy_bias has ", bias.size(), " entries for ", nt, " types");
       ctx.energy_bias.assign( bias.begin(), bias.end() );
       const YAML::Node fit = doc["fitting"];
-      const size_t nfit = ctx.fitting_mixed_types ? 1 : nt;
+      const size_t nfit = desc == "dpa4" ? 0 : ( ctx.fitting_mixed_types ? 1 : nt );   // dpa4: GLU network in its model
       if( fit.size() != nfit ) fail("expected ", nfit, " fitting networks, found ", fit.size());
       for(size_t k = 0; k < nfit; k++) ctx.fitting.push_back( read_net(fit[k], ctx, "fitting network " + std::to_string(k), DP_MAX_FIT_LAYERS, DP_MAX_FIT_WIDTH, "XSTAMP_DEEPMD_MAX_FIT") );
       for(const auto& net : ctx.fitting)
@@ -571,6 +651,7 @@ init_parameters:
         ctx.species_type[s] = it - type_map.begin();
       }
       for(auto& sub : ctx.subs) sub->species_type = ctx.species_type;
+      if( ctx.dpa4 ) ctx.dpa4->ebias.assign( ctx.energy_bias.begin(), ctx.energy_bias.end() );
       if( ctx.dpa2 ) { ctx.dpa2->rep->species_type = ctx.species_type; if( ctx.dpa2->three ) ctx.dpa2->three->species_type = ctx.species_type; }
 
       *rcut_max = std::max( *rcut_max , ctx.rcut );
