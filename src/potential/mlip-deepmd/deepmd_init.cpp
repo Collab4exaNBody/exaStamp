@@ -392,8 +392,10 @@ init_parameters:
       DPA4Model& M = *mp;
       M.nt = nt;
       M.C = dn["channels"].as<int>(); M.lmax = dn["lmax"].as<int>();
-      if( M.lmax < 1 || M.lmax > 2 ) fail("DPA4: lmax must be 1 or 2");
+      if( M.lmax < 1 || M.lmax > 3 ) fail("DPA4: lmax must be 1, 2 or 3");
       M.L = M.lmax + 1; M.D = M.L * M.L; M.Dm = M.L + 2 * M.lmax;
+      M.F_n = dn["n_focus"] ? dn["n_focus"].as<int>() : 1; M.W = M.F_n * M.C;
+      M.focus_tau = dn["focus_tau"] ? dn["focus_tau"].as<double>() : 1.0; M.focus_ls = dn["focus_ls"] ? dn["focus_ls"].as<double>() : 0.0;
       M.nnei = dn["sel"].as< std::vector<int> >().at(0);
       M.rc = dn["rcut"].as<double>(); M.eps = dn["eps"].as<double>(); M.weps = dn["wigner_eps"].as<double>(); M.deg_floor = dn["deg_floor"].as<double>();
       M.K = dn["frames"].as<int>(); M.Ng = dn["ng"].as<int>(); M.Ch = dn["ffn_channels"].as<int>(); M.Ce = M.K * M.Ch; M.rhid = dn["rhid"].as<int>();
@@ -410,15 +412,17 @@ init_parameters:
       if( te.size() < size_t(nt) * C || tt.size() < size_t(nt) * M.tdim ) fail("DPA4: type embeddings too small");
       M.te = te; M.tt = tt;
       M.rf1 = arr( dn["rf1"], size_t(M.nrad) * M.hrf, "rf1" ); M.rf2 = arr( dn["rf2"], size_t(M.hrf) * LC, "rf2" );
-      M.rf_norm.scale = arr( dn["rf_scale"], M.hrf, "rf_scale" ); M.rf_norm.eps = dn["rf_eps"].as<double>();
+      if( dn["rf_scale"] ) { M.rf_norm.scale = arr( dn["rf_scale"], M.hrf, "rf_scale" ); M.rf_norm.eps = dn["rf_eps"].as<double>(); }
       const int Sc = M.s_r + 2 * M.tdim;
       M.s_r1 = arr( dn["s_r1"], size_t(M.nrad) * M.s_r, "s_r1" ); M.s_r2 = arr( dn["s_r2"], size_t(M.s_r) * M.s_r, "s_r2" );
       M.s_g1 = arr( dn["s_g1"], size_t(Sc) * M.s_gh, "s_g1" ); M.s_g2 = arr( dn["s_g2"], size_t(M.s_gh) * M.emb, "s_g2" );
       M.s_out = arr( dn["s_out"], size_t(M.emb) * M.axis * 2 * C, "s_out" );
       { const auto a = dn["s_act"].as< std::vector<bool> >(); for(int k = 0; k < 5; k++) M.s_a[k] = a.at(k); }
-      M.film_s.scale = arr( dn["film_s"], C, "film_s" ); M.film_s.eps = dn["film_s_eps"].as<double>();
-      M.film_f.scale = arr( dn["film_f"], C, "film_f" ); M.film_f.eps = dn["film_f_eps"].as<double>();
+      if( dn["film_s"] ) { M.film_s.scale = arr( dn["film_s"], C, "film_s" ); M.film_s.eps = dn["film_s_eps"].as<double>(); }
+      if( dn["film_f"] ) { M.film_f.scale = arr( dn["film_f"], C, "film_f" ); M.film_f.eps = dn["film_f_eps"].as<double>(); }
       M.C_l2 = arr( dn["C_l2"], 25 * 35, "C_l2" ); M.mono = iarr( "mono", 35 * 4 );
+      M.nDq = M.lmax >= 3 ? 84 : 35;
+      if( M.lmax >= 3 ) { M.C_l3 = arr( dn["C_l3"], 49 * 84, "C_l3" ); M.exp_l3 = iarr( "exp_l3", 84 * 4 ); }
       M.T = arr( dn["to_grid"], size_t(M.Ng) * DK, "to_grid" ); M.F = arr( dn["from_grid"], size_t(DK) * M.Ng, "from_grid" );
       M.rescale = arr( dn["rescale"], D, "rescale" ); M.sweight = arr( dn["sweight"], DK, "sweight" );
       M.coeff = iarr( "coeff", M.Dm ); M.deg_m = iarr( "deg_m", M.Dm ); M.sign_g = iarr( "gate_group", M.Dm );
@@ -433,18 +437,45 @@ init_parameters:
       for(const auto& x : dn["blocks"])
       {
         DPA4Block P;
-        P.pre_mix = arr( x["pre_mix"], size_t(L) * C * C, "pre_mix" ); P.post_mix = arr( x["post_mix"], size_t(L) * C * C, "post_mix" );
-        for(const auto& w : x["lin0"]) P.lin0.push_back( arr( w, size_t(LC) * LC, "lin0" ) );
-        for(const auto& w : x["linm"]) P.linm.push_back( arr( w, size_t(mC) * 2 * mC, "linm" ) );
-        for(const auto& w : x["gate"]) P.gate.push_back( arr( w, size_t(C) * mC, "gate" ) );
-        if( P.gate.size() + 1 != P.lin0.size() || P.linm.size() != P.lin0.size() ) fail("DPA4: inconsistent SO(2) layers");
-        if( M.nk > 0 ) { P.mixw = arr( x["mixw"], size_t(LC) * M.nk, "mixw" ); P.mixb = arr( x["mixb"], C, "mixb" ); }
-        P.qk_norm.scale = arr( x["qk_scale"], C, "qk_scale" ); P.qk_norm.eps = x["qk_eps"].as<double>();
-        P.gate_norm.scale = arr( x["gate_scale"], C, "gate_scale" ); P.gate_norm.eps = x["gate_eps"].as<double>();
-        P.q = arr( x["q"], size_t(C) * C, "q" ); P.k = arr( x["k"], size_t(C) * C, "k" );
-        P.logit_w = arr( x["logit_w"], C, "logit_w" ); P.gate_w = arr( x["gate_w"], C, "gate_w" ); P.log_null = x["log_null"].as<double>();
+        const int F = M.F_n, W = M.W;
+        // arrays with a focus axis: [rows][F][cols] -> [rows][cols] of focus f
+        auto slice = [&](const std::vector<double>& a, size_t rows, size_t cols, int f)
+        {
+          std::vector<double> o( rows * cols );
+          for(size_t r = 0; r < rows; r++) for(size_t c = 0; c < cols; c++) o[r * cols + c] = a[r * F * cols + f * cols + c];
+          return o;
+        };
+        P.pre_mix = arr( x["pre_mix"], size_t(L) * C * W, "pre_mix" ); P.post_mix = arr( x["post_mix"], size_t(L) * W * C, "post_mix" );
+        P.foc.resize( F );
+        for(const auto& w : x["lin0"]) { const auto a = arr( w, size_t(LC) * F * LC, "lin0" ); for(int f = 0; f < F; f++) P.foc[f].lin0.push_back( slice( a, LC, LC, f ) ); }
+        for(const auto& w : x["linm"]) { const auto a = arr( w, size_t(mC) * F * 2 * mC, "linm" ); for(int f = 0; f < F; f++) P.foc[f].linm.push_back( slice( a, mC, 2 * mC, f ) ); }
+        for(const auto& w : x["gate"]) { const auto a = arr( w, size_t(C) * F * mC, "gate" ); for(int f = 0; f < F; f++) P.foc[f].gate.push_back( slice( a, C, mC, f ) ); }
+        if( P.foc[0].gate.size() + 1 != P.foc[0].lin0.size() || P.foc[0].linm.size() != P.foc[0].lin0.size() ) fail("DPA4: inconsistent SO(2) layers");
+        if( M.nk > 0 ) { P.mixw = arr( x["mixw"], size_t(L) * W * M.nk, "mixw" ); P.mixb = arr( x["mixb"], W, "mixb" ); }
+        if( F > 1 ) P.rproj = arr( x["rproj"], size_t(C) * W, "rproj" );
+        const auto qks = arr( x["qk_scale"], size_t(F) * C, "qk_scale" ), gts = arr( x["gate_scale"], size_t(F) * C, "gate_scale" );
+        const auto qq = arr( x["q"], size_t(C) * F * C, "q" ), kk = arr( x["k"], size_t(C) * F * C, "k" );
+        const auto lw = arr( x["logit_w"], size_t(C) * F, "logit_w" ), gw = arr( x["gate_w"], size_t(C) * F, "gate_w" );
+        const auto ggt = arr( x["ggate"], size_t(2 * C) * F * C, "ggate" ), gr = arr( x["gres"], size_t(F) * C, "gres" );
+        std::vector<double> lnull;
+        if( x["log_null"].IsSequence() ) lnull = x["log_null"].as< std::vector<double> >(); else lnull.assign( 1, x["log_null"].as<double>() );
+        if( int(lnull.size()) != F ) fail("DPA4: bad log_null");
+        P.compete = F > 1 && x["comp_w"];
+        for(int f = 0; f < F; f++)
+        {
+          DPA4Focus& Pf = P.foc[f];
+          Pf.qk_norm.scale = slice( qks, 1, C, f ); Pf.qk_norm.eps = x["qk_eps"].as<double>();
+          Pf.gate_norm.scale = slice( gts, 1, C, f ); Pf.gate_norm.eps = x["gate_eps"].as<double>();
+          Pf.q = slice( qq, C, C, f ); Pf.k = slice( kk, C, C, f );
+          Pf.logit_w = slice( lw, C, 1, f ); Pf.gate_w = slice( gw, C, 1, f ); Pf.log_null = lnull[f];
+          Pf.ggate = slice( ggt, 2 * C, C, f ); Pf.gres = slice( gr, 1, C, f );
+          if( P.compete )
+          {
+            Pf.comp_w = slice( arr( x["comp_w"], size_t(C) * F, "comp_w" ), C, 1, f );
+            if( x["comp_scale"] ) { Pf.comp_norm.scale = slice( arr( x["comp_scale"], size_t(F) * C, "comp_scale" ), 1, C, f ); Pf.comp_norm.eps = x["comp_eps"].as<double>(); }
+          }
+        }
         P.gexp = arr( x["gexp"], size_t(L) * C * K * C, "gexp" ); P.gcon = arr( x["gcon"], size_t(L) * K * C * C, "gcon" );
-        P.ggate = arr( x["ggate"], size_t(2 * C) * C, "ggate" ); P.gres = arr( x["gres"], C, "gres" );
         eqn( x["post_norm"], P.post_norm ); eqn( x["ffn_norm"], P.ffn_norm );
         P.flin1 = arr( x["flin1"], size_t(L) * C * 2 * Ce, "flin1" ); P.flin2 = arr( x["flin2"], size_t(L) * Ce * C, "flin2" );
         P.fl = arr( x["fl"], size_t(Ch) * Ch, "fl" ); P.fr = arr( x["fr"], size_t(Ch) * Ch, "fr" ); P.fo = arr( x["fo"], size_t(Ch) * Ch, "fo" );

@@ -108,6 +108,14 @@ def _dpa4_base(**kw):
 
 DPA4 = {"dpa4_mini": _dpa4_base(),                                                     # the grade 'mini' of deepmd's presets
         "dpa4_nano": _dpa4_base(lmax=1, radial_so2_mode="none"),                       # the grade 'nano'
+        "dpa4_mini_f32": _dpa4_base(precision="float32"),                              # default precision of deepmd's presets
+        "dpa4_en0": _dpa4_base(edge_norm=False),                                       # edge_norm off, as deepmd's examples
+        "dpa4_en1": _dpa4_base(edge_norm=[False, True, False]),                        # edge_norm recommended by deepmd's documentation
+        "dpa4_neo": _dpa4_base(lmax=3, n_focus=2),                                     # the grade neo
+        "dpa4_f2": _dpa4_base(channels=8, n_focus=2),                                  # two focus streams, small
+        "dpa4_f2_en0": _dpa4_base(channels=8, n_focus=2, edge_norm=False),             # two focus streams, no competition norm
+        "dpa4_l3": _dpa4_base(channels=8, lmax=3),                                     # lmax 3, one focus
+        "dpa4_s_en0": _dpa4_base(channels=8, edge_norm=False),                         # small, edge_norm off: physics regression
         "dpa4_b": _dpa4_base(channels=16, n_blocks=3, mixing_layers=2, rcut=5.0),      # other sizes
         "dpa4_s": _dpa4_base(channels=8),                                              # small: physics regressions
         "dpa4_s1": _dpa4_base(channels=8, lmax=1, radial_so2_mode="none")}
@@ -119,7 +127,7 @@ def build_dpa4(name, seed=1):
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     from deepmd_dpa4 import randomize
     d = dict(DPA4[name], seed=seed)
-    params = {"type_map": ["O", "H"], "descriptor": d, "fitting_net": {"type": "dpa4_ener", "neuron": [0], "precision": "float64", "seed": seed}}
+    params = {"type_map": ["O", "H"], "descriptor": d, "fitting_net": {"type": "dpa4_ener", "neuron": [0], "precision": d["precision"], "seed": seed}}
     m = get_model(params)
     randomize(m.atomic_model.descriptor, seed + 6)
     randomize(m.atomic_model.fitting_net, seed + 7)

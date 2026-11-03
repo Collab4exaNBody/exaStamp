@@ -58,9 +58,10 @@ def rotation_matrix(q):
                      2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)], -1).reshape(q.shape[:-1] + (3, 3))
 
 
-def wigner(q, lmax, C_l2, eps):
-    """Block diagonal real Wigner D (E, D, D), lmax <= 2."""
-    assert lmax <= 2
+def wigner(q, lmax, kern, eps):
+    """Block diagonal real Wigner D (E, D, D), lmax <= 3."""
+    assert lmax <= 3
+    C_l2 = kern.C_l2
     q = norm_vec(q, eps)
     E = q.shape[0]
     Dd = (lmax + 1) ** 2
@@ -73,6 +74,9 @@ def wigner(q, lmax, C_l2, eps):
     if lmax >= 2:
         q4 = np.einsum("ei,ej,ek,el->eijkl", q, q, q, q).reshape(E, 256)
         D[:, 4:9, 4:9] = (q4 @ C_l2.reshape(25, 256).T).reshape(E, 5, 5)
+    if lmax >= 3:
+        mono = np.prod(q[:, None, :] ** np.asarray(kern.exp_l3)[None], -1)
+        D[:, 9:16, 9:16] = (mono @ np.asarray(kern.C_l3).T).reshape(E, 7, 7)
     return D
 
 
@@ -110,18 +114,18 @@ def eq_rms(N, x):
     return out
 
 
-def so2_linear(L, x):
-    """SO2Linear, x (E, Dm, C): m = 0 block, then m = 1 (neg, pos) with u, v weights."""
+def so2_linear(L, x, f=0):
+    """SO2Linear of focus f, x (E, Dm, C): m = 0 block, then m = 1 (neg, pos) with u, v weights."""
     E, Dm, C = x.shape
     nl0 = L.lmax + 1
     out = np.zeros((E, Dm, L.out_channels))
-    W0 = L.weight_m0.reshape(nl0 * L.in_channels, nl0 * L.out_channels)
+    W0 = L.weight_m0.reshape(nl0 * L.in_channels, -1, nl0 * L.out_channels)[:, f]
     out[:, :nl0] = (x[:, :nl0].reshape(E, -1) @ W0).reshape(E, nl0, L.out_channels)
     off = nl0
     for m, w in enumerate(L.weight_m):
         nl = L.lmax - m
         ib, ob = nl * L.in_channels, nl * L.out_channels
-        w = w.reshape(ib, 2 * ob)
+        w = w.reshape(ib, -1, 2 * ob)[:, f]
         wu, wv = w[:, :ob], w[:, ob:]
         neg = x[:, off:off + nl].reshape(E, ib)
         pos = x[:, off + nl:off + 2 * nl].reshape(E, ib)
@@ -131,11 +135,11 @@ def so2_linear(L, x):
     return out
 
 
-def gated(A, x):
-    """GatedActivation, x (E, Dm, C): silu on the scalar row, sigmoid gates per l on the others."""
+def gated(A, x, f=0):
+    """GatedActivation of focus f, x (E, Dm, C): silu on the scalar row, sigmoid gates per l on the others."""
     y = np.empty_like(x)
     y[:, 0] = silu(x[:, 0])
-    g = sig(x[:, 0] @ A.gate_linear.weight.reshape(A.channels, A.lmax * A.channels)).reshape(x.shape[0], A.lmax, A.channels)
+    g = sig(x[:, 0] @ A.gate_linear.weight.reshape(A.channels, -1, A.lmax * A.channels)[:, f]).reshape(x.shape[0], A.lmax, A.channels)
     y[:, 1:] = x[:, 1:] * g[:, A.expand_index]
     return y
 
@@ -166,27 +170,27 @@ def from_grid(G, g):
     return (G.projector.from_grid_mat @ g).reshape(N, D, G.n_frames * C)
 
 
-def scalar_path(G, coeff, pair):
-    """scalar_pair (N, 2C): gate on all coefficients, SwiGLU added to the scalar of frame zero."""
+def scalar_path(G, coeff, pair, f=0):
+    """scalar_pair (N, 2C): gate on all coefficients, SwiGLU added to the scalar of frame zero (gate weights of focus f)."""
     nc = pair.shape[-1] // 2
     so = pair[:, :nc] * sig(pair[:, :nc]) * pair[:, nc:]
-    gate = sig(pair @ G.scalar_gate.weight.reshape(2 * nc, nc))
+    gate = sig(pair @ G.scalar_gate.weight.reshape(2 * nc, -1, nc)[:, f])
     N, D, Cw = coeff.shape
     v = coeff.reshape(N, D, G.n_frames, nc) * gate[:, None, None, :]
     v[:, 0, G.frame_zero_index] += so
     return v.reshape(N, D, Cw)
 
 
-def message_grid(G, out, x):
-    """Cross GridNet with GridProduct: message-node product, residual scale (query out, context x)."""
+def message_grid(G, out, x, f=0):
+    """Cross GridNet with GridProduct: message-node product, residual scale (query out, context x), one focus stream."""
     W = G.frame_expand.weight[G.frame_expand.degree_index]
     Wc = G.frame_contract.weight[G.frame_contract.degree_index]
     pair = np.concatenate([out[:, 0], x[:, 0]], -1)
     left = np.einsum("ndi,dio->ndo", out, W)
     right = np.einsum("ndi,dio->ndo", x, W)
     c = from_grid(G, to_grid(G, left) * to_grid(G, right))
-    c = scalar_path(G, c, pair)
-    return np.einsum("ndi,dio->ndo", c, Wc) * G.residual_scale.reshape(1, 1, -1)
+    c = scalar_path(G, c, pair, f)
+    return np.einsum("ndi,dio->ndo", c, Wc) * G.residual_scale[f].reshape(1, 1, -1)
 
 
 def ffn(F, x):
@@ -249,35 +253,61 @@ def segment_softmax(logit, env, dst, nn, z_raw, eps):
     return ex / den[dst]
 
 
+def focus_alpha(c, src):
+    """Cross-focus competition, src (E, F, Cf) -> (E, F)."""
+    if c.focus_norm:
+        src = src / np.sqrt(np.mean(src * src, -1, keepdims=True) + c.focus_compete_norm.eps) * c.focus_compete_norm.adam_scale[None]
+    logit = np.sum(src * c.adamw_focus_compete_w.T[None], 2) / c.focus_softmax_tau
+    a = np.exp(logit - np.max(logit, 1, keepdims=True))
+    a = a / np.sum(a, 1, keepdims=True)
+    return a * (1.0 - c.focus_label_smoothing) + c.focus_label_smoothing / c.n_focus
+
+
 def so2_conv(c, x, q, rad_block, env, inv_sqrt_deg, src, dst, D):
-    """SO2Convolution: x (N, Dd, C) node features, rad_block (E, l+1, C)."""
-    N, Dd, C = x.shape
+    """SO2Convolution: x (N, Dd, C) node features, rad_block (E, l+1, C). The hidden width C_wide packs F focus streams."""
+    N, Dd, _ = x.shape
     E = src.shape[0]
-    xp = so3_lin(c.pre_focus_mix, x)
+    F, Cf, Cw = c.n_focus, c.so2_focus_dim, c.hidden_channels
+    xp = so3_lin(c.pre_focus_mix, x)                                       # (N, Dd, Cw)
+    if c.radial_hidden_proj is not None:
+        rad_block = rad_block @ c.radial_hidden_proj.weight
     # edge message
     Dm = D[:, c.coeff_index_m]                                             # (E, Dm, Dd)
     xl = Dm @ xp[src]
     rad = rad_block[:, c.degree_index_m]
     xl = mixer(c.radial_degree_mixer, xl, rad)
-    for k in range(len(c.so2_linears)):
-        y = so2_linear(c.so2_linears[k], xl)
-        if k < len(c.so2_linears) - 1:
-            y = gated(c.non_linearities[k], y)
-        xl = xl + y
-    msg = np.transpose(Dm, (0, 2, 1)) @ xl * c.rotate_inv_rescale_full[None, :, None]
-    # attention
-    l0 = rms_scalar(c.attn_qk_norm, xp[:, 0])
-    Q = l0 @ c.attn_q_proj.weight.reshape(C, C)
-    Kk = l0 @ c.attn_k_proj.weight.reshape(C, C)
-    logit = np.sum(Q[dst] * Kk[src], -1) * C ** -0.5 + (rad[:, 0] @ c.adamw_attn_logit_w.reshape(C))
-    alpha = segment_softmax(logit, env, dst, N, c.adamw_attn_z_bias_raw, c.eps)
-    gate = sig(rms_scalar(c.attn_output_gate_norm, xp[:, 0]) @ c.adamw_attn_gate_w.reshape(C))
-    out = np.zeros((N, Dd, C))
-    np.add.at(out, dst, msg * alpha[:, None, None])
-    out = out * gate[:, None, None]
-    # message-node product, final mix
-    out = out + message_grid(c.message_node_grid_product, out, xp)
-    return so3_lin(c.post_focus_mix, out)
+    alpha_f = focus_alpha(c, xl[:, 0].reshape(E, F, Cf)) if c.focus_compete and F > 1 else None
+    msg_l = np.empty_like(xl)
+    for f in range(F):
+        xf = xl[:, :, f * Cf:(f + 1) * Cf]
+        for k in range(len(c.so2_linears)):
+            y = so2_linear(c.so2_linears[k], xf, f)
+            if k < len(c.so2_linears) - 1:
+                y = gated(c.non_linearities[k], y, f)
+            xf = xf + y
+        msg_l[:, :, f * Cf:(f + 1) * Cf] = xf if alpha_f is None else xf * alpha_f[:, f, None, None]
+    msg = np.transpose(Dm, (0, 2, 1)) @ msg_l * c.rotate_inv_rescale_full[None, :, None]
+    # attention and message-node product, per focus
+    out_all = np.zeros((N, Dd, Cw))
+    for f in range(F):
+        sl = slice(f * Cf, (f + 1) * Cf)
+        x0 = xp[:, 0, sl]
+        l0 = rms_focus(c.attn_qk_norm, x0, f)
+        Q = l0 @ c.attn_q_proj.weight.reshape(Cf, F, Cf)[:, f]
+        Kk = l0 @ c.attn_k_proj.weight.reshape(Cf, F, Cf)[:, f]
+        logit = np.sum(Q[dst] * Kk[src], -1) * Cf ** -0.5 + (rad[:, 0, sl] @ c.adamw_attn_logit_w.reshape(Cf, F)[:, f])
+        alpha = segment_softmax(logit, env, dst, N, c.adamw_attn_z_bias_raw.reshape(F)[f], c.eps)
+        gate = sig(rms_focus(c.attn_output_gate_norm, x0, f) @ c.adamw_attn_gate_w.reshape(Cf, F)[:, f])
+        out = np.zeros((N, Dd, Cf))
+        np.add.at(out, dst, msg[:, :, sl] * alpha[:, None, None])
+        out = out * gate[:, None, None]
+        out_all[:, :, sl] = out + message_grid(c.message_node_grid_product, out, xp[:, :, sl], f)
+    return so3_lin(c.post_focus_mix, out_all)
+
+
+def rms_focus(N, x, f):
+    """ScalarRMSNorm of focus f, x (.., Cf)."""
+    return x / np.sqrt(np.mean(x * x, -1, keepdims=True) + N.eps) * N.adam_scale[f]
 
 
 def dpa4_descriptor(m, coord_ext, atype_ext, nlist, mapping):
@@ -302,15 +332,17 @@ def dpa4_descriptor(m, coord_ext, atype_ext, nlist, mapping):
     rbf = f * np.sin(arg) / arg * envelope(r, m.radial_basis.envelope)[:, None]
     # Wigner
     q = edge_quaternion(v, r, eps)
-    D = wigner(q, m.lmax, m.wigner_calc.small_order_kernels.C_l2, m.wigner_calc.eps)
+    D = wigner(q, m.lmax, m.wigner_calc.small_order_kernels, m.wigner_calc.eps)
     # degree
     deg = np.zeros(nloc)
     np.add.at(deg, dst, env * env)
     isd = 1.0 / np.sqrt(deg + m.deg_norm_floor)
     # radial features
     net = m.radial_embedding.net
-    h = rms_scalar_plain(net[1], lin(net[0], rbf))
-    rf = (silu(h) @ net[3].w).reshape(E, m.node_init_lmax + 1, C) * env[:, None, None]
+    h = lin(net[0], rbf)
+    if m.radial_norm:
+        h = rms_scalar_plain(net[1], h)
+    rf = (silu(h) @ net[-1].w).reshape(E, m.node_init_lmax + 1, C) * env[:, None, None]
     # env seed
     S = m.env_seed_embedding
     r2 = np.sum(v * v, -1)
@@ -324,8 +356,8 @@ def dpa4_descriptor(m, coord_ext, atype_ext, nlist, mapping):
     agg = agg * isd[:, None, None]
     Dd = np.transpose(agg, (0, 2, 1)) @ agg[:, :, :S.axis_dim]
     film = lin(S.output_proj, Dd.reshape(nloc, S.embed_dim * S.axis_dim))
-    sh = rms_scalar(m.film_scale_norm, film[:, :C])
-    sf = rms_scalar(m.film_shift_norm, film[:, C:])
+    sh = rms_scalar(m.film_scale_norm, film[:, :C]) if m.film_norm else film[:, :C]
+    sf = rms_scalar(m.film_shift_norm, film[:, C:]) if m.film_norm else film[:, C:]
     scale = 1.0 + np.exp(m.film_scale_strength_log[0]) * np.tanh(sh)
     shift = np.exp(m.film_shift_strength_log[0]) * np.tanh(sf)
     x = np.zeros((nloc, m.node_init_dim, C))
@@ -377,14 +409,16 @@ def _eq_norm(N, lmax):
 def _check(D):
     if D.exclude_types:
         fail("excluded types are not supported")
-    if D.lmax not in (1, 2):
-        fail(f"lmax {D.lmax} is not supported (1 or 2)")
-    if D.n_focus != 1 or D.n_atten_head != 1 or D.focus_dim != 0:
-        fail("n_focus, n_atten_head != 1 or focus_dim are not supported")
+    if D.lmax not in (1, 2, 3):
+        fail(f"lmax {D.lmax} is not supported (1, 2 or 3)")
+    if D.n_atten_head != 1 or D.focus_dim != 0:
+        fail("n_atten_head != 1 or focus_dim are not supported")
+    if any(b.so2_conv.focus_compete_bias is not None for b in D.blocks):
+        fail("focus competition bias is not supported")
     if D.charge_spin_embedding is not None or D.spin_embedding is not None or D.bridging_switch is not None or D.bridging_clamp is not None:
         fail("charge, spin embeddings and zone bridging are not supported")
-    if not D.use_env_seed or not D.use_gie or not D.film_norm or D.use_full_attn_res or D.use_block_attn_res:
-        fail("this architecture is not supported (env seed, GIE, FiLM norm required, no attention residuals)")
+    if not D.use_env_seed or not D.use_gie or D.use_full_attn_res or D.use_block_attn_res:
+        fail("this architecture is not supported (env seed, GIE required, no attention residuals)")
     if D.so3_readout != "mlp" or D.readout_layers != 1 or D.readout_pre_layers:
         fail("read-out other than one mlp layer is not supported")
     if D.node_init_lmax != D.lmax or any(l != D.lmax for l in D.l_schedule) or any(m != 1 for m in D.m_schedule):
@@ -396,7 +430,7 @@ def _check(D):
         if b.ffn_blocks != 1 or type(b.pre_so2_norm).__name__ != "Identity" or type(b.post_ffn_norms[0]).__name__ != "Identity" or b.layer_scale:
             fail("block norms other than the presets' are not supported")
         if c.edge_cartesian or c.node_cartesian_tp is not None or c.node_wise_grid_product is not None or c.use_so2_attn_res or c.layer_scale \
-                or c.attn_v_proj is not None or c.attn_o_proj is not None or c.attn_focus_mix is not None or c.radial_hidden_proj is not None:
+                or c.attn_v_proj is not None or c.attn_o_proj is not None or c.attn_focus_mix is not None:
             fail("SO(2) convolution options other than the presets' are not supported")
         if c.message_node_grid_product is None or type(c.message_node_grid_product.grid_op).__name__ != "GridProduct":
             fail("a message-node grid product is required")
@@ -439,7 +473,7 @@ def export_dpa4(m):
     c0 = D.blocks[0].so2_conv
     Dd = (lmax + 1) ** 2
     deg = [int(np.floor(np.sqrt(i))) for i in range(Dd)]
-    base = {0: 0, 1: 1, 2: 10}
+    base = {0: 0, 1: 1, 2: 10, 3: 35}
 
     def packed(row, col):
         l = deg[row]
@@ -459,7 +493,6 @@ def export_dpa4(m):
             if not (np.array_equal(g.projector.to_grid_mat, T) and np.array_equal(g.projector.from_grid_mat, Fm)):
                 fail("grids differ between the nets")
         Mx = c.radial_degree_mixer
-        z = float(np.ravel(c.adamw_attn_z_bias_raw)[0])
         blocks.append({
             "pre_mix": _f(c.pre_focus_mix.weight), "post_mix": _f(c.post_focus_mix.weight),
             "lin0": [_f(L.weight_m0) for L in c.so2_linears], "linm": [_f(L.weight_m[0]) for L in c.so2_linears],
@@ -468,7 +501,10 @@ def export_dpa4(m):
             "qk_scale": _f(c.attn_qk_norm.adam_scale), "qk_eps": float(c.attn_qk_norm.eps),
             "gate_scale": _f(c.attn_output_gate_norm.adam_scale), "gate_eps": float(c.attn_output_gate_norm.eps),
             "q": _f(c.attn_q_proj.weight), "k": _f(c.attn_k_proj.weight), "logit_w": _f(c.adamw_attn_logit_w), "gate_w": _f(c.adamw_attn_gate_w),
-            "log_null": float(np.log(np.logaddexp(0.0, z) + c.eps)),
+            "log_null": [float(np.log(np.logaddexp(0.0, float(z)) + c.eps)) for z in np.ravel(c.adamw_attn_z_bias_raw)],
+            **({"rproj": _f(c.radial_hidden_proj.weight)} if c.radial_hidden_proj is not None else {}),
+            **({"comp_w": _f(c.adamw_focus_compete_w)} if c.focus_compete and c.n_focus > 1 else {}),
+            **({"comp_scale": _f(c.focus_compete_norm.adam_scale), "comp_eps": float(c.focus_compete_norm.eps)} if c.focus_compete and c.n_focus > 1 and c.focus_norm else {}),
             "gexp": _f(G.frame_expand.weight), "gcon": _f(G.frame_contract.weight), "ggate": _f(G.scalar_gate.weight), "gres": _f(G.residual_scale),
             "post_norm": _eq_norm(b.post_so2_norm, lmax), "ffn_norm": _eq_norm(b.pre_ffn_norms[0], lmax),
             "flin1": _f(b.ffns[0].so3_linear_1.weight), "flin2": _f(b.ffns[0].so3_linear_2.weight),
@@ -477,7 +513,7 @@ def export_dpa4(m):
     Mx = c0.radial_degree_mixer
     S = D.env_seed_embedding
     net_r = D.radial_embedding.net
-    if type(net_r[1]).__name__ != "RMSNorm" or len(net_r) != 4:
+    if len(net_r) != (4 if D.radial_norm else 3) or (D.radial_norm and type(net_r[1]).__name__ != "RMSNorm"):
         fail("unexpected radial network")
     Ro = D.output_ffn
     RG = Ro.act
@@ -489,17 +525,20 @@ def export_dpa4(m):
     g2, a4 = _layer(S.g_layer2, ("silu", "none", "linear"))
     so, a5 = _layer(S.output_proj, ("silu", "none", "linear"))
     desc = {
+        "n_focus": int(c0.n_focus), "focus_tau": float(c0.focus_softmax_tau), "focus_ls": float(c0.focus_label_smoothing),
         "descriptor": "dpa4", "rcut": float(D.rcut), "sel": [int(D.nnei)], "channels": int(D.channels), "lmax": lmax,
         "eps": float(D.eps), "wigner_eps": float(D.wigner_calc.eps), "deg_floor": float(D.deg_norm_floor if D.version >= 1.1 else D.eps),
         "env_series": list(map(float, D.edge_envelope._series_coefficients)), "rbf_series": list(map(float, D.radial_basis.envelope._series_coefficients)),
         "freq": _f(D.radial_basis.adam_freqs),
         "te": _f(D.type_embedding.adam_type_embedding), "tt": _f(S.env_type_embed.adam_type_embedding), "tdim": int(S.type_dim),
-        "rf1": _f(net_r[0].w), "rf2": _f(net_r[3].w), "rf_scale": _f(net_r[1].adam_scale), "rf_eps": float(net_r[1].eps), "hrf": int(net_r[1].channels),
+        "rf1": _f(net_r[0].w), "rf2": _f(net_r[-1].w), "hrf": int(np.asarray(net_r[0].w).shape[1]),
+        **({"rf_scale": _f(net_r[1].adam_scale), "rf_eps": float(net_r[1].eps)} if D.radial_norm else {}),
         "seed_eps": float(S.eps), "emb": int(S.embed_dim), "axis": int(S.axis_dim), "s_r": int(S.rbf_out_dim), "s_gh": int(S.hidden_dim),
         "s_r1": r1, "s_r2": r2, "s_g1": g1, "s_g2": g2, "s_out": so, "s_act": [a1, a2, a3, a4, a5],
         "film_scale": float(np.exp(np.ravel(D.film_scale_strength_log)[0])), "film_shift": float(np.exp(np.ravel(D.film_shift_strength_log)[0])),
-        "film_s": _f(D.film_scale_norm.adam_scale), "film_s_eps": float(D.film_scale_norm.eps), "film_f": _f(D.film_shift_norm.adam_scale), "film_f_eps": float(D.film_shift_norm.eps),
+        **({"film_s": _f(D.film_scale_norm.adam_scale), "film_s_eps": float(D.film_scale_norm.eps), "film_f": _f(D.film_shift_norm.adam_scale), "film_f_eps": float(D.film_shift_norm.eps)} if D.film_norm else {}),
         "C_l2": _f(Cl2), "mono": [int(x) for t in mono for x in t],
+        **({"C_l3": _f(D.wigner_calc.small_order_kernels.C_l3), "exp_l3": [int(x) for x in np.ravel(D.wigner_calc.small_order_kernels.exp_l3)]} if lmax >= 3 else {}),
         "to_grid": _f(T), "from_grid": _f(Fm), "ng": int(T.shape[0]), "frames": int(G0.n_frames), "rescale": _f(c0.rotate_inv_rescale_full), "sweight": _f(RG._scalar_product_weight),
         "coeff": coeff, "deg_m": [int(x) for x in c0.degree_index_m], "gate_group": [0] + [int(x) for x in c0.non_linearities[0].expand_index],
         "mix_compact": [int(x) for x in Mx.kernel_compact_index] if Mx is not None else [],
