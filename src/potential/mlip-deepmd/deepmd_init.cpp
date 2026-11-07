@@ -41,7 +41,7 @@ namespace exaStamp
 
   class DeepmdInit : public OperatorNode
   {
-    ADD_SLOT( DeepmdParams    , parameters , INPUT        , REQUIRED , DocString{"exported DeePMD model file"} );
+    ADD_SLOT( DeepmdParams    , parameters , INPUT        , REQUIRED , DocString{"exported DeePMD model file; dpa4_store_forward: keep the DPA4 forward values, faster, more memory"} );
     ADD_SLOT( double          , rcut_max   , INPUT_OUTPUT , 0.0 );
     ADD_SLOT( ParticleSpecies , species    , INPUT        , REQUIRED );
     ADD_SLOT( DeepmdContext   , deepmd_ctx , OUTPUT );
@@ -124,6 +124,9 @@ init_parameters:
   - species
   - deepmd_init:
       parameters: { file: "water_se_e2_a.dpnative.yaml" }
+
+DPA4 only: dpa4_store_forward: true keeps the forward values for the reverse pass, about 20% faster but 2 MB per atom for
+the grade mini and 6 MB per atom for neo (192 water atoms).
 
 )EOF";
     }
@@ -408,6 +411,7 @@ init_parameters:
       auto iarr = [&](const char* what, size_t n) { auto v = dn[what].as< std::vector<int> >(); if( n != size_t(-1) && v.size() != n ) fail("DPA4 ", what, ": ", v.size(), " values, expected ", n); return v; };
       M.env_c = dn["env_series"].as< std::vector<double> >(); M.rbf_c = dn["rbf_series"].as< std::vector<double> >();
       M.freq = dn["freq"].as< std::vector<double> >(); M.nrad = M.freq.size();
+      if( dn["gauss_coeff"] ) M.gauss = dn["gauss_coeff"].as<double>();
       const auto te = dn["te"].as< std::vector<double> >(), tt = dn["tt"].as< std::vector<double> >();
       if( te.size() < size_t(nt) * C || tt.size() < size_t(nt) * M.tdim ) fail("DPA4: type embeddings too small");
       M.te = te; M.tt = tt;
@@ -476,7 +480,9 @@ init_parameters:
           }
         }
         P.gexp = arr( x["gexp"], size_t(L) * C * K * C, "gexp" ); P.gcon = arr( x["gcon"], size_t(L) * K * C * C, "gcon" );
-        eqn( x["post_norm"], P.post_norm ); eqn( x["ffn_norm"], P.ffn_norm );
+        if( x["pre_norm"] ) eqn( x["pre_norm"], P.pre_norm );
+        if( x["post_norm"] ) eqn( x["post_norm"], P.post_norm );
+        eqn( x["ffn_norm"], P.ffn_norm );
         P.flin1 = arr( x["flin1"], size_t(L) * C * 2 * Ce, "flin1" ); P.flin2 = arr( x["flin2"], size_t(L) * Ce * C, "flin2" );
         P.fl = arr( x["fl"], size_t(Ch) * Ch, "fl" ); P.fr = arr( x["fr"], size_t(Ch) * Ch, "fr" ); P.fo = arr( x["fo"], size_t(Ch) * Ch, "fo" );
         P.fgate = arr( x["fgate"], size_t(2 * Ch) * Ch, "fgate" );
@@ -486,6 +492,7 @@ init_parameters:
       M.rl = arr( dn["rl"], size_t(2 * Ch) * M.rhid, "rl" ); M.rr = arr( dn["rr"], size_t(2 * Ch) * M.rhid, "rr" ); M.ro = arr( dn["ro"], size_t(M.rhid) * Ch, "ro" );
       M.rgate = arr( dn["rgate"], size_t(2 * Ch) * Ch, "rgate" ); M.rlin2 = arr( dn["rlin2"], size_t(Ch) * C, "rlin2" );
       M.fw = arr( dn["fw"], size_t(C) * 2 * M.fit_h, "fw" ); M.fb = arr( dn["fb"], 2 * M.fit_h, "fb" ); M.fout = arr( dn["fout"], M.fit_h, "fout" );
+      M.store_forward = parameters->dpa4_store_forward;
       ctx.dpa4 = mp;
       ctx.dpa4_buf = std::make_shared<DPA4Buffers>();
       ctx.descriptor = DP_DPA4;

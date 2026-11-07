@@ -106,6 +106,8 @@ def _dpa4_base(**kw):
     return d
 
 
+_V11 = dict(edge_norm=[False, False, True], sandwich_norm=[True, False, True, False], env_exp=5, basis_type="gaussian/fix")   # presets v20260911
+
 DPA4 = {"dpa4_mini": _dpa4_base(),                                                     # the grade 'mini' of deepmd's presets
         "dpa4_nano": _dpa4_base(lmax=1, radial_so2_mode="none"),                       # the grade 'nano'
         "dpa4_mini_f32": _dpa4_base(precision="float32"),                              # default precision of deepmd's presets
@@ -114,6 +116,12 @@ DPA4 = {"dpa4_mini": _dpa4_base(),                                              
         "dpa4_neo": _dpa4_base(lmax=3, n_focus=2),                                     # the grade neo
         "dpa4_f2": _dpa4_base(channels=8, n_focus=2),                                  # two focus streams, small
         "dpa4_f2_en0": _dpa4_base(channels=8, n_focus=2, edge_norm=False),             # two focus streams, no competition norm
+        "dpa4_mini11": _dpa4_base(**_V11),                                             # grades of the presets v20260911
+        "dpa4_nano11": _dpa4_base(lmax=1, radial_so2_mode="none", **_V11),
+        "dpa4_neo11": _dpa4_base(lmax=3, n_focus=2, **_V11),
+        "dpa4_s11": _dpa4_base(channels=8, **_V11),                                    # small: physics regression
+        "dpa4_f211": _dpa4_base(channels=8, n_focus=2, **_V11),                        # focus competition norm on, others off
+        "dpa4_air": _dpa4_base(channels=64, lmax=3, n_blocks=3, mixing_layers=4),      # the grade air
         "dpa4_l3": _dpa4_base(channels=8, lmax=3),                                     # lmax 3, one focus
         "dpa4_s_en0": _dpa4_base(channels=8, edge_norm=False),                         # small, edge_norm off: physics regression
         "dpa4_b": _dpa4_base(channels=16, n_blocks=3, mixing_layers=2, rcut=5.0),      # other sizes

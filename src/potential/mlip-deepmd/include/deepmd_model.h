@@ -68,6 +68,7 @@ namespace exaStamp
   struct DeepmdParams
   {
     std::string file; // model exported by deepmd_export.py
+    bool dpa4_store_forward = false; // DPA4: keep forward values for the reverse pass, faster but about 1 MB per atom and block (mini)
   };
 
   // descriptors (deepmd/dpmodel/descriptor)
@@ -305,9 +306,10 @@ namespace YAML
     static bool decode(const Node& node, exaStamp::DeepmdParams& v)
     {
       if( !node.IsMap() ) { return false; }
-      exaStamp::check_yaml_keys( node , { "file" } , "deepmd parameters" );
+      exaStamp::check_yaml_keys( node , { "file", "dpa4_store_forward" } , "deepmd parameters" );
       if( !node["file"] ) { return false; }
       v.file = node["file"].as<std::string>();
+      if( node["dpa4_store_forward"] ) v.dpa4_store_forward = node["dpa4_store_forward"].as<bool>();
       return true;
     }
   };

@@ -19,13 +19,13 @@ under the License.
 
 #pragma once
 
-// DPA4 (SeZM) descriptor, host only: SO(3) node features x[D][C] (D = (lmax+1)^2), l <= 2, m <= 1, one focus, one
+// DPA4 (SeZM) descriptor, host only: SO(3) node features x[D][C] (D = (lmax+1)^2), l <= 3, m <= 1, one or several focus streams, one
 // attention head, as the presets of deepmd (exaStamp/scripts/python/deepmd_dpa4.py is the numpy specification).
 //
-//   per edge j -> i : quaternion q(d_ij), Wigner blocks D(q), envelope, Bessel radial basis, radial features
+//   per edge j -> i : quaternion q(d_ij), Wigner blocks D(q), envelope, Bessel or Gaussian radial basis, radial features
 //   x0 = FiLM(type embedding; env seed) on l = 0, geometric initial embedding on l > 0
-//   block: xp = pre_mix(x);  edge message: rotate xp_j to the edge frame, radial mixer, SO(2) layers, rotate back
-//          out = gate_i sum_j alpha_ij msg_ij;  out += grid(out, xp_i);  x1 = x + norm(post_mix(out));
+//   block: xp = pre_mix(optional norm(x));  edge message: rotate xp_j to the edge frame, radial mixer, SO(2) layers, rotate back
+//          out = gate_i sum_j alpha_ij msg_ij;  out += grid(out, xp_i);  x1 = x + optional norm(post_mix(out));
 //          x2 = x1 + ffn(norm(x1))
 //   descriptor = x[l = 0] + read-out(x), GLU fitting network
 //
@@ -92,7 +92,7 @@ namespace exaStamp
     std::vector<double> rproj;                              // [C][W], several focus streams only
     std::vector<double> mixw, mixb;                         // [L W][nk], [W]; empty: no mixer
     std::vector<double> gexp, gcon;                         // [L][C][K C], [L][K C][C], shared by the focus streams
-    DPA4EqRms post_norm, ffn_norm;
+    DPA4EqRms pre_norm, post_norm, ffn_norm;                // pre and post norms: empty scale, identity
     std::vector<double> flin1, flin2, fl, fr, fo, fgate;    // [L][C][2 Ce], [L][Ce][C], [Ch][Ch] x3, [2 Ch][Ch]
   };
 
@@ -102,6 +102,8 @@ namespace exaStamp
     double focus_tau = 1.0, focus_ls = 0.0;                         // competition temperature, label smoothing
     int nt = 0, C = 0, lmax = 0, L = 0, D = 0, Dm = 0, nnei = 0, K = 0, Ch = 0, Ce = 0, Ng = 0, nrad = 0, nk = 0;
     int emb = 0, axis = 0, tdim = 0, hrf = 0, fit_h = 0;
+    bool store_forward = false;                                     // keep the forward values for the reverse pass
+    double gauss = 0.0;                                             // gaussian radial basis: exponent coefficient, centres in freq; 0: bessel
     double rc = 0.0, eps = 0.0, weps = 0.0, deg_floor = 0.0, film_scale = 0.0, film_shift = 0.0, seed_eps = 0.0;
     std::vector<double> env_c, rbf_c, freq, te, tt;                 // series coefficients, frequencies, type embeddings
     std::vector<double> rf1, rf2; DPA4Rms rf_norm;
@@ -126,6 +128,21 @@ namespace exaStamp
     double fout_b = 0.0;
   };
 
+  // forward values read by the reverse pass, of one focus stream
+  struct DPA4FocusState
+  {
+    std::vector< std::vector<double> > Y, GG, Sd;                   // SO(2) layers but the last one
+    std::vector<double> XLf, alpha, q0, sum, gl, gr, cin, zgate, pair, xp;
+    double g = 0.0;
+  };
+
+  // of one atom in one block
+  struct DPA4AtomState
+  {
+    std::vector<DPA4FocusState> fs;
+    std::vector<double> X0, rad, kern, af, alf, XW0, mixed, wn1, x1, wn2, fgl, fgr, fco, fzgate, fpair;
+  };
+
   struct DPA4Buffers
   {
     DPA3Buffers c;
@@ -133,6 +150,7 @@ namespace exaStamp
     std::vector<double> envv, rr, rbf, Dq, rf, GD, Grf, Genv, Grbf, Gv, isd, deg, gie, seed;
     std::vector<double> Xp, Kn, GXp, GKn, dX1;
     std::vector< std::vector<double> > X, G;
+    std::vector< std::vector<DPA4AtomState> > store;                // [block][atom], dpa4_store_forward only
   };
 
   // ------------------------------------------------------------------ small dense helpers
@@ -217,6 +235,7 @@ namespace exaStamp
   // equivariant norm, x[D][C] -> y[D][C]; keeps inv and the centered row 0 in w (C + 1 values)
   inline void dpa4_eqrms(const DPA4EqRms& N, const DPA4Model& M, const double* x, double* y, double* w)
   {
+    if( N.scale.empty() ) { std::copy( x, x + size_t(M.D) * M.C, y ); return; }
     const int C = M.C, D = M.D;
     double mu = 0.0;
 #   pragma omp simd reduction(+:mu)
@@ -245,6 +264,7 @@ namespace exaStamp
   }
   inline void dpa4_eqrms_t(const DPA4EqRms& N, const DPA4Model& M, const double* x, const double* w, const double* dy, double* dx)
   {
+    if( N.scale.empty() ) { for(size_t t = 0; t < size_t(M.D) * M.C; t++) dx[t] += dy[t]; return; }
     const int C = M.C, D = M.D;
     const double inv = w[C];
     double S = 0.0;
@@ -278,6 +298,7 @@ namespace exaStamp
   // C2 envelope series: u^4 sum_k c_k x^k, x = r / rc, u = 1 - x; value and radial derivative
   inline void dpa4_envelope(const std::vector<double>& c, double r, double rc, double& v, double& dv)
   {
+    if( c.empty() ) { v = 1.0; dv = 0.0; return; }
     const double u0 = ( rc - r ) / rc, u = u0 < 0.0 ? 0.0 : ( u0 > 1.0 ? 1.0 : u0 ), x = 1.0 - u;
     double s = c.back(), ds = 0.0;
     for(int k = int(c.size()) - 2; k >= 0; k--) { ds = s + x * ds; s = c[k] + x * s; }
@@ -486,36 +507,29 @@ namespace exaStamp
 
   // ------------------------------------------------------------------ one atom in one block
 
-  // values of one focus stream, kept from the forward to the reverse pass
-  struct DPA4FocusState
-  {
-    std::vector< std::vector<double> > XL, Y, GG, Sd;
-    std::vector<double> alpha, ex, logit, q0, l0, sum, out, h, gl, gr, cin, vv, zgate, pair, res, xp;
-    double g = 0.0;
-  };
-
+  // temporaries of one thread
   struct DPA4Scratch
   {
-    std::vector<double> X0, rad, kern, wedge, mixed;
-    std::vector<double> wn1, x1, y, wn2, fgl, fgr, fc, fco, fv, fzgate, fpair;
-    std::vector<DPA4FocusState> fs;
-    std::vector<double> zb, rad0, XW, af, alf, outw, doutw, dXW, dX0, Grw, dAf, dxf;
+    DPA4AtomState own;                                              // state of the current atom when forward values are not stored
+    std::vector< std::vector<double> > XL;
+    std::vector<double> Ylast, rad, ex, logit, l0, h, vv, res, out;
+    std::vector<double> wedge, y, fc, fv;
+    std::vector<double> zb, rad0, XW, outw, doutw, dXW, dX0, Grw, dAf, dxf;
     std::vector<double> tmp, tmp2, tmp3, tmp4, dX, dY, dG, dz, dalpha, ddso, dout, dc, dp, dleft, dright, dh, dpairv, df, dxp, drad, dres;
-    int n = 0;
   };
 
   // forward of block b for atom i; Xp, Kn: nodes (ghosts included); x, y: node row in / out
   inline void dpa4_block_forward(const DPA4Model& M, const DPA4Block& P, const DPA4Buffers& BB, int i, const int64_t e0, const int n,
-                                 const int* nbh, const double* x, DPA4Scratch& S, double* x2)
+                                 const int* nbh, const double* x, DPA4AtomState& A, DPA4Scratch& S, double* x2)
   {
     const int C = M.C, D = M.D, Dm = M.Dm, L = M.L, DK = D * M.K, K = M.K, Ch = M.Ch, Ce = M.Ce, F = M.F_n, W = M.W;
     const size_t DC = size_t(D) * C, DmC = size_t(Dm) * C, DW = size_t(D) * W, DmW = size_t(Dm) * W;
     const double* Xp = BB.Xp.data();
     const double* xp = Xp + size_t(i) * DW;
-    S.n = n;
     const int nl = P.foc[0].lin0.size();
-    if( int(S.fs.size()) < F ) S.fs.resize( F );
-    dpa3_grow( S.X0, size_t(n) * DmW ); dpa3_grow( S.XW, size_t(n) * DmW ); dpa3_grow( S.rad0, size_t(n) * L * C ); dpa3_grow( S.rad, size_t(n) * L * W );
+    if( int(A.fs.size()) < F ) A.fs.resize( F );
+    std::vector<double>& Rd = M.nk > 0 ? S.rad : A.rad;                // the reverse pass reads it without a mixer only
+    dpa3_grow( A.X0, size_t(n) * DmW ); dpa3_grow( S.XW, size_t(n) * DmW ); dpa3_grow( S.rad0, size_t(n) * L * C ); dpa3_grow( Rd, size_t(n) * L * W );
     // radial features of the edges, types fused; projected on the hidden width when there are several focus streams
     const int ty = BB.c.type[i];
     const double* tei = M.te.data() + size_t(ty) * C;
@@ -526,16 +540,16 @@ namespace exaStamp
       double* r = S.rad0.data() + size_t(e) * L * C;
       for(int l = 0; l < L; l++) for(int c = 0; c < C; c++) r[l*C + c] = rf[l*C + c] + tei[c] + tej[c];
     }
-    if( F > 1 ) dpa3_gemm( false, false, n * L, W, C, 1.0, S.rad0.data(), C, P.rproj.data(), W, 0.0, S.rad.data(), W );
-    else std::copy( S.rad0.begin(), S.rad0.begin() + size_t(n) * L * C, S.rad.begin() );
+    if( F > 1 ) dpa3_gemm( false, false, n * L, W, C, 1.0, S.rad0.data(), C, P.rproj.data(), W, 0.0, Rd.data(), W );
+    else std::copy( S.rad0.begin(), S.rad0.begin() + size_t(n) * L * C, Rd.begin() );
     // rotate the source features to the edge frame
-    std::fill( S.X0.begin(), S.X0.begin() + size_t(n) * DmW, 0.0 );
+    std::fill( A.X0.begin(), A.X0.begin() + size_t(n) * DmW, 0.0 );
     const int nrot = M.rot_r.size();
     for(int e = 0; e < n; e++)
     {
       const double* xs = Xp + size_t( nbh[e0 + e] ) * DW;
       const double* Dq = BB.Dq.data() + size_t(e0 + e) * M.nDq;
-      double* xl = S.X0.data() + size_t(e) * DmW;
+      double* xl = A.X0.data() + size_t(e) * DmW;
       for(int t = 0; t < nrot; t++)
       {
         const double f = Dq[ M.rot_o[t] ];
@@ -549,14 +563,14 @@ namespace exaStamp
     double* X = S.XW.data();
     if( M.nk > 0 )
     {
-      dpa3_grow( S.kern, size_t(n) * M.nk );
-      dpa3_gemm( false, false, n, M.nk, L * W, 1.0, S.rad.data(), L * W, P.mixw.data(), M.nk, 0.0, S.kern.data(), M.nk );
+      dpa3_grow( A.kern, size_t(n) * M.nk );
+      dpa3_gemm( false, false, n, M.nk, L * W, 1.0, Rd.data(), L * W, P.mixw.data(), M.nk, 0.0, A.kern.data(), M.nk );
       std::fill( X, X + size_t(n) * DmW, 0.0 );
       const int nm = M.mix_r.size();
       for(int e = 0; e < n; e++)
       {
-        const double* k = S.kern.data() + size_t(e) * M.nk;
-        const double* x0 = S.X0.data() + size_t(e) * DmW;
+        const double* k = A.kern.data() + size_t(e) * M.nk;
+        const double* x0 = A.X0.data() + size_t(e) * DmW;
         double* xo = X + size_t(e) * DmW;
         for(int t = 0; t < nm; t++)
         {
@@ -572,21 +586,23 @@ namespace exaStamp
     {
       for(int e = 0; e < n; e++)
       {
-        const double* x0 = S.X0.data() + size_t(e) * DmW;
-        const double* rd = S.rad.data() + size_t(e) * L * W;
+        const double* x0 = A.X0.data() + size_t(e) * DmW;
+        const double* rd = Rd.data() + size_t(e) * L * W;
         double* xo = X + size_t(e) * DmW;
         for(int r = 0; r < Dm; r++) { const double* rr = rd + size_t( M.deg_m[r] ) * W; for(int c = 0; c < W; c++) xo[size_t(r)*W + c] = x0[size_t(r)*W + c] * rr[c]; }
       }
     }
     // cross-focus competition on the scalar row after the mixer: af = softmax, alpha = smoothed weights
-    dpa3_grow( S.af, size_t(n) * F ); dpa3_grow( S.alf, size_t(n) * F ); dpa3_grow( S.tmp, C );
+    dpa3_grow( A.af, size_t(n) * F ); dpa3_grow( A.alf, size_t(n) * F ); dpa3_grow( S.tmp, C );
     if( F > 1 && P.compete )
     {
+      dpa3_grow( A.XW0, size_t(n) * W );
       for(int e = 0; e < n; e++)
       {
         const double* x0 = X + size_t(e) * DmW;
-        double* a = S.af.data() + size_t(e) * F;
-        double* al = S.alf.data() + size_t(e) * F;
+        std::copy( x0, x0 + W, A.XW0.begin() + size_t(e) * W );
+        double* a = A.af.data() + size_t(e) * F;
+        double* al = A.alf.data() + size_t(e) * F;
         double mx = -std::numeric_limits<double>::infinity();
         for(int f = 0; f < F; f++)
         {
@@ -601,29 +617,31 @@ namespace exaStamp
         for(int f = 0; f < F; f++) { a[f] /= den; al[f] = a[f] * ( 1.0 - M.focus_ls ) + M.focus_ls / F; }
       }
     }
-    else std::fill( S.alf.begin(), S.alf.begin() + size_t(n) * F, 1.0 );
+    else std::fill( A.alf.begin(), A.alf.begin() + size_t(n) * F, 1.0 );
     dpa3_grow( S.outw, DW );
     const int nm0 = L * C, nmm = M.lmax * C;
     for(int f = 0; f < F; f++)
     {
       const DPA4Focus& Pf = P.foc[f];
-      DPA4FocusState& T = S.fs[f];
-      if( int(T.XL.size()) < nl + 1 ) { T.XL.resize( nl + 1 ); T.Y.resize( nl ); T.GG.resize( nl ); T.Sd.resize( nl ); }
-      for(auto& v : T.XL) dpa3_grow( v, size_t(n) * DmC );
+      DPA4FocusState& T = A.fs[f];
+      if( int(S.XL.size()) < nl + 1 ) S.XL.resize( nl + 1 );
+      if( int(T.Y.size()) < nl ) { T.Y.resize( nl ); T.GG.resize( nl ); T.Sd.resize( nl ); }
+      for(auto& v : S.XL) dpa3_grow( v, size_t(n) * DmC );
       dpa3_grow( T.xp, DC );
       for(int d = 0; d < D; d++) for(int c = 0; c < C; c++) T.xp[size_t(d)*C + c] = xp[size_t(d)*W + size_t(f)*C + c];
       for(int e = 0; e < n; e++) for(int r = 0; r < Dm; r++)
       {
         const double* a = X + size_t(e) * DmW + size_t(r) * W + size_t(f) * C;
-        double* b = T.XL[0].data() + size_t(e) * DmC + size_t(r) * C;
+        double* b = S.XL[0].data() + size_t(e) * DmC + size_t(r) * C;
         for(int c = 0; c < C; c++) b[c] = a[c];
       }
       // SO(2) layers
       for(int k = 0; k < nl; k++)
       {
-        const double* xk = T.XL[k].data();
-        dpa3_grow( T.Y[k], size_t(n) * DmC );
-        double* y = T.Y[k].data();
+        const double* xk = S.XL[k].data();
+        std::vector<double>& Yk = k < nl - 1 ? T.Y[k] : S.Ylast;           // the reverse pass does not read the last one
+        dpa3_grow( Yk, size_t(n) * DmC );
+        double* y = Yk.data();
         dpa3_gemm( false, false, n, nm0, nm0, 1.0, xk, int(DmC), Pf.lin0[k].data(), nm0, 0.0, y, int(DmC) );
         if( nmm > 0 )
         {
@@ -635,7 +653,7 @@ namespace exaStamp
           dpa3_gemm( false, false, n, nmm, nmm, 1.0, neg, int(DmC), wm + nmm, 2 * nmm, 0.0, y + nm0 + nmm, int(DmC) );
           dpa3_gemm( false, false, n, nmm, nmm, 1.0, pos, int(DmC), wm, 2 * nmm, 1.0, y + nm0 + nmm, int(DmC) );
         }
-        double* xo = T.XL[k+1].data();
+        double* xo = S.XL[k+1].data();
         if( k < nl - 1 )
         {
           dpa3_grow( T.GG[k], size_t(n) * nmm ); dpa3_grow( T.Sd[k], size_t(n) * C );
@@ -673,39 +691,41 @@ namespace exaStamp
         else for(size_t t = 0; t < size_t(n) * DmC; t++) xo[t] = xk[t] + y[t];
       }
       // attention
-      dpa3_grow( T.l0, C ); dpa3_grow( T.q0, C ); dpa3_grow( T.logit, n ); dpa3_grow( T.alpha, n ); dpa3_grow( T.ex, n );
-      dpa4_rms( Pf.qk_norm, C, T.xp.data(), T.l0.data() );
-      dpa3_gemm( false, false, 1, C, C, 1.0, T.l0.data(), C, Pf.q.data(), C, 0.0, T.q0.data(), C );
+      dpa3_grow( S.l0, C ); dpa3_grow( T.q0, C ); dpa3_grow( S.logit, n ); dpa3_grow( T.alpha, n ); dpa3_grow( S.ex, n );
+      dpa4_rms( Pf.qk_norm, C, T.xp.data(), S.l0.data() );
+      dpa3_gemm( false, false, 1, C, C, 1.0, S.l0.data(), C, Pf.q.data(), C, 0.0, T.q0.data(), C );
       const double ish = 1.0 / std::sqrt( double(C) );
       double mx = Pf.log_null;
       for(int e = 0; e < n; e++)
       {
         const double* kj = BB.Kn.data() + size_t( nbh[e0 + e] ) * W + size_t(f) * C;
-        const double* r0 = S.rad.data() + size_t(e) * L * W + size_t(f) * C;
+        const double* r0 = Rd.data() + size_t(e) * L * W + size_t(f) * C;
         double s = 0.0, b = 0.0;
 #       pragma omp simd reduction(+:s,b)
         for(int c = 0; c < C; c++) { s += T.q0[c] * kj[c]; b += r0[c] * Pf.logit_w[c]; }
         const double env = BB.envv[e0 + e];
         const double l = s * ish + b + 2.0 * std::log( env );
-        T.logit[e] = l;
+        S.logit[e] = l;
         mx = std::max( mx, l );
       }
       double den = std::exp( Pf.log_null - mx );
-      for(int e = 0; e < n; e++) T.ex[e] = T.logit[e] - mx;
-      dpa4_exp_n( T.ex.data(), n );
-      for(int e = 0; e < n; e++) den += T.ex[e];
-      for(int e = 0; e < n; e++) T.alpha[e] = T.ex[e] / den;
-      dpa3_grow( T.sum, DC ); dpa3_grow( T.out, DC );
+      for(int e = 0; e < n; e++) S.ex[e] = S.logit[e] - mx;
+      dpa4_exp_n( S.ex.data(), n );
+      for(int e = 0; e < n; e++) den += S.ex[e];
+      for(int e = 0; e < n; e++) T.alpha[e] = S.ex[e] / den;
+      dpa3_grow( T.sum, DC ); dpa3_grow( S.out, DC );
       // rotate back with the competition and attention weights: sum_e alpha_e msg_e
       std::fill( T.sum.begin(), T.sum.begin() + DC, 0.0 );
       {
-        const double* xf = T.XL[nl].data();
+        dpa3_grow( T.XLf, size_t(n) * DmC );
+        std::swap( T.XLf, S.XL[nl] );
+        const double* xf = T.XLf.data();
         double* sm = T.sum.data();
         for(int e = 0; e < n; e++)
         {
           const double* Dq = BB.Dq.data() + size_t(e0 + e) * M.nDq;
           const double* xl = xf + size_t(e) * DmC;
-          const double al = S.alf[size_t(e) * F + f] * T.alpha[e];
+          const double al = A.alf[size_t(e) * F + f] * T.alpha[e];
           for(int t = 0; t < nrot; t++)
           {
             const int d = M.rot_d[t];
@@ -722,35 +742,35 @@ namespace exaStamp
         double z = 0.0;
         for(int c = 0; c < C; c++) z += S.tmp[c] * Pf.gate_w[c];
         T.g = dpa4_sig( z );
-        for(size_t t = 0; t < DC; t++) T.out[t] = T.sum[t] * T.g;
+        for(size_t t = 0; t < DC; t++) S.out[t] = T.sum[t] * T.g;
       }
       // message-node grid product
       const int C3 = K * C;
       const size_t DC3 = size_t(D) * C3;
-      dpa3_grow( T.h, 2 * DC3 ); dpa3_grow( T.gl, size_t(M.Ng) * C ); dpa3_grow( T.gr, size_t(M.Ng) * C ); dpa3_grow( T.cin, DC3 ); dpa3_grow( T.vv, DC3 );
-      dpa3_grow( T.zgate, C ); dpa3_grow( T.pair, 2 * C ); dpa3_grow( T.res, DC );
-      dpa4_so3( M.lmax, P.gexp.data(), C, C3, T.out.data(), T.h.data() );
-      dpa4_so3( M.lmax, P.gexp.data(), C, C3, T.xp.data(), T.h.data() + DC3 );
-      dpa3_gemm( false, false, M.Ng, C, DK, 1.0, M.T.data(), DK, T.h.data(), C, 0.0, T.gl.data(), C );
-      dpa3_gemm( false, false, M.Ng, C, DK, 1.0, M.T.data(), DK, T.h.data() + DC3, C, 0.0, T.gr.data(), C );
+      dpa3_grow( S.h, 2 * DC3 ); dpa3_grow( T.gl, size_t(M.Ng) * C ); dpa3_grow( T.gr, size_t(M.Ng) * C ); dpa3_grow( T.cin, DC3 ); dpa3_grow( S.vv, DC3 );
+      dpa3_grow( T.zgate, C ); dpa3_grow( T.pair, 2 * C ); dpa3_grow( S.res, DC );
+      dpa4_so3( M.lmax, P.gexp.data(), C, C3, S.out.data(), S.h.data() );
+      dpa4_so3( M.lmax, P.gexp.data(), C, C3, T.xp.data(), S.h.data() + DC3 );
+      dpa3_gemm( false, false, M.Ng, C, DK, 1.0, M.T.data(), DK, S.h.data(), C, 0.0, T.gl.data(), C );
+      dpa3_gemm( false, false, M.Ng, C, DK, 1.0, M.T.data(), DK, S.h.data() + DC3, C, 0.0, T.gr.data(), C );
       dpa3_grow( S.tmp2, size_t(M.Ng) * C );
       for(size_t t = 0; t < size_t(M.Ng) * C; t++) S.tmp2[t] = T.gl[t] * T.gr[t];
       dpa3_gemm( false, false, DK, C, M.Ng, 1.0, M.F.data(), M.Ng, S.tmp2.data(), C, 0.0, T.cin.data(), C );
-      for(int c = 0; c < C; c++) { T.pair[c] = T.out[c]; T.pair[C + c] = T.xp[c]; }
-      dpa4_scalar( Pf.ggate.data(), C, DK, T.cin.data(), T.pair.data(), T.vv.data(), T.zgate.data() );
-      dpa4_so3( M.lmax, P.gcon.data(), C3, C, T.vv.data(), T.res.data() );
-      for(int d = 0; d < D; d++) for(int c = 0; c < C; c++) S.outw[size_t(d)*W + size_t(f)*C + c] = T.out[size_t(d)*C + c] + T.res[size_t(d)*C + c] * Pf.gres[c];
+      for(int c = 0; c < C; c++) { T.pair[c] = S.out[c]; T.pair[C + c] = T.xp[c]; }
+      dpa4_scalar( Pf.ggate.data(), C, DK, T.cin.data(), T.pair.data(), S.vv.data(), T.zgate.data() );
+      dpa4_so3( M.lmax, P.gcon.data(), C3, C, S.vv.data(), S.res.data() );
+      for(int d = 0; d < D; d++) for(int c = 0; c < C; c++) S.outw[size_t(d)*W + size_t(f)*C + c] = S.out[size_t(d)*C + c] + S.res[size_t(d)*C + c] * Pf.gres[c];
     }
     // final mix, norm, residual
-    dpa3_grow( S.mixed, DC ); dpa3_grow( S.wn1, C + 1 ); dpa3_grow( S.x1, DC ); dpa3_grow( S.y, DC ); dpa3_grow( S.wn2, C + 1 );
-    dpa4_so3( M.lmax, P.post_mix.data(), W, C, S.outw.data(), S.mixed.data() );
-    dpa4_eqrms( P.post_norm, M, S.mixed.data(), S.y.data(), S.wn1.data() );
-    for(size_t t = 0; t < DC; t++) S.x1[t] = x[t] + S.y[t];
+    dpa3_grow( A.mixed, DC ); dpa3_grow( A.wn1, C + 1 ); dpa3_grow( A.x1, DC ); dpa3_grow( S.y, DC ); dpa3_grow( A.wn2, C + 1 );
+    dpa4_so3( M.lmax, P.post_mix.data(), W, C, S.outw.data(), A.mixed.data() );
+    dpa4_eqrms( P.post_norm, M, A.mixed.data(), S.y.data(), A.wn1.data() );
+    for(size_t t = 0; t < DC; t++) A.x1[t] = x[t] + S.y[t];
     // FFN
-    dpa4_eqrms( P.ffn_norm, M, S.x1.data(), S.y.data(), S.wn2.data() );
+    dpa4_eqrms( P.ffn_norm, M, A.x1.data(), S.y.data(), A.wn2.data() );
     const size_t DCe = size_t(D) * Ce;
-    dpa3_grow( S.fgl, size_t(M.Ng) * Ch ); dpa3_grow( S.fgr, size_t(M.Ng) * Ch ); dpa3_grow( S.fc, DCe ); dpa3_grow( S.fco, DCe ); dpa3_grow( S.fv, DCe );
-    dpa3_grow( S.fzgate, Ch ); dpa3_grow( S.fpair, 2 * Ch ); dpa3_grow( S.wedge, 2 * DCe ); dpa3_grow( S.tmp3, 2 * DCe ); dpa3_grow( S.tmp4, size_t(M.Ng) * Ch );
+    dpa3_grow( A.fgl, size_t(M.Ng) * Ch ); dpa3_grow( A.fgr, size_t(M.Ng) * Ch ); dpa3_grow( S.fc, DCe ); dpa3_grow( A.fco, DCe ); dpa3_grow( S.fv, DCe );
+    dpa3_grow( A.fzgate, Ch ); dpa3_grow( A.fpair, 2 * Ch ); dpa3_grow( S.wedge, 2 * DCe ); dpa3_grow( S.tmp3, 2 * DCe ); dpa3_grow( S.tmp4, size_t(M.Ng) * Ch );
     dpa4_so3( M.lmax, P.flin1.data(), C, 2 * Ce, S.y.data(), S.wedge.data() );
     // left, right: rows [D K][Ch], split in the channels of a row of 2 Ce
     for(int d = 0; d < D; d++)
@@ -758,22 +778,22 @@ namespace exaStamp
       const double* h = S.wedge.data() + size_t(d) * 2 * Ce;
       for(int t = 0; t < Ce; t++) { S.tmp3[size_t(d)*Ce + t] = h[t]; S.tmp3[DCe + size_t(d)*Ce + t] = h[Ce + t]; }
     }
-    for(int c = 0; c < Ch; c++) { S.fpair[c] = S.tmp3[c]; S.fpair[Ch + c] = S.tmp3[DCe + c]; }
+    for(int c = 0; c < Ch; c++) { A.fpair[c] = S.tmp3[c]; A.fpair[Ch + c] = S.tmp3[DCe + c]; }
     dpa3_gemm( false, false, DK, Ch, Ch, 1.0, S.tmp3.data(), Ch, P.fl.data(), Ch, 0.0, S.fc.data(), Ch );
-    dpa3_gemm( false, false, DK, Ch, Ch, 1.0, S.tmp3.data() + DCe, Ch, P.fr.data(), Ch, 0.0, S.fco.data(), Ch );
-    dpa3_gemm( false, false, M.Ng, Ch, DK, 1.0, M.T.data(), DK, S.fc.data(), Ch, 0.0, S.fgl.data(), Ch );
-    dpa3_gemm( false, false, M.Ng, Ch, DK, 1.0, M.T.data(), DK, S.fco.data(), Ch, 0.0, S.fgr.data(), Ch );
-    for(size_t t = 0; t < size_t(M.Ng) * Ch; t++) S.tmp4[t] = S.fgl[t] * S.fgr[t];
+    dpa3_gemm( false, false, DK, Ch, Ch, 1.0, S.tmp3.data() + DCe, Ch, P.fr.data(), Ch, 0.0, A.fco.data(), Ch );
+    dpa3_gemm( false, false, M.Ng, Ch, DK, 1.0, M.T.data(), DK, S.fc.data(), Ch, 0.0, A.fgl.data(), Ch );
+    dpa3_gemm( false, false, M.Ng, Ch, DK, 1.0, M.T.data(), DK, A.fco.data(), Ch, 0.0, A.fgr.data(), Ch );
+    for(size_t t = 0; t < size_t(M.Ng) * Ch; t++) S.tmp4[t] = A.fgl[t] * A.fgr[t];
     dpa3_gemm( false, false, DK, Ch, M.Ng, 1.0, M.F.data(), M.Ng, S.tmp4.data(), Ch, 0.0, S.fc.data(), Ch );
-    dpa3_gemm( false, false, DK, Ch, Ch, 1.0, S.fc.data(), Ch, P.fo.data(), Ch, 0.0, S.fco.data(), Ch );
-    dpa4_scalar( P.fgate.data(), Ch, DK, S.fco.data(), S.fpair.data(), S.fv.data(), S.fzgate.data() );
+    dpa3_gemm( false, false, DK, Ch, Ch, 1.0, S.fc.data(), Ch, P.fo.data(), Ch, 0.0, A.fco.data(), Ch );
+    dpa4_scalar( P.fgate.data(), Ch, DK, A.fco.data(), A.fpair.data(), S.fv.data(), A.fzgate.data() );
     dpa4_so3( M.lmax, P.flin2.data(), Ce, C, S.fv.data(), x2 );
-    for(size_t t = 0; t < DC; t++) x2[t] += S.x1[t];
+    for(size_t t = 0; t < DC; t++) x2[t] += A.x1[t];
   }
 
   // reverse of dpa4_block_forward: Gout[D][C] dE/dx2 -> dx1 (dE/dx, node term), source atoms and edge accumulators
   inline void dpa4_block_vjp(const DPA4Model& M, const DPA4Block& P, DPA4Buffers& BB, int i, const int64_t e0, const int n,
-                             const int* nbh, const double* Gout, DPA4Scratch& S, double* dxnode)
+                             const int* nbh, const double* Gout, DPA4AtomState& A, DPA4Scratch& S, double* dxnode)
   {
     const int C = M.C, D = M.D, Dm = M.Dm, L = M.L, DK = D * M.K, K = M.K, Ch = M.Ch, Ce = M.Ce, F = M.F_n, W = M.W;
     const size_t DC = size_t(D) * C, DmC = size_t(Dm) * C, DCe = size_t(D) * Ce, DW = size_t(D) * W, DmW = size_t(Dm) * W;
@@ -785,15 +805,15 @@ namespace exaStamp
     dpa3_grow( S.dc, 2 * DCe ); dpa3_grow( S.dp, size_t(M.Ng) * Ch ); dpa3_grow( S.dleft, DCe ); dpa3_grow( S.dright, DCe ); dpa3_grow( S.dh, 2 * DCe );
     dpa3_grow( S.dpairv, 2 * Ch ); dpa3_grow( S.df, Ch ); dpa3_grow( S.tmp2, DCe ); dpa3_grow( S.dG, size_t(M.Ng) * Ch );
     dpa4_so3_t( M.lmax, P.flin2.data(), Ce, C, Gout, S.dc.data() );
-    dpa4_scalar_t( P.fgate.data(), Ch, DK, S.fco.data(), S.fpair.data(), S.fzgate.data(), S.dc.data(), S.tmp2.data(), S.dpairv.data(), S.df.data() );
+    dpa4_scalar_t( P.fgate.data(), Ch, DK, A.fco.data(), A.fpair.data(), A.fzgate.data(), S.dc.data(), S.tmp2.data(), S.dpairv.data(), S.df.data() );
     // fco = fc o: dfc = dfco o^T
     dpa3_gemm( false, true, DK, Ch, Ch, 1.0, S.tmp2.data(), Ch, P.fo.data(), Ch, 0.0, S.dright.data(), Ch );
     // fc = F p: dp = F^T dfc
     dpa3_gemm( true, false, M.Ng, Ch, DK, 1.0, M.F.data(), M.Ng, S.dright.data(), Ch, 0.0, S.dp.data(), Ch );
-    for(size_t t = 0; t < size_t(M.Ng) * Ch; t++) S.dG[t] = S.dp[t] * S.fgr[t];
+    for(size_t t = 0; t < size_t(M.Ng) * Ch; t++) S.dG[t] = S.dp[t] * A.fgr[t];
     dpa3_gemm( true, false, DK, Ch, M.Ng, 1.0, M.T.data(), DK, S.dG.data(), Ch, 0.0, S.dright.data(), Ch );
     dpa3_gemm( false, true, DK, Ch, Ch, 1.0, S.dright.data(), Ch, P.fl.data(), Ch, 0.0, S.dleft.data(), Ch );
-    for(size_t t = 0; t < size_t(M.Ng) * Ch; t++) S.dG[t] = S.dp[t] * S.fgl[t];
+    for(size_t t = 0; t < size_t(M.Ng) * Ch; t++) S.dG[t] = S.dp[t] * A.fgl[t];
     dpa3_gemm( true, false, DK, Ch, M.Ng, 1.0, M.T.data(), DK, S.dG.data(), Ch, 0.0, S.tmp2.data(), Ch );
     dpa3_gemm( false, true, DK, Ch, Ch, 1.0, S.tmp2.data(), Ch, P.fr.data(), Ch, 0.0, S.dright.data(), Ch );
     for(int c = 0; c < Ch; c++) { S.dleft[c] += S.dpairv[c]; S.dright[c] += S.dpairv[Ch + c]; }
@@ -805,11 +825,11 @@ namespace exaStamp
     dpa3_grow( S.dY, DC );
     dpa4_so3_t( M.lmax, P.flin1.data(), C, 2 * Ce, S.dh.data(), S.dY.data() );
     for(size_t t = 0; t < DC; t++) S.dX[t] = Gout[t];
-    dpa4_eqrms_t( P.ffn_norm, M, S.x1.data(), S.wn2.data(), S.dY.data(), S.dX.data() );
+    dpa4_eqrms_t( P.ffn_norm, M, A.x1.data(), A.wn2.data(), S.dY.data(), S.dX.data() );
     // dE/dx1: node term of dE/dx; through the norm and the final mix to dE/dout2
     for(size_t t = 0; t < DC; t++) dxnode[t] = S.dX[t];
     std::fill( S.dY.begin(), S.dY.begin() + DC, 0.0 );
-    dpa4_eqrms_t( P.post_norm, M, S.mixed.data(), S.wn1.data(), S.dX.data(), S.dY.data() );
+    dpa4_eqrms_t( P.post_norm, M, A.mixed.data(), A.wn1.data(), S.dX.data(), S.dY.data() );
     dpa3_grow( S.doutw, DW );
     dpa4_so3_t( M.lmax, P.post_mix.data(), W, C, S.dY.data(), S.doutw.data() );
     const int nl = P.foc[0].lin0.size(), nrot = M.rot_r.size();
@@ -820,7 +840,7 @@ namespace exaStamp
     for(int f = 0; f < F; f++)
     {
       const DPA4Focus& Pf = P.foc[f];
-      DPA4FocusState& T = S.fs[f];
+      DPA4FocusState& T = A.fs[f];
       dpa3_grow( S.dout, DC ); dpa3_grow( S.dres, DC ); dpa3_grow( S.dxf, DC );
       for(int d = 0; d < D; d++) for(int c = 0; c < C; c++) S.dout[size_t(d)*C + c] = S.doutw[size_t(d)*W + size_t(f)*C + c];
       // grid product: res = scale contract( scalar( F( T L * T R ) ) )
@@ -856,7 +876,7 @@ namespace exaStamp
       dpa3_grow( S.dX, size_t(n) * DmC );
       std::fill( S.dX.begin(), S.dX.begin() + size_t(n) * DmC, 0.0 );
       {
-        const double* xf = T.XL[nl].data();
+        const double* xf = T.XLf.data();
         for(int e = 0; e < n; e++)
         {
           const double* Dq = BB.Dq.data() + size_t(e0 + e) * M.nDq;
@@ -865,7 +885,7 @@ namespace exaStamp
           double* dl = S.dX.data() + size_t(e) * DmC;
           double* gd = BB.GD.data() + size_t(e0 + e) * M.nDq;
           const double sc = T.alpha[e] * g;
-          const double al = S.alf[size_t(e) * F + f];
+          const double al = A.alf[size_t(e) * F + f];
           double da = 0.0, dae = 0.0;
           for(int t = 0; t < nrot; t++)
           {
@@ -980,10 +1000,10 @@ namespace exaStamp
     if( F > 1 && P.compete )
     {
       dpa3_grow( S.tmp, C ); dpa3_grow( S.ddso, C );
-      const double* X = S.XW.data();
+      const double* X = A.XW0.data();
       for(int e = 0; e < n; e++)
       {
-        const double* a = S.af.data() + size_t(e) * F;
+        const double* a = A.af.data() + size_t(e) * F;
         const double* dA = S.dAf.data() + size_t(e) * F;
         double mean = 0.0;
         for(int f = 0; f < F; f++) mean += a[f] * dA[f];
@@ -991,7 +1011,7 @@ namespace exaStamp
         {
           const double dl = ( 1.0 - M.focus_ls ) * a[f] * ( dA[f] - mean ) / M.focus_tau;
           for(int c = 0; c < C; c++) S.ddso[c] = dl * P.foc[f].comp_w[c];
-          dpa4_rms_t( P.foc[f].comp_norm, C, X + size_t(e) * DmW + size_t(f) * C, S.ddso.data(), S.dXW.data() + size_t(e) * DmW + size_t(f) * C );
+          dpa4_rms_t( P.foc[f].comp_norm, C, X + size_t(e) * W + size_t(f) * C, S.ddso.data(), S.dXW.data() + size_t(e) * DmW + size_t(f) * C );
         }
       }
     }
@@ -1006,8 +1026,8 @@ namespace exaStamp
       const int nm = M.mix_r.size();
       for(int e = 0; e < n; e++)
       {
-        const double* k = S.kern.data() + size_t(e) * M.nk;
-        const double* x0 = S.X0.data() + size_t(e) * DmW;
+        const double* k = A.kern.data() + size_t(e) * M.nk;
+        const double* x0 = A.X0.data() + size_t(e) * DmW;
         const double* dxo = S.dXW.data() + size_t(e) * DmW;
         double* dxi = dx0 + size_t(e) * DmW;
         double* dk = S.dG.data() + size_t(e) * M.nk;
@@ -1030,8 +1050,8 @@ namespace exaStamp
     {
       for(int e = 0; e < n; e++)
       {
-        const double* x0 = S.X0.data() + size_t(e) * DmW;
-        const double* rd = S.rad.data() + size_t(e) * L * W;
+        const double* x0 = A.X0.data() + size_t(e) * DmW;
+        const double* rd = A.rad.data() + size_t(e) * L * W;
         const double* dxo = S.dXW.data() + size_t(e) * DmW;
         double* dxi = dx0 + size_t(e) * DmW;
         double* gr = S.Grw.data() + size_t(e) * L * W;
@@ -1225,7 +1245,8 @@ namespace exaStamp
           double e7, d7;
           dpa4_envelope( M.rbf_c, r, M.rc, e7, d7 );
           double* rb = BB.rbf.data() + size_t(e) * M.nrad;
-          for(int a = 0; a < M.nrad; a++) { const double x = r * M.freq[a]; rb[a] = M.freq[a] * std::sin(x) / x * e7; }
+          if( M.gauss != 0.0 ) for(int a = 0; a < M.nrad; a++) { const double dr = r - M.freq[a]; rb[a] = std::exp( M.gauss * dr * dr ) * e7; }
+          else for(int a = 0; a < M.nrad; a++) { const double x = r * M.freq[a]; rb[a] = M.freq[a] * std::sin(x) / x * e7; }
           double qq[4], J[12];
           dpa4_quaternion( v, r, M.eps, M.weps, qq, J );
           dpa4_wigner( M, qq, BB.Dq.data() + size_t(e) * M.nDq );
@@ -1315,13 +1336,14 @@ namespace exaStamp
       BB.Xp.resize( n_nodes * DW ); BB.Kn.resize( n_nodes * W );
 #     pragma omp parallel
       {
-        std::vector<double> l0(C);
+        std::vector<double> l0(C), yn(DC), wn(C + 1);
 #       pragma omp for schedule(static)
         for(size_t n = 0; n < n_nodes; n++)
         {
           const double* x = BB.X[b].data() + n * DC;
           double* xp = BB.Xp.data() + n * DW;
-          dpa4_so3( M.lmax, P.pre_mix.data(), C, W, x, xp );
+          dpa4_eqrms( P.pre_norm, M, x, yn.data(), wn.data() );
+          dpa4_so3( M.lmax, P.pre_mix.data(), C, W, yn.data(), xp );
           for(int f = 0; f < F; f++)
           {
             dpa4_rms( P.foc[f].qk_norm, C, xp + size_t(f) * C, l0.data() );
@@ -1332,6 +1354,7 @@ namespace exaStamp
     };
 
     // forward blocks
+    if( M.store_forward ) { BB.store.resize( NB ); for(auto& v : BB.store) v.resize( inum ); }
     for(int b = 0; b < NB; b++)
     {
       node_prep( b );
@@ -1342,7 +1365,8 @@ namespace exaStamp
         for(int q = 0; q < inum; q++)
         {
           const int i = B.ilist[q];
-          dpa4_block_forward( M, M.blocks[b], BB, i, offset[i], BB.ecount[i], nbh, BB.X[b].data() + size_t(i) * DC, S, BB.X[b+1].data() + size_t(i) * DC );
+          DPA4AtomState& A = M.store_forward ? BB.store[b][q] : S.own;
+          dpa4_block_forward( M, M.blocks[b], BB, i, offset[i], BB.ecount[i], nbh, BB.X[b].data() + size_t(i) * DC, A, S, BB.X[b+1].data() + size_t(i) * DC );
         }
       }
       if( b + 1 < NB ) exchange( BB.X[b+1], true );
@@ -1438,8 +1462,9 @@ namespace exaStamp
         for(int q = 0; q < inum; q++)
         {
           const int i = B.ilist[q];
-          dpa4_block_forward( M, M.blocks[b], BB, i, offset[i], BB.ecount[i], nbh, BB.X[b].data() + size_t(i) * DC, S, x2.data() );
-          dpa4_block_vjp( M, M.blocks[b], BB, i, offset[i], BB.ecount[i], nbh, BB.G[b+1].data() + size_t(i) * DC, S, BB.dX1.data() + size_t(i) * DC );
+          DPA4AtomState& A = M.store_forward ? BB.store[b][q] : S.own;
+          if( ! M.store_forward ) dpa4_block_forward( M, M.blocks[b], BB, i, offset[i], BB.ecount[i], nbh, BB.X[b].data() + size_t(i) * DC, A, S, x2.data() );
+          dpa4_block_vjp( M, M.blocks[b], BB, i, offset[i], BB.ecount[i], nbh, BB.G[b+1].data() + size_t(i) * DC, A, S, BB.dX1.data() + size_t(i) * DC );
         }
       }
       // dE/dK of all nodes -> dE/dxp[0], ghost rows folded to their owners, then through the pre mix
@@ -1459,14 +1484,21 @@ namespace exaStamp
       }
       exchange( BB.GXp, false, DW );
       BB.G[b].assign( n_nodes * DC, 0.0 );
-#     pragma omp parallel for schedule(static)
+#     pragma omp parallel
+      {
+      std::vector<double> dn(DC), yn(DC), wn(C + 1);
+#     pragma omp for schedule(static)
       for(int q = 0; q < inum; q++)
       {
         const int i = B.ilist[q];
         double* g = BB.G[b].data() + size_t(i) * DC;
-        dpa4_so3_t( M.lmax, P.pre_mix.data(), C, W, BB.GXp.data() + size_t(i) * DW, g );
+        dpa4_so3_t( M.lmax, P.pre_mix.data(), C, W, BB.GXp.data() + size_t(i) * DW, dn.data() );
+        const double* xi = BB.X[b].data() + size_t(i) * DC;
+        dpa4_eqrms( P.pre_norm, M, xi, yn.data(), wn.data() );
+        dpa4_eqrms_t( P.pre_norm, M, xi, wn.data(), dn.data(), g );
         const double* d = BB.dX1.data() + size_t(i) * DC;
         for(size_t t = 0; t < DC; t++) g[t] += d[t];
+      }
       }
     }
 
@@ -1637,7 +1669,12 @@ namespace exaStamp
           dpa4_envelope( M.rbf_c, r, M.rc, e7, d7 );
           double gr0 = BB.Genv[e] * d5;
           const double* grb = BB.Grbf.data() + size_t(e) * M.nrad;
-          for(int a = 0; a < M.nrad; a++)
+          if( M.gauss != 0.0 ) for(int a = 0; a < M.nrad; a++)
+          {
+            const double dr = r - M.freq[a], ra = std::exp( M.gauss * dr * dr );
+            gr0 += grb[a] * ra * ( d7 + 2.0 * M.gauss * dr * e7 );
+          }
+          else for(int a = 0; a < M.nrad; a++)
           {
             const double f = M.freq[a], x = r * f, sx = std::sin(x), cx = std::cos(x);
             gr0 += grb[a] * ( f * sx / x * d7 + f * f * ( cx / x - sx / ( x * x ) ) * e7 );

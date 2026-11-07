@@ -47,5 +47,8 @@ if(EXASTAMP_DEEPMD_BLAS)
     list(APPEND exaStampMlipDeepmd_LINK_LIBRARIES ${BLAS_LIBRARIES})
   endif()
   list(APPEND exaStampMlipDeepmd_COMPILE_DEFINITIONS -DXSTAMP_DEEPMD_BLAS)
+else()
+  message(WARNING "EXASTAMP_DEEPMD_BLAS is OFF: DeePMD DPA2, DPA3 and DPA4 matrix products use built-in loops, about 7 times slower for DPA4. "
+                  "Enable it with a BLAS for production runs.")
 endif()
 onika_add_plugin(exaStampMlipDeepmd ${CMAKE_CURRENT_SOURCE_DIR})

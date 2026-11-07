@@ -58,10 +58,10 @@ def rotation_matrix(q):
                      2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)], -1).reshape(q.shape[:-1] + (3, 3))
 
 
-def wigner(q, lmax, kern, eps):
+def wigner(q, lmax, calc, eps):
     """Block diagonal real Wigner D (E, D, D), lmax <= 3."""
     assert lmax <= 3
-    C_l2 = kern.C_l2
+    kern = calc.small_order_kernels if lmax >= 2 else None
     q = norm_vec(q, eps)
     E = q.shape[0]
     Dd = (lmax + 1) ** 2
@@ -73,7 +73,7 @@ def wigner(q, lmax, kern, eps):
         D[:, 1:4, 1:4] = rotation_matrix(q)[:, perm][:, :, perm] * np.outer(s, s)
     if lmax >= 2:
         q4 = np.einsum("ei,ej,ek,el->eijkl", q, q, q, q).reshape(E, 256)
-        D[:, 4:9, 4:9] = (q4 @ C_l2.reshape(25, 256).T).reshape(E, 5, 5)
+        D[:, 4:9, 4:9] = (q4 @ kern.C_l2.reshape(25, 256).T).reshape(E, 5, 5)
     if lmax >= 3:
         mono = np.prod(q[:, None, :] ** np.asarray(kern.exp_l3)[None], -1)
         D[:, 9:16, 9:16] = (mono @ np.asarray(kern.C_l3).T).reshape(E, 7, 7)
@@ -275,7 +275,7 @@ def so2_conv(c, x, q, rad_block, env, inv_sqrt_deg, src, dst, D):
     Dm = D[:, c.coeff_index_m]                                             # (E, Dm, Dd)
     xl = Dm @ xp[src]
     rad = rad_block[:, c.degree_index_m]
-    xl = mixer(c.radial_degree_mixer, xl, rad)
+    xl = xl * rad if c.radial_degree_mixer is None else mixer(c.radial_degree_mixer, xl, rad)
     alpha_f = focus_alpha(c, xl[:, 0].reshape(E, F, Cf)) if c.focus_compete and F > 1 else None
     msg_l = np.empty_like(xl)
     for f in range(F):
@@ -328,11 +328,16 @@ def dpa4_descriptor(m, coord_ext, atype_ext, nlist, mapping):
     env = envelope(r, m.edge_envelope)
     # radial basis
     f = m.radial_basis.adam_freqs[0]
-    arg = r[:, None] * f
-    rbf = f * np.sin(arg) / arg * envelope(r, m.radial_basis.envelope)[:, None]
+    if m.radial_basis.basis_family == "bessel":
+        arg = r[:, None] * f
+        rbf = f * np.sin(arg) / arg
+    else:
+        rbf = np.exp((r[:, None] - f) ** 2 * m.radial_basis.gaussian_coeff)
+    if m.radial_basis.envelope is not None:
+        rbf = rbf * envelope(r, m.radial_basis.envelope)[:, None]
     # Wigner
     q = edge_quaternion(v, r, eps)
-    D = wigner(q, m.lmax, m.wigner_calc.small_order_kernels, m.wigner_calc.eps)
+    D = wigner(q, m.lmax, m.wigner_calc, m.wigner_calc.eps)
     # degree
     deg = np.zeros(nloc)
     np.add.at(deg, dst, env * env)
@@ -373,8 +378,8 @@ def dpa4_descriptor(m, coord_ext, atype_ext, nlist, mapping):
     rf = rf + (te[src] + te[dst])[:, None, :]
     # blocks
     for k, b in enumerate(m.blocks):
-        so = so2_conv(b.so2_conv, x, None, rf[:, :m.rad_sizes_per_block[k]], env, isd, src, dst, D)
-        x = x + eq_rms(b.post_so2_norm, so)
+        so = so2_conv(b.so2_conv, eq_rms(b.pre_so2_norm, x) if b.so2_pre_norm else x, None, rf[:, :m.rad_sizes_per_block[k]], env, isd, src, dst, D)
+        x = x + (eq_rms(b.post_so2_norm, so) if b.so2_post_norm else so)
         for i in range(b.ffn_blocks):
             x = x + ffn(b.ffns[i], eq_rms(b.pre_ffn_norms[i], x))
     return x[:, 0] + readout(m.output_ffn, x)
@@ -423,11 +428,9 @@ def _check(D):
         fail("read-out other than one mlp layer is not supported")
     if D.node_init_lmax != D.lmax or any(l != D.lmax for l in D.l_schedule) or any(m != 1 for m in D.m_schedule):
         fail("degree schedules are not supported")
-    if D.radial_basis.basis_family != "bessel":
-        fail("radial basis other than bessel is not supported")
     for b in D.blocks:
         c = b.so2_conv
-        if b.ffn_blocks != 1 or type(b.pre_so2_norm).__name__ != "Identity" or type(b.post_ffn_norms[0]).__name__ != "Identity" or b.layer_scale:
+        if b.ffn_blocks != 1 or not b.ffn_pre_norm or type(b.post_ffn_norms[0]).__name__ != "Identity" or b.layer_scale:
             fail("block norms other than the presets' are not supported")
         if c.edge_cartesian or c.node_cartesian_tp is not None or c.node_wise_grid_product is not None or c.use_so2_attn_res or c.layer_scale \
                 or c.attn_v_proj is not None or c.attn_o_proj is not None or c.attn_focus_mix is not None:
@@ -506,7 +509,9 @@ def export_dpa4(m):
             **({"comp_w": _f(c.adamw_focus_compete_w)} if c.focus_compete and c.n_focus > 1 else {}),
             **({"comp_scale": _f(c.focus_compete_norm.adam_scale), "comp_eps": float(c.focus_compete_norm.eps)} if c.focus_compete and c.n_focus > 1 and c.focus_norm else {}),
             "gexp": _f(G.frame_expand.weight), "gcon": _f(G.frame_contract.weight), "ggate": _f(G.scalar_gate.weight), "gres": _f(G.residual_scale),
-            "post_norm": _eq_norm(b.post_so2_norm, lmax), "ffn_norm": _eq_norm(b.pre_ffn_norms[0], lmax),
+            "ffn_norm": _eq_norm(b.pre_ffn_norms[0], lmax),
+            **({"pre_norm": _eq_norm(b.pre_so2_norm, lmax)} if b.so2_pre_norm else {}),
+            **({"post_norm": _eq_norm(b.post_so2_norm, lmax)} if b.so2_post_norm else {}),
             "flin1": _f(b.ffns[0].so3_linear_1.weight), "flin2": _f(b.ffns[0].so3_linear_2.weight),
             "fl": _f(Fg.grid_op.left_proj.weight), "fr": _f(Fg.grid_op.right_proj.weight), "fo": _f(Fg.grid_op.out_proj.weight), "fgate": _f(Fg.scalar_gate.weight),
         })
@@ -528,7 +533,8 @@ def export_dpa4(m):
         "n_focus": int(c0.n_focus), "focus_tau": float(c0.focus_softmax_tau), "focus_ls": float(c0.focus_label_smoothing),
         "descriptor": "dpa4", "rcut": float(D.rcut), "sel": [int(D.nnei)], "channels": int(D.channels), "lmax": lmax,
         "eps": float(D.eps), "wigner_eps": float(D.wigner_calc.eps), "deg_floor": float(D.deg_norm_floor if D.version >= 1.1 else D.eps),
-        "env_series": list(map(float, D.edge_envelope._series_coefficients)), "rbf_series": list(map(float, D.radial_basis.envelope._series_coefficients)),
+        "env_series": list(map(float, D.edge_envelope._series_coefficients)), "rbf_series": list(map(float, D.radial_basis.envelope._series_coefficients)) if D.radial_basis.envelope is not None else [],
+        **({"gauss_coeff": float(D.radial_basis.gaussian_coeff)} if D.radial_basis.basis_family == "gaussian" else {}),
         "freq": _f(D.radial_basis.adam_freqs),
         "te": _f(D.type_embedding.adam_type_embedding), "tt": _f(S.env_type_embed.adam_type_embedding), "tdim": int(S.type_dim),
         "rf1": _f(net_r[0].w), "rf2": _f(net_r[-1].w), "hrf": int(np.asarray(net_r[0].w).shape[1]),
