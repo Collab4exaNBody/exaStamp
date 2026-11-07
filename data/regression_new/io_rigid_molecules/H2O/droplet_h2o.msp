@@ -20,10 +20,11 @@ configuration:
 #    filter: [".*write_stamp_v4",".*read_stamp_v4",".*species"]
 
 ghost_update_rq:
-  gpu_buffer_pack: true
-  async_buffer_pack: true
-  staging_buffer: true
-  serialize_pack_send: true
+  update_ghost_config:
+    gpu_buffer_pack: true
+    async_buffer_pack: true
+    staging_buffer: true
+    serialize_pack_send: true
 
 # define potential we'll reuse later
 ljrf_rigidmol_force:

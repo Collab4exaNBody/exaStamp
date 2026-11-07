@@ -14,14 +14,16 @@ configuration:
     gpu_block_size: 256
 
 ghost_update_r:
-  gpu_buffer_pack: true
-  async_buffer_pack: false
-  staging_buffer: true
+  update_ghost_config:
+    gpu_buffer_pack: true
+    async_buffer_pack: false
+    staging_buffer: true
 
 update_force_energy_from_ghost:
-  gpu_buffer_pack: true
-  async_buffer_pack: false
-  staging_buffer: true
+  update_ghost_config:
+    gpu_buffer_pack: true
+    async_buffer_pack: false
+    staging_buffer: true
 
 meam_lj_force:
   ghost: false
