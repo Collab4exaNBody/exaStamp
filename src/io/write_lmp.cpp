@@ -260,7 +260,7 @@ namespace exaStamp
             const auto*    ry    = cells[c][field::ry];
             const auto*    rz    = cells[c][field::rz];
             const uint8_t* types = cells[c].field_pointer_or_null(field::type);
-            const size_t*  ids   = cells[c].field_pointer_or_null(field::id);
+            const uint64_t* ids  = cells[c].field_pointer_or_null(field::id);
 
             const int np_cell = static_cast<int>(cells[c].size());
             for (int p = 0; p < np_cell; ++p)
@@ -336,7 +336,7 @@ namespace exaStamp
             const auto*   vx   = cells[c][field::vx];
             const auto*   vy   = cells[c][field::vy];
             const auto*   vz   = cells[c][field::vz];
-            const size_t* ids  = cells[c].field_pointer_or_null(field::id);
+            const uint64_t* ids = cells[c].field_pointer_or_null(field::id);
 
             const int np_cell = static_cast<int>(cells[c].size());
             for (int p = 0; p < np_cell; ++p)
