@@ -93,7 +93,9 @@ static py::object thermodynamic_state_to_python(const exaStamp::ThermodynamicSta
 
   const double n = static_cast<double>(s.particle_count());
   const double per_atom = n > 0 ? conv_energy / n : 0.;
-  const double dof = s.temperature_dof_count();
+  // rigid molecules (ndof > 0): the per-axis temperature is already divided by the degrees of freedom
+  const bool rigidmol = s.ndof_scal() > 0.;
+  const double dof = rigidmol ? 1. : s.temperature_dof_count();
 
   py::dict internal;
   internal["kinetic_energy"]   = vec3(s.kinetic_energy());
@@ -115,6 +117,11 @@ static py::object thermodynamic_state_to_python(const exaStamp::ThermodynamicSta
   d["potential_energy"]    = s.potential_energy() * per_atom;
   d["temperature"]         = s.temperature_scal() / dof * conv_temperature;
   d["temperature_xyz"]     = vec3((conv_temperature / dof) * s.temperature());
+  if( rigidmol )
+  {
+    d["kinetic_temperature"]    = s.kinetic_temperature_scal() * conv_temperature;
+    d["rotational_temperature"] = s.rotational_temperature_scal() * conv_temperature;
+  }
   d["pressure"]            = s.pressure_scal() * conv_pressure;
   d["stress"]              = mat3(conv_pressure * s.full_stress_tensor());
   d["volume"]              = s.volume();
