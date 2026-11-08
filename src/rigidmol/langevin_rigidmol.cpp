@@ -184,7 +184,7 @@ namespace exaStamp
               //application du thermostat
               angmom_m.x = alphaL.x * angmom_m.x + minert.x * sigmaL_langevin.x * vec_alea_L.x;
               angmom_m.y = alphaL.y * angmom_m.y + minert.y * sigmaL_langevin.y * vec_alea_L.y;
-              angmom_m.z = alphaL.z * angmom_m.x + minert.z * sigmaL_langevin.z * vec_alea_L.z;
+              angmom_m.z = alphaL.z * angmom_m.z + minert.z * sigmaL_langevin.z * vec_alea_L.z;
               //retour dans la base du labo
               Mat3d mat_bf_lab = transpose(mat_lab_bf);
               angmom[j] = mat_bf_lab * angmom_m;
