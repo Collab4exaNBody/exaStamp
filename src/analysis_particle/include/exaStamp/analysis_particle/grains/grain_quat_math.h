@@ -21,15 +21,8 @@ under the License.
 #include <ptm_constants.h>
 #include <cmath>
 
-// Quaternion/crystal-symmetry math shared by compute_grain_bond_misorientation.cu (GPU, per-bond
-// disorientation) and grain_segmentation_algo.cpp (host, cluster-level running quaternion-sum
-// accumulation during Node-Pair-Sampling merges). Ported VERBATIM from the vendored PTM library's
-// own lib/ptm_quat.cpp (PM Larsen, MIT license -- the exact routine OVITO's own
-// GrainSegmentationEngine calls), duplicated here rather than linked so the GPU pass can be
-// genuinely CudaCompatible=true (the vendored ptm:: functions are plain host C++, not annotated for
-// device compilation). See compute_grain_bond_misorientation.cu's own header comment for full scope
-// notes (cubic 24-element / hcp "conventional" 12-element groups only, matching OVITO's own
-// GrainSegmentation support -- ICO/diamond/graphene not supported there either).
+// Quaternion and crystal symmetry helpers (from the vendored PTM library, lib/ptm_quat.cpp), usable on
+// GPU. Cubic (FCC, BCC, SC) and hexagonal (HCP) symmetry groups only.
 namespace exaStamp
 {
   ONIKA_HOST_DEVICE_FUNC inline void gb_quat_rot( const double* r, const double* a, double* b )
@@ -78,8 +71,7 @@ namespace exaStamp
     else { n_gen = 0; }
   }
 
-  // Rotates q into its symmetry-equivalent closest to the identity; returns the winning generator
-  // index (needed by gb_map_quaternion_onto_target below), or -1 if unsupported structure_type.
+  // rotates q to its symmetry equivalent closest to identity, returns the generator index (-1: unsupported)
   ONIKA_HOST_DEVICE_FUNC inline int gb_rotate_into_fundamental_zone( int structure_type, double* q )
   {
     double gen[24][4]; int n_gen = 0;
@@ -97,8 +89,7 @@ namespace exaStamp
     return bi;
   }
 
-  // Returns the disorientation angle in DEGREES, or -1.0 if `structure_type` isn't one of the two
-  // symmetry families supported here.
+  // disorientation in degrees, -1 for an unsupported structure type
   ONIKA_HOST_DEVICE_FUNC inline double gb_disorientation_deg( int structure_type, const double* q0, const double* q1 )
   {
     double qinv[4] = { q0[0], -q0[1], -q0[2], -q0[3] };
@@ -109,10 +100,7 @@ namespace exaStamp
     return acos( 2.0*t*t - 1.0 ) * (180.0/M_PI);
   }
 
-  // Ported verbatim from ptm_quat.cpp's own rotation_matrix_to_quaternion (Shepperd's method) --
-  // needed because ptm_fields.cpp materializes PTM's orientation as a rotation-tensor grid field
-  // (Mat3d), not the raw quaternion (which only exists in compute_ptm's own flat, MPI-ghost-unaware
-  // output slot -- unusable here since neighbor bonds can cross into ghost territory).
+  // rotation matrix -> unit quaternion (Shepperd's method)
   ONIKA_HOST_DEVICE_FUNC inline void gb_matrix_to_quat( const Mat3d& R, double* q )
   {
     const double r11=R.m11,r12=R.m12,r13=R.m13, r21=R.m21,r22=R.m22,r23=R.m23, r31=R.m31,r32=R.m32,r33=R.m33;
@@ -128,28 +116,5 @@ namespace exaStamp
     else           { q[0]*=(r21-r12>=0.?1.:-1.); q[1]*=(r31+r13>=0.?1.:-1.); q[2]*=(r32+r23>=0.?1.:-1.); }
     const double n = sqrt( q[0]*q[0]+q[1]*q[1]+q[2]*q[2]+q[3]*q[3] );
     q[0]/=n; q[1]/=n; q[2]/=n; q[3]/=n;
-  }
-
-  // OVITO's own cluster-level merge helper (GrainSegmentationEngine1::calculate_disorientation):
-  // maps q's own symmetry-equivalent orientation closest to qtarget directly onto q (mutated in
-  // place), returns the disorientation (degrees) between the ORIGINAL q and qtarget. Caller is
-  // expected to then accumulate the mapped q (weighted by its own pre-mapping norm) into a running
-  // cluster orientation sum -- see grain_segmentation_algo.cpp's own merge loop.
-  inline double gb_map_quaternion_onto_target( int structure_type, const double* qtarget, double* q )
-  {
-    double qtemp[4]; double qtarget_inv[4] = { qtarget[0], -qtarget[1], -qtarget[2], -qtarget[3] };
-    gb_quat_rot( qtarget_inv, q, qtemp );
-    const int bi = gb_rotate_into_fundamental_zone( structure_type, qtemp );
-    if( bi < 0 ) { return -1.0; }
-    double gen[24][4]; int n_gen=0; gb_generator_table( structure_type, n_gen, gen );
-    double mapped[4]; gb_quat_rot( q, gen[bi], mapped );
-    if( mapped[0] < 0.0 ) { mapped[0]=-mapped[0]; mapped[1]=-mapped[1]; mapped[2]=-mapped[2]; mapped[3]=-mapped[3]; }
-    // disorientation between original q and qtarget (same formula as gb_disorientation_deg, reusing
-    // qtemp which is already q rotated into qtarget's own frame -- avoid a second quat_rot call)
-    double t = qtemp[0];
-    if( t > 1.0 ) t = 1.0; else if( t < -1.0 ) t = -1.0;
-    const double disorientation_deg = acos( 2.0*t*t - 1.0 ) * (180.0/M_PI);
-    q[0]=mapped[0]; q[1]=mapped[1]; q[2]=mapped[2]; q[3]=mapped[3];
-    return disorientation_deg;
   }
 }

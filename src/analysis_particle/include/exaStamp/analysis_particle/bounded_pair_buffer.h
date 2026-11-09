@@ -20,24 +20,16 @@ under the License.
 #include <onika/math/basic_types.h>
 #include <cstddef>
 
-// Compute-pair buffers that cannot overflow, for the structure analysis operators.
-//
-// exaNBody's default ComputePairBuffer2 has MAX_PARTICLE_NEIGHBORS (512) slots, and its overflow
-// check (check_buffer_overflow) is compiled out when NDEBUG is defined. In a release build, an rcut
-// that puts more than 512 neighbors around a particle writes past the end of the buffer and
-// crashes with no message. The two buffers below make that impossible:
-// - NearestNeighborsComputeBuffer<K> keeps only the K nearest neighbors, sorted by distance (for
-//   operators that only look at the K nearest, e.g. PTM and CNA). Any rcut is safe.
-// - OverflowFlagComputeBuffer<UseNeighbors> keeps every neighbor while there is room, and sets
-//   buf.ext.overflow when one had to be dropped, so the operator can report a clear error.
-// Both store at most MaxNeighbors-1 entries, so count never reaches the debug overflow check.
+// Compute-pair buffers that cannot overflow (the default one has no overflow check in release builds):
+// - NearestNeighborsComputeBuffer<K>: the K nearest neighbors, sorted by distance
+// - OverflowFlagComputeBuffer: all neighbors while there is room, then sets buf.ext.overflow
+// Both keep count < MaxNeighbors.
 
 namespace exaStamp
 {
   using namespace exanb;
 
-  // Insertion into a buffer sorted by increasing d2. When the buffer is full, a neighbor farther
-  // than the current farthest one is ignored, otherwise it replaces it.
+  // sorted insertion, the farthest neighbor is dropped when full
   struct NearestNeighborsAppendFunc
   {
     template<class ComputeBufferT, class FieldArraysT, class NbhDataT=double>
@@ -67,8 +59,7 @@ namespace exaStamp
     bool overflow = false;
   };
 
-  // Default append while there is room; afterwards drop the neighbor and raise ext.overflow.
-  // The operator functor must read and clear buf.ext.overflow for each particle.
+  // the functor must read and clear buf.ext.overflow
   struct OverflowFlagAppendFunc
   {
     template<class ComputeBufferT, class FieldArraysT, class NbhDataT=double>
@@ -83,7 +74,6 @@ namespace exaStamp
   template<bool UseNeighbors>
   using OverflowFlagComputeBuffer = ComputePairBuffer2< false, UseNeighbors, PairBufferOverflowFlag, OverflowFlagAppendFunc >;
 
-  // Largest number of neighbors an OverflowFlagComputeBuffer can hold
   template<bool UseNeighbors>
   static inline constexpr size_t overflow_flag_buffer_capacity = OverflowFlagComputeBuffer<UseNeighbors>::MaxNeighbors - 1;
 }

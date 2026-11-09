@@ -27,38 +27,16 @@ under the License.
 #include <exanb/compute/compute_cell_particle_pairs.h>
 #include <exanb/particle_neighbors/chunk_neighbors.h>
 
-#include <ptm_constants.h> // PTM_MATCH_* only (vendored PTM headers, include/)
+#include <ptm_constants.h>
 #include <exaStamp/analysis_particle/grains/grain_quat_math.h>
 
 #include <cmath>
 #include <cstdint>
 #include <limits>
 
-// GPU-compatible pass (i) of grain segmentation, following OVITO's GrainSegmentationEngine1
-// (crystalanalysis/modifier/grains): for every chunk-neighbor bond of a PTM-classified atom, records
-// the neighbor's global id, real bond length, and -- if both atoms share the same (supported)
-// structure type -- the crystal-symmetry-aware disorientation angle. This is exactly OVITO's
-// `_neighborBonds` list, reused downstream for BOTH the misorientation-threshold graph-clustering
-// step (compute_grain_clusters) and Dijkstra-by-distance orphan-atom adoption -- same reuse OVITO's
-// own engine makes (`_neighborBonds`/`noncrystallineBonds` are the same underlying array).
-//
-// Disorientation formula (`quat_rot`/`rotate_quaternion_into_fundamental_zone`/`quat_disorientation_
-// cubic`/`quat_disorientation_hcp_conventional`, and the 24-element cubic / 12-element "conventional"
-// hcp point-group quaternion tables) is ported VERBATIM from the vendored PTM library's own
-// lib/ptm_quat.cpp (PM Larsen, MIT license, the exact routine OVITO's own grains modifier
-// calls) -- duplicated here rather than linked, specifically so this pass can be genuinely
-// CudaCompatible=true: the vendored ptm:: functions are plain host C++, not annotated for device
-// compilation, and ptm_type/ptm_orientation (compute_ptm.cu) are themselves already a hard host-only
-// bottleneck upstream, so linking against them would have silently made "GPU-compatible" a fiction.
-//
-// Scope matches OVITO's own GrainSegmentation: only FCC/BCC/SC (cubic, 24-element symmetry group)
-// and HCP (12-element "conventional" hexagonal group) support disorientation/clustering -- ICO has
-// no supported symmetry group there either (same gap OVITO itself has, see
-// doc/grain_segmentation_workflow.tex), diamond/graphene aren't checked by compute_ptm.cu in the first place.
-// Coherent-interface handling (OVITO's optional HCP-in-FCC twin/stacking-fault reclassification,
-// `handleCoherentInterfaces`) is NOT implemented -- not requested, and a materially separate feature
-// (its own Dijkstra flood-fill + hcp<->fcc quaternion mapping); every HCP-inside-FCC boundary is
-// treated as a genuine grain boundary for now.
+// Grain segmentation, pass (i), GPU compatible: for every neighbor bond of a particle, records the
+// neighbor's id, the bond length and, if both atoms have the same cubic or hexagonal PTM structure,
+// their disorientation in degrees when under misorientation_threshold (-1 otherwise).
 namespace exaStamp
 {
   using namespace exanb;
@@ -117,11 +95,7 @@ namespace exaStamp
       }
       else
       {
-        // Full: keep the MAX_GRAIN_NEIGHBORS(24) NEAREST bonds seen so far, not just the first ones
-        // encountered in traversal order (same "sorted by true distance" principle compute_ptm.cu's
-        // own PTMFunctor already applies) -- an unsorted cap can silently drop the closest bonds,
-        // which matters both for clustering fidelity and, more importantly, for orphan-adoption
-        // reachability (a dropped near bond can be the only short path across a boundary).
+        // full: keep the MAX_GRAIN_NEIGHBORS nearest bonds
         int farthest = 0; double farthest_d = ctx.ext.nbh_distance[0];
         for(int k=1;k<MAX_GRAIN_NEIGHBORS;k++) { if( ctx.ext.nbh_distance[k] > farthest_d ) { farthest_d = ctx.ext.nbh_distance[k]; farthest = k; } }
         if( dist >= farthest_d ) { return; }
@@ -130,7 +104,7 @@ namespace exaStamp
       ctx.ext.nbh_id[idx] = cells[cell_b][field::id][p_b];
       ctx.ext.nbh_distance[idx] = dist;
 
-      double disorientation = -1.0; // sentinel: not a valid crystalline-clustering candidate bond
+      double disorientation = -1.0; // not a clustering candidate
       const int type_b = static_cast<int>( cells[cell_b][m_type_field][p_b] );
       if( ctx.ext.central_type != PTM_MATCH_NONE && type_b == ctx.ext.central_type )
       {
@@ -180,16 +154,16 @@ namespace exaStamp
   {
     ADD_SLOT( GridT                     , grid             , INPUT , REQUIRED );
     ADD_SLOT( Domain                    , domain           , INPUT , REQUIRED );
-    ADD_SLOT( double                    , rcut             , INPUT , REQUIRED , DocString{"Neighbor search cutoff -- same convention as compute_ptm's own rcut, should match/exceed it"} );
-    ADD_SLOT( double                    , misorientation_threshold , INPUT , 4.0 , DocString{"Hard ceiling (degrees) on a candidate crystalline-clustering bond -- matches OVITO's own hardcoded 4 degree GrainSegmentation ceiling, applied here (not downstream) so the clustering pass only ever sees already-filtered candidates"} );
-    ADD_SLOT( std::string               , struct_field     , INPUT , std::string("ptm_type") , DocString{"Name of the per-particle PTM structure-type field (see ptm_fields). Must have fresh ghost data -- run ghost_update_opt on it first."} );
-    ADD_SLOT( std::string               , orient_field     , INPUT , std::string("ptm_orientation") , DocString{"Name of the per-particle PTM lattice-orientation rotation-tensor field (see ptm_fields). Must have fresh ghost data -- run ghost_update_opt on it first."} );
+    ADD_SLOT( double                    , rcut             , INPUT , REQUIRED , DocString{"Neighbor search cutoff, at least the rcut of compute_ptm"} );
+    ADD_SLOT( double                    , misorientation_threshold , INPUT , 4.0 , DocString{"Largest disorientation (degrees) of a clustering candidate bond"} );
+    ADD_SLOT( std::string               , struct_field     , INPUT , std::string("ptm_type") , DocString{"PTM structure-type field (ptm_fields), ghosts updated"} );
+    ADD_SLOT( std::string               , orient_field     , INPUT , std::string("ptm_orientation") , DocString{"PTM orientation field (ptm_fields), ghosts updated"} );
     ADD_SLOT( exanb::GridChunkNeighbors , chunk_neighbors  , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
     ADD_SLOT( double                    , rcut_max         , INPUT_OUTPUT , 0.0 , DocString{"Updated max rcut"} );
-    ADD_SLOT( onika::memory::CudaMMVector<uint64_t> , grain_bond_id            , OUTPUT , DocString{"Flat per-particle neighbor-bond global-id buffer, MAX_GRAIN_NEIGHBORS(24) slots/particle, indexed [cell_particle_offset[cell]+particle]*24+k; empty slots hold UINT64_MAX"} );
-    ADD_SLOT( onika::memory::CudaMMVector<double>   , grain_bond_distance      , OUTPUT , DocString{"Same shape as grain_bond_id: real Euclidean bond length, for every recorded bond (regardless of crystalline-candidate status)"} );
-    ADD_SLOT( onika::memory::CudaMMVector<double>   , grain_bond_disorientation , OUTPUT , DocString{"Same shape as grain_bond_id: disorientation angle in degrees for a same-structure-type bond under the threshold, -1.0 otherwise (not a valid clustering candidate -- still usable for orphan adoption via grain_bond_distance)"} );
-    ADD_SLOT( onika::memory::CudaMMVector<int>      , grain_bond_count         , OUTPUT , DocString{"Per-particle number of valid entries actually written (<=24)"} );
+    ADD_SLOT( onika::memory::CudaMMVector<uint64_t> , grain_bond_id            , OUTPUT , DocString{"Neighbor ids, MAX_GRAIN_NEIGHBORS slots per particle at (cell_particle_offset[cell]+particle)*MAX_GRAIN_NEIGHBORS, empty slots UINT64_MAX"} );
+    ADD_SLOT( onika::memory::CudaMMVector<double>   , grain_bond_distance      , OUTPUT , DocString{"Bond lengths, same layout"} );
+    ADD_SLOT( onika::memory::CudaMMVector<double>   , grain_bond_disorientation , OUTPUT , DocString{"Bond disorientations in degrees, -1 if not a clustering candidate, same layout"} );
+    ADD_SLOT( onika::memory::CudaMMVector<int>      , grain_bond_count         , OUTPUT , DocString{"Number of bonds per particle"} );
 
   public:
     inline void execute () override final
@@ -247,11 +221,9 @@ namespace exaStamp
     {
       return R"EOF(
 
-Pass (i) of grain segmentation: for every chunk-neighbor bond, records the neighbor's global id, real
-distance, and (if both atoms share the same supported PTM structure type -- FCC/BCC/SC or HCP) the
-crystal-symmetry-aware disorientation angle in degrees, gated at misorientation_threshold (OVITO's own
-hardcoded 4 degree ceiling by default). GPU-compatible. Feeds compute_grain_clusters (Node-Pair-
-Sampling clustering) and its own orphan-atom-adoption pass.
+Grain segmentation, pass (i): per-bond neighbor id, length and disorientation (degrees, cubic and
+hexagonal structures, under misorientation_threshold) for compute_grain_clusters. GPU compatible.
+The PTM fields must have up-to-date ghosts.
 
 Usage example:
 
@@ -264,7 +236,6 @@ compute_grain_bond_misorientation: { rcut: 3.6 ang }
     }
   };
 
-  // === register factory ===
   ONIKA_AUTORUN_INIT(compute_grain_bond_misorientation)
   {
     OperatorNodeFactory::instance()->register_factory( "compute_grain_bond_misorientation", make_grid_variant_operator< ComputeGrainBondMisorientation > );

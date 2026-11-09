@@ -26,37 +26,19 @@ namespace exaStamp
 {
   using namespace exanb;
 
-  // This rank's share of a 3D Delaunay tessellation: only tetrahedra "owned" by this rank are
-  // kept (centroid falls in one of this rank's owned, non-ghost cells -- see compute_delaunay.cpp),
-  // so combining every rank's tessellation gives the whole system with neither gaps nor
-  // duplicates, same owned/ghost partition already used everywhere else in this codebase.
-  // vertices/tetrahedra use a compacted local numbering (only points touched by an owned
-  // tetrahedron are kept), independent from the particle grid's own indexing.
+  // This rank's tetrahedra (centroid in an owned cell, see compute_delaunay), with a compact local
+  // numbering of the vertices they use.
   struct DelaunayTessellation
   {
     std::vector<Vec3d> vertices;
     std::vector<std::array<uint32_t,4>> tetrahedra;
-    // vertex_particle_index[v] is the flat particle index (grid->cell_particle_offset_data()
-    // convention: cell_particle_offset[cell]+particle) of vertices[v] -- lets a consumer (e.g.
-    // write_delaunay_vtk's color_field) look up any per-particle grid field for a tet's vertices,
-    // parallel to `vertices`.
+    // flat particle index of each vertex (cell_particle_offset[cell] + particle)
     std::vector<uint32_t> vertex_particle_index;
 
-    // vertex_global_id[v] is vertices[v]'s own persistent, cross-rank-comparable particle id
-    // (field::id) -- unlike vertex_particle_index (a purely LOCAL flat index, meaningless outside
-    // this rank), this is the SAME value on every rank holding a copy of that particle (owned or
-    // ghost, since exaStamp's own ghost duplication preserves id verbatim) -- lets a consumer
-    // recognize "this is literally the same real atom" across ranks (e.g. to stitch per-rank
-    // results computed on the tessellation at domain boundaries).
+    // particle id of each vertex, same on every rank
     std::vector<uint64_t> vertex_global_id;
 
-    // vertex_is_owned[v]: true if vertices[v] is one of this rank's own OWNED particles, false if
-    // it's a ghost copy (of either a periodic image or a cross-rank neighbor). Only meaningful when
-    // compute_delaunay was run with keep_ghost_tets: true (the default, owned-only mode never keeps
-    // a ghost-centroid tet at all, so every vertex in that mode is trivially owned) -- lets a
-    // consumer that DOES see ghost-region tets (e.g. one growing a mesh-based construction past
-    // this rank's own owned/ghost seam instead of stopping there) tell when it has crossed out
-    // of genuinely owned territory into redundant, also-computed-by-a-neighbor-rank ghost territory.
+    // false for ghost vertices (only possible with keep_ghost_tets)
     std::vector<uint8_t> vertex_is_owned;
   };
 }

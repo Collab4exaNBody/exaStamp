@@ -29,23 +29,9 @@ under the License.
 #include <sstream>
 #include <filesystem>
 
-// Writes this rank's DelaunayTessellation (see compute_delaunay) as a VTK unstructured grid
-// piece, plus (rank 0 only) a .pvtu master file referencing every rank's piece -- same
-// subdirectory/master-file convention as exaNBody's write_grid_vtk.cpp, so opening the single
-// .pvtu file in ParaView shows the whole system's tessellation across every MPI rank at once.
-// Each rank only ever wrote tetrahedra it owns (see compute_delaunay's centroid-in-owned-cell
-// rule), so the combined result has neither gaps nor duplicated cells at rank boundaries.
-//
-// color_fields (optional list) generalizes this to any per-particle scalar field (PTM's ptm_type
-// via ptm_fields, or any other field::mk_generic_real): each tetrahedron gets one CellData value
-// per listed field, the average of its 4 vertices' field value, looked up via
-// DelaunayTessellation::vertex_particle_index (see compute_delaunay.cpp) -- writing several at
-// once lets ParaView switch the active coloring between them without re-running the pipeline.
-// A vertex that happens to be a ghost particle (a tet near this rank's boundary can have some of
-// its 4 vertices be ghost copies) only has a meaningful value if something already synchronized
-// that field's ghost copies; otherwise it reads as whatever default that ghost cell's field has
-// (typically 0), which biases boundary tets' average slightly -- acceptable for visualization,
-// not corrected here.
+// Writes each rank's DelaunayTessellation as a .vtu piece, plus a .pvtu master file on rank 0.
+// color_fields: per-tetrahedron average of per-particle scalar fields (ghost values are used as they
+// are, run a ghost update on the fields for exact values at rank boundaries).
 namespace exaStamp
 {
   using namespace exanb;
@@ -57,7 +43,7 @@ namespace exaStamp
     ADD_SLOT( GridT                , grid                 , INPUT , REQUIRED );
     ADD_SLOT( DelaunayTessellation , delaunay_tessellation, INPUT , REQUIRED );
     ADD_SLOT( std::string          , filename             , INPUT , std::string("delaunay") );
-    ADD_SLOT( std::vector<std::string> , color_fields     , INPUT , std::vector<std::string>{} , DocString{"Names of per-particle scalar fields (field::mk_generic_real, e.g. PTM's ptm_type written by ptm_fields) to average over each tetrahedron's 4 vertices and write as extra CellData arrays (one per field), so ParaView can switch the active coloring between them. Leave empty to skip."} );
+    ADD_SLOT( std::vector<std::string> , color_fields     , INPUT , std::vector<std::string>{} , DocString{"Per-particle scalar fields averaged over each tetrahedron, one CellData array per field"} );
 
   public:
     inline void execute () override final
@@ -91,9 +77,7 @@ namespace exaStamp
       const size_t nb_points = mesh.vertices.size();
       const size_t nb_cells = mesh.tetrahedra.size();
 
-      // Optional per-tet coloring: average each listed field over a tet's 4 vertices, looked up
-      // via vertex_particle_index. Needs the deep cells_accessor() (not the raw cells() pointer)
-      // since mk_generic_real is a runtime/dynamic field, not a compile-time FieldId.
+      // per-tetrahedron average of each color field
       std::vector<std::vector<double>> tet_color( color_fields->size() );
       if( ! color_fields->empty() )
       {
@@ -190,16 +174,9 @@ namespace exaStamp
     {
       return R"EOF(
 
-Writes a DelaunayTessellation (see compute_delaunay) to VTK unstructured grid format for ParaView.
-Each MPI rank writes its own piece (<filename>/piece<rank>.vtu); rank 0 additionally writes a
-master <filename>.pvtu referencing every piece. Open the .pvtu file in ParaView (not the individual
-.vtu pieces) to see the whole system's tessellation across every rank at once, with no gaps or
-duplicated cells at rank boundaries.
-
-color_fields (optional list) additionally colors each tetrahedron by any number of per-particle
-scalar grid fields (field::mk_generic_real -- e.g. PTM's ptm_type/ptm_rmsd, written by ptm_fields):
-each tet gets one CellData array per listed field, the average of its 4 vertices' field value, so
-ParaView can switch the active coloring between them without re-running the pipeline.
+Writes compute_delaunay's tessellation as VTK: <filename>/piece<rank>.vtu per rank and
+<filename>.pvtu on rank 0 (open this one). color_fields: per-tetrahedron average of per-particle
+scalar fields, one CellData array each.
 
 Usage example:
 
@@ -212,7 +189,6 @@ write_delaunay_vtk: { filename: "paraview/delaunay", color_fields: [ ptm_type, p
     }
   };
 
-  // === register factories ===
   ONIKA_AUTORUN_INIT(write_delaunay_vtk)
   {
     OperatorNodeFactory::instance()->register_factory( "write_delaunay_vtk", make_grid_variant_operator< WriteDelaunayVTK > );

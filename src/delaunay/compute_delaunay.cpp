@@ -32,23 +32,9 @@ under the License.
 
 #include <vector>
 
-// Builds a 3D Delaunay tessellation of this rank's owned+ghost particles using Geogram's
-// PeriodicDelaunay3d, constructed in NON-periodic mode -- exaStamp's own ghost particles already
-// are literal duplicated position copies for both periodic images and cross-rank neighbors (the
-// same ghost layer every other operator in this codebase relies on), so Geogram never needs to
-// handle periodicity itself. MPI parallelism therefore falls out of exaStamp's existing domain
-// decomposition (one independent tessellation per rank); OMP parallelism falls out of
-// PeriodicDelaunay3d's own internal multithreading (confirmed OpenMP-backed in this build:
-// libgeogram.so links libgomp and calls omp_get_max_threads/etc).
-//
-// Ownership/trust filtering: a tetrahedron has no fixed radius of influence the way a physical
-// interaction cutoff does, so tets near the outer edge of the ghost halo aren't guaranteed
-// correct. Rather than track a separate correctness margin, ownership and correctness are handled
-// by the SAME single rule: a tetrahedron is kept by this rank only if its centroid falls inside
-// one of this rank's own OWNED (non-ghost) cells. This guarantees no gaps and no duplicates once
-// every rank's output is combined (every point in space belongs to exactly one rank's owned
-// region), and it also discards exactly the tets that could be unreliable, since those can only
-// occur out near the fringe of the ghost halo -- far from any owned cell.
+// Delaunay tessellation (Geogram, non-periodic) of this rank's owned and ghost particles. A tetrahedron
+// is kept if its centroid lies in an owned cell, so the ranks' outputs combine without gaps or
+// duplicates and the unreliable tetrahedra near the ghost fringe are dropped.
 namespace exaStamp
 {
   using namespace exanb;
@@ -59,12 +45,12 @@ namespace exaStamp
     ADD_SLOT( GridT               , grid                 , INPUT );
     ADD_SLOT( Domain              , domain               , INPUT , REQUIRED );
     ADD_SLOT( DelaunayTessellation, delaunay_tessellation, OUTPUT );
-    ADD_SLOT( bool                , keep_ghost_tets      , INPUT , false , DocString{"false (default): keep only tets whose centroid falls in an owned cell -- the original no-gaps/no-duplicates convention every other consumer (write_delaunay_vtk, the 96000-tet MPI/ghost regression test, ...) relies on. true: ALSO keep tets whose centroid falls in a ghost cell (still discarding genuinely out-of-block ones) -- gives each rank a full local view extending into its own ghost halo, deliberately overlapping with neighboring ranks' own equally-extended view of the same shared region, so a consumer can fully process a structure (e.g. a defect) that sits at or straddles this rank's own owned/ghost seam, rather than being cut off right there. Populates the new DelaunayTessellation::vertex_is_owned so such a consumer can still tell owned from ghost territory and clamp/stitch accordingly."} );
+    ADD_SLOT( bool                , keep_ghost_tets      , INPUT , false , DocString{"Also keep tetrahedra whose centroid lies in a ghost cell (overlapping with neighbor ranks); see DelaunayTessellation::vertex_is_owned"} );
 
   public:
     inline void execute () override final
     {
-      GEO::initialize(); // idempotent (function-local static singleton), safe to call every step
+      GEO::initialize(); // idempotent
 
       DelaunayTessellation& result = *delaunay_tessellation;
       result.vertices.clear();
@@ -76,22 +62,10 @@ namespace exaStamp
       const size_t n_cells = grid->number_of_cells();
       auto cells = grid->cells();
 
-      // point_flat_index[pv] is pv's flat particle index in grid->cell_particle_offset_data()'s
-      // own convention -- read explicitly here rather than assumed equal to pv, so any consumer
-      // of DelaunayTessellation::vertex_particle_index can look up other per-particle data
-      // (PTM's flat output buffers, compute_bispectrum's, ...) without relying on iteration-order
-      // coincidence.
+      // point_flat_index[pv]: flat particle index (cell_particle_offset[cell] + particle)
       const size_t * const cell_particle_offset = grid->cell_particle_offset_data();
-      // `points` stays in the SAME raw/reduced (pre-xform) frame as field::rx/ry/rz -- this is the
-      // frame domain_periodic_location()/cell partitioning itself operates in (see the classification
-      // loop below, and its own comment), so it's the right one for CLASSIFYING which cell a point
-      // falls in. It is NOT, in general, real Euclidean space -- Geogram's own Delaunay computation
-      // (nearest-neighbor/circumsphere tests) is only geometrically meaningful in real space, and a
-      // non-trivial xform (shear, non-uniform scale) can change which triangulation is actually
-      // Delaunay between the two frames. `points_real` (== `points` whenever the domain's own xform
-      // is the identity, which every test case run so far uses -- this bug was real but silently
-      // masked until now) is the one actually fed to Geogram, and the one whose values become
-      // DelaunayTessellation::vertices, so every downstream consumer gets real physical coordinates.
+      // `points`: reduced (pre-xform) frame, used for cell classification; `points_real`: real coordinates,
+      // given to Geogram (Delaunay is only meaningful in real space) and output as vertices
       std::vector<double> points;
       std::vector<double> points_real;
       std::vector<uint32_t> point_flat_index;
@@ -129,20 +103,13 @@ namespace exaStamp
       delaunay.set_vertices( static_cast<GEO::index_t>(nb_points), points_real.data() );
       delaunay.compute();
 
-      // classify + compact: keep only tets whose centroid falls in one of this rank's owned cells
+      // keep tetrahedra whose centroid lies in an owned cell
       const IJK local_dims = grid->dimension();
       const IJK block_start = grid->block().start;
       const IJK domain_dims = domain->grid_dimension();
 
-      // Ranks whose ghost-inclusive local block straddles a periodic domain edge have a
-      // block_start that can be negative (or block_start+local_dims > domain_dims) -- e.g.
-      // rank 0 on a periodic axis owns global cells [0,5) and ghost_layers=2 gives block_start=-2.
-      // domain_periodic_location() always wraps into the canonical [0,domain_dims) range, which
-      // is the WRONG representation to subtract block_start from in that case (it would place
-      // the cell far outside this rank's local extent even though it's really a nearby ghost
-      // cell, just expressed on "the other side" of the wrap) -- so resolve each axis directly
-      // against this rank's own local_dims/block_start instead of going through the domain's
-      // canonical wrapped frame.
+      // near a periodic edge block_start can be negative: resolve each axis against the local block, not the
+      // wrapped domain frame
       auto resolve_local_axis = [&]( ssize_t raw, ssize_t start, ssize_t local_n, ssize_t dom_n, bool periodic ) -> ssize_t
       {
         ssize_t local = raw - start;
@@ -158,7 +125,7 @@ namespace exaStamp
       size_t n_kept = 0;
       size_t n_oob = 0;
       size_t n_ghost = 0;
-      const size_t nb_cells_delaunay = delaunay.nb_cells(); // finite cells only (keeps_infinite()==false by default)
+      const size_t nb_cells_delaunay = delaunay.nb_cells(); // finite cells only
       for(size_t t=0;t<nb_cells_delaunay;t++)
       {
         uint32_t v[4];
@@ -171,8 +138,7 @@ namespace exaStamp
         }
         centroid = centroid * 0.25;
 
-        // raw (unwrapped) global cell coordinates -- same "reduced" position frame as field::rx/ry/rz,
-        // no xform needed (cell partitioning operates in that frame, same as domain_periodic_location).
+        // unwrapped global cell coordinates, reduced frame
         const Vec3d rel_pos = centroid - domain->origin();
         const IJK raw_ijk = make_ijk( rel_pos / domain->cell_size() );
 
@@ -220,20 +186,10 @@ namespace exaStamp
     {
       return R"EOF(
 
-Builds a 3D Delaunay tessellation of this rank's owned+ghost particles, using Geogram's
-PeriodicDelaunay3d in non-periodic mode (exaStamp's own ghost layer already encodes
-periodicity/domain decomposition, so Geogram doesn't need to). By default (keep_ghost_tets: false),
-only tetrahedra whose centroid falls in one of this rank's own owned (non-ghost) cells are kept, in
-a DelaunayTessellation OUTPUT slot (compacted local vertex/tetrahedra numbering) -- this guarantees
-no gaps or duplicates when every rank's output is combined, and discards exactly the tets that could
-be unreliable near the ghost fringe. See write_delaunay_vtk to export the result.
-
-With keep_ghost_tets: true, ghost-centroid tets are ALSO kept (only genuinely out-of-block ones are
-discarded), giving each rank a full local view extending into its own ghost halo -- deliberately
-overlapping with neighboring ranks' own equally-extended view of the same shared region, so a
-consumer needing to grow something (a circuit, a region) across what would otherwise be a hard
-owned/ghost cutoff has room to do so. DelaunayTessellation::vertex_is_owned distinguishes owned from
-ghost vertices in this mode (trivially all-owned in the default mode).
+Delaunay tessellation (Geogram) of each rank's owned and ghost particles. Only tetrahedra whose
+centroid lies in an owned cell are kept (no gaps or duplicates across ranks). With keep_ghost_tets,
+tetrahedra with a ghost-cell centroid are kept too, and DelaunayTessellation::vertex_is_owned tells
+owned from ghost vertices. Export with write_delaunay_vtk.
 
 Usage example:
 
@@ -244,7 +200,6 @@ write_delaunay_vtk: { filename: "delaunay" }
     }
   };
 
-  // === register factories ===
   ONIKA_AUTORUN_INIT(compute_delaunay)
   {
     OperatorNodeFactory::instance()->register_factory( "compute_delaunay", make_grid_variant_operator< ComputeDelaunay > );

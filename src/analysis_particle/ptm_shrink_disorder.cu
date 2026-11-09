@@ -33,23 +33,8 @@ under the License.
 
 #include <vector>
 
-// Runs right after compute_ptm: recovers atoms whose own PTM match was rejected (ptm_type ==
-// PTM_MATCH_NONE) by majority vote among their physical neighbors' CURRENT ptm_type -- if a clear
-// majority already match some structure, this atom is very likely part of the same
-// undistorted lattice, just individually noisier/more strained than PTM's own rmsd_cutoff
-// tolerates, not a genuine defect. Repeated for n_iterations, letting newly-recovered atoms help
-// recover their own neighbors in turn (matching a real, recovered atom's own neighbors are
-// themselves probably fine too -- the disordered region actually SHRINKS each pass).
-//
-// Typical use: keep the elastically strained lattice around a defect (e.g. a dislocation core's
-// long-range strain field) classified as crystalline, so that only the genuinely disordered
-// atoms remain PTM_MATCH_NONE.
-//
-// Uses ComputePairBuffer2<false,true> (UseNeighbors=true) to get each neighbor's own (cell,part)
-// identity directly from the buffer (DefaultComputePairBufferAppendFunc already stores this
-// unconditionally, just a no-op when UseNeighbors=false -- see compute_pair_buffer.h) rather than
-// compute_ptm's flat-buffer-index-lookup pattern, since here (unlike compute_ptm's own env
-// construction) neighbor IDENTITY, not just relative position, is what's actually needed.
+// After compute_ptm: an unmatched atom takes the structure type shared by a majority of its neighbors
+// within rcut, repeated n_iterations times. Keeps strained lattice around defects crystalline.
 namespace exaStamp
 {
   using namespace exanb;
@@ -57,27 +42,26 @@ namespace exaStamp
   struct PTMShrinkDisorderFunctor
   {
     const size_t * const __restrict__ m_cell_particle_offset = nullptr;
-    const double * const __restrict__ m_struct_type_in = nullptr;  // this iteration's starting point (read-only)
-    double * const __restrict__ m_struct_type_out = nullptr;       // next iteration's buffer, pre-seeded with a copy of m_struct_type_in
+    const double * const __restrict__ m_struct_type_in = nullptr;  // previous pass
+    double * const __restrict__ m_struct_type_out = nullptr;       // this pass
     double m_min_fraction = 0.5;
-    long * const m_n_overflow = nullptr; // particles with more neighbors within rcut than the buffer holds
+    long * const m_n_overflow = nullptr; // particles with more neighbors than the buffer holds
 
     template<class ComputeBufferT, class CellParticlesT>
     inline void operator () ( int jnum, ComputeBufferT& buf, CellParticlesT /*cells*/ ) const
     {
       if( buf.ext.overflow )
       {
-        // the vote uses every neighbor within rcut: a truncated set would give a wrong result
+        // the vote needs every neighbor within rcut
         buf.ext.overflow = false;
 #       pragma omp atomic
         ++ (*m_n_overflow);
         return;
       }
       const size_t i = m_cell_particle_offset[buf.cell] + buf.part;
-      if( m_struct_type_in[i] != static_cast<double>(PTM_MATCH_NONE) || jnum <= 0 ) { return; } // already matched, or isolated -- untouched
+      if( m_struct_type_in[i] != static_cast<double>(PTM_MATCH_NONE) || jnum <= 0 ) { return; }
 
-      // small fixed-size histogram: ENABLED_FLAGS in compute_ptm.cu only ever produces
-      // PTM_MATCH_NONE(0)/FCC(1)/HCP(2)/BCC(3)/ICO(4)/SC(5)
+      // structure types 0..5 (PTM_MATCH_NONE..SC)
       int counts[6] = {0,0,0,0,0,0};
       for(int j=0;j<jnum;j++)
       {
@@ -88,7 +72,7 @@ namespace exaStamp
       }
 
       int best_t = -1, best_count = 0;
-      for(int t=1;t<6;t++) { if( counts[t] > best_count ) { best_count = counts[t]; best_t = t; } } // skip t=0 (NONE)
+      for(int t=1;t<6;t++) { if( counts[t] > best_count ) { best_count = counts[t]; best_t = t; } }
 
       if( best_t >= 1 && static_cast<double>(best_count)/static_cast<double>(jnum) >= m_min_fraction )
       {
@@ -102,13 +86,13 @@ namespace exaStamp
   {
     ADD_SLOT( GridT               , grid            , INPUT_OUTPUT );
     ADD_SLOT( Domain              , domain          , INPUT , REQUIRED );
-    ADD_SLOT( double              , rcut            , INPUT , REQUIRED , DocString{"Neighbor search cutoff -- same convention as compute_ptm's own rcut, typically the exact same value"} );
+    ADD_SLOT( double              , rcut            , INPUT , REQUIRED , DocString{"Neighbor search cutoff, usually the rcut of compute_ptm"} );
     ADD_SLOT( exanb::GridChunkNeighbors , chunk_neighbors , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
     ADD_SLOT( double              , rcut_max        , INPUT_OUTPUT , 0.0 , DocString{"Updated max rcut"} );
-    ADD_SLOT( onika::memory::CudaMMVector<double> , ptm_struct_type , INPUT_OUTPUT , DocString{"compute_ptm's flat structure-type buffer, refined in place: an unmatched (PTM_MATCH_NONE) particle whose neighbor majority already matches some structure gets that structure's type"} );
-    ADD_SLOT( double              , min_neighbor_fraction , INPUT , 0.5 , DocString{"Minimum fraction of an unmatched particle's neighbors that must agree on the same structure type for it to be recovered"} );
-    ADD_SLOT( long                , n_iterations    , INPUT , 3 , DocString{"Number of majority-vote passes -- each pass only sees the PREVIOUS pass's result, so a recovered particle can help recover its own neighbors in a later pass, letting the recovered region grow outward from confidently-matched bulk toward a genuine defect core, not just one shell deep"} );
-    ADD_SLOT( long                , n_recovered     , OUTPUT , DocString{"Number of particles recovered (were PTM_MATCH_NONE, now assigned a structure type) across all iterations"} );
+    ADD_SLOT( onika::memory::CudaMMVector<double> , ptm_struct_type , INPUT_OUTPUT , DocString{"compute_ptm structure types, updated in place"} );
+    ADD_SLOT( double              , min_neighbor_fraction , INPUT , 0.5 , DocString{"Fraction of the neighbors that must share a structure type"} );
+    ADD_SLOT( long                , n_iterations    , INPUT , 3 , DocString{"Number of passes, each one using the previous result"} );
+    ADD_SLOT( long                , n_recovered     , OUTPUT , DocString{"Number of recovered particles on this rank"} );
 
   public:
     inline void execute () override final
@@ -129,7 +113,7 @@ namespace exaStamp
       std::vector<double> buf_a( ptm_struct_type->begin(), ptm_struct_type->end() );
       std::vector<double> buf_b( buf_a );
 
-      using ComputeBuffer = OverflowFlagComputeBuffer<true>; // UseNeighbors=true: buf.nbh.get(j,cell,part) per neighbor
+      using ComputeBuffer = OverflowFlagComputeBuffer<true>; // with neighbor (cell,particle)
       ComputePairOptionalLocks<false> cp_locks {};
       exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
       auto compute_buf = make_compute_pair_buffer<ComputeBuffer>();
@@ -150,7 +134,7 @@ namespace exaStamp
 
       for(long iter=0; iter<n_iter; iter++)
       {
-        buf_b = buf_a; // unmatched stays unmatched this pass unless recovered below
+        buf_b = buf_a;
         long n_overflow = 0;
         PTMShrinkDisorderFunctor compute_op = { cell_particle_offset, buf_a.data(), buf_b.data(), min_fraction, &n_overflow };
 
@@ -192,15 +176,9 @@ namespace exaStamp
     {
       return R"EOF(
 
-Recovers atoms whose own PTM match was rejected (compute_ptm's ptm_type == PTM_MATCH_NONE) by
-majority vote among their physical neighbors' current structure type: if a clear majority
-(min_neighbor_fraction) already match some structure, this atom is very likely part of the same
-undistorted lattice -- just individually noisier/more strained than compute_ptm's own rmsd_cutoff
-tolerates, not a genuine defect. Run right after compute_ptm, before ptm_fields/compute_delaunay.
-Repeated for n_iterations so a recovered particle can help recover its own neighbors in a later
-pass. A genuine dislocation core's own neighbors are themselves disordered too, so there's no
-majority to recover it with -- this only shrinks spurious/noisy misclassification, not real
-defects.
+Gives an atom with no PTM structure the structure type shared by at least min_neighbor_fraction of
+its neighbors within rcut, n_iterations times. Run right after compute_ptm. Defect cores, whose
+neighbors are disordered too, stay unmatched.
 
 Usage example:
 
@@ -212,7 +190,6 @@ ptm_fields: {}
     }
   };
 
-  // === register factories ===
   ONIKA_AUTORUN_INIT(ptm_shrink_disorder)
   {
     OperatorNodeFactory::instance()->register_factory( "ptm_shrink_disorder", make_grid_variant_operator< PTMShrinkDisorder > );

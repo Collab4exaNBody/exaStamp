@@ -39,64 +39,29 @@ under the License.
 #include <cmath>
 #include <algorithm>
 
-// Per-particle structure identification + local lattice orientation via PTM (Polyhedral Template
-// Matching, Larsen, Schmidt & Schiotz, Model. Simul. Mater. Sci. Eng. 24 (2016) 055007), vendored
-// from OVITO's bundled copy (lib/, include/ -- see PTM_LICENSE). Supersedes the
-// earlier hand-rolled correspondence-refinement approach: PTM's own quaternion-based rotation fit
-// (Theobald's QCP, ptm_polar.cpp) plus its combinatorial template/graph matching is the
-// established, validated method for this, not something to re-derive from scratch. This gives
-// structure type, orientation quaternion and RMSD in one call per particle -- the orientation is
-// PTM's own lattice-registration result, unrelated to (and not derived from) any
-// deformation-gradient/polar-decomposition computation elsewhere in this codebase.
-//
-// PTM itself is host-only (combinatorial graph/template matching, not GPU-portable), so this
-// operator's functor is intentionally NOT CudaCompatible -- runs on CPU/OpenMP only, one
-// ptm_local_handle_t scratch object per OpenMP thread (PTM's handles are not thread-safe to share).
-// Uses the buffer-based compute-pair pattern (all jnum neighbors available at once via buf.drx/
-// dry/drz/d2), same shape already used for host/CudaCompatible=false pair ops in this codebase
-// (see exaStamp/potential/eam_potential_template/eam_force_op_singlemat.h).
-//
-// Output goes to flat onika::memory::CudaMMVector buffers indexed via grid->cell_particle_offset_
-// data() (exactly compute_bispectrum.cu's pattern), NOT named grid fields -- keeps this operator
-// off compute_cell_particle_pairs2's deep cells_accessor() path entirely.
-//
-// The host-side OpenMP loop calls compute_cell_particle_pairs_cell directly (same thing
-// ComputeParticlePairFunctor::operator() does internally on the host path) rather than going
-// through compute_cell_particle_pairs2, keeping full control over the CudaCompatible=false
-// functor's dispatch. Chunk neighbors are expected with chunk_size==1 (checked at runtime below).
-//
-// Checks FCC, HCP, BCC, ICO and SC (PTM's single-shot-callback structures, see PTMFunctor::
-// m_flags below). DCUB/DHEX/GRAPHENE are deliberately excluded -- they need a two-shell neighbour
-// query our callback doesn't implement (see the comment on m_flags).
+// Polyhedral Template Matching (Larsen, Schmidt, Schiotz, MSMSE 24 (2016) 055007, vendored library in
+// lib/ and include/): structure type (FCC, HCP, BCC, ICO, SC), lattice orientation and RMSD per
+// particle. Host only, one PTM handle per OpenMP thread. Needs chunk_size 1 neighbor lists.
 namespace exaStamp
 {
   using namespace exanb;
 
-  // PTM's neighbour_ordering for BCC/FCC/HCP/ICO/SC (num_outer==0) calls this callback exactly
-  // once, with the atom's own request -- since we've already gathered and sorted this particle's
-  // neighbors before calling ptm_index(), just hand back the pre-built environment as-is.
+  // single-shell structures query their neighbors once: return the prepared environment
   static int ptm_get_neighbours_from_prebuilt_env(void* vdata, size_t /*unused*/, size_t /*atom_index*/, int /*num*/, ptm_atomicenv_t* env)
   {
     *env = *reinterpret_cast<const ptm_atomicenv_t*>(vdata);
     return 0;
   }
 
-  // PTM only looks at the PTM_MAX_INPUT_POINTS-1 nearest neighbors: keep just those, sorted by
-  // distance, whatever rcut is (see bounded_pair_buffer.h).
+  // PTM uses at most the PTM_MAX_INPUT_POINTS-1 nearest neighbors
   using PTMComputeBuffer = NearestNeighborsComputeBuffer< PTM_MAX_INPUT_POINTS - 1 >;
 
   struct PTMFunctor
   {
-    // FCC/HCP/BCC/ICO/SC all go through PTM's single-shot neighbour_ordering (num_outer==0,
-    // ptm_index.cpp) -- the one our ptm_get_neighbours_from_prebuilt_env callback above actually
-    // supports. DCUB/DHEX/GRAPHENE use a genuinely different *two-shell* ordering (num_inner/
-    // num_outer both nonzero) that calls the neighbour callback multiple times for distinct
-    // inner/outer shell requests; our callback ignores that and always hands back the same single
-    // prebuilt env, so enabling those flags would silently produce wrong results, not just
-    // unsupported ones. Left out until the callback is taught the two-shell protocol.
+    // DCUB/DHEX/GRAPHENE need a two-shell neighbor query, not implemented
     static constexpr int32_t ENABLED_FLAGS = PTM_CHECK_SC | PTM_CHECK_FCC | PTM_CHECK_HCP | PTM_CHECK_ICO | PTM_CHECK_BCC;
     const int32_t m_flags = ENABLED_FLAGS;
-    const double m_rmsd_cutoff = 0.1; // OVITO's own PTM modifier default; <=0 disables the cutoff
+    const double m_rmsd_cutoff = 0.1; // <= 0 disables the cutoff
     ptm_local_handle_t * const m_thread_handles = nullptr; // one per OpenMP thread, sized by caller
     const size_t * const __restrict__ m_cell_particle_offset = nullptr;
     double * const __restrict__ m_struct_type_out = nullptr; // 1 per particle
@@ -106,16 +71,7 @@ namespace exaStamp
     template<class ComputeBufferT, class CellParticlesT>
     inline void operator () ( int jnum, ComputeBufferT& buf, CellParticlesT /*cells*/) const
     {
-      // PTM wants its own fixed candidate-neighbor pool -- not "however many happen to lie
-      // within rcut" -- rcut only needs to be generous enough that the candidate pool is full of
-      // *genuinely* nearest neighbors; anything past that must be discarded, or PTM's own graph
-      // matching sees a different point set and gives different (rcut-dependent) results. Same
-      // convention as OVITO's own PTM code (PTMAlgorithm.cpp): always gather up to
-      // PTM_MAX_INPUT_POINTS-1 nearest neighbors regardless of which structures are enabled --
-      // ptm_index() itself already gates each individual structure check on whether enough points
-      // were supplied (see the `num_points >= PTM_NUM_POINTS_*` checks in ptm_index.cpp). The
-      // selection is done while filling the buffer (NearestNeighborsComputeBuffer): buf already
-      // holds the jnum nearest neighbors, sorted by increasing distance.
+      // the 18 nearest neighbors, sorted by distance (NearestNeighborsComputeBuffer), whatever rcut is
       const int n = std::min( jnum, static_cast<int>(PTM_MAX_INPUT_POINTS) - 1 );
 
       double struct_type = static_cast<double>( PTM_MATCH_NONE );
@@ -146,13 +102,7 @@ namespace exaStamp
 
         if( result.structure_type != PTM_MATCH_NONE )
         {
-          // PTM always returns its best combinatorial match, however poor -- it never refuses on
-          // its own. Without a cutoff, a genuinely different local structure (e.g. FCC atoms
-          // against the BCC-only template checked here) still gets *some* correspondence, just a
-          // bad one (rmsd far from 0). Reject those explicitly, same convention OVITO's own PTM
-          // modifier uses (rmsdCutoff, default 0.1) -- rmsd/orientation are kept either way, only
-          // the discrete structure_type classification is gated, so a rejected fit is still
-          // visible for diagnostics.
+          // PTM always returns its best match: reject poor fits, keep rmsd and orientation for diagnostics
           rmsd = result.rmsd;
           quat[0] = result.orientation[0];
           quat[1] = result.orientation[1];
@@ -180,14 +130,14 @@ namespace exaStamp
   {
     ADD_SLOT( GridT               , grid            , INPUT_OUTPUT );
     ADD_SLOT( Domain              , domain          , INPUT , REQUIRED );
-    ADD_SLOT( double              , rcut            , INPUT , REQUIRED , DocString{"Neighbor search cutoff -- must be generous enough to include at least BCC's 14 first+second-shell neighbors (the largest requirement among the checked structures: FCC/HCP/ICO 12, BCC 14, SC 6). Only the 18 nearest neighbors within rcut are used, so a larger rcut costs neighbor search time but does not change the result"} );
-    ADD_SLOT( double              , rmsd_cutoff     , INPUT , 0.1 , DocString{"Reject a PTM match whose RMSD exceeds this (structure_type reported as PTM_MATCH_NONE, rmsd/orientation still written for diagnostics). Same default as OVITO's own PTM modifier. <=0 disables the cutoff."} );
+    ADD_SLOT( double              , rcut            , INPUT , REQUIRED , DocString{"Neighbor search cutoff, must include 14 neighbors for BCC (12 FCC/HCP/ICO, 6 SC). Only the 18 nearest are used"} );
+    ADD_SLOT( double              , rmsd_cutoff     , INPUT , 0.1 , DocString{"Matches with a larger RMSD are reported as no structure (RMSD and orientation still written). <= 0 disables it"} );
     ADD_SLOT( exanb::GridChunkNeighbors , chunk_neighbors , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
     ADD_SLOT( double              , rcut_max        , INPUT_OUTPUT , 0.0 , DocString{"Updated max rcut"} );
-    ADD_SLOT( onika::memory::CudaMMVector<double> , ptm_struct_type , OUTPUT , DocString{"Flat per-particle structure type buffer (0=none, 1=FCC, 2=HCP, 3=BCC, 4=ICO, 5=SC -- see PTM_MATCH_* in ptm_constants.h): ptm_struct_type[ cell_particle_offset[cell] + particle ], see grid->cell_particle_offset_data()"} );
-    ADD_SLOT( onika::memory::CudaMMVector<double> , ptm_orientation , OUTPUT , DocString{"Flat per-particle lattice orientation quaternion buffer (w,x,y,z, PTM's own fit result): ptm_orientation[ 4*(cell_particle_offset[cell]+particle) + component ]"} );
-    ADD_SLOT( onika::memory::CudaMMVector<double> , ptm_rmsd , OUTPUT , DocString{"Flat per-particle fit-quality RMSD buffer (negative if no match attempted/found), same indexing as ptm_struct_type"} );
-    ADD_SLOT( long , ptm_n_matched , OUTPUT , DocString{"Number of particles PTM found a match for (out of grid->number_of_particles())"} );
+    ADD_SLOT( onika::memory::CudaMMVector<double> , ptm_struct_type , OUTPUT , DocString{"Per-particle structure type (0 none, 1 FCC, 2 HCP, 3 BCC, 4 ICO, 5 SC), indexed by cell_particle_offset[cell] + particle"} );
+    ADD_SLOT( onika::memory::CudaMMVector<double> , ptm_orientation , OUTPUT , DocString{"Per-particle orientation quaternion (w,x,y,z), 4 values per particle, same indexing"} );
+    ADD_SLOT( onika::memory::CudaMMVector<double> , ptm_rmsd , OUTPUT , DocString{"Per-particle RMSD (negative if no match), same indexing"} );
+    ADD_SLOT( long , ptm_n_matched , OUTPUT , DocString{"Number of matched particles on this rank"} );
 
     std::vector<ptm_local_handle_t> m_thread_handles;
 
@@ -275,36 +225,22 @@ namespace exaStamp
     {
       return R"EOF(
 
-Per-particle structure identification and local lattice orientation via PTM (Polyhedral Template
-Matching), vendored from OVITO. Checks FCC, HCP, BCC, ICO and SC (not DCUB/DHEX/GRAPHENE, which
-need a neighbour query this operator doesn't implement -- see compute_ptm.cu). Gathers each
-particle's nearest neighbors (sorted by true distance, up to PTM_MAX_INPUT_POINTS-1=18 within
-rcut; neighbors past the 18 nearest are discarded, so any rcut is safe), feeds them to PTM's ptm_index(), and writes three flat per-particle buffers, indexed via
-grid->cell_particle_offset_data() (same convention as compute_bispectrum's output): ptm_struct_type
-(0=none, 1=FCC, 2=HCP, 3=BCC, 4=ICO, 5=SC), ptm_orientation
-(PTM's own fitted lattice orientation quaternion, w,x,y,z, 4 doubles/particle), and ptm_rmsd
-(fit quality, negative if no match attempted/found). A match whose RMSD exceeds rmsd_cutoff is
-reported as PTM_MATCH_NONE (rmsd/orientation are still written, only the classification is
-gated) -- PTM itself always returns its best combinatorial match, however poor, so this cutoff is
-what actually rejects a genuinely different local structure. Host/OpenMP only -- PTM is not
-GPU-portable.
+Polyhedral Template Matching: structure type (0 none, 1 FCC, 2 HCP, 3 BCC, 4 ICO, 5 SC), lattice
+orientation quaternion (w,x,y,z) and RMSD per particle, from the 18 nearest neighbors within rcut.
+Writes the flat buffers ptm_struct_type, ptm_orientation and ptm_rmsd; use ptm_fields to copy them
+into grid fields. A match with an RMSD above rmsd_cutoff is reported as no structure. Host only.
 
 Usage example:
 
 compute_ptm:
-  rcut: 3.6 ang   # generous enough for BCC's 8 first + 6 second shell neighbors
+  rcut: 3.6 ang
   rmsd_cutoff: 0.1
 
 )EOF";
     }
   };
 
-  // Materializes compute_ptm's flat CudaMMVector buffers into named per-particle grid fields
-  // (field::mk_generic_real/mk_generic_mat3), so any consumer that expects a real grid field
-  // (write_xyz, write_grid_vtk, write_delaunay_vtk's color_field, ...) can read PTM's results
-  // directly. Purely pointwise, no neighbor search needed -- unlike compute_ptm.cu itself, this
-  // has no chunk-neighbor/CS complication to work around, so it uses exanb's plain per-particle
-  // compute_cell_particles (compute_cell_particles.h) instead of the pair-compute machinery.
+  // compute_ptm buffers -> grid fields (orientation as a rotation matrix)
   struct PTMFieldsFunctor
   {
     const size_t * const __restrict__ m_cell_particle_offset = nullptr;
@@ -352,12 +288,8 @@ compute_ptm:
     {
       return R"EOF(
 
-Copies compute_ptm's flat per-particle output buffers (ptm_struct_type/ptm_orientation/ptm_rmsd)
-into named per-particle grid fields, so any consumer expecting a real grid field (write_xyz,
-write_grid_vtk, write_delaunay_vtk's color_field, ...) can read PTM's results directly. Purely
-pointwise (no neighbor search) -- run any time after compute_ptm. Orientation is converted from
-PTM's quaternion (as stored in ptm_orientation) to a rotation tensor field. Only touches owned
-particles -- ghost copies of these fields are not synchronized across MPI ranks.
+Copies compute_ptm's buffers into per-particle grid fields, orientation as a rotation matrix. Owned
+particles only: run ghost_update_opt on the fields if ghosts need them.
 
 Usage example:
 
@@ -368,7 +300,6 @@ ptm_fields: { struct_field: ptm_type, orient_field: ptm_orientation, rmsd_field:
     }
   };
 
-  // === register factories ===
   ONIKA_AUTORUN_INIT(compute_ptm)
   {
     OperatorNodeFactory::instance()->register_factory( "compute_ptm", make_grid_variant_operator< ComputePTM > );

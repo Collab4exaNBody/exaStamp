@@ -35,64 +35,32 @@ under the License.
 #include <cmath>
 #include <algorithm>
 
-// Adaptive-cutoff Common Neighbor Analysis (CNA), reimplemented from scratch following OVITO's
-// own structure-identification engine (src/ovito/crystalanalysis/modifier/structureanalysis/
-// StructureAnalysis.cpp). Complements compute_ptm: PTM's classification (continuous RMSD fit)
-// has a different (wider) strain tolerance than CNA's discrete bond-topology test, so the two
-// can disagree on strongly strained atoms (see compare_cna_ptm_quadrupole.msp).
-//
-// Checks FCC, HCP, BCC, ICO (not SC or diamond -- classic CNA doesn't cover SC at all; diamond
-// needs its own, differently-shaped 16-vector template, can be added later if needed). Output
-// uses the exact same PTM_MATCH_* numbering convention as compute_ptm's own ptm_struct_type
-// (0=none,1=FCC,2=HCP,3=BCC,4=ICO), so it can replace ptm_type wherever a structure-type field is
-// consumed -- orientation still needs to come from ptm_fields' ptm_orientation (CNA's own reference implementation only
-// produces a per-CLUSTER, not per-atom, orientation -- a materially bigger feature, not
-// implemented here; an atom's own PTM-fitted orientation remains a reasonable per-atom proxy
-// even when its own PTM structure-type match was rejected, same reasoning as ptm_shrink_disorder).
-//
-// Algorithm (adaptive CNA, per-neighbor-family since FCC/HCP/ICO need 12 neighbors and BCC needs
-// 14, with different cutoff formulas):
-//   1. Sort the particle's neighbors by distance (need at least nn+1 to check the "next neighbor
-//      must lie outside the adaptive cutoff sphere" condition that pins down exactly nn).
-//   2. Compute the local adaptive cutoff from the nearest bond lengths (FCC/HCP/ICO: mean of the
-//      12 nearest; BCC: mean of the nearest 8, rescaled by 2/sqrt(3) to the 2nd-shell length
-//      scale), scaled by (1+sqrt(2))/2 -- the exact StructureAnalysis.cpp formula.
-//   3. Build the pairwise "common neighbor" bond graph among the nn candidate neighbors (bonded
-//      iff their mutual distance is under the adaptive cutoff).
-//   4. For each of the nn neighbors, using ITS row of the bond graph: numCommonNeighbors = how
-//      many of the OTHER nn-1 neighbors it's bonded to; numNeighborBonds = how many bonded PAIRS
-//      exist among that common-neighbor set; maxChainLength = the largest connected component's
-//      size within that set (union-find). Tally the classic 4-2-1/4-2-2/5-5-5 (12-neighbor) or
-//      4-4-4/6-6-6 (14-neighbor) signature counts across all nn neighbors.
-//   5. Accept FCC (12x 4-2-1), HCP (6x 4-2-1 + 6x 4-2-2), ICO (12x 5-5-5), or BCC (6x 4-4-4 + 8x
-//      6-6-6) -- exactly OVITO's own acceptance table, no tolerance.
+// Adaptive-cutoff Common Neighbor Analysis: FCC, HCP, ICO (12 neighbors) and BCC (14 neighbors).
+// Output uses the PTM_MATCH_* numbering of compute_ptm (0 none, 1 FCC, 2 HCP, 3 BCC, 4 ICO).
 namespace exaStamp
 {
   using namespace exanb;
 
-  // same numbering as PTM_MATCH_* (ptm_constants.h) -- kept independent here (no PTM link at
-  // all) so any downstream consumer keying off this convention works transparently regardless
-  // of which operator (compute_ptm or compute_cna) produced the structure-type field.
+  // same values as PTM_MATCH_*
   static constexpr double CNA_MATCH_NONE = 0.0;
   static constexpr double CNA_MATCH_FCC  = 1.0;
   static constexpr double CNA_MATCH_HCP  = 2.0;
   static constexpr double CNA_MATCH_BCC  = 3.0;
   static constexpr double CNA_MATCH_ICO  = 4.0;
 
-  static constexpr int CNA_MAX_NBRS = 16; // enough for BCC's 14 + 1 sanity-check neighbor
+  static constexpr int CNA_MAX_NBRS = 16; // BCC 14 + 1
 
   struct CNAFunctor
   {
     const size_t * const __restrict__ m_cell_particle_offset = nullptr;
     double * const __restrict__ m_struct_type_out = nullptr; // 1 per particle
 
-    // classify the nn nearest (already sorted) neighbors as one member of a CNA family (12: FCC/
-    // HCP/ICO; 14: BCC). scaling_nbrs/scaling_rescale determine the adaptive cutoff (see file
-    // comment): cutoff = mean(d2[0..scaling_nbrs)) * scaling_rescale * (1+sqrt(2))/2.
+    // nn nearest neighbors (sorted), adaptive cutoff = mean distance of the scaling_nbrs nearest
+    // * scaling_rescale * (1+sqrt(2))/2
     template<class ComputeBufferT>
     static inline double classify_family( const ComputeBufferT& buf, int jnum, int nn, int scaling_nbrs, double scaling_rescale )
     {
-      if( jnum < nn+1 ) { return CNA_MATCH_NONE; } // need one extra neighbor for the sanity check below
+      if( jnum < nn+1 ) { return CNA_MATCH_NONE; }
 
       double scaling = 0.0;
       for(int i=0;i<scaling_nbrs;i++) { scaling += std::sqrt( buf.d2[i] ); }
@@ -100,7 +68,7 @@ namespace exaStamp
       const double cutoff = scaling * scaling_rescale * (1.0+std::sqrt(2.0)) * 0.5;
       const double cutoff2 = cutoff*cutoff;
 
-      if( buf.d2[nn] <= cutoff2 ) { return CNA_MATCH_NONE; } // (nn+1)-th neighbor too close: not exactly nn neighbors at this cutoff
+      if( buf.d2[nn] <= cutoff2 ) { return CNA_MATCH_NONE; } // more than nn neighbors within cutoff
 
       bool bonded[CNA_MAX_NBRS][CNA_MAX_NBRS];
       for(int a=0;a<nn;a++)
@@ -120,11 +88,7 @@ namespace exaStamp
         int common[CNA_MAX_NBRS]; int nc=0;
         for(int j=0;j<nn;j++) { if( j!=i && bonded[i][j] ) { common[nc++] = j; } }
 
-        // maxChainLength is the largest EDGE count among connected components of the common-
-        // neighbor bond graph -- not the node count. For closed rings (444/555/666) edges==nodes
-        // so the two coincide, but for the open-chain FCC/HCP signatures (421: two disjoint edges,
-        // 2 nodes/1 edge each; 422: one 2-edge/3-node path + 1 isolated node) they don't -- must
-        // count edges per component, not nodes.
+        // maxChainLength = largest number of bonds in a connected component of the common neighbors
         int numNeighborBonds = 0;
         int parent[CNA_MAX_NBRS];
         for(int k=0;k<nc;k++) { parent[k] = k; }
@@ -141,7 +105,6 @@ namespace exaStamp
             }
           }
         }
-        // second pass, after all unions have settled: tally edges per final component root.
         int edgecount[CNA_MAX_NBRS] = {0};
         for(int a=0;a<nc;a++)
         {
@@ -176,15 +139,13 @@ namespace exaStamp
     template<class ComputeBufferT, class CellParticlesT>
     inline void operator () ( int jnum, ComputeBufferT& buf, CellParticlesT /*cells*/ ) const
     {
-      // buf holds the jnum (<= CNA_MAX_NBRS) nearest neighbors, sorted by increasing distance:
-      // the selection is done while filling the buffer (NearestNeighborsComputeBuffer), since
-      // CNA's "which neighbors are the nn nearest" question needs the true nearest set.
+      // buf holds the nearest neighbors, sorted by distance (NearestNeighborsComputeBuffer)
       const int n = std::min( jnum, CNA_MAX_NBRS );
 
-      double struct_type = classify_family( buf, n, 12, 12, 1.0 ); // FCC/HCP/ICO: mean of 12 nearest, no rescale
+      double struct_type = classify_family( buf, n, 12, 12, 1.0 );
       if( struct_type == CNA_MATCH_NONE )
       {
-        struct_type = classify_family( buf, n, 14, 8, 2.0/std::sqrt(3.0) ); // BCC: mean of nearest 8 (1st shell), rescaled to 2nd-shell length scale
+        struct_type = classify_family( buf, n, 14, 8, 2.0/std::sqrt(3.0) ); // BCC: first shell rescaled to the second
       }
 
       const size_t i = m_cell_particle_offset[buf.cell] + buf.part;
@@ -197,11 +158,11 @@ namespace exaStamp
   {
     ADD_SLOT( GridT               , grid            , INPUT_OUTPUT );
     ADD_SLOT( Domain              , domain          , INPUT , REQUIRED );
-    ADD_SLOT( double              , rcut            , INPUT , REQUIRED , DocString{"Neighbor search cutoff -- must be generous enough for at least BCC's 14 first+second-shell neighbors plus one more (the largest requirement among the checked structures: FCC/HCP/ICO need 12+1, BCC needs 14+1)"} );
+    ADD_SLOT( double              , rcut            , INPUT , REQUIRED , DocString{"Neighbor search cutoff, must include 13 neighbors (FCC/HCP/ICO) or 15 (BCC)"} );
     ADD_SLOT( exanb::GridChunkNeighbors , chunk_neighbors , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
     ADD_SLOT( double              , rcut_max        , INPUT_OUTPUT , 0.0 , DocString{"Updated max rcut"} );
-    ADD_SLOT( onika::memory::CudaMMVector<double> , cna_struct_type , OUTPUT , DocString{"Flat per-particle structure type buffer (0=none, 1=FCC, 2=HCP, 3=BCC, 4=ICO -- same numbering as compute_ptm's ptm_struct_type): cna_struct_type[ cell_particle_offset[cell] + particle ], see grid->cell_particle_offset_data()"} );
-    ADD_SLOT( long , cna_n_matched , OUTPUT , DocString{"Number of particles CNA found a match for (out of grid->number_of_particles())"} );
+    ADD_SLOT( onika::memory::CudaMMVector<double> , cna_struct_type , OUTPUT , DocString{"Per-particle structure type (0 none, 1 FCC, 2 HCP, 3 BCC, 4 ICO), indexed by cell_particle_offset[cell] + particle"} );
+    ADD_SLOT( long , cna_n_matched , OUTPUT , DocString{"Number of matched particles on this rank"} );
 
   public:
     inline void execute () override final
@@ -219,7 +180,7 @@ namespace exaStamp
       const size_t total_particles = grid->number_of_particles();
       cna_struct_type->resize( total_particles );
 
-      using ComputeBuffer = NearestNeighborsComputeBuffer< CNA_MAX_NBRS >; // nearest only, any rcut is safe
+      using ComputeBuffer = NearestNeighborsComputeBuffer< CNA_MAX_NBRS >;
       ComputePairOptionalLocks<false> cp_locks {};
       exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
       auto compute_buf = make_compute_pair_buffer<ComputeBuffer>();
@@ -262,13 +223,9 @@ namespace exaStamp
     {
       return R"EOF(
 
-Per-particle structure identification via adaptive-cutoff Common Neighbor Analysis (CNA),
-reimplemented from scratch following OVITO's own structure-identification engine. Checks FCC, HCP,
-BCC and ICO (not SC or diamond -- see compute_cna.cu). Writes a single flat per-particle buffer,
-indexed via grid->cell_particle_offset_data() (same convention as compute_ptm's own
-ptm_struct_type, including its 0=none/1=FCC/2=HCP/3=BCC/4=ICO numbering) -- can be used as a
-drop-in replacement for ptm_type, mixed with compute_ptm/ptm_fields' own ptm_orientation for orientation (CNA itself, per this reference implementation, only produces
-a per-cluster orientation, not per-atom).
+Adaptive-cutoff Common Neighbor Analysis: FCC, HCP, BCC and ICO. Writes a flat per-particle
+buffer, cna_struct_type (0 none, 1 FCC, 2 HCP, 3 BCC, 4 ICO, same numbering as compute_ptm).
+Use cna_fields to copy it into a grid field.
 
 Usage example:
 
@@ -278,11 +235,7 @@ compute_cna: { rcut: 5.0 ang }
     }
   };
 
-  // Materializes compute_cna's flat CudaMMVector buffer into a named per-particle grid field
-  // (field::mk_generic_real), so any consumer expecting a real grid field (write_xyz,
-  // write_delaunay_vtk's color_fields, grain segmentation's struct_field, ...) can read it
-  // directly. Purely pointwise, no neighbor search -- same exanb::compute_cell_particles pattern
-  // as ptm_fields.
+  // cna_struct_type -> grid field
   struct CNAFieldsFunctor
   {
     const size_t * const __restrict__ m_cell_particle_offset = nullptr;
@@ -313,11 +266,8 @@ compute_cna: { rcut: 5.0 ang }
     {
       return R"EOF(
 
-Copies compute_cna's flat per-particle output buffer (cna_struct_type) into a named per-particle
-grid field, so any consumer expecting a real grid field (write_xyz, write_delaunay_vtk's
-color_fields, ...) can read it directly. Purely pointwise (no
-neighbor search) -- run any time after compute_cna. Only touches owned particles -- ghost copies
-of this field are not synchronized across MPI ranks.
+Copies compute_cna's cna_struct_type into a per-particle grid field. Owned particles only: run
+ghost_update_opt on the field if ghosts need it.
 
 Usage example:
 
@@ -328,7 +278,6 @@ cna_fields: { struct_field: cna_type }
     }
   };
 
-  // === register factories ===
   ONIKA_AUTORUN_INIT(compute_cna)
   {
     OperatorNodeFactory::instance()->register_factory( "compute_cna", make_grid_variant_operator< ComputeCNA > );
