@@ -15,6 +15,10 @@
 # under the License.
 #
 
+# lib/ + include/: vendored Polyhedral Template Matching (PTM, MIT license, see PTM_LICENSE and
+# PTM_README.md) from https://github.com/pmla/polyhedral-template-matching, built by onika as the
+# exaStampAnalysisParticle component library and used by compute_ptm, ptm_shrink_disorder and the
+# grain segmentation operators.
 set(exaStampAnalysisParticle_LINK_LIBRARIES exaStampCompute exaStampThermoState exanbDefBox exanbIO exanbParticleNeighbors exaStampParticleSpecies)
 onika_add_plugin(exaStampAnalysisParticle ${CMAKE_CURRENT_SOURCE_DIR})
 
