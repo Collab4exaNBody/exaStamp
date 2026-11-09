@@ -17,37 +17,45 @@ under the License.
 
 #pragma once
 
-#include <exaStamp/analysis_particle/grains/grain_clusters.h>
-#include <cstdint>
+#include <onika/math/basic_types.h>
+#include <mpi.h>
+#include <vector>
+#include <cstddef>
+
+// Grain segmentation building blocks, used by compute_grain_clusters.cpp
 
 namespace exaStamp
 {
-  // Pure algorithm (no grid/MPI dependency, unit-testable in isolation): Node-Pair-Sampling graph
-  // clustering + auto-threshold dendrogram cut + min-grain-size dissolution + (optional)
-  // Dijkstra-by-distance orphan-atom adoption, following OVITO's GrainSegmentationEngine1/2 -- see
-  // compute_grain_clusters.cpp's own header comment for the full algorithm writeup/citations.
-  //
-  // All flat arrays below are indexed by LOCAL atom index (0..n_atoms-1), same convention as
-  // compute_grain_bond_misorientation's own output. `bond_id` holds GLOBAL particle ids (cross-rank
-  // comparable); this function resolves them to local indices itself via `global_id`, silently
-  // treating a bond whose target isn't present locally (e.g. a ghost just outside this rank's own
-  // ghost halo) as absent -- this is a known, not-yet-addressed limitation: a grain that spans an
-  // MPI rank boundary is NOT stitched into one id across ranks (each rank clusters its own local
-  // view only).
-  void grain_segmentation_nps(
-    size_t n_atoms,
-    const double * struct_type,          // PTM_MATCH_* code per atom
-    const double * orientation_mat3,     // 9 doubles/atom, row-major (Mat3d)
-    const uint64_t * global_id,          // per atom
-    const uint64_t * bond_id,            // max_neighbors slots/atom; GRAIN_BOND_EMPTY(UINT64_MAX) = unused slot
-    const double * bond_distance,        // same shape, real Euclidean length
-    const double * bond_disorientation,  // same shape, degrees; <0 = not a clustering candidate
-    const int * bond_count,              // per atom, valid entries in the slots above
-    int max_neighbors,
-    bool auto_threshold,
-    double manual_threshold_log,         // only used if !auto_threshold -- OVITO's own internal log-distance unit, NOT degrees (see this file's own header note on GraphClusteringManual)
-    long min_grain_atom_count,
-    bool orphan_adoption,
-    unsigned int color_seed,
-    GrainSegmentationResult & result );
+  using namespace exanb;
+
+  // weight of a crystalline bond, disorientation in degrees
+  double grain_bond_weight( double disorientation_deg );
+
+  struct NPSEdge
+  {
+    int u, v;
+    double w;
+  };
+
+  struct NPSMerge
+  {
+    int a, b;          // merged nodes
+    double distance;   // wnode[a]*wnode[b]/w(a,b)
+    double merge_size; // harmonic mean of the two cluster sizes, in atoms
+  };
+
+  // Node-Pair-Sampling clustering (reciprocal nearest neighbor chain). node_weight: sum of all edge weights
+  // of each node, including edges left out of `edges` (bonds to other ranks). node_size: atoms per node.
+  // Duplicated edges are summed. Merges are returned sorted by distance.
+  std::vector<NPSMerge> nps_dendrogram( const std::vector<double>& node_weight,
+                                        const std::vector<double>& node_size,
+                                        const std::vector<NPSEdge>& edges );
+
+  // Automatic merge threshold: least absolute deviation fit of log(distance) vs log(merge_size), weighted
+  // by merge_size; returns the largest log(distance) with residual < 1.5 * median |residual|. Collective:
+  // each rank passes its share of the merges. -infinity without merges.
+  double nps_auto_threshold( MPI_Comm comm, const std::vector<double>& merge_size, const std::vector<double>& distance );
+
+  // random per-grain colors
+  std::vector<Vec3d> grain_colors( long n_grains, unsigned int seed );
 }
