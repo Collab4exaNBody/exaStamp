@@ -31,6 +31,7 @@ under the License.
 #include <exaStamp/analysis_particle/bounded_pair_buffer.h>
 
 #include <omp.h>
+#include <mpi.h>
 #include <vector>
 #include <cmath>
 #include <algorithm>
@@ -156,6 +157,7 @@ namespace exaStamp
   template<class GridT>
   class ComputeCNA : public OperatorNode
   {
+    ADD_SLOT( MPI_Comm            , mpi             , INPUT , MPI_COMM_WORLD );
     ADD_SLOT( GridT               , grid            , INPUT_OUTPUT );
     ADD_SLOT( Domain              , domain          , INPUT , REQUIRED );
     ADD_SLOT( double              , rcut            , INPUT , REQUIRED , DocString{"Neighbor search cutoff, must include 13 neighbors (FCC/HCP/ICO) or 15 (BCC)"} );
@@ -179,6 +181,8 @@ namespace exaStamp
 
       const size_t total_particles = grid->number_of_particles();
       cna_struct_type->resize( total_particles );
+      // ghost entries are not computed: give them the "no match" value instead of stale ones
+      std::fill( cna_struct_type->begin(), cna_struct_type->end(), static_cast<double>(CNA_MATCH_NONE) );
 
       using ComputeBuffer = NearestNeighborsComputeBuffer< CNA_MAX_NBRS >;
       ComputePairOptionalLocks<false> cp_locks {};
@@ -212,11 +216,27 @@ namespace exaStamp
                                          , posfields, std::index_sequence<>{} );
       }
 
-      size_t n_matched = 0;
-      for(size_t p=0;p<total_particles;p++) { if( (*cna_struct_type)[p] != CNA_MATCH_NONE ) { ++n_matched; } }
-
+      size_t n_matched = 0, n_owned = 0;
+      const size_t * const cell_particle_offset = grid->cell_particle_offset_data();
+      for(ssize_t k=gl;k<dims.k-gl;k++)
+      for(ssize_t j=gl;j<dims.j-gl;j++)
+      for(ssize_t i=gl;i<dims.i-gl;i++)
+      {
+        const size_t cell = static_cast<size_t>( grid_ijk_to_index(dims,IJK{i,j,k}) );
+        const size_t np = cells[cell].size();
+        for(size_t q=0;q<np;q++)
+        {
+          const size_t p = cell_particle_offset[cell] + q;
+          ++n_owned;
+          if( (*cna_struct_type)[p] != CNA_MATCH_NONE ) { ++n_matched; }
+        }
+      }
       *cna_n_matched = static_cast<long>(n_matched);
-      lout << "compute_cna: " << n_matched << " / " << total_particles << " particles matched" << std::endl;
+
+      // log: totals over all ranks
+      unsigned long long counts[2] = { n_matched, n_owned };
+      MPI_Allreduce( MPI_IN_PLACE, counts, 2, MPI_UNSIGNED_LONG_LONG, MPI_SUM, *mpi );
+      lout << "compute_cna: " << counts[0] << " / " << counts[1] << " particles matched" << std::endl;
     }
 
     inline std::string documentation() const override final

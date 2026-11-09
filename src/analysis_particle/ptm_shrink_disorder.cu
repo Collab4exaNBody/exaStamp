@@ -27,11 +27,15 @@ under the License.
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/compute/compute_cell_particle_pairs.h>
 #include <exanb/particle_neighbors/chunk_neighbors.h>
+#include <exanb/mpi/ghosts_comm_scheme.h>
+#include <exanb/mpi/flat_buffer_ghosts.h>
 #include <exaStamp/analysis_particle/bounded_pair_buffer.h>
 
 #include <ptm_constants.h>
 
+#include <mpi.h>
 #include <vector>
+#include <algorithm>
 
 // After compute_ptm: an unmatched atom takes the structure type shared by a majority of its neighbors
 // within rcut, repeated n_iterations times. Keeps strained lattice around defects crystalline.
@@ -84,8 +88,10 @@ namespace exaStamp
   template<class GridT>
   class PTMShrinkDisorder : public OperatorNode
   {
+    ADD_SLOT( MPI_Comm            , mpi             , INPUT , MPI_COMM_WORLD );
     ADD_SLOT( GridT               , grid            , INPUT_OUTPUT );
     ADD_SLOT( Domain              , domain          , INPUT , REQUIRED );
+    ADD_SLOT( GhostCommunicationScheme , ghost_comm_scheme , INPUT , REQUIRED , DocString{"Scheme of the last ghost update, used to send the structure types to the ghosts before each pass"} );
     ADD_SLOT( double              , rcut            , INPUT , REQUIRED , DocString{"Neighbor search cutoff, usually the rcut of compute_ptm"} );
     ADD_SLOT( exanb::GridChunkNeighbors , chunk_neighbors , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
     ADD_SLOT( double              , rcut_max        , INPUT_OUTPUT , 0.0 , DocString{"Updated max rcut"} );
@@ -110,8 +116,10 @@ namespace exaStamp
       const size_t total_particles = grid->number_of_particles();
       const size_t * const cell_particle_offset = grid->cell_particle_offset_data();
 
+      // compute_ptm fills the owned particles only: the votes need the ghosts' structure types too
       std::vector<double> buf_a( ptm_struct_type->begin(), ptm_struct_type->end() );
       std::vector<double> buf_b( buf_a );
+      const GhostFlatBuffer gb_a { buf_a.data(), 1, 1, total_particles, GhostFlatBuffer::ValueType::Double };
 
       using ComputeBuffer = OverflowFlagComputeBuffer<true>; // with neighbor (cell,particle)
       ComputePairOptionalLocks<false> cp_locks {};
@@ -134,6 +142,7 @@ namespace exaStamp
 
       for(long iter=0; iter<n_iter; iter++)
       {
+        flat_buffer_ghost_exchange<true>( *mpi, *ghost_comm_scheme, cell_particle_offset, gb_a, 0x5d1 );
         buf_b = buf_a;
         long n_overflow = 0;
         PTMShrinkDisorderFunctor compute_op = { cell_particle_offset, buf_a.data(), buf_b.data(), min_fraction, &n_overflow };
@@ -158,18 +167,31 @@ namespace exaStamp
                         << ", rcut is far too large (use about the first-neighbor shell distance)" << std::endl;
         }
 
-        buf_a.swap( buf_b );
+        std::copy( buf_b.begin(), buf_b.end(), buf_a.begin() );
       }
+      flat_buffer_ghost_exchange<true>( *mpi, *ghost_comm_scheme, cell_particle_offset, gb_a, 0x5d2 );
 
-      size_t n_rec = 0;
-      for(size_t p=0;p<total_particles;p++)
+      // count owned particles only
+      size_t n_rec = 0, n_owned = 0;
+      for(ssize_t k=gl;k<dims.k-gl;k++)
+      for(ssize_t j=gl;j<dims.j-gl;j++)
+      for(ssize_t i=gl;i<dims.i-gl;i++)
       {
-        if( (*ptm_struct_type)[p] == static_cast<double>(PTM_MATCH_NONE) && buf_a[p] != static_cast<double>(PTM_MATCH_NONE) ) { ++n_rec; }
-        (*ptm_struct_type)[p] = buf_a[p];
+        const size_t cell = static_cast<size_t>( grid_ijk_to_index(dims,IJK{i,j,k}) );
+        const size_t np = cells[cell].size();
+        for(size_t p=0;p<np;p++)
+        {
+          const size_t f = cell_particle_offset[cell] + p;
+          ++n_owned;
+          if( (*ptm_struct_type)[f] == static_cast<double>(PTM_MATCH_NONE) && buf_a[f] != static_cast<double>(PTM_MATCH_NONE) ) { ++n_rec; }
+        }
       }
+      std::copy( buf_a.begin(), buf_a.end(), ptm_struct_type->begin() );
 
       *n_recovered = static_cast<long>( n_rec );
-      lout << "ptm_shrink_disorder: " << n_rec << " / " << total_particles << " particles recovered by neighbor consensus" << std::endl;
+      unsigned long long counts[2] = { n_rec, n_owned };
+      MPI_Allreduce( MPI_IN_PLACE, counts, 2, MPI_UNSIGNED_LONG_LONG, MPI_SUM, *mpi );
+      lout << "ptm_shrink_disorder: " << counts[0] << " / " << counts[1] << " particles recovered by neighbor consensus" << std::endl;
     }
 
     inline std::string documentation() const override final

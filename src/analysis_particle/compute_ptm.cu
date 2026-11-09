@@ -35,6 +35,7 @@ under the License.
 #include <ptm_initialize_data.h>
 
 #include <omp.h>
+#include <mpi.h>
 #include <vector>
 #include <cmath>
 #include <algorithm>
@@ -128,6 +129,7 @@ namespace exaStamp
   template<class GridT>
   class ComputePTM : public OperatorNode
   {
+    ADD_SLOT( MPI_Comm            , mpi             , INPUT , MPI_COMM_WORLD );
     ADD_SLOT( GridT               , grid            , INPUT_OUTPUT );
     ADD_SLOT( Domain              , domain          , INPUT , REQUIRED );
     ADD_SLOT( double              , rcut            , INPUT , REQUIRED , DocString{"Neighbor search cutoff, must include 14 neighbors for BCC (12 FCC/HCP/ICO, 6 SC). Only the 18 nearest are used"} );
@@ -167,6 +169,14 @@ namespace exaStamp
       ptm_struct_type->resize( total_particles );
       ptm_orientation->resize( total_particles * 4 );
       ptm_rmsd->resize( total_particles );
+      // ghost entries are not computed: give them the "no match" values instead of stale ones
+      std::fill( ptm_struct_type->begin(), ptm_struct_type->end(), static_cast<double>(PTM_MATCH_NONE) );
+      std::fill( ptm_rmsd->begin(), ptm_rmsd->end(), -1.0 );
+      for(size_t p=0;p<total_particles;p++)
+      {
+        double * q = ptm_orientation->data() + 4*p;
+        q[0] = 1.0; q[1] = 0.0; q[2] = 0.0; q[3] = 0.0;
+      }
 
       using ComputeBuffer = PTMComputeBuffer;
       ComputePairOptionalLocks<false> cp_locks {};
@@ -202,22 +212,38 @@ namespace exaStamp
       }
 
       size_t n_matched = 0;
+      size_t n_owned = 0;
       double rmsd_sum = 0.0;
       double angle_sum = 0.0; // deviation from identity orientation, degrees
-      for(size_t p=0;p<total_particles;p++)
+      const size_t * const cell_particle_offset = grid->cell_particle_offset_data();
+      for(ssize_t k=gl;k<dims.k-gl;k++)
+      for(ssize_t j=gl;j<dims.j-gl;j++)
+      for(ssize_t i=gl;i<dims.i-gl;i++)
       {
-        if( (*ptm_struct_type)[p] != static_cast<double>(PTM_MATCH_NONE) )
+        const size_t cell = static_cast<size_t>( grid_ijk_to_index(dims,IJK{i,j,k}) );
+        const size_t np = cells[cell].size();
+        for(size_t q=0;q<np;q++)
         {
-          ++n_matched;
-          rmsd_sum += (*ptm_rmsd)[p];
-          const double qw = std::min( 1.0, std::abs( (*ptm_orientation)[4*p+0] ) );
-          angle_sum += 2.0 * std::acos(qw) * (180.0/M_PI);
+          const size_t p = cell_particle_offset[cell] + q;
+          ++n_owned;
+          if( (*ptm_struct_type)[p] != static_cast<double>(PTM_MATCH_NONE) )
+          {
+            ++n_matched;
+            rmsd_sum += (*ptm_rmsd)[p];
+            const double qw = std::min( 1.0, std::abs( (*ptm_orientation)[4*p+0] ) );
+            angle_sum += 2.0 * std::acos(qw) * (180.0/M_PI);
+          }
         }
       }
       *ptm_n_matched = static_cast<long>(n_matched);
-      lout << "compute_ptm: " << n_matched << " / " << total_particles << " particles matched"
-           << ( n_matched>0 ? ( ", mean rmsd=" + std::to_string(rmsd_sum/n_matched)
-                                 + ", mean |angle from identity|=" + std::to_string(angle_sum/n_matched) + " deg" )
+
+      // log: totals over all ranks
+      double sums[4] = { double(n_matched), double(n_owned), rmsd_sum, angle_sum };
+      MPI_Allreduce( MPI_IN_PLACE, sums, 4, MPI_DOUBLE, MPI_SUM, *mpi );
+      const long g_matched = static_cast<long>( sums[0] );
+      lout << "compute_ptm: " << g_matched << " / " << static_cast<long>(sums[1]) << " particles matched"
+           << ( g_matched>0 ? ( ", mean rmsd=" + std::to_string(sums[2]/sums[0])
+                                 + ", mean |angle from identity|=" + std::to_string(sums[3]/sums[0]) + " deg" )
                              : std::string() ) << std::endl;
     }
 
