@@ -1,0 +1,3 @@
+# EAM alloy, multipass scheme with full neighbor lists (each pair computed by both atoms): see baseline_single_species.yaml
+includes:
+  - baseline_single_species.yaml

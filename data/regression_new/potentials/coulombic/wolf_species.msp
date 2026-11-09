@@ -1,0 +1,43 @@
+# Wolf, charges read from species (per_atom_charge: false)
+# Coulomb-only, 768 atoms of disturbed fluorite UO2 (generated). Accuracy vs LAMMPS is checked in lammps_validation/.
+
+species:
+  - O: { mass: 15.999000 Da , z: 8 , charge: -1.1104 e- }
+  - U: { mass: 238.02891 Da , z: 92 , charge: 2.2208 e- }
+
+coulombic_wolf:
+  per_atom_charge: false
+  parameters: { alpha: 0.25 1/ang , rc: 8.0 ang }
+
+compute_force:
+  - coulombic_wolf
+
+setup_system:
+  - domain:
+      cell_size: 5.45 ang
+      grid_dims: [ 4, 4, 4 ]
+      bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 21.8 ang, 21.8 ang, 21.8 ang ] ]
+      xform: [ [ 1, 0, 0 ], [ 0, 1, 0 ], [ 0, 0, 1 ] ]
+      periodic: [ true, true, true ]
+      expandable: false
+  - init_rcb_grid
+  - lattice: # fluorite UO2, 4x4x4 unit cells
+      structure: CUSTOM
+      types: [ U, U, U, U, O, O, O, O, O, O, O, O ]
+      positions:
+        [
+          [ 0.0, 0.0, 0.0 ], [ 0.0, 0.5, 0.5 ], [ 0.5, 0.0, 0.5 ], [ 0.5, 0.5, 0.0 ],
+          [ 0.25, 0.25, 0.25 ], [ 0.25, 0.25, 0.75 ], [ 0.25, 0.75, 0.25 ], [ 0.25, 0.75, 0.75 ],
+          [ 0.75, 0.25, 0.25 ], [ 0.75, 0.25, 0.75 ], [ 0.75, 0.75, 0.25 ], [ 0.75, 0.75, 0.75 ],
+        ]
+      size: [ 5.45 ang, 5.45 ang, 5.45 ang ]
+  - gaussian_noise_r: { sigma: 0.05 ang }
+  - copy_charge_species_to_particle
+
+global:
+  max_iteration: 10
+  simulation_thermostate_screen_frequency: 1
+  simulation_thermostate_file_frequency: -1
+  simulation_snapshot_frequency: -1
+  rcut_inc: 1.0 ang
+  dt: 0.001 ps

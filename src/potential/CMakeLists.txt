@@ -33,6 +33,7 @@ add_subdirectory(eam_potentials)
 # ================== Reactive Potentials ================ #
 add_subdirectory(LCHBOP)
 add_subdirectory(rebo)
+add_subdirectory(sw)
 # ======================================================= #
 
 # ======================================================= #
@@ -42,10 +43,9 @@ add_subdirectory(meam)
 
 # ======================================================= #
 # ================= Coulombic Potentials ================ #
-add_subdirectory(coul_dsf)
-add_subdirectory(coul_wolf)
-add_subdirectory(ewald)
-add_subdirectory(reaction_field)
+add_subdirectory(coulombic)
+#add_subdirectory(coul_dsf)
+#add_subdirectory(coul_wolf)
 # ======================================================= #
 
 # ======================================================= #
@@ -55,19 +55,20 @@ add_subdirectory(ljexp6rf)
 
 # ======================================================= #
 # ======= Machine Learning Interatomic Potentials ======= #
-if(EXASTAMP_BUILD_PACE)
-  add_subdirectory(mlip-pace)
-endif()
-
-if(EXASTAMP_BUILD_POD)
-  add_subdirectory(mlip-pod)
-endif()
-
-add_subdirectory(n2p2)
-
-add_subdirectory(snap)
-add_subdirectory(snaplegacy)
-add_subdirectory(snaplmp)
+# Moment Tensor Potential
+add_subdirectory(mlip-mtp)
+# Neural Network Potential
+add_subdirectory(mlip-n2p2)
+# Atomic Cluster Expansion Potential
+add_subdirectory(mlip-pace)
+# Proper Orthogonal Descriptor Potential
+add_subdirectory(mlip-pod)
+# Spectral Neighbor Analysis Potential
+add_subdirectory(mlip-snap)
+# Spectral Neighbor Analysis Potential (Legacy version)
+add_subdirectory(mlip-snaplegacy)
+# Spectral Neighbor Analysis Potential (external source version)
+add_subdirectory(mlip-snaplmp)
 # ======================================================= #
 
 # ======================================================= #

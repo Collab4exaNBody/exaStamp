@@ -144,7 +144,7 @@ namespace exaStamp
       // temperature
       static constexpr double conv_temperature = 1.202712206318418424189076176845;
       Vec3d temp = 2. * ( kinetic_energy - 0.5 * momentum * momentum / total_mass );
-      double temp_scale = ( conv_temperature * ( temp.x + temp.y + temp.z ) / 3. ) / total_particles;
+      double temp_scale = ( conv_temperature * ( temp.x + temp.y + temp.z ) / 3. ) / ( total_particles > 1 ? total_particles - 1. : 1. ); // COM-removed KE -> 3N-3 dof
   
       double min_temp = (*temperature)*(1.0-(*tolerance));
       double max_temp = (*temperature)*(1.0+(*tolerance));

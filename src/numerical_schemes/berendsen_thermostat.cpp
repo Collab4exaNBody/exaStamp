@@ -119,7 +119,7 @@ namespace exaStamp
 
       // Getting current temperature
       static constexpr double conv_temperature = 1.e4 * onika::physics::atomicMass / onika::physics::boltzmann;
-      double Tcurrent = sim_info.temperature_scal() / sim_info.particle_count() * conv_temperature;
+      double Tcurrent = sim_info.temperature_scal() / sim_info.temperature_dof_count() * conv_temperature;
 
       // Checking definition of target temperature
       bool constant_T = T.has_value();

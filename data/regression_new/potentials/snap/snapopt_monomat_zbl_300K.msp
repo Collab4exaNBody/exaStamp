@@ -2,7 +2,7 @@
 
 includes: [ "snaplmp_monomat_zbl_300K.msp" ]
 
-snap_force:
+snap_force_fp64:
   parameters:
     nt: 2
     param: "Mo_Chen_PRM2017.snapparam"
@@ -11,5 +11,5 @@ snap_force:
 # define potential we'll reuse later
 compute_force:
   - zbl_compute_force
-  - snap_force
+  - snap_force_fp64
 

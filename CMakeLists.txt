@@ -63,47 +63,21 @@ endif()
 # ======================================
 find_package(exaNBody)
 
-
-# ====================================
-# === PACE potential external libs ===
-# ====================================
-option(EXASTAMP_BUILD_PACE "Build PACE potential" OFF)
-set(PACE_GIT_REPO "git@github.com:Collab4exaNBody/exaStamp_mlip_pace.git" CACHE STRING "Git repository URL for PACE compute libraries")
-set(PACE_GIT_TAG "main" CACHE STRING "Git tag/branch for PACE compute libraries")
-set(PACE_EXTERNAL_DIR "${CMAKE_BINARY_DIR}/external/pace")
-set(YAML_CPP_INSTALL_DIR "" CACHE PATH "yaml-cpp installation directory (forwarded to PACE build)")
-
-if(EXASTAMP_BUILD_PACE)
-  if(NOT EXISTS "${PACE_EXTERNAL_DIR}/.git")
-    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/external")
-    message(STATUS "Cloning PACE libraries from ${PACE_GIT_REPO} (${PACE_GIT_TAG}) into ${PACE_EXTERNAL_DIR}")
-    execute_process(
-      COMMAND git clone --branch ${PACE_GIT_TAG} ${PACE_GIT_REPO} pace
-      WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/external"
-      RESULT_VARIABLE _pace_clone_result
-    )
-    if(NOT _pace_clone_result EQUAL 0)
-      message(FATAL_ERROR "Failed to clone PACE repository (exit code: ${_pace_clone_result})")
-    endif()
-  else()
-    message(STATUS "PACE libraries already present in ${PACE_EXTERNAL_DIR}")
-  endif()
+# Data files kept out of the repository (restarts, large configurations), in one flat folder.
+# Appended to the data search path (ONIKA_DATA_PATH) of the exaStamp wrappers when the folder exists.
+set(EXASTAMP_DATA_DIR "$ENV{HOME}/.local/exaStamp_data" CACHE PATH "Flat folder of exaStamp data files kept out of the repository")
+string(REPLACE ":" ";" _data_dirs "${exaStamp_DATA_DIRS}")
+if(EXASTAMP_DATA_DIR AND IS_DIRECTORY "${EXASTAMP_DATA_DIR}" AND NOT "${EXASTAMP_DATA_DIR}" IN_LIST _data_dirs)
+  set(exaStamp_DATA_DIRS "${exaStamp_DATA_DIRS}:${EXASTAMP_DATA_DIR}")
 endif()
+message(STATUS "exaStamp data search path : ${exaStamp_DATA_DIRS}")
 
-# ====================================
-# === POD potential external libs ====
-# ====================================
-option(EXASTAMP_BUILD_POD "Build POD potential" OFF)
-set(EXASTAMP_POD_BLAS_VENDOR "" CACHE STRING
-    "BLA_VENDOR hint for the POD potential (e.g. OpenBLAS, Intel10_64lp, Generic). Empty = CMake auto-selects.")
-if(EXASTAMP_BUILD_POD)
-  if(EXASTAMP_POD_BLAS_VENDOR)
-    set(BLA_VENDOR ${EXASTAMP_POD_BLAS_VENDOR})
-    message(STATUS "POD BLAS vendor: ${EXASTAMP_POD_BLAS_VENDOR}")
-  endif()
-  find_package(BLAS REQUIRED)
-  find_package(LAPACK REQUIRED)
-endif()
+
+# yaml-cpp installation directory (general onika variable, also used by the PACE build)
+set(YAML_CPP_INSTALL_DIR "" CACHE PATH "yaml-cpp installation directory")
+
+# Machine-learning potential build options (EXASTAMP_MLIP_<NAME>_*) are defined in each
+# src/potential/mlip-<name>/CMakeLists.txt.
 
 option(USE_RSA "Add RSA Package" OFF)
 if(USE_RSA)
@@ -125,8 +99,7 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/exaStamp DESTINATION include)
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/data DESTINATION ${CMAKE_INSTALL_PREFIX})
 if(ONIKA_REGRESSION_TEST_ENABLE)
   #  AddRegressionTestDir("${CMAKE_SOURCE_DIR}/data/regression")
-  file(GLOB_RECURSE POTENTIAL_FILES "${CMAKE_SOURCE_DIR}/data/potentials/*")
-  file(COPY ${POTENTIAL_FILES} DESTINATION ${CMAKE_BINARY_DIR})
+  # regression tests run in a copy of their input folder, with data/potentials reachable as './data' (cmake/AddSingleTest.cmake)
   add_subdirectory(data/regression_new)
 endif()
 

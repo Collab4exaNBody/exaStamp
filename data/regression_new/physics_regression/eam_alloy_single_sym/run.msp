@@ -1,0 +1,101 @@
+# eam/alloy (Ta), single species, sym kernel
+# generated from potentials/eam inputs, references in ref_values.dat / ref_thermo.yaml
+includes:
+  - ../common.yaml
+  - config_update_symmetric_forces.msp   # symmetric passes: forces/energies of ghost partners folded back to their owners
+
+grid_flavor: grid_flavor_multimat
+
+species:
+  - Ta: { mass: 180.95 Da , z: 73 , charge: 0 e- }
+
+configuration:
+  physics:
+    units:
+      length: angstrom
+      mass: Dalton
+      time: picosecond
+      charge: elementary_charge
+      temperature: kelvin
+      amount: particle
+      luminosity: candela
+      angle: radian
+      energy: joule
+  logging:
+    debug: false
+
+ghost_config: &ghost_update_params
+  gpu_buffer_pack: true
+  async_buffer_pack: true
+  staging_buffer: true
+  serialize_pack_send: true
+  wait_all: false
+
+ghost_config_opt: &ghost_update_opt_params
+  gpu_buffer_pack: true
+  async_buffer_pack: true
+  staging_buffer: true
+  serialize_pack_send: true
+  wait_all: true
+  opt_fields: [ "rho_dEmb" ]
+
+update_force_energy_from_ghost: *ghost_update_params
+
+ghost_update_r: *ghost_update_params
+
+ghost_update_all_no_fv: *ghost_update_params
+
+ghost_update_opt: *ghost_update_opt_params
+
+init_parameters:
+  rebind: { parameters: eam_alloy_parameters }
+  body:
+    - eam_alloy_init:
+        parameters:
+          file: "Ta1_Ravelo_2013.eam.alloy"
+
+chunk_neighbors:
+  config:
+    chunk_size: 4
+    build_particle_offset: true
+
+eam_rho:
+  - eam_alloy_force: { rcut: 5.30 ang , eam_rho: true , eam_rho2emb: false , eam_ghost: false , eam_force: false , eam_symmetry: true }
+
+eam_rho2emb:
+  - eam_alloy_force: { rcut: 5.30 ang , eam_rho: false , eam_rho2emb: true , eam_ghost: false , eam_force: false , eam_symmetry: true }
+
+eam_force:
+  - eam_alloy_force: { rcut: 5.30 ang , eam_rho: false , eam_rho2emb: false, eam_ghost: false , eam_force: true , eam_symmetry: true }
+
+compute_force:
+  rebind: { parameters: eam_alloy_parameters }
+  body:
+    - eam_rho
+    - update_opt_from_ghost: { opt_fields: [ "rho_dEmb" ] }   # symmetric rho: ghost contributions folded back to their owners
+    - eam_rho2emb
+    - ghost_update_opt: { opt_fields: [ "rho_dEmb" ] }        # dEmb/drho of owners sent to the ghosts
+    - eam_force
+
+setup_system:
+  - particle_types:
+      particle_type_map: { Ta: 0 }
+  - particle_type_add_properties:
+      Ta: { mass: 180.95 Da , z: 73 }
+  - domain:
+      cell_size: 6.6 ang
+      grid_dims: [10,10,10]
+      bounds: [[0 ang ,0 ang,0 ang],[66. ang, 66. ang, 66. ang]]
+      xform: [[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]]
+      periodic: [true,true,true]
+      expandable: false
+  - init_rcb_grid
+  - lattice:
+      structure: BCC
+      types: [ Ta, Ta]
+      size: [ 3.3 ang , 3.3 ang , 3.3 ang ]
+  - physics_regression_noise
+
++global:
+  rcut_inc: 1.0 ang
+  dt: 1.0e-3 ps

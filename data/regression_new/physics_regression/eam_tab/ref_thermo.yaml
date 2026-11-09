@@ -1,0 +1,7 @@
+particle_count: 4000
+potential_energy: -161866702.35897025
+kinetic_energy: 546815.63869408355
+rotational_energy: 0
+total_energy: -161319886.72027618
+volume: 46656
+virial: [ 0, 0, 0, 0, 0, 0, 0, 0, 0 ]

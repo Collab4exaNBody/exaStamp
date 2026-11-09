@@ -85,6 +85,7 @@ namespace YAML
 
     std::string line;
     std::ifstream file( file_to_load );
+    if( ! file.good() ) { onika::fatal_error() << "EAM alloy: cannot open potential file '" << file_to_load << "'" << std::endl; }
 
     // Ignore first 3 lines (always considered as comments in input file)
     for (int i = 1; i < 4; ++i)

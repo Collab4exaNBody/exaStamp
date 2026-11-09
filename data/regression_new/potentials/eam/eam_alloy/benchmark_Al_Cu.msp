@@ -1,3 +1,4 @@
+# EAM alloy benchmark (Al-Cu, 16000 atoms): the three force schemes, select one with compute_force below
 configuration:
   physics:
     units:
@@ -13,19 +14,12 @@ configuration:
   logging:
     debug: false
 
-chunk_neighbors:
-  config:
-    chunk_size: 1
-    build_particle_offset: true
-
-ghost_update_emb: &ghost_update_parms
+ghost_config: &ghost_update_parms
   gpu_buffer_pack: true
   async_buffer_pack: true
   staging_buffer: true
   serialize_pack_send: true
   wait_all: false
-
-update_rho_from_ghost: *ghost_update_parms
 
 update_force_energy_from_ghost: *ghost_update_parms
 
@@ -70,11 +64,11 @@ compute_force_singlepass:
   body:
     - eam_alloy_force: { rcut: 6.6825 ang , eam_rho: true , eam_rho2emb: true , eam_ghost: true , eam_force: true , eam_symmetry: false }
 
-# base version, computes extra ghosts to perform a single pass => slow
+# single pass: densities also computed for the ghosts (extra ghost layer) => simplest, slowest
 compute_force: compute_force_singlepass
-# alternatives
+# alternatives (see *_multipass*.msp)
 #compute_force: compute_force_nosym
-#compute_force: compute_force_sym
+#compute_force: compute_force_sym   # also include config_update_symmetric_forces.msp (forces of ghost partners folded back)
 
 species:
   - Al: { mass: 26.982 Da , z: 13 , charge: 0 e- }
@@ -111,18 +105,10 @@ setup_system:
   - gaussian_noise_v: { sigma: 50. m/s }  
 
 global:
+  deterministic_noise: true   # same initial state whatever the number of MPI processes
   max_iteration: 10
   simulation_thermostate_screen_frequency: 10
   simulation_thermostate_file_frequency: -1
   simulation_snapshot_frequency: -1
   rcut_inc: 1.0 ang
   dt: 1.0e-3 ps
-
-xxx_simulation_epilog:
-  - check_values:
-      file: eam_alloy_single_specy.dat
-      pos_threshold: 5.e-10
-      acc_threshold: 5.e-10
-      vel_threshold: 5.e-10
-
-

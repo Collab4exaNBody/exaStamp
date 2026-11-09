@@ -93,6 +93,10 @@ namespace exaStamp
       
       unsigned int m_nb_pair_params = 0;
       UserPotParams * m_user_pot_parameters = nullptr;
+      // owning storage of the pair parameters : p above may be a read-only shallow copy (pointers into owning
+      // containers, e.g. tabulated splines), it must not point into a temporary
+      using UserPotOwners = std::map< std::pair<std::string,std::string> , USTAMP_POTENTIAL_PARAMS >;
+      UserPotOwners * m_user_pot_owners = nullptr;
     };
   
     // helper functor, with templated call operator (with/without weights)
@@ -327,7 +331,10 @@ namespace YAML
         auto type_b =  pp["type_b"].as<std::string>();
         if( rmpp.m_user_pot_parameters == nullptr ) rmpp.m_user_pot_parameters = new /*( rmpp.m_user_pot_data )*/ UserPotParams {};
         auto & pair_pot = (* rmpp.m_user_pot_parameters) [ std::make_pair(type_a,type_b) ];
-        pair_pot.p = pp["parameters"].as<USTAMP_POTENTIAL_PARAMS>();
+        if( rmpp.m_user_pot_owners == nullptr ) rmpp.m_user_pot_owners = new typename std::remove_reference_t<decltype(rmpp)>::UserPotOwners {};
+        auto & owner = (* rmpp.m_user_pot_owners) [ std::make_pair(type_a,type_b) ];
+        owner = pp["parameters"].as<USTAMP_POTENTIAL_PARAMS>();
+        pair_pot.p = owner; // read-only view on persistent storage (map nodes never move)
         pair_pot.rcut = pp["rcut"].as<Quantity>().convert();
       }
       return true;

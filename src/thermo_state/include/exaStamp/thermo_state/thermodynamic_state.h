@@ -27,6 +27,9 @@ namespace exaStamp
 {
   using namespace exanb;
 
+  // temperature uses COM-removed kinetic energy -> N-1 dof per axis (3N-3 total, LAMMPS convention)
+  inline double temperature_dof_count(double n) { return n > 1. ? n - 1. : 1.; }
+
   class ThermodynamicState
   {
   public:
@@ -101,21 +104,21 @@ namespace exaStamp
     inline void set_temperature(const Vec3d& x) { m_temperature = x; }
     inline const Vec3d& temperature() const { return m_temperature; }
     inline double temperature_scal() const { return ( m_temperature.x + m_temperature.y + m_temperature.z ) / 3. ; }
-    inline double temperature_rigidmol_scal() const { return ( m_temperature.x + m_temperature.y + m_temperature.z ) / (3. + ndof_scal() / particle_count()) ; }
+    inline double temperature_rigidmol_scal() const { return ( m_temperature.x + m_temperature.y + m_temperature.z ) / 3. ; }
 
     inline void set_kinetic_temperature(const Vec3d& x) { m_kinetic_temperature = x; }
     inline const Vec3d& kinetic_temperature() const { return m_kinetic_temperature; }
     inline double kinetic_temperature_x() const { return m_kinetic_temperature.x ; }
     inline double kinetic_temperature_y() const { return m_kinetic_temperature.y ; }
     inline double kinetic_temperature_z() const { return m_kinetic_temperature.z ; }
-    inline double kinetic_temperature_scal() const { return ( m_kinetic_temperature.x + m_kinetic_temperature.y + m_kinetic_temperature.z ) / (3. + ndof_scal() / particle_count()) ; }
+    inline double kinetic_temperature_scal() const { return ( m_kinetic_temperature.x + m_kinetic_temperature.y + m_kinetic_temperature.z ) / 3. ; }
 
     inline void set_rotational_temperature(const Vec3d& x) { m_rotational_temperature = x; }
     inline const Vec3d& rotational_temperature() const { return m_rotational_temperature; }
     inline double rotational_temperature_x() const { return m_rotational_temperature.x ; }
     inline double rotational_temperature_y() const { return m_rotational_temperature.y ; }
     inline double rotational_temperature_z() const { return m_rotational_temperature.z ; }
-    inline double rotational_temperature_scal() const { return ( m_rotational_temperature.x + m_rotational_temperature.y + m_rotational_temperature.z ) / (3. + ndof_scal() / particle_count()) ; }
+    inline double rotational_temperature_scal() const { return ( m_rotational_temperature.x + m_rotational_temperature.y + m_rotational_temperature.z ) / 3. ; }
 
     inline void set_kinetic_momentum(const Vec3d& x) { m_kinetic_momentum = x; }
     inline const Vec3d& kinetic_momentum() const { return m_kinetic_momentum; }
@@ -140,6 +143,7 @@ namespace exaStamp
 
     inline void set_particle_count(size_t x) { m_particle_count = x; }
     inline size_t particle_count() const { return m_particle_count; }
+    inline double temperature_dof_count() const { return exaStamp::temperature_dof_count( m_particle_count ); }
     
   private:
     Mat3d m_virial;

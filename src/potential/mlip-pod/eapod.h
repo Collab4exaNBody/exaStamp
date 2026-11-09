@@ -74,6 +74,11 @@ class EAPOD {
   double rcut;
   int true4BodyDesc;
 
+  bool useScaledLJ;
+  double scaleLJ;
+  double fadeinMu;
+  double fadeinDelta;
+
   int nelements;
   int pbc[3];
   int *elemindex;
@@ -206,6 +211,14 @@ class EAPOD {
   double peratomenergyforce2_soa(const double *drx, const double *dry, const double *drz,
                                  int ti_0indexed, const int *tj_0indexed, int Nj,
                                  const int *type_map);
+
+  // SoA variant of peratombase_descriptors -- same SoA->AoS packing pattern as
+  // peratomenergyforce2_soa above, but calls the coefficient-free descriptor path
+  // instead of the energy path. No central-atom type needed: base descriptors don't
+  // depend on it (that only matters downstream, in the environment/cluster layer or
+  // coefficient contraction). Result left in bd/Mdesc.
+  void peratombase_descriptors_soa(const double *drx, const double *dry, const double *drz,
+                                   const int *tj_0indexed, int Nj, const int *type_map);
 
   double energyforce(double *force, double *x, int *atomtype, int *alist, int *jlist,
                      int *pairnumsum, int natom);

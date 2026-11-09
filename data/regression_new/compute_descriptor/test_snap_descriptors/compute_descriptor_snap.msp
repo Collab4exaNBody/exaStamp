@@ -1,0 +1,37 @@
+# enable-if-EXASTAMP_MLIP_SNAP_BUILD enable-if-XNB_BUILD_mdSnap
+species:
+  - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+
+init_parameters:
+  - species
+  - snap_init:
+      parameters:
+        param: "param.txt"
+        coef: "coeff.txt"
+
+setup_system:
+  - domain:
+      cell_size: 6.0 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_xyz_file_with_xform:
+      filename: "tantalum_noisy.xyz"
+
+global:
+  max_iteration: 1
+  dt: 1.0e-3 ps
+
+# Smoke test: per-atom descriptors, derivative aggregate and their ghost reduction, no output file.
+compute_descriptor_snap:
+  compute_derivative: true
+
+update_opt_from_ghost:
+  opt_fields: [ "sda_.*" ]
+
+simulation_epilog:
+  - compute_descriptor_snap
+  - update_opt_from_ghost   # required whenever compute_derivative is used on more than one rank
+  - print_test:
+      rebind: { value: ncoeff }
+      body:
+        - print_int: { prefix: "ncoeff=", suffix: "\n" }

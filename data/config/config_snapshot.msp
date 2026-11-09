@@ -63,7 +63,7 @@ write_snapshot_xyz:
       rebind: { mesg: filename }
       body:
         - message: { endl: true }
-  - write_xyz_file
+  - write_xyz
 
 write_snapshot_lammps_data:
   - timestep_file: "exaStamp_%09d.lmp"
@@ -72,7 +72,7 @@ write_snapshot_lammps_data:
       rebind: { mesg: filename }
       body:
         - message: { endl: true }
-  - write_lmp_file
+  - write_lmp
 
 ######################################################################################################
 ######################################################################################################

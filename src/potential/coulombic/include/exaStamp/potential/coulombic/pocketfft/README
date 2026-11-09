@@ -1,0 +1,4 @@
+pocketfft C++ header-only FFT (BSD-3-Clause, see LICENSE.md).
+Source: https://github.com/mreineck/pocketfft branch cpp, file pocketfft_hdronly.h
+Downloaded 2026-10-07, sha256 3e9a05318d8e3b1446bda1c4617e6a103cdd23599ae0a776a92a6e8800e92fdc
+Used by coulombic_pppm (CPU FFT path). Unmodified.

@@ -82,7 +82,7 @@ xxx_mur:
 
 # user-specified dump data
 #dump_data: 
-#  - write_xyz_file
+#  - write_xyz
 #  - timestep_file:  "output_%09d"
 
 #  - timestep_file: "molstampv4_%05d.mpio"

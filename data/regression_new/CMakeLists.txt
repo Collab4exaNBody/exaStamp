@@ -15,6 +15,11 @@ AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/compute_local_average")
 # WARNING : this depends on onika bugfix-xs_data_move branch
 AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/compute_local_strain")
 
+# Regression tests for the unified compute_descriptor_<family>/write_descriptor_<family> pipeline
+# (SNAP/POD/k2b/MTP per-atom + SNAP/POD/k2b global design-matrix descriptor tests)
+# Layout: compute_descriptor/<testcase>/<variant>.msp
+AddRegressionTestSimple("${CMAKE_CURRENT_SOURCE_DIR}/compute_descriptor")
+
 # Regression tests for testing generic_vec3 operators
 # Layout: boundary_conditions/<variant>.msp
 AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/constraints/generic_vec3")
@@ -68,6 +73,10 @@ AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/particle_regions")
 # Layout: potentials/pair/<testcase>/<variant>.msp
 AddRegressionTestSimple("${CMAKE_CURRENT_SOURCE_DIR}/potentials/pair")
 
+# Regression tests for coulombic operators (wolf, dsf, rf, ewald), run-only on 768 atoms of UO2
+# Layout: potentials/coulombic/<variant>.msp ; lammps_validation/ (accuracy vs LAMMPS, run by hand) is not registered
+AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/potentials/coulombic")
+
 # Regression tests for eam potentials
 # Layout: potentials/eam/<testcase>/<variant>.msp
 AddRegressionTestSimple("${CMAKE_CURRENT_SOURCE_DIR}/potentials/eam")
@@ -92,3 +101,7 @@ AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/ttm")
 # Regression tests for applied deformation using xform_function
 # Layout: potentials/eam/<testcase>/<variant>.msp
 AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/xform_function")
+# Physics regression collection: one case per interatomic potential, noisy start, 10 steps,
+# compared to committed references (check_values + check_thermodynamic_state), see physics_regression/README.md
+# Layout: physics_regression/<case>/run.msp
+AddRegressionTestSimple("${CMAKE_CURRENT_SOURCE_DIR}/physics_regression")

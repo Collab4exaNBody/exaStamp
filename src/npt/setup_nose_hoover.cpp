@@ -49,7 +49,7 @@ namespace exaStamp
       static const double conv_temperature = 1.e4 * onika::physics::atomicMass / onika::physics::boltzmann;
       const ThermodynamicState& sim_info = *(this->thermodynamic_state);
       long natoms = sim_info.particle_count();
-      npt_ctx->t_current = sim_info.temperature_scal() / natoms * conv_temperature;
+      npt_ctx->t_current = sim_info.temperature_scal() / sim_info.temperature_dof_count() * conv_temperature;
       npt_ctx->tdof = 3 * natoms - 3;
       
       if ( npt_ctx->tstat_flag) {

@@ -1,0 +1,55 @@
+# IGAR external energy field (igar_force_interp), Ar on a simple cubic lattice, LJ switched off (epsilon 0)
+# igar_field.vtk : smooth periodic field written by make_igar_field.py (16^3 = 4^3 cells x grid_subdiv 4)
+includes:
+  - ../common.yaml
+
+species:
+  - Ar: { mass: 39.948 Da, z: 18, charge: 0.0 e- }
+
+lj_compute_force:
+  parameters: { epsilon: 0.0 eV, sigma: 3.4 ang }
+  rcut: 5.0 ang
+
+compute_force_prolog:
+  - zero_force_energy: { ghost: true }
+
+compute_force:
+  - lj_compute_force
+  - igar_force_interp: { energy_factor: 20000.0 }
+
+preinit_rcut_max:
+  profiling: false
+  rebind: { grid: null_grid, chunk_neighbors: null_neighbors, domain: empty_domain }
+  body:
+    - domain:
+        cell_size: 0.0 ang
+        grid_dims: [ 0 , 0 , 0 ]
+        periodic: [ true , true , true ]
+    - lj_compute_force
+    - nbh_dist
+
+setup_system:
+  - domain:
+      cell_size: 15.5 ang
+      grid_dims: [ 4, 4, 4 ]
+      bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 62. ang, 62. ang, 62. ang ] ]
+      xform: [ [ 1, 0, 0 ], [ 0, 1, 0 ], [ 0, 0, 1 ] ]
+      periodic: [ true, true, true ]
+      expandable: false
+  - init_rcb_grid
+  - lattice:
+      structure: SC
+      types: [ Ar ]
+      size: [ 2.1 ang, 2.1 ang, 2.1 ang ]
+  - physics_regression_noise
+  - read_cell_values:
+      field_name: "igar_ep"
+      field_dim: 1
+      grid_subdiv: 4
+      file_name: "igar_field.vtk"
+
+
++global:
+  enable_cell_values: true
+  rcut_inc: 1.0 ang
+  dt: 0.5 fs

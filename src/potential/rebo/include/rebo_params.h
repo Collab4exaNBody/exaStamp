@@ -728,8 +728,7 @@ namespace YAML
       const std::string file_path = onika::data_file_path(v.potential_file);
       std::ifstream f(file_path);
       if (!f.is_open()) {
-        lerr << "Cannot open Rebo potential file: " << file_path << std::endl;
-        return false;
+        onika::fatal_error() << "REBO: cannot open potential file '" << file_path << "'" << std::endl;
       }
       lout << "Reading Rebo potential file: " << file_path << std::endl;
 

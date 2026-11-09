@@ -36,6 +36,7 @@ under the License.
 #include <type_traits>
 
 #include "pair_potential_template.h"
+#include <onika/cuda/cuda.h>
 
 // this allows for parallel compilation of templated operator for each available field set
 
@@ -311,23 +312,31 @@ namespace exaStamp
             tmp_vir += pair_vir;
           }
 
-          auto& lock_b = locks[cell_b][p_b];
-          lock_b.lock();
-          ep_b[p_b] += energy;
-          fx_b[p_b] -= fe_x ; 
-          fy_b[p_b] -= fe_y ; 
-          fz_b[p_b] -= fe_z ; 
-          if constexpr (compute_virial) { vir_b[p_b] += pair_vir; }
-          lock_b.unlock();
+          // atomic updates of the partner particle : compute_cell_particle_pairs may call this functor through
+          // its overload without locks (NullGridParticleLocks), so particle locks cannot be relied on here
+          ONIKA_CU_ATOMIC_ADD( ep_b[p_b] , energy );
+          ONIKA_CU_ATOMIC_ADD( fx_b[p_b] , -fe_x );
+          ONIKA_CU_ATOMIC_ADD( fy_b[p_b] , -fe_y );
+          ONIKA_CU_ATOMIC_ADD( fz_b[p_b] , -fe_z );
+          if constexpr (compute_virial)
+          {
+            ONIKA_CU_ATOMIC_ADD( vir_b[p_b].m11 , pair_vir.m11 ); ONIKA_CU_ATOMIC_ADD( vir_b[p_b].m12 , pair_vir.m12 ); ONIKA_CU_ATOMIC_ADD( vir_b[p_b].m13 , pair_vir.m13 );
+            ONIKA_CU_ATOMIC_ADD( vir_b[p_b].m21 , pair_vir.m21 ); ONIKA_CU_ATOMIC_ADD( vir_b[p_b].m22 , pair_vir.m22 ); ONIKA_CU_ATOMIC_ADD( vir_b[p_b].m23 , pair_vir.m23 );
+            ONIKA_CU_ATOMIC_ADD( vir_b[p_b].m31 , pair_vir.m31 ); ONIKA_CU_ATOMIC_ADD( vir_b[p_b].m32 , pair_vir.m32 ); ONIKA_CU_ATOMIC_ADD( vir_b[p_b].m33 , pair_vir.m33 );
+          }
         }
 
-        lock_a.lock();
-        _ep += tmp_ep;
-        _fx += tmp_fx;
-        _fy += tmp_fy;
-        _fz += tmp_fz;
-        if constexpr (compute_virial) { virial += tmp_vir; }
-        lock_a.unlock();
+        // the center particle is also the partner of other pairs computed concurrently : atomic updates too
+        ONIKA_CU_ATOMIC_ADD( _ep , tmp_ep );
+        ONIKA_CU_ATOMIC_ADD( _fx , tmp_fx );
+        ONIKA_CU_ATOMIC_ADD( _fy , tmp_fy );
+        ONIKA_CU_ATOMIC_ADD( _fz , tmp_fz );
+        if constexpr (compute_virial)
+        {
+          ONIKA_CU_ATOMIC_ADD( virial.m11 , tmp_vir.m11 ); ONIKA_CU_ATOMIC_ADD( virial.m12 , tmp_vir.m12 ); ONIKA_CU_ATOMIC_ADD( virial.m13 , tmp_vir.m13 );
+          ONIKA_CU_ATOMIC_ADD( virial.m21 , tmp_vir.m21 ); ONIKA_CU_ATOMIC_ADD( virial.m22 , tmp_vir.m22 ); ONIKA_CU_ATOMIC_ADD( virial.m23 , tmp_vir.m23 );
+          ONIKA_CU_ATOMIC_ADD( virial.m31 , tmp_vir.m31 ); ONIKA_CU_ATOMIC_ADD( virial.m32 , tmp_vir.m32 ); ONIKA_CU_ATOMIC_ADD( virial.m33 , tmp_vir.m33 );
+        }
       }
     };
 

@@ -98,6 +98,7 @@ fire_trajectory_loop:
   body:
     - fire_loop_prolog
     - begin_iteration
+    - force_thermo_state                  # potential energy needed at every iteration
     - simulation_thermodynamic_state
     - fire_power
     # NOTE: "rebind:" is only ever applied by the batch-construction code path, which only

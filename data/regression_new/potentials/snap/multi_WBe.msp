@@ -7,7 +7,7 @@ configuration:
   logging:
     debug: false
   debug:
-    filter: [ ".*snap_force" ]
+    filter: [ ".*snap_force_fp64" ]
 
 zbl_multi_force:
   rcut: 4.8 ang
@@ -23,7 +23,7 @@ snaplmp_force: &snapconfig
     param: "WBe_Wood_PRB2019.snapparam"
     coef: "WBe_Wood_PRB2019.snapcoeff"
 
-snap_force: *snapconfig
+snap_force_fp64: *snapconfig
 
 species:
   - W:
@@ -46,7 +46,7 @@ input_data:
 
 compute_force:
   - zbl_multi_force
-  - snap_force
+  - snap_force_fp64
 #  - snaplmp_force
 #  - langevin_thermostat: { T: 300 K , gamma: 0.1 ps^-1 }
 
