@@ -48,7 +48,7 @@ species:
 
 input_data:
   - read_stamp_v3:
-      file: microjet.mpio
+      filename: microjet.mpio
       bounds_mode: FILE
 #  - replicate_domain: [ 1 , 2 , 2 ]
 
@@ -81,9 +81,7 @@ global:
 # define potential we'll reuse later
 compute_force:
   - resize_grid_cell_values
-  - grid_cell_particle_splatting:
-      enable_temperature: false
-      enable_velocity_vector: false
+  - atom_cell_projection:
       grid_subdiv: 8
       splat_size: 2.0 ang
   - meam_force

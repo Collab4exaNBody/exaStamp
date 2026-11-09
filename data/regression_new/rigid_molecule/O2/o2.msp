@@ -12,7 +12,6 @@ ljrf_rigidmol_force:
         rcut: 8 ang,
         parameters:
           {
-            rf_rcut: 8 ang,
             rf: { epsilon: 100, rc: 8 ang },
             lj_rcut: 8 ang,
             lj: { epsilon: 1.286776984E-21 J, sigma: 0.31589E-09 m },

@@ -19,6 +19,7 @@ under the License.
 
 #include <cmath>
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 
 #include <onika/physics/units.h>
 #include <onika/log.h>
@@ -62,6 +63,7 @@ namespace YAML
       using onika::physics::Quantity;
 
       if( !node.IsMap() ) { return false; }
+      exaStamp::check_yaml_keys( node , { "dielectric", "shift" } , "coul_cut parameters" );
       v.dielectric = node["dielectric"].as<Quantity>().convert();
       // the pair potential template always shifts the energy to 0 at the cutoff : 'shift' is accepted for older inputs only
       if( node["shift"] && ! node["shift"].as<bool>() )

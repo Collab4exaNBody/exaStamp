@@ -24,6 +24,7 @@ under the License.
 #include <fstream>
 #include <sstream>
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 
 #include <onika/physics/units.h>
 #include <onika/physics/constants.h>
@@ -721,6 +722,7 @@ namespace YAML
       using exanb::lerr;
 
       if (!node.IsMap())           { return false; }
+      exaStamp::check_yaml_keys( node , { "potential_file" } , "rebo parameters" );
       if (!node["potential_file"]) { return false; }
 
       v.potential_file = node["potential_file"].as<std::string>();

@@ -70,12 +70,12 @@ compute_LCHBOP:
 
 
 compute_force_bond:
-      virial: false
+      compute_virial: false
       potentials:
          - *bond_A_B
 
 compute_force_bend:
-      virial: false
+      compute_virial: false
       potentials_for_angles:
          - *bend_A_B_A
 
@@ -115,7 +115,7 @@ init_particles:
 # define the verlet numerical scheme
 numerical_scheme_verlet:
   body:
-    - push_position_2nd_order: { dt_scale: 1.0 }
+    - push_f_v_r: { dt_scale: 1.0 }
     - push_velocity_1st_order: { dt_scale: 0.5 }
     - ghost_update_rv
     - zero_force_energy

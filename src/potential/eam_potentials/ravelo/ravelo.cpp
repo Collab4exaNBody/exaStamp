@@ -16,6 +16,7 @@ under the License.
 */
 
 #include "ravelo.h"
+#include <exaStamp/yaml_check_keys.h>
 #include <onika/file_utils.h>
 #include <onika/yaml/yaml_utils.h>
 #include <onika/log.h>
@@ -43,6 +44,7 @@ namespace YAML
     else
     {
       if( !node.IsMap() ) { return false; }
+      exaStamp::check_yaml_keys( node , { "file", "format", "rho", "f", "df", "Ec", "alpha", "a0", "f3", "f4", "U0", "r1", "alphap", "beta3", "beta4", "rs", "s", "rc", "a1", "a2", "a3", "a4", "p", "q", "rho0" } , "eam ravelo parameters" );
       if( node["file"] )
       {
         file_to_load = node["file"].as<std::string>();

@@ -1,10 +1,9 @@
 # define potential we'll reuse later
-compute_force:
-  symetric: true
-  virial: false
-  potential: lj
+lj_compute_force:
   parameters: { epsilon: 9.340E-20 J , sigma: 0.227E-09 m }
   rcut: 5.68 ang
+
+compute_force: lj_compute_force
 
 # atoms descriptions
 species:
@@ -25,11 +24,6 @@ domain:
   cell_size: 30.0 ang
   periodic: [true,true,true]
 #  grid_dims: [12,12,12]
-
-# (optional) specialize update_particles for the mono material symetric particular case
-update_particle_neighbors:
-  - compute_primary_neighbors_monomat
-  - resize_particle_locks
 
 do_load_balancing:
   condition: trigger_load_balance

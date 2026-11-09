@@ -19,6 +19,7 @@ under the License.
 
 #include <cmath>
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 #include <functional>
 #include <vector>
 #include <algorithm>
@@ -83,6 +84,7 @@ namespace YAML
   {
     static bool decode(const Node& node, BondPotential& b)
     {
+      exaStamp::check_yaml_keys( node , { "types", "potential", "parameters" } , "bond potential" );
       if(!node["potential"])
         {
           lerr << "No potential type given in the bond interaction. Choice are harmBond and bond." << std::endl;

@@ -41,7 +41,6 @@ species:
      charge: -0.4680 e-
 
 LCHBOP_inits:
-   flag_vmr: false
 #   parameters
 #   nbclist
 #   LCHBOP_rc_perf         : [8e-10, 1.2e-10] 
@@ -52,7 +51,6 @@ grid_flavor: grid_flavor_full
 input_data_xyz:
   - read_xyz_file:
      file: C216.xyz
-     resize_factor: 0.0025381
 
 domain:
 #  periodic: [true,true,true]
@@ -84,10 +82,10 @@ simulation:
   - LCHBOP_inits
   - compute_loop:
       loop: false
-      condition: compute_loop_continue
+      condition: md_loop_continue
       body:
 #        - update_particles
-        - push_position_2nd_order: { dt_scale: 1.0 }
+        - push_f_v_r: { dt_scale: 1.0 }
         - push_f_v: { dt_scale: 0.5 }
         - ghost_update_r
         - zero_force_energy
@@ -96,5 +94,5 @@ simulation:
         - push_f_v: { dt_scale: 0.5 }
         - write_paraview
         - end_iteration
-        - compute_loop_stop
+        - md_loop_stop
 
