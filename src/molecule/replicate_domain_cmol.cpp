@@ -41,11 +41,14 @@ namespace exaStamp
     template<class FieldTupleT>
     inline void operator () ( FieldTupleT& tp , int64_t id_offset ) const
     {
-      if constexpr ( tp.has_field( field::id ) )
+      // tp.has_field(...) is static constexpr but calling it through the
+      // instance inside if-constexpr trips a Clang strictness quirk; use
+      // onika's documented workaround instead (field_tuple_has_field_v).
+      if constexpr ( onika::soatl::field_tuple_has_field_v<FieldTupleT, field::_id> )
       {
         tp[field::id] += id_offset;
       }
-      if constexpr ( tp.has_field( field::cmol ) )
+      if constexpr ( onika::soatl::field_tuple_has_field_v<FieldTupleT, field::_cmol> )
       {
         auto cmol = tp[field::cmol];
         for(size_t i=0;i<cmol.size();i++)

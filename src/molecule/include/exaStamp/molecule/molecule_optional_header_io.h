@@ -37,7 +37,7 @@ namespace exaStamp
     static inline constexpr uint64_t header_version = 101; // Version 1.1 adds potential and weighting parameters in optional header
   
     // since version 1.0
-    IntraFFtypes& m_ffnameVector = nullptr;
+    IntraFFtypes& m_ffnameVector;
     bool& m_rf_self_pairs;
     bool& m_long_range_correction;    
     
