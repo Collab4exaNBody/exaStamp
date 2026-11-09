@@ -113,36 +113,50 @@ namespace exaStamp
       const size_t n_particles = grid->number_of_particles();
       const size_t n_cells = grid->number_of_cells();
       const size_t * const cell_particle_offset = grid->cell_particle_offset_data();
+      const int max_neighbors = static_cast<int>( grain_bond_count->size()>0 ? (grain_bond_id->size()/grain_bond_count->size()) : 0 );
 
-      std::vector<double> struct_type( n_particles );
-      std::vector<double> orientation_mat3( n_particles*9 );
-      std::vector<uint64_t> global_id( n_particles );
+      // Cluster OWNED atoms only. Ghost atoms are periodic/MPI images sharing the global id of a real
+      // atom: as separate graph nodes they split boundary atoms in two (bond targets resolved to
+      // whichever copy came last) and get counted in cluster sizes. Bond buffers are only filled for
+      // owned atoms anyway. A bond to a ghost resolves, by global id, to the owned atom it images.
+      std::vector<size_t> owned; // compact index -> flat particle index
+      owned.reserve( n_particles );
+      std::vector<double> struct_type;
+      std::vector<double> orientation_mat3;
+      std::vector<uint64_t> global_id;
+      std::vector<uint64_t> bond_id;
+      std::vector<double> bond_distance, bond_disorientation;
+      std::vector<int> bond_count;
       {
         auto cells = grid->cells_accessor();
         auto type_acc = grid->field_accessor( field::mk_generic_real( *struct_field ) );
         auto orient_acc = grid->field_accessor( field::mk_generic_mat3( *orient_field ) );
         for(size_t c=0;c<n_cells;c++)
         {
+          if( grid->is_ghost_cell(c) ) { continue; }
           const size_t np = cells[c].size();
           for(size_t p=0;p<np;p++)
           {
             const size_t i = cell_particle_offset[c] + p;
-            struct_type[i] = cells[c][type_acc][p];
+            owned.push_back( i );
+            struct_type.push_back( cells[c][type_acc][p] );
             const Mat3d R = cells[c][orient_acc][p];
-            orientation_mat3[9*i+0]=R.m11; orientation_mat3[9*i+1]=R.m12; orientation_mat3[9*i+2]=R.m13;
-            orientation_mat3[9*i+3]=R.m21; orientation_mat3[9*i+4]=R.m22; orientation_mat3[9*i+5]=R.m23;
-            orientation_mat3[9*i+6]=R.m31; orientation_mat3[9*i+7]=R.m32; orientation_mat3[9*i+8]=R.m33;
-            global_id[i] = cells[c][field::id][p];
+            const double m[9] = { R.m11,R.m12,R.m13, R.m21,R.m22,R.m23, R.m31,R.m32,R.m33 };
+            orientation_mat3.insert( orientation_mat3.end(), m, m+9 );
+            global_id.push_back( cells[c][field::id][p] );
+            const size_t base = i*static_cast<size_t>(max_neighbors);
+            bond_id.insert( bond_id.end(), grain_bond_id->data()+base, grain_bond_id->data()+base+max_neighbors );
+            bond_distance.insert( bond_distance.end(), grain_bond_distance->data()+base, grain_bond_distance->data()+base+max_neighbors );
+            bond_disorientation.insert( bond_disorientation.end(), grain_bond_disorientation->data()+base, grain_bond_disorientation->data()+base+max_neighbors );
+            bond_count.push_back( (*grain_bond_count)[i] );
           }
         }
       }
 
-      const int max_neighbors = static_cast<int>( grain_bond_count->size()>0 ? (grain_bond_id->size()/grain_bond_count->size()) : 0 );
-
       GrainSegmentationResult result;
       grain_segmentation_nps(
-        n_particles, struct_type.data(), orientation_mat3.data(), global_id.data(),
-        grain_bond_id->data(), grain_bond_distance->data(), grain_bond_disorientation->data(), grain_bond_count->data(),
+        owned.size(), struct_type.data(), orientation_mat3.data(), global_id.data(),
+        bond_id.data(), bond_distance.data(), bond_disorientation.data(), bond_count.data(),
         max_neighbors, *auto_threshold, *manual_threshold_log, *min_grain_atom_count, *orphan_adoption, *color_seed,
         result );
 
@@ -156,8 +170,25 @@ namespace exaStamp
       auto color_acc = grid->field_accessor( field::mk_generic_vec3( *grain_color_field ) );
       // atom_grain_id is 0-based-"none"/1-based-grain internally (matches union-find root indexing
       // convention); shift to -1="none" for the OUTPUT field.
-      std::vector<int32_t> shifted( n_particles );
-      for(size_t i=0;i<n_particles;i++) { shifted[i] = result.atom_grain_id[i] - 1; }
+      // owned atoms get their own result, ghost copies the result of the owned atom with the same id
+      // (-1 if that atom is owned by another MPI rank)
+      std::unordered_map<uint64_t,int32_t> id_to_grain;
+      id_to_grain.reserve( owned.size()*2 );
+      std::vector<int32_t> shifted( n_particles, -1 );
+      for(size_t k=0;k<owned.size();k++) { shifted[owned[k]] = result.atom_grain_id[k] - 1; id_to_grain[global_id[k]] = shifted[owned[k]]; }
+      {
+        auto cells = grid->cells_accessor();
+        for(size_t c=0;c<n_cells;c++)
+        {
+          if( ! grid->is_ghost_cell(c) ) { continue; }
+          const size_t np = cells[c].size();
+          for(size_t p=0;p<np;p++)
+          {
+            auto it = id_to_grain.find( cells[c][field::id][p] );
+            if( it != id_to_grain.end() ) { shifted[ cell_particle_offset[c] + p ] = it->second; }
+          }
+        }
+      }
       GrainIdFieldFunctor func = { cell_particle_offset, shifted.data(), result.grain_color.empty() ? nullptr : &result.grain_color[0].x };
       compute_cell_particles( *grid, false, func, onika::make_flat_tuple( id_acc, color_acc ), parallel_execution_context() );
     }

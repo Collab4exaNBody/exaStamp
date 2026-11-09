@@ -18,6 +18,7 @@ under the License.
 #include <exaStamp/analysis_particle/grains/grain_segmentation_algo.h>
 #include <exaStamp/analysis_particle/grains/grain_quat_math.h>
 #include <onika/log.h>
+#include <ptm_constants.h>
 
 #include <unordered_map>
 #include <unordered_set>
@@ -80,6 +81,7 @@ namespace exaStamp
     {
       const int parent = ( graph[a].adj.size() >= graph[b].adj.size() ) ? a : b;
       const int child  = ( parent == a ) ? b : a;
+      const double merged_wnode = graph[a].wnode + graph[b].wnode; // NPS node weight: sum, internal edges included (OVITO Graph::contract_edge)
       for( const auto& kv : graph[child].adj )
       {
         const int v = kv.first; const double w = kv.second;
@@ -89,13 +91,14 @@ namespace exaStamp
         graph[parent].adj[v] = new_w;
         graph[v].adj[parent] = new_w;
         graph[v].adj.erase(child);
-        recompute_wnode( graph, v );
+        // wnode[v] unchanged: v's edge to child moved to parent with the same weight (OVITO keeps the
+        // accumulated node weight, internal edges included; recomputing it from adj would drop them)
       }
       graph[parent].adj.erase(child);
       graph[child].adj.clear(); // dead now -- must not leave stale entries a re-visited chain index could read
       graph[child].wnode = 0.0;
       graph[child].alive = false;
-      recompute_wnode( graph, parent );
+      graph[parent].wnode = merged_wnode;
       return parent;
     }
 
@@ -112,7 +115,7 @@ namespace exaStamp
         const double d = graph[v].wnode / w;
         if( d < best_d || ( d == best_d && v < best_v ) ) { best_d = d; best_v = v; }
       }
-      return { best_d, best_v };
+      return { best_d * graph[a].wnode, best_v };
     }
 
     inline double quat_norm( const double* q ) { return std::sqrt( q[0]*q[0]+q[1]*q[1]+q[2]*q[2]+q[3]*q[3] ); }
@@ -244,11 +247,29 @@ namespace exaStamp
     // ---- build the crystalline candidate graph (undirected; both directions of a bond agree on
     // weight since disorientation is a true symmetric distance, see grain_quat_math.h) ----
     std::vector<GraphNode> graph( n_atoms );
+    std::vector<int> order;
     for(size_t i=0;i<n_atoms;i++)
     {
       const int cnt = bond_count[i];
-      for(int k=0;k<cnt;k++)
+      // OVITO only bonds an atom to its PTM template neighbors (PTMNeighborFinder): keep the
+      // n_template nearest recorded bonds as clustering candidates
+      int n_template = 0;
+      switch( static_cast<int>( struct_type[i] ) )
       {
+        case PTM_MATCH_FCC: n_template = PTM_NUM_NBRS_FCC; break;
+        case PTM_MATCH_HCP: n_template = PTM_NUM_NBRS_HCP; break;
+        case PTM_MATCH_BCC: n_template = PTM_NUM_NBRS_BCC; break;
+        case PTM_MATCH_ICO: n_template = PTM_NUM_NBRS_ICO; break;
+        case PTM_MATCH_SC:  n_template = PTM_NUM_NBRS_SC;  break;
+        default: n_template = 0; break;
+      }
+      order.resize( cnt );
+      for(int k=0;k<cnt;k++) { order[k] = k; }
+      const size_t base_i = i*static_cast<size_t>(max_neighbors);
+      std::sort( order.begin(), order.end(), [&]( int p, int q ){ return bond_distance[base_i+p] < bond_distance[base_i+q]; } );
+      for(int kk=0;kk<std::min(cnt,n_template);kk++)
+      {
+        const int k = order[kk];
         const size_t slot = i*static_cast<size_t>(max_neighbors) + static_cast<size_t>(k);
         const double deg = bond_disorientation[slot];
         if( deg < 0.0 ) { continue; }
