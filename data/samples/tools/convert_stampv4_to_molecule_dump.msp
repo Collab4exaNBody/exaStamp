@@ -3,8 +3,8 @@
 
 includes:
   - config_molecule.msp
-  - PB.cfg
-  - stampv4_to_molecule_dump.msp
+  - ../../regression_new/flexible_molecule/molstampv4/PB.cfg
+  - ../../tutorial/stampv4_to_molecule_dump.msp
 
 domain:
   cell_size: 40.0 ang

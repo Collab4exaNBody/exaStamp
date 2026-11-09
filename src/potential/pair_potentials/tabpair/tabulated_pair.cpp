@@ -16,6 +16,7 @@ under the License.
 */
 
 #include "tabulated_pair.h"
+#include <exaStamp/yaml_check_keys.h>
 #include <onika/file_utils.h>
 #include <onika/yaml/yaml_utils.h>
 #include <onika/log.h>
@@ -48,6 +49,7 @@ namespace YAML
         lerr << "Decoding exaStamp::TabPairPotentialParms : YAML node is not a map as expected"<<std::endl;
         return false;
       }
+      exaStamp::check_yaml_keys( in_node , { "file", "format", "r", "e", "de" } , "tabulated pair parameters" );
       if( in_node["file"] )
       {
         file_to_load = in_node["file"].as<std::string>();

@@ -7,7 +7,7 @@ simulation:
       grid_dims: [24,24,24]
       periodic: [false,false,false]
   - read_stamp_v3:
-      file: droplet.mpio
+      filename: droplet.mpio
       bounds_mode: FILE
   - histogram_rx
   - print_histogram: { message: "------------------- X --------------------" }

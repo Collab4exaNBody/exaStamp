@@ -4,7 +4,7 @@
 
 # enable-if-XSTAMP_BUILD_PAIR_zero enable-if-XSTAMP_BUILD_PAIR_lennard_jones
 includes:
-  - config_rigidmol.msp
+  - config_rigid_molecule.msp
 
 configuration:
   profiling:
@@ -24,12 +24,12 @@ ljrf_rigidmol_force:
 #ljrf_multi_force:
   rcut: 8 ang
   parameters:
-    - { type_a: O , type_b: O , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } , lj_rcut: 8 ang , lj: { epsilon: 1.286776984E-21 J , sigma: 0.31589E-09 m } } }
-    - { type_a: O , type_b: M , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
-    - { type_a: O , type_b: H , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
-    - { type_a: H , type_b: M , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
-    - { type_a: M , type_b: M , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
-    - { type_a: H , type_b: H , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: O , type_b: O , rcut: 8 ang , parameters: { rf: { epsilon: 100 , rc: 8 ang } , lj_rcut: 8 ang , lj: { epsilon: 1.286776984E-21 J , sigma: 0.31589E-09 m } } }
+    - { type_a: O , type_b: M , rcut: 8 ang , parameters: { rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: O , type_b: H , rcut: 8 ang , parameters: { rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: H , type_b: M , rcut: 8 ang , parameters: { rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: M , type_b: M , rcut: 8 ang , parameters: { rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: H , type_b: H , rcut: 8 ang , parameters: { rf: { epsilon: 100 , rc: 8 ang } } }
     - { type_a: Air , type_b: Air , rcut: 8 ang , parameters: { lj_rcut: 8 ang , lj: { epsilon: 1.08468E-21 J , sigma: 0.3711-09 m } } }
     - { type_a: Air , type_b: O   , rcut: 8 ang , parameters: { lj_rcut: 8 ang , lj: { epsilon: 1.0e-22 J , sigma: 0.7127E-09 m } } }
 
@@ -61,7 +61,7 @@ global:
 #  init_temperature: 300 K
   rcut_inc: 0.5 ang
 
-grid_cell_particle_splatting:
+atom_cell_projection:
   splat_size: 4.0 ang
   grid_subdiv: 3
 
@@ -143,7 +143,6 @@ input_data:
             structure: SC
             types: [ H2O ]
             size: [ 3.103 ang , 3.103 ang , 3.103 ang ]
-            noise: 0.1 ang
             noise_cutoff: 0.2 ang
             repeats: [ 3232 , 323 , 323 ]
             region: DROPLET
@@ -152,7 +151,6 @@ input_data:
             structure: SC
             types: [ Air ]
             size: [ 34 ang , 34 ang , 34 ang ]
-            noise: 0.1 ang
             noise_cutoff: 0.2 ang
             repeats: [ 294 , 29 , 29 ]
             region: BOX and not HOLE

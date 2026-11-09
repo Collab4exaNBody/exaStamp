@@ -37,7 +37,7 @@ species:
 
 compute_force:
   - meam_force
-  - wall:
+  - plane_wall:
       normal: [ 1.0, 0.0, 0.0 ]
       offset: -5.0 ang
       cutoff: 5.17 ang

@@ -19,6 +19,7 @@ under the License.
 
 #include <cmath>
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 #include <onika/physics/units.h>
 #include <exaStamp/potential_factory/pair_potential.h>
 
@@ -78,6 +79,7 @@ namespace YAML
     static bool decode(const Node& node, Exp6RFParms& v)
     {
       if( !node.IsMap() ) { return false; }
+      exaStamp::check_yaml_keys( node , { "exp6", "exp6_rcut", "rf" } , "exp6rf parameters" );
       
       if( node["exp6_rcut"] ) v.exp6_rcut = node["exp6_rcut"].as<Quantity>().convert();
       else v.exp6_rcut = 0.0;

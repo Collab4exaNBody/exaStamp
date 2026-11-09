@@ -24,25 +24,24 @@ ljrf_rigidmol_force:
 #ljrf_multi_force:
   rcut: 8 ang
   parameters:
-    - { type_a: O , type_b: O , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } , lj_rcut: 8 ang , lj: { epsilon: 1.286776984E-21 J , sigma: 0.31589E-09 m } } }
-    - { type_a: O , type_b: M , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
-    - { type_a: O , type_b: H , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
-    - { type_a: H , type_b: M , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
-    - { type_a: M , type_b: M , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
-    - { type_a: H , type_b: H , rcut: 8 ang , parameters: { rf_rcut: 8 ang , rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: O , type_b: O , rcut: 8 ang , parameters: { rf: { epsilon: 100 , rc: 8 ang } , lj_rcut: 8 ang , lj: { epsilon: 1.286776984E-21 J , sigma: 0.31589E-09 m } } }
+    - { type_a: O , type_b: M , rcut: 8 ang , parameters: { rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: O , type_b: H , rcut: 8 ang , parameters: { rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: H , type_b: M , rcut: 8 ang , parameters: { rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: M , type_b: M , rcut: 8 ang , parameters: { rf: { epsilon: 100 , rc: 8 ang } } }
+    - { type_a: H , type_b: H , rcut: 8 ang , parameters: { rf: { epsilon: 100 , rc: 8 ang } } }
     - { type_a: Air , type_b: Air , rcut: 8 ang , parameters: { lj_rcut: 8 ang , lj: { epsilon: 1.08468E-21 J , sigma: 0.3711-09 m } } }
     - { type_a: Air , type_b: O   , rcut: 8 ang , parameters: { lj_rcut: 8 ang , lj: { epsilon: 1.0e-22 J , sigma: 0.7127E-09 m } } }
 
 compute_force: 
   - ljrf_rigidmol_force
 #  - ljrf_multi_force
-  - wall_v2:
+  - plane_wall:
       normal: [ 1.0, 0.0, 0.0 ]
       offset: 0.0 ang
       cutoff: 2.4 ang
       epsilon: 1.0e-19 J
       exponent: 2
-      collective_stats: true
 
 grid_flavor: grid_flavor_rigidmol
 
@@ -61,7 +60,7 @@ global:
 #  init_temperature: 300 K
   rcut_inc: 1.5 ang
 
-grid_cell_particle_splatting:
+atom_cell_projection:
   splat_size: 4.0 ang
   grid_subdiv: 3
 
@@ -139,7 +138,6 @@ input_data:
             structure: SC
             types: [ H2O ]
             size: [ 3.103 ang , 3.103 ang , 3.103 ang ]
-            noise: 0.1 ang
             noise_cutoff: 0.2 ang
             region: DROPLET
         - lattice:
@@ -147,7 +145,6 @@ input_data:
             structure: SC
             types: [ Air ]
             size: [ 34 ang , 34 ang , 34 ang ]
-            noise: 0.1 ang
             noise_cutoff: 0.2 ang
             region: BOX and not HOLE
 #

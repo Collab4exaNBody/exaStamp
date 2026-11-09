@@ -20,6 +20,7 @@ under the License.
 #pragma once
 
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 #include <string>
 
 struct MtpParams
@@ -36,6 +37,7 @@ namespace YAML
     static bool decode(const Node& node, MtpParams& v)
     {
       if( !node.IsMap() )     { return false; }
+      exaStamp::check_yaml_keys( node , { "mtp_file" } , "mtp parameters" );
       if( !node["mtp_file"] ) { return false; }
       v.mtp_file = node["mtp_file"].as<std::string>();
       return true;
