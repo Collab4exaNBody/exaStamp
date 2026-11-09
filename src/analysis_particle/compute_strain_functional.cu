@@ -242,6 +242,7 @@ compute_strain_functional:
                         << ( stride == sfd::N_SPHERICAL ? " (set spherical_tensors: true in compute_strain_functional)" : "" ) << std::endl;
         }
 
+        if( prefix->size() + name.size() > 15 ) fatal_error() << "strain_functional_fields: field name '" << (*prefix) + name << "' longer than 15 characters (shorten prefix)" << std::endl;
         auto acc = grid->field_accessor( field::mk_generic_real( (*prefix) + name ) );
         StrainFunctionalColumnFunctor func = { grid->cell_particle_offset_data() , values->data() , stride , column };
         compute_cell_particles( *grid , false , func , onika::make_flat_tuple( acc ) , parallel_execution_context() );
