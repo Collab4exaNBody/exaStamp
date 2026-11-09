@@ -20,6 +20,7 @@ under the License.
 #pragma once
 
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 #include <string>
 
 struct PodParams
@@ -35,6 +36,7 @@ namespace YAML
     static bool decode(const Node& node, PodParams& v)
     {
       if( !node.IsMap() )       { return false; }
+      exaStamp::check_yaml_keys( node , { "pod_file", "coeff_file" } , "pod parameters" );
       if( !node["pod_file"] )   { return false; }
       if( !node["coeff_file"] ) { return false; }
       v.pod_file   = node["pod_file"].as<std::string>();

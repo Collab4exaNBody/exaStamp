@@ -8,7 +8,7 @@ configuration:
 #  debug:
 #    filter: '.*sim_continue'
 
-meam_force_chunk:
+meam_force:
   rcut: 3.69 ang
   parameters:
     rmax: 3.69 ang
@@ -45,10 +45,7 @@ species:
       charge: 0 e-
 
 # define potential we'll reuse later
-compute_force: meam_force_chunk
-
-# pour activer les listes de voisins compactes
-update_particle_neighbors: update_particle_neighbors_chunk
+compute_force: meam_force
 
 # minimum d'informations sur la grille
 # grid_flavor: grid_flavor_multimat # debug

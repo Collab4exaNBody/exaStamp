@@ -1,10 +1,9 @@
 # define potential we'll reuse later
-compute_force:
-  symetric: true
-  virial: false
-  potential: lj
+lj_compute_force:
   parameters: { epsilon: 9.340E-20 J , sigma: 0.227E-09 m }
   rcut: 5.68 ang
+
+compute_force: lj_compute_force
 
 # atoms descriptions
 species:

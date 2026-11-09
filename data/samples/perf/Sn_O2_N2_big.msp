@@ -119,7 +119,6 @@ input_data:
             structure: SC
             types: [ Sn ]
             size: [ 3. ang , 3. ang , 3. ang ]
-            noise: 0.1 ang
             repeats: [ 100 , 100 , 100 ]
             region: PLANE1 or PLANE2 or BOX or SPHERE
         - lattice:
@@ -127,7 +126,6 @@ input_data:
             structure: BCC
             types: [ O2 , N2 ]
             size: [ 15 ang , 15 ang , 15 ang ]
-            noise: 0.1 ang
             repeats: [ 20 , 20 , 20 ]
             region: not ( PLANE1 or PLANE2 or BOX or SPHERE )
 #     *** Initialize temperature ***

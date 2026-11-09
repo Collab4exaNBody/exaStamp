@@ -19,6 +19,7 @@ under the License.
 
 #include <cmath>
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 #include <onika/physics/units.h>
 #include <onika/physics/constants.h>
 #include <onika/cuda/cuda.h>
@@ -63,6 +64,7 @@ namespace YAML
     {
       v = LennardJonesParms{};
       if( !node.IsMap() ) { return false; }
+      exaStamp::check_yaml_keys( node , { "epsilon", "sigma" } , "lj parameters" );
       v.epsilon = node["epsilon"].as<Quantity>().convert();
       v.sigma   = node["sigma"]  .as<Quantity>().convert();
       //std::cout<<"epsilon="<<v.epsilon<<", sigma="<<v.sigma<<std::endl;

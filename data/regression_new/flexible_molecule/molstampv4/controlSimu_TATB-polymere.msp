@@ -42,13 +42,6 @@ global:
   simulation_log_frequency: 1
   chunk_size: 8
 
-#add test of the potential during the first iteration, just after the intialiasation of the particles
-+init_particles:
-  - check_bond_potentials
-  - check_bend_potentials
-  - check_torsion_potentials
-  - check_improper_potentials
-
 # user-specified force components
 compute_force:
   - compute_extramolecular_forces

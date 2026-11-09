@@ -122,6 +122,8 @@ endif()
 # ===========================================================
 # === generate execution wrappers and environment scripts ===
 # ===========================================================
+# potential files of data/potentials are referenced by bare file name in input files
+set(exaStamp_DATA_DIRS "${exaStamp_DATA_DIRS}:${CMAKE_INSTALL_PREFIX}/data/potentials")
 GenerateEndUserExecEnv()
 
 

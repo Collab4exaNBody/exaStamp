@@ -57,6 +57,6 @@ grid_flavor: grid_flavor_minimal
 
 input_data:
   - read_stamp_v3:
-      file: microjet.mpio
+      filename: microjet.mpio
       bounds_mode: FILE
 

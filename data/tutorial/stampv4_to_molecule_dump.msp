@@ -23,7 +23,7 @@ simulation:
       rebind: { file: inputfile }
       body: [ read_stamp_v4 ]
   - reduce_species
-  - simple_cost_model: { ccost: 1.0 , pdens: 4.0 , pdens2:0.0 , pdens3:0.003 }
+  - simple_cost_model: { cost_model_coefs: [ 0.003, 0.0, 4.0, 1.0 ] }   # X^3, X^2, X, constant (X: particle density)
   - load_balance_rcb
   - migrate_cell_particles
   - simulation_thermodynamic_state

@@ -1,7 +1,7 @@
 # override parameters with user file :
 # ------------------------------------
 
-includes: [ stampv4_to_atom_dump.msp ]
+includes: [ ../../tutorial/stampv4_to_atom_dump.msp ]
 
 domain:
   cell_size: 80.0 ang

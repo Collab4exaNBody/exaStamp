@@ -95,7 +95,6 @@ input_data:
             structure: SC
             types: [ Sn ]
             size: [ 3. ang , 3. ang , 3. ang ]
-            noise: 0.2 ang
             noise_cutoff: 0.4 ang
             repeats: [ 200 , 100 , 100 ]
             region: BOXSN1 or ( BOXSN2 and not CONE )
@@ -104,7 +103,6 @@ input_data:
             structure: BCC
             types: [ O2 , N2 ]
             size: [ 30 ang , 15 ang , 15 ang ]
-            noise: 0.2 ang
             noise_cutoff: 0.4 ang
             repeats: [ 20 , 20 , 20 ]
             region: ( BOXGAZ or CONEGAZ ) and not BOXNOGAZ

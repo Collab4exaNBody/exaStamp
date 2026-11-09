@@ -13,12 +13,11 @@ debug:
   graph_lod: 3
 
 # define potential we'll reuse later
-compute_force:
-  symetric: true
-  virial: false
-  potential: lj
+lj_compute_force:
   parameters: { epsilon: 9.340E-20 J , sigma: 0.227E-09 m }
   rcut: 5.68 ang
+
+compute_force: lj_compute_force
 
 # atoms descriptions
 species:
@@ -41,11 +40,6 @@ input_data:
 domain:
   grid_dims: [12,12,12]
   periodic: [true,true,true]
-
-# (optional) specialize update_particles for the mono material symetric particular case
-update_particle_neighbors:
-  - compute_primary_neighbors_monomat
-  - resize_particle_locks
 
 global:
   simulation_end_iteration: 100

@@ -21,6 +21,7 @@ under the License.
 #include <limits>
 #include <utility>
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 #include <onika/physics/units.h>
 #include <exaStamp/potential_factory/pair_potential.h>
 #include <onika/physics/constants.h>
@@ -59,6 +60,7 @@ namespace YAML
       using onika::physics::Quantity;
       v = exaStamp::RelaxParms{};
       if( !node.IsMap() ) { return false; }
+      exaStamp::check_yaml_keys( node , { "r1", "rc" } , "relax parameters" );
       if( ! node["r1"] ) { return false; }
       if( ! node["rc"] ) { return false; }
       v.r1 = node["r1"].as<Quantity>().convert();

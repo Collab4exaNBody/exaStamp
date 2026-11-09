@@ -54,7 +54,6 @@ species:
      charge: -0.4680 e-
 
 LCHBOP_inits:
-  flag_vmr: true
 #  nbclist
 #   parameters
 #   LCHBOP_rc_perf         : [8e-10, 1.2e-10] 
@@ -96,7 +95,7 @@ input_data:
 #  - LCHBOP_inits
 #CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 
-dump_data: dump_data_stamp_v3
+dump_data: write_restart_stamp_v3
 
 domain:
 #   periodic: [false,false,false]
