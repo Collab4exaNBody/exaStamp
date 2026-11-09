@@ -13,7 +13,7 @@ species:
 
 input_data:
   - read_stamp_v3:
-      file: big_lattice.mpio
+      filename: big_lattice.mpio
       bounds_mode: FILE
 
 domain:
@@ -29,12 +29,8 @@ compute_loop_epilog:
   - charge_min_max
 
 # define potential we'll reuse later
-compute_force: compute_force_pair
-
-compute_force_pair:
-  symetric: false
-  virial: true
-  potential: lj
+compute_force: lj_compute_force
+lj_compute_force:
   parameters: { epsilon: 9.340E-20 J , sigma: 0.227E-09 m }
   rcut: 5.68 ang
 

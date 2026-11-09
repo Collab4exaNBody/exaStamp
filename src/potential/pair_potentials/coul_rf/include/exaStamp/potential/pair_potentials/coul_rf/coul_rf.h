@@ -18,6 +18,7 @@ under the License.
 #pragma once
 
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 #include <onika/physics/units.h>
 #include <onika/physics/constants.h>
 #include <onika/cuda/cuda.h>
@@ -123,6 +124,7 @@ namespace YAML
     static bool decode(const Node& node, ReactionFieldParms& v)
     {
       if( !node.IsMap() ) { return false; }
+      exaStamp::check_yaml_keys( node , { "rc", "epsilon" } , "reaction field parameters" );
       init_rf( v, node["rc"].as<Quantity>().convert() , node["epsilon"].as<double>() );
       return true;
     }

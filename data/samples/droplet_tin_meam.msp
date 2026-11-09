@@ -36,11 +36,11 @@ species:
 
 compute_force_heat_bath:
   - meam_force
-  - wall:
+  - plane_wall:
       normal: [ 1.0, 0.0, 0.0 ]
       offset: -255 ang
       cutoff: 5.17 ang
-  - wall:
+  - plane_wall:
       normal: [ -1.0, 0.0, 0.0 ]
       offset: 255 ang
       cutoff: 5.17 ang
@@ -52,11 +52,11 @@ numerical_scheme_heat_bath: numerical_scheme_verlet_macro(compute_force_heat_bat
 
 compute_force:
   - meam_force
-  - wall:
+  - plane_wall:
       normal: [ 1.0, 0.0, 0.0 ]
       offset: -255 ang
       cutoff: 5.17 ang
-  - wall:
+  - plane_wall:
       normal: [ -1.0, 0.0, 0.0 ]
       offset: 255 ang
       cutoff: 5.17 ang

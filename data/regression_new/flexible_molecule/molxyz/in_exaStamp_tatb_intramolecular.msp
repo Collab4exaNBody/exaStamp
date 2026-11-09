@@ -2,7 +2,7 @@
 includes:
   - DonneesAtomesExaStamp_Bedrov.cfg
   - xform_uniaxial.cfg
-  - config_molecule2.msp
+  - config_molecule.msp
 
 configuration:
   logging:

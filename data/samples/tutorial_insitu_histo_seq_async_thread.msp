@@ -17,7 +17,7 @@ input_data:
   - mpi_dup
   - histoseq_thread_init
   - read_stamp_v3:
-      file: big_lattice.mpio
+      filename: big_lattice.mpio
       bounds_mode: FILE
 
 domain:
@@ -42,13 +42,10 @@ compute_loop_epilog:
 # define potential we'll reuse later
 compute_force:
   - message: "start compute force"
-  - compute_force_pair
+  - lj_compute_force
   - message: "end compute force"
 
-compute_force_pair:
-  symetric: false
-  virial: true
-  potential: lj
+lj_compute_force:
   parameters: { epsilon: 9.340E-20 J , sigma: 0.227E-09 m }
   rcut: 5.68 ang
 

@@ -25,6 +25,7 @@ under the License.
 
 #include <cmath>
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 #include <onika/physics/units.h>
 #include <onika/physics/units.h>
 #include <onika/cuda/cuda.h>
@@ -173,6 +174,7 @@ namespace YAML
     static bool decode(const Node& node, EamVniitfParameters& v)
     {
       if( !node.IsMap() ) { return false; }
+      exaStamp::check_yaml_keys( node , { "rmax", "rmin", "rt0", "Ecoh", "E0", "beta", "A", "Z", "n", "alpha", "D", "eta", "mu" } , "eam vniitf parameters" );
 #     define CONVERT_EAMJVNIITF_PARAM(x) v.x = node[#x].as<Quantity>().convert()
       CONVERT_EAMJVNIITF_PARAM( rmax );
       CONVERT_EAMJVNIITF_PARAM( rmin );

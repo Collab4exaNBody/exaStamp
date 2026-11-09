@@ -30,7 +30,7 @@ grid_flavor: grid_flavor_full
 
 input_data:
   - read_stamp_v3:
-      file: Mo_conf_300K.MpiIO
+      filename: Mo_conf_300K.MpiIO
       bounds_mode: FILE
       enlarge_bounds: 1.0 ang
   - replicate_domain: [ 4 , 4 , 4 ]

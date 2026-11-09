@@ -22,6 +22,9 @@ compute_force_lj:
 compute_force: 
   - compute_force_rf
   - compute_force_lj
+  - langevin_thermostat_rigidmol:
+      T: 280 K
+      gamma: 1.0 ps^-1   # was friction: 1e12 s^-1
 
 grid_flavor: grid_flavor_rigidmol
 
@@ -35,9 +38,9 @@ init_epilog:
   - init_mass_center
   - init_rigid_mol_inertial_mass
 #  - init_angular_momentum: { T: 300 K }
-  - init_angular_momentum: { T: 300 K }
+  - init_temperature_rigidmol: { T: 300 K }
 
-default_thermodynamic_state: simulation_thermodynamic_state_rigidmol
+default_thermostate_compute: simulation_thermodynamic_state_rigidmol
 
 domain:
 #  periodic: [false,false,false]
@@ -47,10 +50,10 @@ domain:
 update_particles_fast_body:
     - ghost_update_rq
 
-default_thermodynamic_state: simulation_thermodynamic_state_rigidmol
+default_thermostate_compute: simulation_thermodynamic_state_rigidmol
 
-default_print_thermodynamic_state: print_thermodynamic_state_rigidmol
-default_dump_thermodynamic_state: dump_thermodynamic_state_rigidmol
+default_thermostate_screen: print_thermodynamic_state_rigidmol
+default_thermostate_file: dump_thermodynamic_state_rigidmol
 
 global:
   dt: 1.0e-4 ps
@@ -59,12 +62,7 @@ global:
   simulation_dump_frequency: 1000000
   simulation_dump_thermo_frequency: 1
 
-numerical_scheme: numerical_scheme_verlet_rigidmol_langevin
-#numerical_scheme: numerical_scheme_verlet_rigidmol_stamp
 
-langevin_rigidmol:
-   T: 280 K
-   friction : 1.e12
 
 xxx_simulation_epilog:
   - check_values:
