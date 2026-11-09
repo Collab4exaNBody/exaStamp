@@ -1,0 +1,388 @@
+# Curated description of the blocks users write in exaStamp input files.
+#
+# Complements the operator catalog (slot names, required flags), which cannot
+# show units, defaults, allowed values or keys decoded by custom YAML readers
+# (e.g. domain). Sources: data/config/*.msp, doc_exaStamp Starter Pack and User
+# guide pages, operator sources. Every snippet is checked by tests/test_mcp.py.
+#
+# key fields: type (int|float|bool|string|quantity|list|map|vec3|ijk|aabb|mat3),
+#             dimension (for quantities, see onika_mcp.units.DIMENSIONS),
+#             default, values (allowed), required, doc
+
+global:
+  kind: definition
+  summary: Simulation control parameters (time step, iterations, output frequencies). Any key becomes a global variable, so typos are not detected by exaStamp itself.
+  doc: Beginner/StarterPack/1_global.md
+  keys:
+    max_iteration: {type: int, default: 1000, doc: "last time step (number of iterations)"}
+    start_iteration: {type: int, default: 0}
+    dt: {type: quantity, dimension: time, default: "1.0e-3 ps", doc: "time step"}
+    rcut_inc: {type: quantity, dimension: length, default: "1.0 ang", doc: "neighbor list skin added to the potential cutoff"}
+    log_mode: {type: string, default: mechanical, values: [default, thermo_basic, thermo, thermo_full, vol_fluct_ortho_basic, vol_fluct_ortho, vol_fluct_ortho_full, vol_fluct_tricl_basic, vol_fluct_tricl, vol_fluct_tricl_full, mechanical, dump_default], doc: "preset, or ';'-separated keywords (stp;pht;tmp;pre;...)", open_values: true}
+    log_format: {type: string}
+    simulation_thermostate_screen_frequency: {type: int, default: 10, doc: "print the thermodynamic state every N steps"}
+    simulation_thermostate_file_frequency: {type: int, default: 10, doc: "append the thermodynamic state to thermostate_file every N steps (-1: never)"}
+    thermostate_file: {type: string, default: thermodynamic_state.csv}
+    simulation_snapshot_frequency: {type: int, default: 1000, doc: "write_snapshot every N steps"}
+    simulation_restart_frequency: {type: int, default: 1000, doc: "write_restart every N steps"}
+    simulation_analysis_frequency: {type: int, default: 1000, doc: "perform_analysis every N steps (0: never)"}
+    simulation_load_balance_frequency: {type: int, default: 100}
+    enable_load_balance: {type: bool, default: true}
+    enable_grid_compact: {type: bool, default: true}
+    trigger_cost_model_fitting: {type: bool, default: false}
+    cost_model_coefs: {type: list, default: [0.0, 0.0, 1.0, 0.0]}
+    init_temperature: {type: quantity, dimension: temperature, default: -1.0}
+    scale_temperature: {type: quantity, dimension: temperature, default: -1.0}
+    timestep: {type: int, default: 0}
+    physical_time: {type: quantity, dimension: time, default: 0.0}
+    md_loop_continue: {type: bool, default: true}
+    trigger_thermo_state: {type: bool, default: true}
+    thermo_state_every_step: {type: bool, default: false}
+  snippet: |
+    global:
+      max_iteration: 1000
+      dt: 1.0e-3 ps
+      rcut_inc: 1.0 ang
+      simulation_thermostate_screen_frequency: 10
+      simulation_thermostate_file_frequency: 10
+      simulation_snapshot_frequency: 100
+      simulation_restart_frequency: 1000
+      simulation_analysis_frequency: 0
+
+species:
+  kind: list_of_named
+  summary: "Particle species. A list of one-key maps 'Name: {mass, z, charge, molecule, rigid_molecule}'."
+  doc: Beginner/StarterPack/2_species.md
+  item_keys:
+    mass: {type: quantity, dimension: mass, required: true, doc: "e.g. 180.95 Da"}
+    z: {type: int, doc: "atomic number"}
+    charge: {type: quantity, dimension: charge, doc: "e.g. 0 e-"}
+    molecule: {type: string, doc: "flexible molecule this atom belongs to"}
+    rigid_molecule: {type: list, doc: "list of 'Atom: [x, y, z]' positions of a rigid molecule"}
+  snippet: |
+    species:
+      - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
+
+domain:
+  kind: definition
+  summary: Simulation box. bounds must equal grid_dims x cell_size exactly along each axis. A cell_size near the potential cutoff plus rcut_inc is efficient; smaller cells work too.
+  doc: Beginner/StarterPack/3_domain.md
+  keys:
+    cell_size: {type: quantity, dimension: length, default: "0.0 ang", doc: "grid cell edge (0: deduced from the cutoff)"}
+    grid_dims: {type: ijk, default: [0, 0, 0], doc: "cells per axis ([0,0,0]: deduced from bounds and cell_size)"}
+    bounds: {type: aabb, doc: "[[xmin,ymin,zmin],[xmax,ymax,zmax]] with length units"}
+    xform: {type: mat3, doc: "grid space to physical space matrix (triclinic boxes)"}
+    periodic: {type: list, default: [false, false, false], doc: "periodic boundaries per axis"}
+    mirror: {type: list, default: [], doc: "mirror boundaries, e.g. [X-, Z]"}
+    expandable: {type: bool, default: false, doc: "grow the box to keep escaping particles (not with full periodicity)"}
+  snippet: |
+    domain:
+      cell_size: 3.3 ang
+      grid_dims: [ 20, 20, 20 ]
+      bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 66 ang, 66 ang, 66 ang ] ]
+      periodic: [ true, true, true ]
+      expandable: false
+
+setup_system:
+  kind: batch
+  summary: "List of operators that create the system, run before species. Typical lattice case: domain, init_rcb_grid, lattice, init_temperature_new."
+  doc: Beginner/StarterPack/4_setup_system.md
+  items: [domain, init_rcb_grid, lattice, init_temperature_new, read_extended_xyz_file, read_dump_atoms, particle_types, particle_type_add_properties]
+  snippet: |
+    setup_system:
+      - domain:
+          cell_size: 3.3 ang
+          grid_dims: [ 20, 20, 20 ]
+          bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 66 ang, 66 ang, 66 ang ] ]
+          periodic: [ true, true, true ]
+          expandable: false
+      - init_rcb_grid
+      - lattice:
+          structure: BCC
+          types: [ Ta, Ta ]
+          size: [ 3.3 ang, 3.3 ang, 3.3 ang ]
+      - init_temperature_new:
+          T: 600 K
+
+init_rcb_grid:
+  kind: operator
+  summary: Distribute the grid over MPI processes. Required between domain and lattice; not needed with file readers.
+  doc: Beginner/StarterPack/4_setup_system.md
+  keys: {}
+
+lattice:
+  kind: operator
+  summary: Fill the domain with a crystal. types needs SC 1, BCC 2, 2BCT/FCC/HCP 4, c-DIA/h-DIA/graphite 8 entries, each a declared species.
+  doc: Beginner/StarterPack/4_setup_system.md
+  keys:
+    structure: {type: string, required: true, values: [SC, BCC, 2BCT, FCC, HCP, h-DIA, c-DIA, graphite, CUSTOM]}
+    types: {type: list, required: true, doc: "species name of each atom of the unit cell"}
+    size: {type: vec3, dimension: length, required: true, doc: "unit cell edge lengths"}
+    shift: {type: vec3, dimension: length}
+    positions: {type: list, doc: "reduced positions, with structure: CUSTOM"}
+    region: {type: string, doc: "restrict to a region (see particle_regions)"}
+    void_mode: {type: string}
+    void_center: {type: vec3, dimension: length}
+    void_radius: {type: quantity, dimension: length}
+    void_porosity: {type: float}
+    void_mean_diameter: {type: quantity, dimension: length}
+  structure_types_count: {SC: 1, BCC: 2, 2BCT: 4, FCC: 4, HCP: 4, h-DIA: 8, c-DIA: 8, graphite: 8}
+  snippet: |
+    lattice:
+      structure: FCC
+      types: [ Cu, Cu, Cu, Cu ]
+      size: [ 3.615 ang, 3.615 ang, 3.615 ang ]
+
+init_temperature_new:
+  kind: operator
+  summary: Draw Maxwell-Boltzmann velocities at temperature T (last setup_system step).
+  doc: Beginner/StarterPack/4_setup_system.md
+  keys:
+    T: {type: quantity, dimension: temperature, default: "300 K"}
+    distribution: {type: string, default: gaussian, values: [gaussian, uniform]}
+    override_velocities: {type: bool, default: true}
+    add_velocities: {type: bool, default: false}
+    scale_velocities: {type: bool, default: false}
+    zero_linear_momentum: {type: bool, default: true}
+    region: {type: string}
+    atom_type: {type: string}
+    deterministic_noise: {type: bool}
+  snippet: |
+    init_temperature_new:
+      T: 300 K
+
+read_extended_xyz_file:
+  kind: operator
+  summary: Read particles from an extended XYZ file (Lattice= and Properties= on line 2). domain needs only cell_size and periodic.
+  doc: Beginner/StarterPack/4_setup_system.md
+  keys:
+    filename: {type: string, required: true}
+    bounds_mode: {type: string, values: [FILE, DOMAIN, COMPUTED], default: FILE}
+    read_velocities: {type: bool, default: true}
+
+read_dump_atoms:
+  kind: operator
+  summary: Restart from a binary atoms dump (domain, species and timestep are restored).
+  doc: Beginner/StarterPack/4_setup_system.md
+  keys:
+    filename: {type: string, required: true}
+    periodic: {type: list}
+    mirror: {type: list}
+    expandable: {type: bool}
+    bounds: {type: aabb}
+    shrink_to_fit: {type: bool}
+    scale_cell_size: {type: float}
+
+particle_types:
+  kind: operator
+  summary: Low-level type map (name -> id) and per-type properties, needed when a type map must exist before species.
+  doc: Beginner/StarterPack/2_species.md
+  keys:
+    particle_type_map: {type: map}
+    particle_type_properties: {type: map}
+    verbose: {type: bool}
+
+particle_type_add_properties:
+  kind: operator
+  summary: "Add per-type properties ('Type: {prop: value}') to declared types."
+  doc: Beginner/StarterPack/2_species.md
+  open_keys: true
+  keys: {}
+
+grid_flavor:
+  kind: choice
+  summary: "Per-particle field set. grid_flavor_full (default) has virial and charge; multimat, minimal, atomic and atomic_charge are lighter but have no virial (pressure is kinetic only: not for NPT); multimat_mechanics and atomic_full add the virial; rigidmol is required for rigid molecules."
+  doc: User/E_Grids/flavors.md
+  values: [grid_flavor_full, grid_flavor_multimat, grid_flavor_minimal, grid_flavor_atomic, grid_flavor_atomic_charge, grid_flavor_atomic_full, grid_flavor_full_mechanics, grid_flavor_multimat_mechanics, grid_flavor_rigidmol]
+  default: grid_flavor_full
+
+compute_force:
+  kind: choice
+  summary: "Potential(s) used for forces: the name of a force operator defined at top level, or a list of them."
+  doc: Beginner/StarterPack/5_force.md
+  operators: [lj_compute_force, eam_alloy_force, meam_force, compute_force_pair_multimat, snap_force_fp64]
+
+lj_compute_force:
+  kind: potential
+  summary: 12/6 Lennard-Jones pair potential for a single species.
+  doc: Beginner/StarterPack/5_force.md
+  keys:
+    rcut: {type: quantity, dimension: length, required: true}
+    parameters: {type: map, required: true, keys: {epsilon: {type: quantity, dimension: energy, required: true}, sigma: {type: quantity, dimension: length, required: true}}}
+  snippet: |
+    lj_compute_force:
+      parameters: { epsilon: 0.0104 eV, sigma: 3.4 ang }
+      rcut: 8.0 ang
+    compute_force: lj_compute_force
+
+eam_alloy_force:
+  kind: potential
+  summary: EAM potential read from a LAMMPS eam/alloy (setfl) file; elements must match the species names.
+  doc: Beginner/StarterPack/5_force.md
+  keys:
+    rcut: {type: quantity, dimension: length, doc: "cutoff, at most the file's cutoff"}
+    parameters: {type: map, required: true, keys: {file: {type: string, required: true, data_file: true}}}
+    types: {type: list}
+  file_pattern: "*.eam.alloy"
+  snippet: |
+    eam_alloy_force:
+      rcut: 5.30 ang
+      parameters:
+        file: "Ta1_Ravelo_2013.eam.alloy"
+    compute_force: eam_alloy_force
+
+meam_force:
+  kind: potential
+  summary: Analytical 2NN MEAM potential, single species, parameters given inline.
+  doc: Beginner/StarterPack/5_force.md
+  keys:
+    rcut: {type: quantity, dimension: length, required: true}
+    parameters: {type: map, required: true}
+
+compute_force_pair_multimat:
+  kind: potential
+  summary: "Pair potentials per species pair (alloys, Lennard-Jones mixtures, LJ + Coulomb). Needs grid_flavor_multimat (no virial: not for NPT; grid_flavor_multimat_mechanics has it) and a particle_types map listing every species in setup_system. One potentials item per unordered pair (Cu-Zn covers Zn-Cu). Pair styles: lj, ljwolf (Wolf Coulomb under 'cw', not 'coul_wolf'), ljrf, ljexp6rf, exp6, exp6rf, buckingham, zbl, coul_cut, coul_rf, coul_wolf (no self energy), tabpair. describe_block's observed_parameters lists the keys of each style."
+  doc: User/G_ForceFields/Pair/Strategies/index.md
+  keys:
+    potentials: {type: list, required: true}
+  snippet: |
+    grid_flavor: grid_flavor_multimat
+    compute_force_pair_multimat:
+      potentials:
+        - { type_a: Cu , type_b: Cu , potential: lj , rcut: 6.0 ang , parameters: { epsilon: 0.4093 eV , sigma: 2.338 ang } }
+        - { type_a: Zn , type_b: Zn , potential: lj , rcut: 6.0 ang , parameters: { epsilon: 0.1574 eV , sigma: 2.44 ang } }
+        - { type_a: Cu , type_b: Zn , potential: lj , rcut: 6.0 ang , parameters: { epsilon: 0.30 eV , sigma: 2.36 ang } }
+    compute_force: compute_force_pair_multimat
+    # in setup_system, before the lattice:  - particle_types: { particle_type_map: { Cu: 0, Zn: 1 } }
+
+snap_force_fp64:
+  kind: potential
+  summary: "SNAP machine-learning potential (snap_force_fp32: single precision). parameters.param / parameters.coef are the LAMMPS .snapparam / .snapcoeff files; nt is the number of species; species names must match the .snapcoeff elements. The cutoff comes from the files (rcutfac)."
+  doc: User/G_ForceFields/MLIP/snap.md
+  keys:
+    parameters: {type: map, required: true, keys: {nt: {type: int, required: true}, param: {type: string, required: true, data_file: true}, coef: {type: string, required: true, data_file: true}}}
+  file_pattern: "*.snapcoeff"
+  snippet: |
+    grid_flavor: grid_flavor_multimat
+    compute_force:
+      - snap_force_fp64:
+          parameters:
+            nt: 1
+            param: Ta06A.snapparam
+            coef: Ta06A.snapcoeff
+
+init_nose_hoover:
+  kind: definition
+  summary: "Nose-Hoover thermostat / barostat parameters for numerical_scheme verlet_nhnvt (algo: NVT) or verlet_nhnpt (algo: NPT). Both schemes need 'includes: [ config_nose_hoover.msp ]'. Pressures are bare numbers in Pa (no units: the value is divided by 1e5 to get bar). Pmode: ISO (one pressure), ANISO (Pxx/Pyy/Pzz start/end/damp), TRI (also shear). NPT needs a grid flavor with the virial (grid_flavor_full, the default)."
+  doc: User/H_EnsemblesConstraints/npt_ensemble.md
+  keys:
+    algo: {type: string, values: [NVT, NPT], default: NVT}
+    Tstart: {type: quantity, dimension: temperature, required: true}
+    Tend: {type: quantity, dimension: temperature}
+    Tdamp: {type: quantity, dimension: time, default: 0.1}
+    tchain: {type: int, default: 3}
+    Pstart: {type: float, doc: "Pa, bare number"}
+    Pend: {type: float, doc: "Pa, bare number"}
+    Pdamp: {type: quantity, dimension: time}
+    pchain: {type: int, default: 3}
+    Pmode: {type: string, values: [ISO, ANISO, TRI, OTHER], default: OTHER}
+    Pcouple: {type: string, default: NONE}
+    Pdrag: {type: float}
+    mtkcorr: {type: bool}
+  snippet: |
+    includes:
+      - config_nose_hoover.msp
+    numerical_scheme: verlet_nhnpt
+    init_nose_hoover:
+      algo: NPT
+      Tstart: 300. K
+      Tend: 300. K
+      Tdamp: 0.1 ps
+      Pstart: 0.0
+      Pend: 0.0
+      Pdamp: 1.0 ps
+      Pmode: ISO
+
+particle_regions:
+  kind: operator
+  summary: "Named regions, used by name in thermostats (langevin_thermostat thermostat_region, berendsen_thermostat region), filters, analyses and gaussian_noise_* region. Put it first in setup_system. A region is a box (bounds) or a quadric; a region expression combines names (e.g. 'BATH and not CORE')."
+  doc: User/D_DomainRegions/regions/geometric.md
+  keys:
+    particle_regions: {type: list}
+    verbose: {type: bool}
+  snippet: |
+    setup_system:
+      - particle_regions:
+          - BATH:
+              bounds: [ [ 0 ang, -1 ang, -1 ang ], [ 10 ang, 34 ang, 34 ang ] ]
+    compute_force:
+      - eam_alloy_force
+      - langevin_thermostat: { T: 300 K, gamma: 0.1 ps^-1, thermostat_region: BATH }
+
+simulation_epilog:
+  kind: definition
+  summary: "Batch run once after the last step: end-of-run analyses such as histograms (histogram_vx/vy/vz, histogram_vnorm, histogram_energy, histogram_charge, histogram_fnorm, ...) followed by write_histogram, which writes the last histogram to a .csv file."
+  doc: User/F_Particles/analysis.md
+  snippet: |
+    simulation_epilog:
+      - histogram_vx: { samples: 100 }
+      - write_histogram: { filename: vx_hist.csv }
+
+numerical_scheme:
+  kind: choice
+  summary: "Time integrator. verlet_lnvt / verlet_bnvt need langevin_thermostat / berendsen_thermostat parameters; verlet_nhnvt / verlet_nhnpt need 'includes: [ config_nose_hoover.msp ]' and init_nose_hoover parameters."
+  doc: Beginner/StarterPack/6_numerical_scheme.md
+  values: [verlet_nve, verlet_lnvt, verlet_bnvt, verlet_nhnvt, verlet_nhnpt]
+  default: verlet_nve
+  requires: {verlet_lnvt: langevin_thermostat, verlet_bnvt: berendsen_thermostat}
+
+langevin_thermostat:
+  kind: definition
+  summary: "Langevin heat bath (with numerical_scheme: verlet_lnvt). Give exactly one of T, Tstart+Tstop, tserie+Tserie."
+  doc: Beginner/StarterPack/6_numerical_scheme.md
+  keys:
+    T: {type: quantity, dimension: temperature}
+    Tstart: {type: quantity, dimension: temperature}
+    Tstop: {type: quantity, dimension: temperature}
+    tserie: {type: list}
+    Tserie: {type: list}
+    gamma: {type: quantity, dimension: inverse_time, default: "0.1 ps^-1"}
+    seed: {type: int}
+    deterministic_noise: {type: bool}
+    thermostat_region: {type: string}
+    start_iteration: {type: int}
+  one_of: [[T], [Tstart, Tstop], [tserie, Tserie]]
+  snippet: |
+    numerical_scheme: verlet_lnvt
+    langevin_thermostat:
+      T: 300 K
+      gamma: 0.1 ps^-1
+
+berendsen_thermostat:
+  kind: definition
+  summary: "Berendsen velocity rescaling (with numerical_scheme: verlet_bnvt). Give exactly one of T, Tstart+Tstop, tserie+Tserie."
+  doc: User/H_EnsemblesConstraints/Thermostats/berendsen.md
+  keys:
+    T: {type: quantity, dimension: temperature}
+    Tstart: {type: quantity, dimension: temperature}
+    Tstop: {type: quantity, dimension: temperature}
+    tserie: {type: list}
+    Tserie: {type: list}
+    tau: {type: quantity, dimension: time}
+    region: {type: string}
+    start_iteration: {type: int}
+  one_of: [[T], [Tstart, Tstop], [tserie, Tserie]]
+
+write_snapshot:
+  kind: choice
+  summary: Snapshot writer, called every simulation_snapshot_frequency steps.
+  doc: Beginner/StarterPack/7_output.md
+  values: [nop, write_snapshot_xyz, write_snapshot_paraview, write_snapshot_grid_vtk, write_snapshot_lammps_data]
+  default: nop
+
+write_restart:
+  kind: choice
+  summary: Restart writer, called every simulation_restart_frequency steps.
+  doc: Beginner/StarterPack/7_output.md
+  values: [nop, write_restart_atoms]
+  default: nop

@@ -1,0 +1,300 @@
+# Evaluation set of the exaStamp MCP server: simulation requests, as a user would
+# write them, with machine-checkable expectations on the input the agent writes.
+#
+# expect:
+#   potential     force operator that must be in compute_force
+#   scheme        numerical_scheme
+#   species       species names that must be declared
+#   structure     lattice structure in setup_system
+#   atoms         particle count after the smoke run
+#   temperature   target or initial temperature (K) that must appear
+#   steps         global.max_iteration
+#   snapshot      write_snapshot value
+#   operators     names that must appear as a key or value anywhere in the input ("a|b": either)
+#   files         data files the input must reference
+#   max_potential_energy   upper bound (eV/atom) after the smoke run
+#   refusal       the request cannot be done with this install: no input, reply mentions `mentions`
+# potential may be a list of acceptable force operators.
+# reference: a SimulationSpec reaching the expectations, or reference_input: a
+# hand-written input (references/) for the cases outside build_input
+# (run_eval.py --reference checks that every case is feasible with this install,
+# without any LLM). workspace_files: files the user already has (fixtures/, or
+# the installed data), copied into the workspace first.
+
+- id: ta_bcc_eam_nvt
+  prompt: "Ta BCC, 20x20x20 unit cells, EAM potential of Ravelo 2013 (Ta1), Langevin NVT at 300 K for 10 ps with a 1 fs time step, xyz snapshot every 1 ps."
+  expect: {potential: eam_alloy_force, scheme: verlet_lnvt, species: [Ta], structure: BCC, atoms: 16000, temperature: 300, steps: 10000, snapshot: write_snapshot_xyz}
+  reference:
+    species: [{name: Ta}]
+    system: {kind: lattice, structure: BCC, lattice_parameter: 3.3026 ang, repeats: [20, 20, 20]}
+    potential: {kind: eam_alloy, file: Ta1_Ravelo_2013.eam.alloy}
+    ensemble: {kind: langevin, temperature: 300 K}
+    steps: 10000
+    outputs: {snapshot: xyz, snapshot_every: 1000}
+
+- id: cu_fcc_eam_nve
+  prompt: "Copper FCC crystal, 10 cells per side, lattice parameter 3.615 Angstrom, Cu EAM alloy potential, NVE starting from 500 K, 5000 steps."
+  expect: {potential: eam_alloy_force, scheme: verlet_nve, species: [Cu], structure: FCC, atoms: 4000, temperature: 500, steps: 5000}
+  reference:
+    species: [{name: Cu}]
+    system: {kind: lattice, structure: FCC, lattice_parameter: 3.615 ang, repeats: [10, 10, 10]}
+    potential: {kind: eam_alloy, file: Cu.eam.alloy}
+    initial_temperature: 500 K
+    steps: 5000
+
+- id: cu_fcc_langevin
+  prompt: "Thermalize an FCC copper box of 12x12x12 cells (a = 3.615 A) at 800 K with a Langevin thermostat (friction 1 ps^-1), 20000 steps of 2 fs."
+  expect: {potential: eam_alloy_force, scheme: verlet_lnvt, species: [Cu], structure: FCC, atoms: 6912, temperature: 800, steps: 20000}
+  reference:
+    species: [{name: Cu}]
+    system: {kind: lattice, structure: FCC, lattice_parameter: 3.615 ang, repeats: [12, 12, 12]}
+    potential: {kind: eam_alloy, file: Cu.eam.alloy}
+    ensemble: {kind: langevin, temperature: 800 K, gamma: 1.0 ps^-1}
+    timestep: 2.0e-3 ps
+    steps: 20000
+
+- id: ar_lj_nve
+  prompt: "Liquid-like argon with Lennard-Jones (epsilon 0.0104 eV, sigma 3.4 A, cutoff 8.5 A), FCC start a = 5.26 A, 8x8x8 cells, NVE from 90 K for 2000 steps."
+  expect: {potential: lj_compute_force, scheme: verlet_nve, species: [Ar], structure: FCC, atoms: 2048, temperature: 90, steps: 2000}
+  reference:
+    species: [{name: Ar}]
+    system: {kind: lattice, structure: FCC, lattice_parameter: 5.26 ang, repeats: [8, 8, 8]}
+    potential: {kind: lj, epsilon: 0.0104 eV, sigma: 3.4 ang, rcut: 8.5 ang}
+    initial_temperature: 90 K
+    steps: 2000
+
+- id: ar_lj_berendsen
+  prompt: "Argon LJ crystal (FCC 5.26 A, 6x6x6 cells, epsilon 0.0104 eV, sigma 3.4 A, rcut 2.5 sigma) heated from 20 K to 60 K with a Berendsen thermostat over 5000 steps."
+  expect: {potential: lj_compute_force, scheme: verlet_bnvt, species: [Ar], structure: FCC, atoms: 864, temperature: 60, steps: 5000}
+  reference:
+    species: [{name: Ar}]
+    system: {kind: lattice, structure: FCC, lattice_parameter: 5.26 ang, repeats: [6, 6, 6]}
+    potential: {kind: lj, epsilon: 0.0104 eV, sigma: 3.4 ang, rcut: 8.5 ang}
+    ensemble: {kind: berendsen, temperature_start: 20 K, temperature_stop: 60 K}
+    steps: 5000
+
+- id: alcu_alloy
+  prompt: "Ordered Al-Cu FCC alloy (L1_0-like, two Al and two Cu in the cubic cell, a = 3.8 A), 9 cells per side, AlCu EAM potential, Langevin at 600 K, 3000 steps."
+  expect: {potential: eam_alloy_force, scheme: verlet_lnvt, species: [Al, Cu], structure: FCC, atoms: 2916, temperature: 600, steps: 3000}
+  reference:
+    species: [{name: Al}, {name: Cu}]
+    system: {kind: lattice, structure: FCC, lattice_parameter: 3.8 ang, repeats: [9, 9, 9], types: [Al, Cu, Cu, Al]}
+    potential: {kind: eam_alloy, file: AlCu.eam.alloy}
+    ensemble: {kind: langevin, temperature: 600 K}
+    steps: 3000
+
+- id: sn_2bct
+  prompt: "beta-tin (2BCT, a = 5.83 A, c = 3.18 A), 10x10x18 cells, Sn EAM alloy potential, NVE from 300 K, 1000 steps."
+  expect: {potential: eam_alloy_force, scheme: verlet_nve, species: [Sn], structure: 2BCT, atoms: 7200, temperature: 300, steps: 1000}
+  reference:
+    species: [{name: Sn}]
+    system: {kind: lattice, structure: 2BCT, lattice_parameter: [5.83 ang, 5.83 ang, 3.18 ang], repeats: [10, 10, 18]}
+    potential: {kind: eam_alloy, file: Sn.eam.alloy}
+    initial_temperature: 300 K
+    steps: 1000
+
+- id: ta_ramp
+  prompt: "Heat Ta (BCC, 3.3026 A, 16^3 cells, Ta1 Ravelo EAM) linearly from 300 K to 3000 K with Langevin over 50 ps, time step 1 fs, thermo every 100 steps, restart files every 10000 steps."
+  expect: {potential: eam_alloy_force, scheme: verlet_lnvt, species: [Ta], structure: BCC, atoms: 8192, temperature: 3000, steps: 50000}
+  reference:
+    species: [{name: Ta}]
+    system: {kind: lattice, structure: BCC, lattice_parameter: 3.3026 ang, repeats: [16, 16, 16]}
+    potential: {kind: eam_alloy, file: Ta1_Ravelo_2013.eam.alloy}
+    ensemble: {kind: langevin, temperature_start: 300 K, temperature_stop: 3000 K}
+    steps: 50000
+    outputs: {thermo_every: 100, restart_every: 10000}
+
+- id: ta_paraview
+  prompt: "Small Ta BCC test, 8x8x8 cells, Ta EAM (Ta.eam.alloy), NVE at 100 K, 500 steps, paraview output every 50 steps."
+  expect: {potential: eam_alloy_force, scheme: verlet_nve, species: [Ta], structure: BCC, atoms: 1024, temperature: 100, steps: 500, snapshot: write_snapshot_paraview}
+  reference:
+    species: [{name: Ta}]
+    system: {kind: lattice, structure: BCC, lattice_parameter: 3.304 ang, repeats: [8, 8, 8]}
+    potential: {kind: eam_alloy, file: Ta.eam.alloy}
+    initial_temperature: 100 K
+    steps: 500
+    outputs: {snapshot: paraview, snapshot_every: 50}
+
+- id: cu_lammps_out
+  prompt: "Cu FCC 6x6x6 (3.615 A) with the Cu EAM potential, Berendsen at 300 K (tau 0.1 ps), 1000 steps, write LAMMPS data snapshots every 200 steps."
+  expect: {potential: eam_alloy_force, scheme: verlet_bnvt, species: [Cu], structure: FCC, atoms: 864, temperature: 300, steps: 1000, snapshot: write_snapshot_lammps_data}
+  reference:
+    species: [{name: Cu}]
+    system: {kind: lattice, structure: FCC, lattice_parameter: 3.615 ang, repeats: [6, 6, 6]}
+    potential: {kind: eam_alloy, file: Cu.eam.alloy}
+    ensemble: {kind: berendsen, temperature: 300 K}
+    steps: 1000
+    outputs: {snapshot: lammps_data, snapshot_every: 200}
+
+- id: ta_noncubic_box
+  prompt: "Ta slab-like box of 30x15x10 BCC cells (a = 3.3026 A), fully periodic, Ta1 Ravelo EAM, Langevin 500 K, 2000 steps."
+  expect: {potential: eam_alloy_force, scheme: verlet_lnvt, species: [Ta], structure: BCC, atoms: 9000, temperature: 500, steps: 2000}
+  reference:
+    species: [{name: Ta}]
+    system: {kind: lattice, structure: BCC, lattice_parameter: 3.3026 ang, repeats: [30, 15, 10]}
+    potential: {kind: eam_alloy, file: Ta1_Ravelo_2013.eam.alloy}
+    ensemble: {kind: langevin, temperature: 500 K}
+    steps: 2000
+
+- id: ta_free_surface
+  prompt: "Ta BCC film, 12x12x12 cells (3.3026 A), periodic in x and y only (free surfaces along z), Ta1 Ravelo EAM, NVE from 300 K, 1000 steps."
+  expect: {potential: eam_alloy_force, scheme: verlet_nve, species: [Ta], structure: BCC, temperature: 300, steps: 1000}
+  reference:
+    species: [{name: Ta}]
+    system: {kind: lattice, structure: BCC, lattice_parameter: 3.3026 ang, repeats: [12, 12, 12], periodic: [true, true, false]}
+    potential: {kind: eam_alloy, file: Ta1_Ravelo_2013.eam.alloy}
+    initial_temperature: 300 K
+    steps: 1000
+
+- id: ta2_potential
+  prompt: "Compare with the second Ravelo Ta potential (Ta2): BCC Ta 10^3 cells, NVT Langevin 1000 K, 4000 steps."
+  expect: {potential: eam_alloy_force, scheme: verlet_lnvt, species: [Ta], structure: BCC, atoms: 2000, temperature: 1000, steps: 4000}
+  reference:
+    species: [{name: Ta}]
+    system: {kind: lattice, structure: BCC, lattice_parameter: 3.3026 ang, repeats: [10, 10, 10]}
+    potential: {kind: eam_alloy, file: Ta2_Ravelo_2013.eam.alloy}
+    ensemble: {kind: langevin, temperature: 1000 K}
+    steps: 4000
+
+- id: al_fcc_alcu_file
+  prompt: "Pure aluminium FCC (a = 4.05 A), 10x10x10, using the Al part of the AlCu EAM file, Langevin 300 K, 2000 steps."
+  expect: {potential: eam_alloy_force, scheme: verlet_lnvt, species: [Al], structure: FCC, atoms: 4000, temperature: 300, steps: 2000}
+  reference:
+    species: [{name: Al}]
+    system: {kind: lattice, structure: FCC, lattice_parameter: 4.05 ang, repeats: [10, 10, 10]}
+    potential: {kind: eam_alloy, file: AlCu.eam.alloy}
+    ensemble: {kind: langevin, temperature: 300 K}
+    steps: 2000
+
+- id: ar_sc_lj
+  prompt: "Toy model, simple cubic argon (a = 3.8 A), 15 cells per side, LJ (0.0104 eV, 3.4 A, cutoff 8.5 A), NVE from 10 K, 1000 steps, 0.5 fs time step."
+  expect: {potential: lj_compute_force, scheme: verlet_nve, species: [Ar], structure: SC, atoms: 3375, temperature: 10, steps: 1000}
+  reference:
+    species: [{name: Ar}]
+    system: {kind: lattice, structure: SC, lattice_parameter: 3.8 ang, repeats: [15, 15, 15]}
+    potential: {kind: lj, epsilon: 0.0104 eV, sigma: 3.4 ang, rcut: 8.5 ang}
+    initial_temperature: 10 K
+    timestep: 5.0e-4 ps
+    steps: 1000
+
+- id: cu_hot_start
+  prompt: "Cu FCC 8^3, Cu EAM, initial velocities at 1200 K then Langevin NVT at 600 K, 3000 steps, xyz every 500 steps."
+  expect: {potential: eam_alloy_force, scheme: verlet_lnvt, species: [Cu], structure: FCC, atoms: 2048, temperature: 600, steps: 3000, snapshot: write_snapshot_xyz}
+  reference:
+    species: [{name: Cu}]
+    system: {kind: lattice, structure: FCC, lattice_parameter: 3.615 ang, repeats: [8, 8, 8]}
+    potential: {kind: eam_alloy, file: Cu.eam.alloy}
+    ensemble: {kind: langevin, temperature: 600 K}
+    initial_temperature: 1200 K
+    steps: 3000
+    outputs: {snapshot: xyz, snapshot_every: 500}
+
+- id: sn_hot
+  prompt: "White tin near melting, 2BCT a=5.83 A c=3.18 A, 8x8x14 cells, Sn EAM, Langevin 500 K, 5000 steps, thermodynamic output every 50 steps."
+  expect: {potential: eam_alloy_force, scheme: verlet_lnvt, species: [Sn], structure: 2BCT, atoms: 3584, temperature: 500, steps: 5000}
+  reference:
+    species: [{name: Sn}]
+    system: {kind: lattice, structure: 2BCT, lattice_parameter: [5.83 ang, 5.83 ang, 3.18 ang], repeats: [8, 8, 14]}
+    potential: {kind: eam_alloy, file: Sn.eam.alloy}
+    ensemble: {kind: langevin, temperature: 500 K}
+    steps: 5000
+    outputs: {thermo_every: 50}
+
+- id: ta_from_docs
+  prompt: "Reproduce the exaStamp Starter Pack example (Ta BCC 20^3 at 600 K, Langevin to 300 K), but run 2000 steps."
+  expect: {potential: eam_alloy_force, scheme: verlet_lnvt, species: [Ta], structure: BCC, atoms: 16000, temperature: 300, steps: 2000}
+  reference:
+    species: [{name: Ta, mass: 180.95 Da}]
+    system: {kind: lattice, structure: BCC, lattice_parameter: 3.3 ang, repeats: [20, 20, 20]}
+    potential: {kind: eam_alloy, file: Ta1_Ravelo_2013.eam.alloy, rcut: 5.3 ang}
+    ensemble: {kind: langevin, temperature: 300 K}
+    initial_temperature: 600 K
+    steps: 2000
+    outputs: {snapshot: xyz, snapshot_every: 100}
+
+- id: alcu_random_types
+  prompt: "Cu-rich AlCu FCC (three Cu, one Al per cubic cell, a = 3.7 A), 8^3 cells, AlCu EAM, NVE 300 K, 1000 steps."
+  expect: {potential: eam_alloy_force, scheme: verlet_nve, species: [Al, Cu], structure: FCC, atoms: 2048, temperature: 300, steps: 1000}
+  reference:
+    species: [{name: Al}, {name: Cu}]
+    system: {kind: lattice, structure: FCC, lattice_parameter: 3.7 ang, repeats: [8, 8, 8], types: [Al, Cu, Cu, Cu]}
+    potential: {kind: eam_alloy, file: AlCu.eam.alloy}
+    initial_temperature: 300 K
+    steps: 1000
+
+- id: ta_short_dt
+  prompt: "Ta BCC 10^3, Ta1 Ravelo EAM, shock-like hot start at 5000 K, NVE, 0.2 fs time step, 2000 steps."
+  expect: {potential: eam_alloy_force, scheme: verlet_nve, species: [Ta], structure: BCC, atoms: 2000, temperature: 5000, steps: 2000}
+  reference:
+    species: [{name: Ta}]
+    system: {kind: lattice, structure: BCC, lattice_parameter: 3.3026 ang, repeats: [10, 10, 10]}
+    potential: {kind: eam_alloy, file: Ta1_Ravelo_2013.eam.alloy}
+    initial_temperature: 5000 K
+    timestep: 2.0e-4 ps
+    steps: 2000
+
+# --------------------------------------------------------------------------
+# Outside build_input: the agent has to start from an example or the docs.
+
+- id: cuzn_multimat_lj
+  prompt: "Cu-Zn mixture on an FCC lattice (a = 3.7 A, cubic cell sites Cu, Zn, Cu, Zn), 8x8x8 cells. Lennard-Jones for each species pair: Cu-Cu epsilon 0.4093 eV sigma 2.338 A, Zn-Zn 0.1574 eV 2.44 A, Cu-Zn 0.30 eV 2.36 A, cutoff 6 A for all pairs. NVE from 300 K, 500 steps."
+  expect: {potential: [compute_force_pair_multimat, lj_multi_force], species: [Cu, Zn], structure: FCC, atoms: 2048, temperature: 300, steps: 500}
+  reference_input: references/cuzn_multimat_lj.msp
+
+- id: ta_snap
+  prompt: "Ta BCC (a = 3.316 A), 6x6x6 cells, with the Ta06A SNAP potential (Thompson et al. 2015). NVE from 300 K, 200 steps of 0.5 fs."
+  expect: {potential: [snap_force_fp64, snap_force_fp32, snap_force_generic], files: [Ta06A.snapcoeff, Ta06A.snapparam], structure: BCC, atoms: 432, temperature: 300, steps: 200}
+  reference_input: references/ta_snap.msp
+
+- id: ta_npt
+  prompt: "Relax Ta BCC (a = 3.3026 A, 10x10x10 cells, Ta1 Ravelo EAM) at 300 K and zero pressure with an isotropic Nose-Hoover barostat, 1000 steps."
+  expect: {potential: eam_alloy_force, scheme: verlet_nhnpt, operators: [init_nose_hoover], atoms: 2000, temperature: 300, steps: 1000}
+  reference_input: references/ta_npt.msp
+
+- id: nacl_lj_wolf
+  prompt: "NaCl rock salt (a = 5.64 A), 4x4x4 conventional cells, charges +1 and -1. Lennard-Jones per pair (Na-Na 0.0115 eV 2.35 A, Cl-Cl 0.0046 eV 4.40 A, Na-Cl 0.0073 eV 3.375 A) plus Coulomb with the Wolf summation (alpha 0.25 1/A, cutoff 10 A). NVE from 300 K, 200 steps."
+  expect:
+    species: [Na, Cl]
+    atoms: 512
+    temperature: 300
+    steps: 200
+    operators: ["ljwolf|ljwolf_multi_force|ljwolf_compute_force|coul_wolf|coul_wolf_multi_force|coulombic_wolf"]
+    max_potential_energy: -1.0
+  reference_input: references/nacl_lj_wolf.msp
+
+- id: water_rigid
+  prompt: "Box of 216 rigid TIP4P-like water molecules (use the water model shipped with exaStamp), simple cubic start with 3.1 A spacing, Lennard-Jones + reaction field, Langevin thermostat at 300 K, 1000 steps of 1 fs."
+  expect:
+    operators: ["ljrf_rigidmol_force|compute_force_pair_rigidmol", langevin_thermostat_rigidmol, grid_flavor_rigidmol]
+    atoms: 216
+    temperature: 300
+    steps: 1000
+  reference_input: references/water_rigid.msp
+
+- id: si_sw_xyz
+  prompt: "Run my silicon structure init.xyz (extended XYZ, the cell and the velocities are in the file) with the Stillinger-Weber potential, NVE, 1000 steps of 1 fs."
+  workspace_files: [regression_new/potentials/sw/Si/init.xyz]
+  expect: {potential: sw_force, operators: ["read_xyz_file_with_xform"], files: [Si.sw, init.xyz], atoms: 512, steps: 1000}
+  reference_input: references/si_sw_xyz.msp
+
+- id: ta_region_thermostat
+  prompt: "Ta BCC 20x10x10 cells (a = 3.3026 A, Ta1 Ravelo EAM), starting at 0 K. NVE everywhere, except a Langevin heat bath at 300 K applied only to the atoms with x < 10 A. 2000 steps."
+  expect: {potential: eam_alloy_force, operators: [particle_regions, thermostat_region, langevin_thermostat], atoms: 4000, temperature: 300, steps: 2000}
+  reference_input: references/ta_region_thermostat.msp
+
+- id: ta_restart
+  # the restart file stores iteration 500: max_iteration is not checked (2000 or 2500 both defensible)
+  prompt: "Continue my Ta simulation from the restart file ta_restart.MpiIO (written by exaStamp with write_dump_atoms), Ta1 Ravelo EAM, Langevin at 300 K, 2000 more steps, restart files every 500 steps."
+  workspace_files: [ta_restart.MpiIO]
+  expect: {potential: eam_alloy_force, scheme: verlet_lnvt, operators: [read_dump_atoms], files: [ta_restart.MpiIO], atoms: 1024, temperature: 300}
+  reference_input: references/ta_restart.msp
+
+- id: cu_histogram
+  prompt: "Cu FCC 10x10x10 cells (3.615 A), Cu EAM, NVE from 600 K for 1000 steps. At the end of the run, write the histogram of the x velocities (100 bins) to vx_hist.csv."
+  expect: {potential: eam_alloy_force, operators: ["histogram_vx|histogram_generic", write_histogram], files: [vx_hist.csv], atoms: 4000, temperature: 600, steps: 1000}
+  reference_input: references/cu_histogram.msp
+
+- id: rsa_unavailable
+  prompt: "Fill a 100 A cubic box with Ta atoms by random sequential addition (init_rsa, minimum distance 2.5 A), then run NVE for 1000 steps."
+  missing_operators: [init_rsa]
+  expect: {refusal: true, mentions: [rsa]}

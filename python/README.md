@@ -86,3 +86,31 @@ The full pyonika API is also available: `init`, `run`, `run_node`, `end`, `make_
 - `examples/run_eam_sample.py` runs a sample and prints its thermodynamics, species and particle arrays.
 - `examples/temperature_sweep.py` runs several simulations in one process.
 - `tests/` holds the pytest suite, also registered in ctest as `pyexastamp_tests`.
+
+## MCP server for LLM agents
+
+`exastamp_mcp` is an [MCP](https://modelcontextprotocol.io) server that helps an LLM agent (any model) write input files that run the first time. Install it with the `mcp` extra:
+
+```bash
+pip install "<prefix>/python[mcp]"
+exastamp-mcp --workspace my_runs --doc-dir path/to/doc_exaStamp/docs   # stdio server
+exastamp-mcp --index-examples    # once per install: records which shipped examples build
+```
+
+Register it in an MCP client, e.g. `.mcp.json` for Claude Code:
+
+```json
+{ "mcpServers": { "exastamp": {
+    "command": "<venv>/bin/exastamp-mcp",
+    "args": ["--workspace", "."],
+    "env": { "EXASTAMP_DOC_DIR": "<path>/doc_exaStamp/docs" } } } }
+```
+
+What it does:
+
+- **Grounding:** `list_capabilities`, `describe_block` (curated schemas of the blocks users write, plus the operator's real parameters), `search_examples` / `get_example`, `search_docs`, `list_potential_files`.
+- **Structured description:** `build_input` turns a `SimulationSpec` (species, lattice or XYZ file, EAM alloy or Lennard-Jones, NVE / Langevin / Berendsen, outputs) into a commented input. Domain arithmetic, lattice types, grid flavor and block order are derived, so they are right by construction.
+- **Layered validation:** `validate_input` runs static checks (unknown parameters with suggestions, units and dimensions, domain and lattice consistency, potential files, thermostat set-up), then a strict graph build, then a 2-step smoke run in a child process, checking the result for NaN, temperature explosions and the expected atom count. Issues are `{stage, level, path, message, suggestion, doc}`.
+- **Workspace:** `write_input` (refused while validation fails), `run_input` / `job_status` / `stop_job` for local background runs.
+
+The server never loads exaStamp itself. Catalog, build and runs go through child processes (`onika_mcp.worker`), so an abort cannot take it down. `mcp_eval/` holds 20 requests with expected results: `python mcp_eval/run_eval.py --reference` checks they can all be met, `--claude-code` measures Claude Code on them with your Claude account (no API billing), and `--api-model <model>` does the same through the Anthropic API (billed per token, needs `pip install "anthropic[mcp]"`). `run_eval.grade()` can score workspaces produced by another framework.
