@@ -1,5 +1,11 @@
-# Input final_large.xyz is not stored in the repository, generate it first with Atomsk:
-#   atomsk --polycrystal tantalum.xsf polycrystal.txt final_large.xyz
+# Input final_large.xyz is not stored in the repository, generate it first with Atomsk
+# (24 random grains in a 200 ang box, about 445k atoms). -wrap puts all atoms back in the box,
+# and the second line writes the extended XYZ header that read_extended_xyz_file needs
+# (Atomsk writes a plain XYZ comment line in --polycrystal mode):
+#   atomsk --polycrystal tantalum.xsf polycrystal.txt -wrap final_large.xyz
+#   sed -i.bak '2s/.*/Lattice="200 0 0 0 200 0 0 0 200" Properties=species:S:1:pos:R:3/' final_large.xyz
+# Atomsk keeps overlapping atom pairs at the grain boundaries (about 1% of the atoms closer than
+# 1.5 ang): remove_close_particles deletes one atom of each pair before the analysis.
 
 species:
   - Ta: { mass: 180.95 Da, z: 73, charge: 0 e- }
@@ -46,6 +52,8 @@ compute_grain_clusters:
   orphan_adoption: true
 
 simulation_epilog:
+  - remove_close_particles: { distance: 1.5 ang, seed: 42 }
+  - parallel_update_particles   # rebuild ghosts and neighbor lists after the removal
   - compute_ptm
   - ptm_fields
   - ghost_update_opt: { opt_fields: [ ptm_type, ptm_orientation ] }
