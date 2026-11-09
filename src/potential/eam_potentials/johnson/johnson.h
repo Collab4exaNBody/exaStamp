@@ -19,6 +19,7 @@ under the License.
 
 #include <cmath>
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 #include <onika/physics/units.h>
 #include <onika/physics/units.h>
 
@@ -178,6 +179,7 @@ namespace YAML
     static bool decode(const Node& node, EamJohnsonParameters& v)
     {
       if( !node.IsMap() ) { return false; }
+      exaStamp::check_yaml_keys( node , { "re", "fe", "rhoe", "alpha", "beta", "A", "B", "kappa", "lambda", "Fn0", "Fn1", "Fn2", "Fn3", "F0", "F1", "F2", "F3", "Fo", "eta" } , "eam johnson parameters" );
 #     define CONVERT_EAMJOHNSON_PARAM(x) v.x = node[#x].as<Quantity>().convert() //; std::cout << #x << " = " << v.x << std::endl 
       CONVERT_EAMJOHNSON_PARAM(re);
       CONVERT_EAMJOHNSON_PARAM(fe);

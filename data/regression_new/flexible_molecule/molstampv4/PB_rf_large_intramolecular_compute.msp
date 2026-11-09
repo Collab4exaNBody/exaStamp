@@ -1,7 +1,7 @@
 # no-seq
 includes:
   - PB.cfg
-  - config_molecule2.msp
+  - config_molecule.msp
 
 configuration:
   onika:

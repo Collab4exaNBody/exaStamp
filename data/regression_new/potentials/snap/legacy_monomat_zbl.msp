@@ -3,14 +3,14 @@
 includes:
   - legacy_monomat.msp
 
-zbl_compute_force_virial:
+zbl_compute_force:
   parameters: { r1: 0.1 ang , rc: 4.615858 ang }
   rcut: 4.615858 ang
 
 # define potential we'll reuse later
 compute_force:
-  - snapl_force_virial
-  - zbl_compute_force_virial
+  - snaplegacy_force
+  - zbl_compute_force
 
 simulation_epilog:
   - check_values:

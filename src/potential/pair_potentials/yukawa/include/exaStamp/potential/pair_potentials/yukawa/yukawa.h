@@ -19,6 +19,7 @@ under the License.
 
 #include <cmath>
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 #include <onika/physics/units.h>
 #include <onika/physics/constants.h>
 #include <onika/cuda/cuda.h>
@@ -60,6 +61,7 @@ namespace YAML
     {
       v = YukawaParms{};
       if( !node.IsMap() ) { return false; }
+      exaStamp::check_yaml_keys( node , { "A", "kappa" } , "yukawa parameters" );
       v.A     = node["A"].as<Quantity>().convert();
       v.kappa = node["kappa"].as<Quantity>().convert();
       return true;

@@ -19,6 +19,7 @@ under the License.
 
 #include <cmath>
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 #include <functional>
 #include <vector>
 #include <algorithm>
@@ -71,6 +72,7 @@ namespace YAML
     static bool decode(const Node& node, TorsionPotential& b)
     {
       // potential gestion
+      exaStamp::check_yaml_keys( node , { "types", "potential", "parameters" } , "torsion potential" );
       if(!node["potential"])
       {
         fatal_error() << "No potential type given in the torsion interaction. Choice are harm_torsion, torsion, cos_two, half_torsion, opls_torsion, torsion_gaff." << std::endl;

@@ -150,7 +150,7 @@ first_iteration:
   - init_particles
   - compute_all_forces_energy
   - default_thermostate_compute
-  - default_thermostate_screen: { lb_flag: false , move_flag: false , print_header: true }
+  - default_thermostate_screen: { print_header: true }
   - default_thermostate_file
   - nose_hoover_additional_step
   - next_time_step

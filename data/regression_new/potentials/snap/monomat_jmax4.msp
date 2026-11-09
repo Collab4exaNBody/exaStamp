@@ -29,7 +29,7 @@ compute_force:
 
 input_data:
   - read_stamp_v3:
-      file: Mo_conf_300K.MpiIO
+      filename: Mo_conf_300K.MpiIO
       bounds_mode: FILE
 
 domain:
