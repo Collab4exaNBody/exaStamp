@@ -28,6 +28,7 @@ under the License.
 #include <exanb/compute/compute_cell_particle_pairs.h>
 #include <exanb/compute/compute_cell_particles.h>
 #include <exanb/particle_neighbors/chunk_neighbors.h>
+#include <exaStamp/analysis_particle/bounded_pair_buffer.h>
 
 #include <omp.h>
 #include <vector>
@@ -175,23 +176,10 @@ namespace exaStamp
     template<class ComputeBufferT, class CellParticlesT>
     inline void operator () ( int jnum, ComputeBufferT& buf, CellParticlesT /*cells*/ ) const
     {
-      // partial selection sort: true globally-nearest neighbors first (inner loop scans the full
-      // jnum, not just the first n) -- same technique as compute_ptm.cu, same reasoning: CNA's
-      // own "which neighbors are the nn nearest" question needs the true nearest set, not
-      // whichever happen to land first in the buffer's own traversal order.
+      // buf holds the jnum (<= CNA_MAX_NBRS) nearest neighbors, sorted by increasing distance:
+      // the selection is done while filling the buffer (NearestNeighborsComputeBuffer), since
+      // CNA's "which neighbors are the nn nearest" question needs the true nearest set.
       const int n = std::min( jnum, CNA_MAX_NBRS );
-      for(int i=0;i<n;i++)
-      {
-        int m = i;
-        for(int j=i+1;j<jnum;j++) { if( buf.d2[j] < buf.d2[m] ) { m = j; } }
-        if( m != i )
-        {
-          std::swap( buf.drx[i], buf.drx[m] );
-          std::swap( buf.dry[i], buf.dry[m] );
-          std::swap( buf.drz[i], buf.drz[m] );
-          std::swap( buf.d2[i], buf.d2[m] );
-        }
-      }
 
       double struct_type = classify_family( buf, n, 12, 12, 1.0 ); // FCC/HCP/ICO: mean of 12 nearest, no rescale
       if( struct_type == CNA_MATCH_NONE )
@@ -231,7 +219,7 @@ namespace exaStamp
       const size_t total_particles = grid->number_of_particles();
       cna_struct_type->resize( total_particles );
 
-      using ComputeBuffer = ComputePairBuffer2<false,false>;
+      using ComputeBuffer = NearestNeighborsComputeBuffer< CNA_MAX_NBRS >; // nearest only, any rcut is safe
       ComputePairOptionalLocks<false> cp_locks {};
       exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
       auto compute_buf = make_compute_pair_buffer<ComputeBuffer>();

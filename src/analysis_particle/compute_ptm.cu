@@ -28,6 +28,7 @@ under the License.
 #include <exanb/compute/compute_cell_particle_pairs.h>
 #include <exanb/compute/compute_cell_particles.h>
 #include <exanb/particle_neighbors/chunk_neighbors.h>
+#include <exaStamp/analysis_particle/bounded_pair_buffer.h>
 
 #include <ptm_functions.h>
 #include <ptm_constants.h>
@@ -80,6 +81,10 @@ namespace exaStamp
     return 0;
   }
 
+  // PTM only looks at the PTM_MAX_INPUT_POINTS-1 nearest neighbors: keep just those, sorted by
+  // distance, whatever rcut is (see bounded_pair_buffer.h).
+  using PTMComputeBuffer = NearestNeighborsComputeBuffer< PTM_MAX_INPUT_POINTS - 1 >;
+
   struct PTMFunctor
   {
     // FCC/HCP/BCC/ICO/SC all go through PTM's single-shot neighbour_ordering (num_outer==0,
@@ -102,30 +107,16 @@ namespace exaStamp
     inline void operator () ( int jnum, ComputeBufferT& buf, CellParticlesT /*cells*/) const
     {
       // PTM wants its own fixed candidate-neighbor pool -- not "however many happen to lie
-      // within rcut" -- rcut only needs to be generous enough that the candidate pool below is
-      // full of *genuinely* nearest neighbors; anything past that must be discarded, or PTM's
-      // own graph matching sees a different point set and gives different (rcut-dependent)
-      // results. Same convention as OVITO's own PTM code (PTMAlgorithm.cpp): always gather up to
+      // within rcut" -- rcut only needs to be generous enough that the candidate pool is full of
+      // *genuinely* nearest neighbors; anything past that must be discarded, or PTM's own graph
+      // matching sees a different point set and gives different (rcut-dependent) results. Same
+      // convention as OVITO's own PTM code (PTMAlgorithm.cpp): always gather up to
       // PTM_MAX_INPUT_POINTS-1 nearest neighbors regardless of which structures are enabled --
       // ptm_index() itself already gates each individual structure check on whether enough points
-      // were supplied (see the `num_points >= PTM_NUM_POINTS_*` checks in ptm_index.cpp), and its
-      // combinatorial matching is designed to pick the right subset/correspondence out of a
-      // candidate pool larger than any one template needs. Partial selection sort finds the true
-      // n globally-nearest neighbors (inner loop scans the full jnum, not just the first n) --
-      // buf.copy(src,dst) is a one-way overwrite (not a swap), so exchange the two slots by hand.
+      // were supplied (see the `num_points >= PTM_NUM_POINTS_*` checks in ptm_index.cpp). The
+      // selection is done while filling the buffer (NearestNeighborsComputeBuffer): buf already
+      // holds the jnum nearest neighbors, sorted by increasing distance.
       const int n = std::min( jnum, static_cast<int>(PTM_MAX_INPUT_POINTS) - 1 );
-      for(int i=0;i<n;i++)
-      {
-        int m = i;
-        for(int j=i+1;j<jnum;j++) { if( buf.d2[j] < buf.d2[m] ) { m = j; } }
-        if( m != i )
-        {
-          std::swap( buf.drx[i], buf.drx[m] );
-          std::swap( buf.dry[i], buf.dry[m] );
-          std::swap( buf.drz[i], buf.drz[m] );
-          std::swap( buf.d2[i], buf.d2[m] );
-        }
-      }
 
       double struct_type = static_cast<double>( PTM_MATCH_NONE );
       double quat[4] = { 1.0, 0.0, 0.0, 0.0 }; // identity
@@ -189,7 +180,7 @@ namespace exaStamp
   {
     ADD_SLOT( GridT               , grid            , INPUT_OUTPUT );
     ADD_SLOT( Domain              , domain          , INPUT , REQUIRED );
-    ADD_SLOT( double              , rcut            , INPUT , REQUIRED , DocString{"Neighbor search cutoff -- must be generous enough to include at least BCC's 14 first+second-shell neighbors (the largest requirement among the checked structures: FCC/HCP/ICO 12, BCC 14, SC 6)"} );
+    ADD_SLOT( double              , rcut            , INPUT , REQUIRED , DocString{"Neighbor search cutoff -- must be generous enough to include at least BCC's 14 first+second-shell neighbors (the largest requirement among the checked structures: FCC/HCP/ICO 12, BCC 14, SC 6). Only the 18 nearest neighbors within rcut are used, so a larger rcut costs neighbor search time but does not change the result"} );
     ADD_SLOT( double              , rmsd_cutoff     , INPUT , 0.1 , DocString{"Reject a PTM match whose RMSD exceeds this (structure_type reported as PTM_MATCH_NONE, rmsd/orientation still written for diagnostics). Same default as OVITO's own PTM modifier. <=0 disables the cutoff."} );
     ADD_SLOT( exanb::GridChunkNeighbors , chunk_neighbors , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
     ADD_SLOT( double              , rcut_max        , INPUT_OUTPUT , 0.0 , DocString{"Updated max rcut"} );
@@ -227,7 +218,7 @@ namespace exaStamp
       ptm_orientation->resize( total_particles * 4 );
       ptm_rmsd->resize( total_particles );
 
-      using ComputeBuffer = ComputePairBuffer2<false,false>;
+      using ComputeBuffer = PTMComputeBuffer;
       ComputePairOptionalLocks<false> cp_locks {};
       exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
       auto compute_buf = make_compute_pair_buffer<ComputeBuffer>();
@@ -288,7 +279,7 @@ Per-particle structure identification and local lattice orientation via PTM (Pol
 Matching), vendored from OVITO. Checks FCC, HCP, BCC, ICO and SC (not DCUB/DHEX/GRAPHENE, which
 need a neighbour query this operator doesn't implement -- see compute_ptm.cu). Gathers each
 particle's nearest neighbors (sorted by true distance, up to PTM_MAX_INPUT_POINTS-1=18 within
-rcut), feeds them to PTM's ptm_index(), and writes three flat per-particle buffers, indexed via
+rcut; neighbors past the 18 nearest are discarded, so any rcut is safe), feeds them to PTM's ptm_index(), and writes three flat per-particle buffers, indexed via
 grid->cell_particle_offset_data() (same convention as compute_bispectrum's output): ptm_struct_type
 (0=none, 1=FCC, 2=HCP, 3=BCC, 4=ICO, 5=SC), ptm_orientation
 (PTM's own fitted lattice orientation quaternion, w,x,y,z, 4 doubles/particle), and ptm_rmsd

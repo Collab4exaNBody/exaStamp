@@ -27,6 +27,7 @@ under the License.
 #include <exanb/core/make_grid_variant_operator.h>
 #include <exanb/compute/compute_cell_particle_pairs.h>
 #include <exanb/particle_neighbors/chunk_neighbors.h>
+#include <exaStamp/analysis_particle/bounded_pair_buffer.h>
 
 #include <ptm_constants.h>
 
@@ -59,10 +60,19 @@ namespace exaStamp
     const double * const __restrict__ m_struct_type_in = nullptr;  // this iteration's starting point (read-only)
     double * const __restrict__ m_struct_type_out = nullptr;       // next iteration's buffer, pre-seeded with a copy of m_struct_type_in
     double m_min_fraction = 0.5;
+    long * const m_n_overflow = nullptr; // particles with more neighbors within rcut than the buffer holds
 
     template<class ComputeBufferT, class CellParticlesT>
     inline void operator () ( int jnum, ComputeBufferT& buf, CellParticlesT /*cells*/ ) const
     {
+      if( buf.ext.overflow )
+      {
+        // the vote uses every neighbor within rcut: a truncated set would give a wrong result
+        buf.ext.overflow = false;
+#       pragma omp atomic
+        ++ (*m_n_overflow);
+        return;
+      }
       const size_t i = m_cell_particle_offset[buf.cell] + buf.part;
       if( m_struct_type_in[i] != static_cast<double>(PTM_MATCH_NONE) || jnum <= 0 ) { return; } // already matched, or isolated -- untouched
 
@@ -119,7 +129,7 @@ namespace exaStamp
       std::vector<double> buf_a( ptm_struct_type->begin(), ptm_struct_type->end() );
       std::vector<double> buf_b( buf_a );
 
-      using ComputeBuffer = ComputePairBuffer2<false,true>; // UseNeighbors=true: buf.nbh.get(j,cell,part) per neighbor
+      using ComputeBuffer = OverflowFlagComputeBuffer<true>; // UseNeighbors=true: buf.nbh.get(j,cell,part) per neighbor
       ComputePairOptionalLocks<false> cp_locks {};
       exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
       auto compute_buf = make_compute_pair_buffer<ComputeBuffer>();
@@ -141,7 +151,8 @@ namespace exaStamp
       for(long iter=0; iter<n_iter; iter++)
       {
         buf_b = buf_a; // unmatched stays unmatched this pass unless recovered below
-        PTMShrinkDisorderFunctor compute_op = { cell_particle_offset, buf_a.data(), buf_b.data(), min_fraction };
+        long n_overflow = 0;
+        PTMShrinkDisorderFunctor compute_op = { cell_particle_offset, buf_a.data(), buf_b.data(), min_fraction, &n_overflow };
 
 #       pragma omp parallel for collapse(3) schedule(dynamic)
         for(ssize_t k=gl;k<dims.k-gl;k++)
@@ -154,6 +165,13 @@ namespace exaStamp
                                            , compute_buf, optional, compute_op
                                            , compute_field_set, cp_opts
                                            , posfields, std::index_sequence<>{} );
+        }
+
+        if( n_overflow > 0 )
+        {
+          fatal_error() << "ptm_shrink_disorder: " << n_overflow << " particle(s) have more than "
+                        << overflow_flag_buffer_capacity<true> << " neighbors within rcut=" << *rcut
+                        << ", rcut is far too large (use about the first-neighbor shell distance)" << std::endl;
         }
 
         buf_a.swap( buf_b );

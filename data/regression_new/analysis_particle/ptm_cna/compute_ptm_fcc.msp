@@ -30,6 +30,7 @@ setup_system:
       sigma: 0.05 ang
 
 global:
+  deterministic_noise: true
   max_iteration: 0
   simulation_thermostate_screen_frequency: 10
   simulation_thermostate_file_frequency: -1
