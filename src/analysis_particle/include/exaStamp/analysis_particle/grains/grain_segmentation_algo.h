@@ -21,6 +21,7 @@ under the License.
 #include <mpi.h>
 #include <vector>
 #include <cstddef>
+#include <cstdint>
 
 // Grain segmentation building blocks, used by compute_grain_clusters.cpp
 
@@ -58,4 +59,17 @@ namespace exaStamp
 
   // random per-grain colors
   std::vector<Vec3d> grain_colors( long n_grains, unsigned int seed );
+
+  // Mean lattice orientation of each grain, collective. Each rank passes its own member atoms: grain index
+  // (0-based), particle id, PTM structure type and orientation quaternion (w,x,y,z, 4 per atom). Each
+  // atom is mapped onto the symmetry equivalent closest to the grain's reference orientation (first the
+  // atom with the smallest id, then the mean of the previous pass), and the mapped quaternions are
+  // averaged. Returns 4 values per grain, rotated into the fundamental zone; identity for a grain with no
+  // member atom or an unsupported structure type. structure_out: structure type of each grain, -1 if none.
+  std::vector<double> grain_mean_orientations( MPI_Comm comm, long n_grains,
+                                               const std::vector<long>& atom_grain,
+                                               const std::vector<uint64_t>& atom_id,
+                                               const std::vector<int>& atom_type,
+                                               const std::vector<double>& atom_quat,
+                                               std::vector<int>& structure_out );
 }

@@ -50,6 +50,7 @@ compute_grain_bond_misorientation:
 compute_grain_clusters:
   min_grain_atom_count: 100
   orphan_adoption: true
+  grains_file: grains.csv          # per-grain table: atoms, structure, mean orientation, color
 
 simulation_epilog:
   - remove_close_particles: { distance: 1.5 ang, seed: 42 }

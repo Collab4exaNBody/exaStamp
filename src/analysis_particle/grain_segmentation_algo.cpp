@@ -15,6 +15,7 @@ specific language governing permissions and limitations
 under the License.
 */
 #include <exaStamp/analysis_particle/grains/grain_segmentation_algo.h>
+#include <exaStamp/analysis_particle/grains/grain_quat_math.h>
 
 #include <unordered_map>
 #include <set>
@@ -23,6 +24,7 @@ under the License.
 #include <cmath>
 #include <limits>
 #include <random>
+#include <cstdint>
 
 namespace exaStamp
 {
@@ -248,5 +250,66 @@ namespace exaStamp
       colors[g] = Vec3d{r,gc,b};
     }
     return colors;
+  }
+
+  std::vector<double> grain_mean_orientations( MPI_Comm comm, long n_grains,
+                                               const std::vector<long>& atom_grain,
+                                               const std::vector<uint64_t>& atom_id,
+                                               const std::vector<int>& atom_type,
+                                               const std::vector<double>& atom_quat,
+                                               std::vector<int>& structure_out )
+  {
+    const size_t ng = static_cast<size_t>( std::max( 0L, n_grains ) );
+    const size_t n = atom_grain.size();
+    std::vector<double> ref( 4*ng, 0.0 );
+    structure_out.assign( ng, -1 );
+    if( ng == 0 ) { return ref; }
+
+    // reference: the member atom with the smallest id, its orientation and structure type
+    std::vector<unsigned long long> min_id( ng, std::numeric_limits<unsigned long long>::max() );
+    for(size_t a=0;a<n;a++) { const size_t g=atom_grain[a]; min_id[g] = std::min<unsigned long long>( min_id[g], atom_id[a] ); }
+    MPI_Allreduce( MPI_IN_PLACE, min_id.data(), static_cast<int>(ng), MPI_UNSIGNED_LONG_LONG, MPI_MIN, comm );
+    std::vector<double> ref_type( ng, 0.0 );
+    for(size_t a=0;a<n;a++)
+    {
+      const size_t g = atom_grain[a];
+      if( atom_id[a] != min_id[g] ) continue;
+      for(int c=0;c<4;c++) ref[4*g+c] = atom_quat[4*a+c];
+      ref_type[g] = static_cast<double>( atom_type[a] ) + 1.0; // 0 = no atom
+    }
+    MPI_Allreduce( MPI_IN_PLACE, ref.data(), static_cast<int>(4*ng), MPI_DOUBLE, MPI_SUM, comm );
+    MPI_Allreduce( MPI_IN_PLACE, ref_type.data(), static_cast<int>(ng), MPI_DOUBLE, MPI_SUM, comm );
+    for(size_t g=0;g<ng;g++) structure_out[g] = static_cast<int>( ref_type[g] ) - 1;
+
+    // two passes: map onto the reference, average, use the mean as the next reference
+    std::vector<double> sum( 4*ng );
+    for(int pass=0; pass<2; pass++)
+    {
+      std::fill( sum.begin(), sum.end(), 0.0 );
+      for(size_t a=0;a<n;a++)
+      {
+        const size_t g = atom_grain[a];
+        if( atom_type[a] != structure_out[g] ) continue;
+        const double * r = ref.data() + 4*g;
+        const double rinv[4] = { r[0], -r[1], -r[2], -r[3] };
+        double rel[4]; gb_quat_rot( rinv, atom_quat.data() + 4*a, rel );
+        if( gb_rotate_into_fundamental_zone( structure_out[g], rel ) < 0 ) continue;
+        double mapped[4]; gb_quat_rot( r, rel, mapped ); // symmetry equivalent of the atom closest to r
+        for(int c=0;c<4;c++) sum[4*g+c] += mapped[c];
+      }
+      MPI_Allreduce( MPI_IN_PLACE, sum.data(), static_cast<int>(4*ng), MPI_DOUBLE, MPI_SUM, comm );
+      for(size_t g=0;g<ng;g++)
+      {
+        const double nrm = std::sqrt( sum[4*g]*sum[4*g] + sum[4*g+1]*sum[4*g+1] + sum[4*g+2]*sum[4*g+2] + sum[4*g+3]*sum[4*g+3] );
+        if( nrm > 0.0 ) { for(int c=0;c<4;c++) ref[4*g+c] = sum[4*g+c] / nrm; }
+      }
+    }
+
+    for(size_t g=0;g<ng;g++)
+    {
+      double * q = ref.data() + 4*g;
+      if( gb_rotate_into_fundamental_zone( structure_out[g], q ) < 0 ) { q[0]=1.0; q[1]=q[2]=q[3]=0.0; }
+    }
+    return ref;
   }
 }

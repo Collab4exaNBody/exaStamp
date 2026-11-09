@@ -28,6 +28,7 @@ under the License.
 #include <exanb/mpi/flat_buffer_ghosts.h>
 
 #include <exaStamp/analysis_particle/grains/grain_segmentation_algo.h>
+#include <exaStamp/analysis_particle/grains/grain_quat_math.h>
 
 #include <ptm_constants.h>
 
@@ -39,6 +40,8 @@ under the License.
 #include <cmath>
 #include <limits>
 #include <cstdint>
+#include <fstream>
+#include <iomanip>
 
 // Grain segmentation, pass (ii): Node-Pair-Sampling clustering of crystalline atoms (edges: bonds to PTM
 // template neighbors with the same structure, disorientation under the threshold of pass (i)), then
@@ -46,9 +49,11 @@ under the License.
 //  1. each rank clusters its owned atoms; node weights include bonds to other ranks' atoms
 //  2. collective automatic threshold, local cut into fragments of at most fragment_max_atoms atoms
 //  3. fragment graph (bonds within and across ranks) clustered on rank 0, threshold selected again,
-//     grains numbered largest first and sent back
-//  4. orphans take the grain of the closest grain atom along bonds (distributed Dijkstra rounds)
-// Not implemented: coherent twin/stacking-fault interfaces, per-grain orientation.
+//     grains sent back
+//  4. orphans take the grain of the closest grain atom along bonds (distributed Dijkstra rounds), then
+//     grains are numbered by decreasing final size (ties: smallest atom id)
+//  5. per-grain table: atom count, structure, mean orientation (clustered atoms, collective average)
+// Not implemented: coherent twin/stacking-fault interfaces.
 namespace exaStamp
 {
   using namespace exanb;
@@ -118,10 +123,12 @@ namespace exaStamp
   template<class GridT>
   class ComputeGrainClusters : public OperatorNode
   {
+    std::string m_grains_file_started; // grains_file already started by this run
     ADD_SLOT( MPI_Comm , mpi , INPUT , MPI_COMM_WORLD );
     ADD_SLOT( GridT   , grid , INPUT_OUTPUT );
     ADD_SLOT( GhostCommunicationScheme , ghost_comm_scheme , INPUT , REQUIRED , DocString{"Scheme of the last ghost update"} );
     ADD_SLOT( std::string , struct_field , INPUT , std::string("ptm_type") , DocString{"PTM structure-type field (ptm_fields)"} );
+    ADD_SLOT( std::string , orient_field , INPUT , std::string("ptm_orientation") , DocString{"PTM orientation field (ptm_fields), for the mean grain orientations. Missing field: identity orientations"} );
     ADD_SLOT( onika::memory::CudaMMVector<uint64_t> , grain_bond_id            , INPUT , REQUIRED );
     ADD_SLOT( onika::memory::CudaMMVector<double>   , grain_bond_distance      , INPUT , REQUIRED );
     ADD_SLOT( onika::memory::CudaMMVector<double>   , grain_bond_disorientation , INPUT , REQUIRED );
@@ -134,8 +141,13 @@ namespace exaStamp
     ADD_SLOT( unsigned int , color_seed , INPUT , 1u , DocString{"Seed of the random grain colors"} );
     ADD_SLOT( std::string , grain_id_field , INPUT , std::string("grain_id") , DocString{"Output grain-id field (0-based, -1 = none)"} );
     ADD_SLOT( std::string , grain_color_field , INPUT , std::string("grain_color") , DocString{"Output RGB grain-color field"} );
+    ADD_SLOT( std::string , grains_file , INPUT , std::string("") , DocString{"CSV file with one line per grain and per call (timestep, id, atoms, structure, mean orientation quaternion, color), written by rank 0. Truncated at the first call of the run, appended to afterwards. Empty: no file"} );
+    ADD_SLOT( long , timestep , INPUT , 0 , DocString{"Timestep written in the grains_file lines"} );
     ADD_SLOT( long , n_grains , OUTPUT );
     ADD_SLOT( long , n_orphans_adopted , OUTPUT );
+    ADD_SLOT( std::vector<long>   , grain_atom_count  , OUTPUT , DocString{"Atoms of each grain, adopted orphans included, indexed by grain id"} );
+    ADD_SLOT( std::vector<long>   , grain_structure   , OUTPUT , DocString{"PTM structure type of each grain"} );
+    ADD_SLOT( std::vector<double> , grain_orientation , OUTPUT , DocString{"Mean lattice orientation of each grain, quaternion (w,x,y,z) in the fundamental zone, 4 values per grain"} );
 
   public:
     inline void execute () override final
@@ -159,11 +171,14 @@ namespace exaStamp
       std::vector<size_t> owned;           // k -> flat index
       std::vector<uint64_t> owned_gid;     // k -> particle id
       std::vector<int> owned_type;         // k -> PTM structure type
+      std::vector<double> owned_quat;      // k -> orientation quaternion, 4 values
+      const bool has_orient = grid->has_allocated_field( field::mk_generic_mat3( *orient_field ) );
       std::unordered_map<uint64_t,int> id_to_owned;
       std::unordered_map<uint64_t,size_t> id_to_ghost; // not owned here -> a ghost row
       {
         auto cells = grid->cells_accessor();
         auto type_acc = grid->field_accessor( field::mk_generic_real( *struct_field ) );
+        auto orient_acc = grid->field_accessor( field::mk_generic_mat3( *orient_field ) );
         for(size_t c=0;c<n_cells;c++)
         {
           if( grid->is_ghost_cell(c) ) continue;
@@ -174,6 +189,9 @@ namespace exaStamp
             owned.push_back( cell_particle_offset[c] + p );
             owned_gid.push_back( cells[c][field::id][p] );
             owned_type.push_back( static_cast<int>( cells[c][type_acc][p] ) );
+            double q[4] = { 1.0, 0.0, 0.0, 0.0 };
+            if( has_orient ) { gb_matrix_to_quat( cells[c][orient_acc][p], q ); }
+            owned_quat.insert( owned_quat.end(), q, q+4 );
           }
         }
         for(size_t c=0;c<n_cells;c++)
@@ -405,7 +423,7 @@ namespace exaStamp
         const long g = ( frag_of[k] >= 0 ) ? frag_grain[ frag_of[k] ] : 0;
         if( g > 0 ) { dist[k] = 0.0; lab[k] = static_cast<double>(g); }
       }
-      const std::vector<double> lab_before = lab;
+      std::vector<double> lab_before = lab;
       long rounds = 0;
       if( *orphan_adoption && ngrains > 0 )
       {
@@ -449,6 +467,32 @@ namespace exaStamp
       for(size_t k=0;k<n_owned;k++) if( lab_before[k] == 0.0 && lab[k] > 0.0 ) ++adopted;
       MPI_Allreduce( MPI_IN_PLACE, &adopted, 1, MPI_LONG, MPI_SUM, comm );
 
+      // ---------- renumber grains by final size (adopted orphans included), ties by smallest atom id ----------
+      // independent of the number of ranks, unlike the cluster sizes before adoption
+      std::vector<long> gsize( ngrains, 0 );
+      {
+        std::vector<unsigned long long> gmin( ngrains, std::numeric_limits<unsigned long long>::max() );
+        for(size_t k=0;k<n_owned;k++) if( lab[k] > 0.0 )
+        {
+          const size_t g = static_cast<size_t>(lab[k]) - 1;
+          ++gsize[g]; gmin[g] = std::min<unsigned long long>( gmin[g], owned_gid[k] );
+        }
+        MPI_Allreduce( MPI_IN_PLACE, gsize.data(), static_cast<int>(ngrains), MPI_LONG, MPI_SUM, comm );
+        MPI_Allreduce( MPI_IN_PLACE, gmin.data(), static_cast<int>(ngrains), MPI_UNSIGNED_LONG_LONG, MPI_MIN, comm );
+        std::vector<long> order( ngrains );
+        for(long g=0; g<ngrains; g++) order[g] = g;
+        std::sort( order.begin(), order.end(), [&](long a, long b){ return gsize[a]>gsize[b] || (gsize[a]==gsize[b] && gmin[a]<gmin[b]); } );
+        std::vector<double> new_lab( ngrains+1, 0.0 ); // old 1-based label -> new 1-based label
+        std::vector<long> new_size( ngrains );
+        for(long r=0; r<ngrains; r++) { new_lab[ order[r]+1 ] = static_cast<double>(r+1); new_size[r] = gsize[ order[r] ]; }
+        for(size_t k=0;k<n_owned;k++)
+        {
+          lab[k] = new_lab[ static_cast<size_t>(lab[k]) ];
+          lab_before[k] = new_lab[ static_cast<size_t>(lab_before[k]) ];
+        }
+        gsize.swap( new_size );
+      }
+
       // ---------- output fields, ghosts included ----------
       std::fill( flat_buf.begin(), flat_buf.end(), -1.0 );
       for(size_t k=0;k<n_owned;k++) flat_buf[ owned[k] ] = lab[k] - 1.0;
@@ -461,6 +505,37 @@ namespace exaStamp
       auto color_acc = grid->field_accessor( field::mk_generic_vec3( *grain_color_field ) );
       GrainIdFieldFunctor func = { cell_particle_offset, flat_buf.data(), colors.data() };
       compute_cell_particles( *grid, true, func, onika::make_flat_tuple( id_acc, color_acc ), parallel_execution_context() );
+
+      // ---------- per-grain table ----------
+      std::vector<long> mgrain; std::vector<uint64_t> mid; std::vector<int> mtype; std::vector<double> mquat;
+      for(size_t k=0;k<n_owned;k++)
+      {
+        if( !( lab_before[k] > 0.0 ) ) continue; // clustered atoms only, not adopted orphans
+        mgrain.push_back( static_cast<long>(lab_before[k]) - 1 );
+        mid.push_back( owned_gid[k] );
+        mtype.push_back( owned_type[k] );
+        mquat.insert( mquat.end(), owned_quat.begin()+4*k, owned_quat.begin()+4*k+4 );
+      }
+      std::vector<int> gstruct;
+      const std::vector<double> gquat = grain_mean_orientations( comm, ngrains, mgrain, mid, mtype, mquat, gstruct );
+      if( rank == 0 && ! grains_file->empty() )
+      {
+        // first call of the run (or new file name): start a new file, append afterwards
+        const bool new_file = ( *grains_file != m_grains_file_started );
+        std::ofstream out( *grains_file, new_file ? std::ios::trunc : std::ios::app );
+        if( ! out ) { fatal_error() << "compute_grain_clusters: cannot write " << *grains_file << std::endl; }
+        if( new_file ) { out << "timestep,grain_id,atoms,structure,qw,qx,qy,qz,r,g,b\n"; m_grains_file_started = *grains_file; }
+        out << std::setprecision(8);
+        for(long g=0; g<ngrains; g++)
+        {
+          out << *timestep << ',' << g << ',' << gsize[g] << ',' << gstruct[g];
+          for(int c=0;c<4;c++) out << ',' << gquat[4*g+c];
+          out << ',' << colors[g].x << ',' << colors[g].y << ',' << colors[g].z << '\n';
+        }
+      }
+      grain_atom_count->assign( gsize.begin(), gsize.end() );
+      grain_structure->assign( gstruct.begin(), gstruct.end() );
+      *grain_orientation = gquat;
 
       *n_grains = ngrains;
       *n_orphans_adopted = adopted;
@@ -478,8 +553,9 @@ namespace exaStamp
 
 Grain segmentation, pass (ii): Node-Pair-Sampling clustering of crystalline atoms by
 misorientation with an automatic threshold, then orphan adoption. Any number of MPI ranks. Writes a
-grain_id field (0-based, -1 = none, ghosts included) and a grain_color field. Needs a ghost
-communication scheme (run after a ghost update).
+grain_id field (0-based, -1 = none, ghosts included) and a grain_color field, and a per-grain table
+(atom count, structure, mean orientation) in the grain_* output slots and, if grains_file is set, in
+a CSV file. Needs a ghost communication scheme (run after a ghost update).
 
 Usage example:
 
