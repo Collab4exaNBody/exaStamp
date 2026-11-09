@@ -36,6 +36,7 @@ add_subdirectory(setup_system)
 add_subdirectory(numerical_schemes)
 add_subdirectory(thermo_state)
 add_subdirectory(shock)
+add_subdirectory(delaunay)
 
 if(USE_RSA)
 	add_subdirectory(rsa)
