@@ -71,6 +71,8 @@ add_subdirectory(mlip-snap)
 add_subdirectory(mlip-snaplegacy)
 # Spectral Neighbor Analysis Potential (external source version)
 add_subdirectory(mlip-snaplmp)
+# YE3T linear Atomic Cluster Expansion (.yace), native kernels
+add_subdirectory(mlip-ye3t)
 # ======================================================= #
 
 # ======================================================= #
