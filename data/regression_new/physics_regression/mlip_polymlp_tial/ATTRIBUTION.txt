@@ -1,0 +1,9 @@
+tial.polymlp.yaml: exaStamp export (scripts/polymlp_export) of the Ti-Al polynomial machine-learning potential
+"Ti-Al-2022-06-22" (first model of the list) of the Polynomial Machine Learning Potential Repository,
+https://cms.mtl.kyoto-u.ac.jp/seko/mlp-repository/ , by A. Seko, licensed under the Creative Commons Attribution 4.0
+International licence (https://creativecommons.org/licenses/by/4.0/). Changes: converted to the exaStamp table format
+(features enumerated by the pypolymlp library, regression coefficients halved to undo the doubling of the polymlp
+readers; the potential itself is unchanged).
+
+Reference: A. Seko, "Tutorial: Systematic development of polynomial machine learning potentials for elemental and
+alloy systems", J. Appl. Phys. 133, 011101 (2023), https://doi.org/10.1063/5.0129045
