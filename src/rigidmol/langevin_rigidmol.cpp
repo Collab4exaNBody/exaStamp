@@ -56,7 +56,7 @@ namespace exaStamp
     ADD_SLOT( double          , gamma       , INPUT , 1.0 );
     ADD_SLOT( double          , gamma_ratio , INPUT , 1.e-2 );
     ADD_SLOT( double          , time_nve,        INPUT , 1e30 );    
-    ADD_SLOT( int64_t         , timestep       , INPUT , REQUIRED );
+    ADD_SLOT( long            , timestep       , INPUT , REQUIRED );
     ADD_SLOT( bool            , deterministic_noise , INPUT , false );
 
   public:

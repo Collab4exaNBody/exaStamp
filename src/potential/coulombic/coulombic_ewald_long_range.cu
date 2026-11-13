@@ -121,8 +121,9 @@ inline namespace coulombic_ewald
       const int off[3] = { 0 , m_table.oy , m_table.oz };
       for(int d=0;d<3;d++)
       {
-        double s,c;
-        sincos( 2.0 * M_PI * u[d] , &s , &c );
+        // sin and cos rather than sincos, a GNU extension missing on macOS (compilers merge the two calls)
+        const double s = sin( 2.0 * M_PI * u[d] );
+        const double c = cos( 2.0 * M_PI * u[d] );
         const Complexd e1 = { c , s };
         Complexd e = { 1.0 , 0.0 };
         m_table.at( off[d] , a ) = e;
