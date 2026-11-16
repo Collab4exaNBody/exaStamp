@@ -82,22 +82,24 @@ Per-atom energy: the atomic energy E_i of the model (the polynomial of the featu
     inline void execute() override final
     {
       PolymlpContext& ctx = *polymlp_ctx;
-      if( !ctx.tables ) fatal_error() << "polymlp_force: no model, polymlp_init must run first" << std::endl;
+      if( ctx.parts.empty() ) fatal_error() << "polymlp_force: no model, polymlp_init must run first" << std::endl;
       if( grid->number_of_cells() == 0 ) return;
       assert( chunk_neighbors->number_of_cells() == grid->number_of_cells() );
-      const mlip_polymlp::PolymlpTables& T = *ctx.tables;
+      // bonds gathered once, within the largest cutoff; each part keeps the bonds within its own cutoff
+      double rc = 0.0;
+      for(const auto& T : ctx.parts) rc = std::max( rc , T->rc );
       const int nth = omp_get_max_threads();
       mlip_utils::BondsView bv;
       mlip_utils::OutputsView out;
-      mlip_utils::gather_bonds( *grid, *chunk_neighbors, *domain, ctx.species_type, T.rc, has_virial_field, ctx.flat, bv, out, nth );
+      mlip_utils::gather_bonds( *grid, *chunk_neighbors, *domain, ctx.species_type, rc, has_virial_field, ctx.flat, bv, out, nth );
 
-      if( ctx.emulate > 0 ) mlip_polymlp::polymlp_onika_emul( T, ctx.buf, bv, out, ctx.emulate, ctx.mem_gb );
-      else
+      const bool gpu = onika::parallel::functor_gpu_support_v< mlip_polymlp::polymlp_onika::BasisFunctor >
+                    && global_cuda_ctx() != nullptr && global_cuda_ctx()->has_devices();
+      const mlip_utils::OnikaLauncher<PolymlpForce> pec{ this };
+      for(const auto& T : ctx.parts)
       {
-        const bool gpu = onika::parallel::functor_gpu_support_v< mlip_polymlp::polymlp_onika::BasisFunctor >
-                      && global_cuda_ctx() != nullptr && global_cuda_ctx()->has_devices();
-        const mlip_utils::OnikaLauncher<PolymlpForce> pec{ this };
-        mlip_polymlp::polymlp_onika_compute( T, ctx.buf, bv, out, gpu, ctx.mem_gb, pec );
+        if( ctx.emulate > 0 ) mlip_polymlp::polymlp_onika_emul( *T, ctx.buf, bv, out, ctx.emulate, ctx.mem_gb );
+        else mlip_polymlp::polymlp_onika_compute( *T, ctx.buf, bv, out, gpu, ctx.mem_gb, pec );
       }
       mlip_utils::scatter_outputs( *grid, ctx.flat, nth );
     }

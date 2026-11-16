@@ -1,0 +1,7 @@
+tial_hybrid.1.polymlp.yaml, tial_hybrid.2.polymlp.yaml: a two-part hybrid polynomial MLP for Ti-Al made for this test
+only (not a physical potential). Part 1: gtinv features, cutoff 6 ang; part 2: pair features, cutoff 4.5 ang; both
+fitted together with pypolymlp 0.22.1 (append_hybrid_params) on 100 strained, rattled 32-atom fcc Ti/Al structures
+whose energies, forces and stresses were computed with the Ti-Al potential "Ti-Al-2022-06-22" of the Polynomial Machine
+Learning Potential Repository (https://cms.mtl.kyoto-u.ac.jp/seko/mlp-repository/, A. Seko, CC BY 4.0), then
+converted by scripts/polymlp_export (regression coefficients halved to undo the doubling of the polymlp readers).
+tial256.xyz: see ../mlip_polymlp_tial.

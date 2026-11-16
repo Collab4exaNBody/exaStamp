@@ -31,7 +31,7 @@ namespace exaStamp
 {
   struct PolymlpParams
   {
-    std::string file;
+    std::vector<std::string> files;   // one model, or the parts of a hybrid model (energies summed)
     double mem_gb = 1.0;        // budget of the per-chunk buffers
     int emulate = 0;            // debug: > 0 runs the GPU code paths on the host, blocks of that many threads
   };
@@ -39,7 +39,7 @@ namespace exaStamp
   // model built by polymlp_init, with the flat arrays the force operator gathers into
   struct PolymlpContext
   {
-    std::shared_ptr<mlip_polymlp::PolymlpTables> tables;
+    std::vector< std::shared_ptr<mlip_polymlp::PolymlpTables> > parts;   // one model, or the parts of a hybrid model
     std::vector<int> species_type;    // exaStamp species index -> model type (-1: not in the model)
     double mem_gb = 1.0;
     int emulate = 0;
@@ -57,7 +57,8 @@ namespace YAML
       if( !node.IsMap() ) { return false; }
       exaStamp::check_yaml_keys( node , { "file", "mem_gb", "emulate" } , "polymlp parameters" );
       if( !node["file"] ) { return false; }
-      v.file = node["file"].as<std::string>();
+      if( node["file"].IsSequence() ) v.files = node["file"].as< std::vector<std::string> >();
+      else v.files = { node["file"].as<std::string>() };
       if( node["mem_gb"] ) v.mem_gb = node["mem_gb"].as<double>();
       if( node["emulate"] ) v.emulate = node["emulate"].as<int>();
       return true;

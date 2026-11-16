@@ -1,0 +1,35 @@
+# enable-if-EXASTAMP_MLIP_POLYMLP_BUILD : hybrid polynomial MLP (polymlp_init with a list of files + polymlp_force), 2-part Ti-Al test model (gtinv rc 6 + pair rc 4.5, see ATTRIBUTION.txt), 256-atom fcc Ti/Al frame
+includes:
+  - ../common.yaml
+
+compute_force_prolog:
+  - zero_force_energy: { ghost: true }
+
+compute_force_epilog:
+  - update_force_energy_from_ghost
+  - force_to_accel
+
+species:
+  - Ti: { mass: 47.867 Da, z: 22, charge: 0 e- }
+  - Al: { mass: 26.9815 Da, z: 13, charge: 0 e- }
+
+init_parameters:
+  - species
+  - polymlp_init:
+      parameters: { file: [ "tial_hybrid.1.polymlp.yaml", "tial_hybrid.2.polymlp.yaml" ] }
+
+compute_force:
+  - polymlp_force
+
+setup_system:
+  - domain:
+      cell_size: 4.0 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_xyz_file_with_xform:
+      filename: "tial256.xyz"
+  - physics_regression_noise
+
++global:
+  rcut_inc: 0.5 ang
+  dt: 1.0e-3 ps

@@ -12,5 +12,6 @@ make -j4 POLYMLP_SRC=$(python -c "import pypolymlp, os; print(os.path.dirname(py
 ```
 
 On macOS, pip may need an OpenMP-capable compiler to build pypolymlp (e.g. `CC=$(brew --prefix llvm)/bin/clang CXX=$(brew --prefix llvm)/bin/clang++`);
-the exporter itself needs none. Tested with pypolymlp 0.22.1. Gaussian radial functions only; one file per potential
-(hybrid potentials: not supported yet).
+the exporter itself needs none. Tested with pypolymlp 0.22.1. Gaussian radial functions only; one file per potential.
+A hybrid potential (pypolymlp files `polymlp.yaml.1`, `polymlp.yaml.2`, ...) is converted part by part and given to
+`polymlp_init` as a list: `file: [ polymlp.1.exastamp.yaml, polymlp.2.exastamp.yaml ]`.

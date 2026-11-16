@@ -42,7 +42,7 @@ namespace exaStamp
 
   class PolymlpInit : public OperatorNode
   {
-    ADD_SLOT( PolymlpParams   , parameters  , INPUT        , REQUIRED , DocString{"file: model exported by scripts/polymlp_export; mem_gb, emulate: see documentation"} );
+    ADD_SLOT( PolymlpParams   , parameters  , INPUT        , REQUIRED , DocString{"file: model exported by scripts/polymlp_export (or a list of files: hybrid model); mem_gb, emulate: see documentation"} );
     ADD_SLOT( double          , rcut_max    , INPUT_OUTPUT , 0.0 );
     ADD_SLOT( ParticleSpecies , species     , INPUT        , REQUIRED );
     ADD_SLOT( PolymlpContext  , polymlp_ctx , OUTPUT );
@@ -83,14 +83,22 @@ polymlp_init:
     mem_gb: 1.0       # budget of the per-chunk buffers
     emulate: 0        # debug: N > 0 runs the GPU code paths on the host with blocks of N threads (slow)
 
+Hybrid model (sum of several polynomial MLPs fitted together, files polymlp.yaml.1, polymlp.yaml.2 ... of pypolymlp,
+each converted by polymlp_export): a list of files,
+
+    file: [ polymlp.1.exastamp.yaml, polymlp.2.exastamp.yaml ]
+
+The parts must have the same elements in the same order; each keeps its own cutoff.
+
 The exaStamp species are mapped to the model elements by name. Gaussian radial functions only.
 
 )EOF";
     }
 
-    inline void execute() override final
+    // one model file (one part of a hybrid model): tables, log line
+    std::shared_ptr<PolymlpTables> load_part( const std::string& file , int part , int nparts )
     {
-      m_fname = onika::data_file_path( parameters->file );
+      m_fname = onika::data_file_path( file );
       YAML::Node root;
       try { root = YAML::LoadFile( m_fname ); }
       catch( const YAML::Exception& e ) { fail("cannot read model file: ", e.what()); }
@@ -276,6 +284,24 @@ The exaStamp species are mapped to the model elements by name. Gaussian radial f
       T->nto.assign( nto.begin(), nto.end() ); T->nt_feat.assign( nt_feat.begin(), nt_feat.end() ); T->nt_coef.assign( nt_coef.begin(), nt_coef.end() );
       T->pcoef.assign( pcoef.begin(), pcoef.end() ); T->pfo.assign( pfo.begin(), pfo.end() ); T->pfac.assign( pfac.begin(), pfac.end() );
 
+      lout << "polymlp" << ( nparts > 1 ? " part " + std::to_string( part + 1 ) + "/" + std::to_string( nparts ) : std::string() ) << ": " << nel << " element(s), " << ftype << ", " << T->ng << " gaussians, lmax " << T->lmax << ", rcut " << T->rc << " ang, "
+           << nfeat << " features (" << nterm << " terms, " << nnode << " product nodes), " << npoly << " polynomial terms, " << src_n.size() << " sources, "
+           << T->bytes() / 1024 << " KB of tables" << std::endl;
+      return T;
+    }
+
+    inline void execute() override final
+    {
+      const auto& files = parameters->files;
+      if( files.empty() ) fatal_error() << "polymlp_init: no model file" << std::endl;
+      std::vector< std::shared_ptr<PolymlpTables> > parts;
+      for(size_t k=0;k<files.size();k++)
+      {
+        parts.push_back( load_part( files[k] , k , files.size() ) );
+        if( parts.back()->elements != parts.front()->elements ) fail("the parts of a hybrid model must have the same elements, in the same order");
+      }
+      const auto& elements = parts.front()->elements;
+
       PolymlpContext& ctx = *polymlp_ctx;
       ctx = PolymlpContext{};
       const auto& sp = *species;
@@ -286,13 +312,10 @@ The exaStamp species are mapped to the model elements by name. Gaussian radial f
         if( it != elements.end() ) ctx.species_type[s] = it - elements.begin();
         else lout << "polymlp_init: warning: species " << sp[s].m_name << " is not an element of the model, its atoms are ignored" << std::endl;
       }
-      ctx.tables = T;
+      ctx.parts = parts;
       ctx.mem_gb = parameters->mem_gb;
       ctx.emulate = parameters->emulate;
-      *rcut_max = std::max( *rcut_max , T->rc );
-      lout << "polymlp: " << nel << " element(s), " << ftype << ", " << T->ng << " gaussians, lmax " << T->lmax << ", rcut " << T->rc << " ang, "
-           << nfeat << " features (" << nterm << " terms, " << nnode << " product nodes), " << npoly << " polynomial terms, " << src_n.size() << " sources, "
-           << T->bytes() / 1024 << " KB of tables" << std::endl;
+      for(const auto& T : parts) *rcut_max = std::max( *rcut_max , T->rc );
     }
   };
 
