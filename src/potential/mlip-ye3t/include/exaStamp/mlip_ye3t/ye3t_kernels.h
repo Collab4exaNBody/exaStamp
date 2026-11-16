@@ -73,31 +73,31 @@ namespace exaStamp
       ONIKA_HOST_DEVICE_FUNC inline size_t basis_record(const Ye3tView& t) { return size_t(t.nbase_max) + t.ncontr_max + 2 * size_t(t.nlh) + 1; }
       ONIKA_HOST_DEVICE_FUNC inline size_t forces_record(const Ye3tView& t) { return 2 * size_t(t.nbase_max) + 2 * size_t(t.ncontr_max) + 8 * size_t(t.nlh); }
 
-      // radial values (and derivatives) of a bond at r: base g_k into g (dg), contracted R into R (dR)
+      // radial values (and derivatives) of a bond at r: base g_k into g (dg) from their spline (or directly below the
+      // table / in analytic mode), contracted R_nl = sum_k c g_k into R (dR). The cubic Hermite spline is linear in its
+      // node data: this is the spline of R_nl with the contracted nodes of PACE / ye3t-lammps, to round-off
       template<bool DER>
       ONIKA_HOST_DEVICE_FUNC inline void radials( const Ye3tView& t, const Ye3tBond& b, double r, double* g, double* dg, double* R, double* dR )
       {
         SplinePos sp;
+        double dgl[64];
+        double* dd = DER ? dg : dgl;
         if( !t.analytic && sp.locate( b, r ) )
         {
           const double* bs = t.pool + b.bspl;
-          const double* cs = t.pool + b.cspl;
           double v, d;
-          for(int k=0;k<b.nbase;k++) { sp.eval( bs, b.nbase, k, v, d ); g[k] = v; if( DER ) dg[k] = d; }
-          for(int k=0;k<b.ncontr;k++) { sp.eval( cs, b.ncontr, k, v, d ); R[k] = v; if( DER ) dR[k] = d; }
-          return;
+          for(int k=0;k<b.nbase;k++) { sp.eval( bs, b.nbase, k, v, d ); g[k] = v; dd[k] = d; }
         }
-        // direct evaluation (below the table, or analytic mode)
-        double dgl[64];
-        double* gg = g;
-        double* dd = DER ? dg : dgl;
-        if( b.nbase > 64 ) return;    // refused at init
-        cheb_exp_cos( b, r, gg, dd );
+        else
+        {
+          if( b.nbase > 64 ) return;    // refused at init
+          cheb_exp_cos( b, r, g, dd );
+        }
         const double* c = t.pool + b.crad;
         for(int q=0;q<b.ncontr;q++)
         {
           double s = 0.0, ds = 0.0;
-          for(int k=0;k<b.nbase;k++) { s += c[size_t(q)*b.nbase+k] * gg[k]; ds += c[size_t(q)*b.nbase+k] * dd[k]; }
+          for(int k=0;k<b.nbase;k++) { s += c[size_t(q)*b.nbase+k] * g[k]; ds += c[size_t(q)*b.nbase+k] * dd[k]; }
           R[q] = s;
           if( DER ) dR[q] = ds;
         }
@@ -441,8 +441,9 @@ namespace exaStamp
       // functions of a group vectorised over the lanes. Thread scratch: neighbour list (jmax ints), then lane arrays.
       ONIKA_HOST_DEVICE_FUNC inline size_t host_lane_scratch(const Ye3tView& t, size_t jmax)
       {
-        return ( jmax + 1 ) / 2 + 1 + size_t(kYe3tLanes) * ( 2 * size_t(t.nbase_max) + 2 * size_t(t.ncontr_max) + 8 * size_t(t.nlh) + 8 )
-             + 2 * size_t(t.nbase_max) + 2 * size_t(t.ncontr_max);
+        const size_t n = ( ( ( jmax + 1 ) / 2 + 2 ) & ~size_t(1) ) + size_t(kYe3tLanes) * ( 2 * size_t(t.nbase_max) + 2 * size_t(t.ncontr_max) + 8 * size_t(t.nlh) + 8 )
+                       + 2 * size_t(t.nbase_max) + 2 * size_t(t.ncontr_max);
+        return ( n + 1 ) & ~size_t(1);   // even: every thread slot 16-byte aligned
       }
 
       template<bool DER>
@@ -454,7 +455,7 @@ namespace exaStamp
         HostLanes(const Ye3tView& t, double* scr, size_t jmax)
         {
           jl = reinterpret_cast<int*>( scr );
-          double* p = scr + ( jmax + 1 ) / 2 + 1;
+          double* p = scr + ( ( ( jmax + 1 ) / 2 + 2 ) & ~size_t(1) );   // lane arrays 16-byte aligned (scr is)
           auto take = [&](size_t n) { double* x = p; p += n; return x; };
           g = take( L * t.nbase_max ); dg = take( L * t.nbase_max ); R = take( L * t.ncontr_max ); dR = take( L * t.ncontr_max );
           yr = take( L * t.nlh ); yi = take( L * t.nlh ); gr = take( 3 * L * t.nlh ); gi = take( 3 * L * t.nlh );
@@ -483,16 +484,50 @@ namespace exaStamp
             {
               ux[x] = 0.0; uy[x] = 0.0; uz[x] = 1.0; ir[x] = 1.0; dx[x] = dy[x] = dz[x] = 0.0;
               for(int k=0;k<b.nbase;k++) { g[k*L+x] = 0.0; dg[k*L+x] = 0.0; }
-              for(int k=0;k<b.ncontr;k++) { R[k*L+x] = 0.0; dR[k*L+x] = 0.0; }
               continue;
             }
             const double* d = bv.rij + 3 * ( b0 + jl[k0+x] );
             const double r = sqrt( d[0]*d[0] + d[1]*d[1] + d[2]*d[2] );
             ir[x] = 1.0 / r; dx[x] = d[0]; dy[x] = d[1]; dz[x] = d[2];
             ux[x] = d[0] * ir[x]; uy[x] = d[1] * ir[x]; uz[x] = d[2] * ir[x];
-            radials<DER>( t, b, r, tg, tdg, tR, tdR );
-            for(int k=0;k<b.nbase;k++) { g[k*L+x] = tg[k]; if( DER ) dg[k*L+x] = tdg[k]; }
-            for(int k=0;k<b.ncontr;k++) { R[k*L+x] = tR[k]; if( DER ) dR[k*L+x] = tdR[k]; }
+            // base functions only (spline, or direct below the table / analytic mode); the contracted R_nl = sum_k c g_k
+            // follow for all lanes at once (the cubic Hermite spline is linear in its node data: same values as the
+            // spline of R_nl, whose nodes are the contractions of those of g_k)
+            SplinePos sp;
+            if( !t.analytic && sp.locate( b, r ) )
+            {
+              const double* bs = t.pool + b.bspl;
+              double v, dv;
+              for(int k=0;k<b.nbase;k++) { sp.eval( bs, b.nbase, k, v, dv ); g[k*L+x] = v; if( DER ) dg[k*L+x] = dv; }
+            }
+            else
+            {
+              cheb_exp_cos( b, r, tg, tdg );
+              for(int k=0;k<b.nbase;k++) { g[k*L+x] = tg[k]; if( DER ) dg[k*L+x] = tdg[k]; }
+            }
+          }
+          // R = C g, dR = C dg over the lanes, native 2-double vectors (lane arrays 16-byte aligned)
+          {
+            typedef double v2 __attribute__(( vector_size( 16 ) ));
+            constexpr int W = L / 2;
+            static_assert( L % 2 == 0 , "even lane count" );
+            const double* c = t.pool + b.crad;
+            const v2* G = reinterpret_cast<const v2*>( __builtin_assume_aligned( g , 16 ) );
+            const v2* DG = reinterpret_cast<const v2*>( __builtin_assume_aligned( dg , 16 ) );
+            v2* Rv = reinterpret_cast<v2*>( __builtin_assume_aligned( R , 16 ) );
+            v2* dRv = reinterpret_cast<v2*>( __builtin_assume_aligned( dR , 16 ) );
+            for(int q=0;q<b.ncontr;q++)
+            {
+              const double* cq = c + size_t(q) * b.nbase;
+              v2 acc[W], dacc[W];
+              for(int w=0;w<W;w++) { acc[w] = cq[0] * G[w]; if( DER ) dacc[w] = cq[0] * DG[w]; }
+              for(int k=1;k<b.nbase;k++)
+              {
+                const double ck = cq[k];
+                for(int w=0;w<W;w++) { acc[w] += ck * G[k*W+w]; if( DER ) dacc[w] += ck * DG[k*W+w]; }
+              }
+              for(int w=0;w<W;w++) { Rv[q*W+w] = acc[w]; if( DER ) dRv[q*W+w] = dacc[w]; }
+            }
           }
           mlip_utils::ylm_lanes<L,DER>( b.lb, t.ylm_a, t.ylm_b, ux, uy, uz, ir, yr, yi, gr, gi );
         }

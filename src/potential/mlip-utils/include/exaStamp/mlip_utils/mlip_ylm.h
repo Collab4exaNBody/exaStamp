@@ -95,14 +95,23 @@ namespace exaStamp
       }
     }
 
-    // host: Y_lm (and gradients) of L bond vectors at once, vectorised over the lanes; arrays [lmh][L] (yr, yi) and
-    // [lmh][3][L] (gr, gi). Unused lanes must hold a valid unit vector (their results are ignored).
+    // host: Y_lm (and gradients) of L bond vectors at once, vectorised over the lanes (2-double vectors, L even, no
+    // alignment requirement); arrays [lmh][L] (yr, yi) and [lmh][3][L] (gr, gi). Unused lanes must hold a valid unit
+    // vector (their results are ignored).
     template<int L, bool GRAD>
-    inline void ylm_lanes( int lmax, const double* A, const double* B, const double* ux, const double* uy, const double* uz, const double* inv_r,
-                           double* __restrict__ yr, double* __restrict__ yi, double* __restrict__ gr, double* __restrict__ gi )
+    inline void ylm_lanes( int lmax, const double* A, const double* B, const double* ux_, const double* uy_, const double* uz_, const double* inv_r_,
+                           double* __restrict__ yr_, double* __restrict__ yi_, double* __restrict__ gr_, double* __restrict__ gi_ )
     {
-      for(int b=0;b<L;b++) { yr[b] = 1.0; yi[b] = 0.0; }
-      if( GRAD ) for(int k=0;k<3*L;k++) { gr[k] = 0.0; gi[k] = 0.0; }
+      static_assert( L % 2 == 0 , "ylm_lanes: even lane count" );
+      typedef double v2 __attribute__(( vector_size( 16 ), aligned( 8 ) ));
+      constexpr int W = L / 2;
+      auto V = [](const double* p) { return reinterpret_cast<const v2*>( p ); };
+      auto M = [](double* p) { return reinterpret_cast<v2*>( p ); };
+      const v2* ux = V( ux_ ); const v2* uy = V( uy_ ); const v2* uz = V( uz_ ); const v2* ir = V( inv_r_ );
+      v2* yr = M( yr_ ); v2* yi = M( yi_ ); v2* gr = M( gr_ ); v2* gi = M( gi_ );
+      const v2 one = { 1.0, 1.0 }, zero = { 0.0, 0.0 };
+      for(int w=0;w<W;w++) { yr[w] = one; yi[w] = zero; }
+      if( GRAD ) for(int k=0;k<3*W;k++) { gr[k] = zero; gi[k] = zero; }
       for(int m=0;m<=lmax;m++)
       {
         const int d = lmh(m,m);
@@ -110,22 +119,21 @@ namespace exaStamp
         {
           const int p = lmh(m-1,m-1);
           const double a = A[d];
-#         pragma omp simd
-          for(int b=0;b<L;b++)
+          for(int w=0;w<W;w++)
           {
-            const double pr = yr[p*L+b], pi = yi[p*L+b];
-            yr[d*L+b] = a * ( ux[b] * pr - uy[b] * pi );
-            yi[d*L+b] = a * ( ux[b] * pi + uy[b] * pr );
+            const v2 pr = yr[p*W+w], pi = yi[p*W+w];
+            yr[d*W+w] = a * ( ux[w] * pr - uy[w] * pi );
+            yi[d*W+w] = a * ( ux[w] * pi + uy[w] * pr );
             if( GRAD )
             {
               for(int k=0;k<3;k++)
               {
-                const double qr = gr[(3*p+k)*L+b], qi = gi[(3*p+k)*L+b];
-                gr[(3*d+k)*L+b] = a * ( ux[b] * qr - uy[b] * qi );
-                gi[(3*d+k)*L+b] = a * ( ux[b] * qi + uy[b] * qr );
+                const v2 qr = gr[(3*p+k)*W+w], qi = gi[(3*p+k)*W+w];
+                gr[(3*d+k)*W+w] = a * ( ux[w] * qr - uy[w] * qi );
+                gi[(3*d+k)*W+w] = a * ( ux[w] * qi + uy[w] * qr );
               }
-              gr[(3*d+0)*L+b] += a * pr;  gi[(3*d+0)*L+b] += a * pi;
-              gr[(3*d+1)*L+b] -= a * pi;  gi[(3*d+1)*L+b] += a * pr;
+              gr[(3*d+0)*W+w] += a * pr;  gi[(3*d+0)*W+w] += a * pi;
+              gr[(3*d+1)*W+w] -= a * pi;  gi[(3*d+1)*W+w] += a * pr;
             }
           }
         }
@@ -136,20 +144,19 @@ namespace exaStamp
           const bool two = l - 2 >= m;
           const int q2 = two ? lmh(l-2,m) : q1;
           const double b2 = two ? bb : 0.0;
-#         pragma omp simd
-          for(int b=0;b<L;b++)
+          for(int w=0;w<W;w++)
           {
-            yr[q*L+b] = a * uz[b] * yr[q1*L+b] - b2 * yr[q2*L+b];
-            yi[q*L+b] = a * uz[b] * yi[q1*L+b] - b2 * yi[q2*L+b];
+            yr[q*W+w] = a * uz[w] * yr[q1*W+w] - b2 * yr[q2*W+w];
+            yi[q*W+w] = a * uz[w] * yi[q1*W+w] - b2 * yi[q2*W+w];
             if( GRAD )
             {
               for(int k=0;k<3;k++)
               {
-                gr[(3*q+k)*L+b] = a * uz[b] * gr[(3*q1+k)*L+b] - b2 * gr[(3*q2+k)*L+b];
-                gi[(3*q+k)*L+b] = a * uz[b] * gi[(3*q1+k)*L+b] - b2 * gi[(3*q2+k)*L+b];
+                gr[(3*q+k)*W+w] = a * uz[w] * gr[(3*q1+k)*W+w] - b2 * gr[(3*q2+k)*W+w];
+                gi[(3*q+k)*W+w] = a * uz[w] * gi[(3*q1+k)*W+w] - b2 * gi[(3*q2+k)*W+w];
               }
-              gr[(3*q+2)*L+b] += a * yr[q1*L+b];
-              gi[(3*q+2)*L+b] += a * yi[q1*L+b];
+              gr[(3*q+2)*W+w] += a * yr[q1*W+w];
+              gi[(3*q+2)*W+w] += a * yi[q1*W+w];
             }
           }
         }
@@ -159,15 +166,14 @@ namespace exaStamp
         const int n = lmh(lmax,lmax) + 1;
         for(int q=0;q<n;q++)
         {
-#         pragma omp simd
-          for(int b=0;b<L;b++)
+          v2* x = gr + 3*q*W;
+          v2* y = gi + 3*q*W;
+          for(int w=0;w<W;w++)
           {
-            double* x = gr + 3*q*L + b;
-            double* y = gi + 3*q*L + b;
-            const double sr = ux[b] * x[0] + uy[b] * x[L] + uz[b] * x[2*L];
-            const double si = ux[b] * y[0] + uy[b] * y[L] + uz[b] * y[2*L];
-            x[0] = ( x[0] - sr * ux[b] ) * inv_r[b]; x[L] = ( x[L] - sr * uy[b] ) * inv_r[b]; x[2*L] = ( x[2*L] - sr * uz[b] ) * inv_r[b];
-            y[0] = ( y[0] - si * ux[b] ) * inv_r[b]; y[L] = ( y[L] - si * uy[b] ) * inv_r[b]; y[2*L] = ( y[2*L] - si * uz[b] ) * inv_r[b];
+            const v2 sr = ux[w] * x[w] + uy[w] * x[W+w] + uz[w] * x[2*W+w];
+            const v2 si = ux[w] * y[w] + uy[w] * y[W+w] + uz[w] * y[2*W+w];
+            x[w] = ( x[w] - sr * ux[w] ) * ir[w]; x[W+w] = ( x[W+w] - sr * uy[w] ) * ir[w]; x[2*W+w] = ( x[2*W+w] - sr * uz[w] ) * ir[w];
+            y[w] = ( y[w] - si * ux[w] ) * ir[w]; y[W+w] = ( y[W+w] - si * uy[w] ) * ir[w]; y[2*W+w] = ( y[2*W+w] - si * uz[w] ) * ir[w];
           }
         }
       }

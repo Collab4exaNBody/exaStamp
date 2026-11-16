@@ -1,0 +1,13 @@
+{
+ "schema": "ye3t_tagged_cauchy_composite_v1",
+ "species_order": [
+  "Ta",
+  "W"
+ ],
+ "ordinary_component": {
+  "path": "tw_test.yace"
+ },
+ "tagged_component": {
+  "path": "tw_tagged.tagged.json"
+ }
+}

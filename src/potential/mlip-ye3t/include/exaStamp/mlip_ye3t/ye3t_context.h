@@ -18,6 +18,7 @@ under the License.
 #pragma once
 
 #include <exaStamp/mlip_ye3t/ye3t_tables.h>
+#include <exaStamp/mlip_ye3t/ye3t_tagged.h>
 #include <exaStamp/mlip_utils/mlip_flat_bonds.h>
 #include <exaStamp/yaml_check_keys.h>
 
@@ -40,12 +41,15 @@ namespace exaStamp
   // model built by ye3t_init, with the flat arrays the force operator gathers into
   struct Ye3tContext
   {
-    std::shared_ptr<mlip_ye3t::Ye3tTables> tables;
+    std::shared_ptr<mlip_ye3t::Ye3tTables> tables;          // linear ACE (.yace, or the backbone of a composite); null: tagged slice alone
+    std::shared_ptr<mlip_ye3t::Ye3tTaggedTables> tagged;   // tagged-Cauchy correction (composite or slice), or null
+    double rcut = 0.0;                                     // bond cutoff of the gather
     std::vector<int> species_type;    // exaStamp species index -> model element (-1: not in the model)
     double mem_gb = 1.0;
     int emulate = 0;
     mlip_utils::FlatBonds flat;
     mlip_ye3t::Ye3tBuffers buf;
+    mlip_ye3t::Ye3tTaggedBuffers tbuf;
   };
 }
 

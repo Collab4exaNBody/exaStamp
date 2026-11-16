@@ -32,6 +32,9 @@ under the License.
 #include <onika/cuda/cuda_context.h>
 
 #include <omp.h>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
 
 namespace exaStamp
 {
@@ -42,6 +45,8 @@ namespace exaStamp
     // GPU code paths run on the host (ye3t_emul.cpp)
     void ye3t_onika_emul( const Ye3tTables& T, Ye3tBuffers& buf, const mlip_utils::BondsView& bv, mlip_utils::OutputsView& out,
                           int nthreads, double mem_gb, int& n_rho_limit );
+    void ye3t_tagged_emul( const Ye3tTaggedTables& T, Ye3tTaggedBuffers& buf, const mlip_utils::BondsView& bv, mlip_utils::OutputsView& out,
+                           int nthreads, double mem_gb );
   }
 
   template <class GridT, class = AssertGridHasFields<GridT, field::_ep, field::_fx, field::_fy, field::_fz, field::_type>>
@@ -74,6 +79,8 @@ compute_force_epilog:
 compute_force:
   - ye3t_force
 
+A tagged-Cauchy correction (composite model of ye3t_init) is computed after the linear ACE backbone, on the same bonds.
+
 Per-atom energy: the atomic energy E_i of the model. Per-atom virial: the whole virial of each bond on its central atom.
 
 )EOF";
@@ -82,26 +89,37 @@ Per-atom energy: the atomic energy E_i of the model. Per-atom virial: the whole 
     inline void execute() override final
     {
       Ye3tContext& ctx = *ye3t_ctx;
-      if( !ctx.tables ) fatal_error() << "ye3t_force: no model, ye3t_init must run first" << std::endl;
+      if( !ctx.tables && !ctx.tagged ) fatal_error() << "ye3t_force: no model, ye3t_init must run first" << std::endl;
       if( grid->number_of_cells() == 0 ) return;
       assert( chunk_neighbors->number_of_cells() == grid->number_of_cells() );
-      const mlip_ye3t::Ye3tTables& T = *ctx.tables;
       const int nth = omp_get_max_threads();
       mlip_utils::BondsView bv;
       mlip_utils::OutputsView out;
-      mlip_utils::gather_bonds( *grid, *chunk_neighbors, *domain, ctx.species_type, T.rcut, has_virial_field, ctx.flat, bv, out, nth );
+      static const bool prof = std::getenv( "YE3T_PROF" ) != nullptr;
+      static double tg = 0.0, ts = 0.0;
+      auto T0 = std::chrono::steady_clock::now();
+      mlip_utils::gather_bonds( *grid, *chunk_neighbors, *domain, ctx.species_type, ctx.rcut, has_virial_field, ctx.flat, bv, out, nth );
+      if( prof ) tg += std::chrono::duration<double>( std::chrono::steady_clock::now() - T0 ).count();
 
+      const bool gpu = onika::parallel::functor_gpu_support_v< mlip_ye3t::ye3t_onika::BasisFunctor >
+                    && global_cuda_ctx() != nullptr && global_cuda_ctx()->has_devices();
+      const mlip_utils::OnikaLauncher<Ye3tForce> pec{ this };
       int n_rho = 0;
-      if( ctx.emulate > 0 ) mlip_ye3t::ye3t_onika_emul( T, ctx.buf, bv, out, ctx.emulate, ctx.mem_gb, n_rho );
-      else
+      if( ctx.tables )
       {
-        const bool gpu = onika::parallel::functor_gpu_support_v< mlip_ye3t::ye3t_onika::BasisFunctor >
-                      && global_cuda_ctx() != nullptr && global_cuda_ctx()->has_devices();
-        const mlip_utils::OnikaLauncher<Ye3tForce> pec{ this };
-        mlip_ye3t::ye3t_onika_compute( T, ctx.buf, bv, out, gpu, ctx.mem_gb, pec, n_rho );
+        const mlip_ye3t::Ye3tTables& T = *ctx.tables;
+        if( ctx.emulate > 0 ) mlip_ye3t::ye3t_onika_emul( T, ctx.buf, bv, out, ctx.emulate, ctx.mem_gb, n_rho );
+        else mlip_ye3t::ye3t_onika_compute( T, ctx.buf, bv, out, gpu, ctx.mem_gb, pec, n_rho );
       }
       if( n_rho > 0 ) fatal_error() << "ye3t_force: " << n_rho << " atom(s) with a density beyond rho_core_cutoff - drho_core_cutoff (outside the validity of the linear model)" << std::endl;
+      if( ctx.tagged )
+      {
+        if( ctx.emulate > 0 ) mlip_ye3t::ye3t_tagged_emul( *ctx.tagged, ctx.tbuf, bv, out, ctx.emulate, ctx.mem_gb );
+        else mlip_ye3t::ye3t_tagged_compute( *ctx.tagged, ctx.tbuf, bv, out, gpu, ctx.mem_gb, pec );
+      }
+      T0 = std::chrono::steady_clock::now();
       mlip_utils::scatter_outputs( *grid, ctx.flat, nth );
+      if( prof ) { ts += std::chrono::duration<double>( std::chrono::steady_clock::now() - T0 ).count(); std::fprintf( stderr, "YE3T_PROF gather %.3f s scatter %.3f s\n", tg, ts ); }
     }
   };
 

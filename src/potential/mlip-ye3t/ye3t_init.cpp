@@ -27,6 +27,7 @@ under the License.
 
 #include <algorithm>
 #include <cmath>
+#include <complex>
 #include <cstdlib>
 #include <map>
 #include <memory>
@@ -42,7 +43,7 @@ namespace exaStamp
 
   class Ye3tInit : public OperatorNode
   {
-    ADD_SLOT( Ye3tParams      , parameters , INPUT        , REQUIRED , DocString{"file: .yace model (linear ACE, ye3t-lammps pair_style ye3t); analytic, mem_gb, emulate: see documentation"} );
+    ADD_SLOT( Ye3tParams      , parameters , INPUT        , REQUIRED , DocString{"file: .yace model (linear ACE, ye3t-lammps pair_style ye3t), or .json tagged-Cauchy composite / slice v2; analytic, mem_gb, emulate: see documentation"} );
     ADD_SLOT( double          , rcut_max   , INPUT_OUTPUT , 0.0 );
     ADD_SLOT( ParticleSpecies , species    , INPUT        , REQUIRED );
     ADD_SLOT( Ye3tContext     , ye3t_ctx   , OUTPUT );
@@ -101,14 +102,31 @@ ye3t_init:
     mem_gb: 1.0       # budget of the per-chunk buffers
     emulate: 0        # debug: N > 0 runs the GPU code paths on the host with blocks of N threads (slow)
 
+Tagged-Cauchy models (ye3t-lammps model_family tagged_cauchy, slice v2): file is a .json, either a composite
+manifest (schema ye3t_tagged_cauchy_composite_v1: a .yace backbone plus a tagged correction, paths relative to the
+manifest, e.g. model.ye3t.json of the ye3t-lammps cost_comparison models) or a tagged slice alone (schema
+ye3t_tagged_cauchy_slice_v2). The correction adds to E_i densities and same-edge moments of real tesseral components
+times a falling factorial of the edge count; its radial functions are always evaluated directly. Models fitted as a
+residual to ZBL need the ZBL pair term of the fit (pair_style hybrid/overlay ye3t ... zbl inner outer in LAMMPS):
+
+compute_force:
+  - ye3t_force
+  - zbl_multi_force:
+      rcut: 1.649 ang
+      parameters:
+        - { type_a: Cu , type_b: Cu , rcut: 1.649 ang , parameters: { r1: 1.283 ang , rc: 1.649 ang } }
+
+Physical-image tagged models (slices v3 / v4) and lifted-Cauchy models are not supported.
+
 The exaStamp species are mapped to the model elements by name.
 
 )EOF";
     }
 
-    inline void execute() override final
+    // .yace model (also the backbone of a tagged-Cauchy composite)
+    std::shared_ptr<Ye3tTables> load_yace( const std::string& path )
     {
-      m_fname = onika::data_file_path( parameters->file );
+      m_fname = path;
       YAML::Node root;
       try { root = YAML::LoadFile( m_fname ); }
       catch( const YAML::Exception& e ) { fail("cannot read model file: ", e.what()); }
@@ -197,7 +215,7 @@ The exaStamp species are mapped to the model elements by name.
         b.nint = int( ratio );
         b.scale = double( b.nint ) / b.rc;
         const double h = b.rc / double( b.nint );
-        std::vector<double> gv( size_t(b.nint) * b.nbase ), gd( gv.size() ), cv( size_t(b.nint) * b.ncontr ), cd( cv.size() );
+        std::vector<double> gv( size_t(b.nint) * b.nbase ), gd( gv.size() );
         for(int k=0;k<b.nint;k++)
         {
           const double r = h * double( k + 1 );
@@ -205,20 +223,10 @@ The exaStamp species are mapped to the model elements by name.
           double* dg = gd.data() + size_t(k) * b.nbase;
           if( r >= b.rc ) { std::fill( g, g + b.nbase, 0.0 ); std::fill( dg, dg + b.nbase, 0.0 ); }
           else cheb_exp_cos( b, r, g, dg );
-          for(int q=0;q<b.ncontr;q++)
-          {
-            double s = 0.0, ds = 0.0;
-            for(int kk=0;kk<b.nbase;kk++) { s += pool[ b.crad + size_t(q)*b.nbase + kk ] * g[kk]; ds += pool[ b.crad + size_t(q)*b.nbase + kk ] * dg[kk]; }
-            cv[ size_t(k)*b.ncontr + q ] = s;
-            cd[ size_t(k)*b.ncontr + q ] = ds;
-          }
         }
         b.bspl = pool.size();
         pool.resize( pool.size() + size_t(b.nint + 1) * b.nbase * 4 );
         build_spline( gv, gd, b.nint, b.nbase, h, pool.data() + b.bspl );
-        b.cspl = pool.size();
-        pool.resize( pool.size() + size_t(b.nint + 1) * b.ncontr * 4 );
-        build_spline( cv, cd, b.nint, b.ncontr, h, pool.data() + b.cspl );
         T->bonds[bi] = b;
         T->lmax = std::max( T->lmax , b.lb );
         T->nbase_max = std::max( T->nbase_max , b.nbase );
@@ -422,6 +430,339 @@ The exaStamp species are mapped to the model elements by name.
       T->ch0.assign( ch0.begin(), ch0.end() );
       T->no0.assign( no0.begin(), no0.end() );
 
+      lout << "YE3T linear ACE: " << nel << " element(s), " << nfunc << " functions (" << nrows << " rows -> " << nmono
+           << " real monomials, " << nnode << " product nodes), lmax " << T->lmax << ", rcut " << T->rcut << " ang, " << src_kind.size() << " sources, "
+           << T->bytes() / 1024 << " KB of tables" << ( T->analytic ? ", analytic radials" : "" ) << std::endl;
+      return T;
+    }
+
+    // inverse of a small complex matrix (Gauss-Jordan, partial pivoting), row-major n x n
+    std::vector< std::complex<double> > invert( std::vector< std::complex<double> > m, int n )
+    {
+      std::vector< std::complex<double> > inv( size_t(n) * n, 0.0 );
+      for(int k=0;k<n;k++) inv[size_t(k)*n+k] = 1.0;
+      for(int c=0;c<n;c++)
+      {
+        int piv = c;
+        for(int r=c+1;r<n;r++) if( std::abs( m[size_t(r)*n+c] ) > std::abs( m[size_t(piv)*n+c] ) ) piv = r;
+        if( std::abs( m[size_t(piv)*n+c] ) < 1e-14 ) fail("singular real-form matrix");
+        for(int k=0;k<n;k++) { std::swap( m[size_t(c)*n+k], m[size_t(piv)*n+k] ); std::swap( inv[size_t(c)*n+k], inv[size_t(piv)*n+k] ); }
+        const std::complex<double> d = 1.0 / m[size_t(c)*n+c];
+        for(int k=0;k<n;k++) { m[size_t(c)*n+k] *= d; inv[size_t(c)*n+k] *= d; }
+        for(int r=0;r<n;r++)
+        {
+          if( r == c ) continue;
+          const std::complex<double> f = m[size_t(r)*n+c];
+          if( f == 0.0 ) continue;
+          for(int k=0;k<n;k++) { m[size_t(r)*n+k] -= f * m[size_t(c)*n+k]; inv[size_t(r)*n+k] -= f * inv[size_t(c)*n+k]; }
+        }
+      }
+      return inv;
+    }
+
+    // tagged-Cauchy slice v2 (ye3t-lammps model_family tagged_cauchy): flat tables of ye3t_tagged.h. B: the .yace
+    // backbone of a composite (same elements, cutoffs of the edge count), or null
+    std::shared_ptr<Ye3tTaggedTables> load_tagged( const YAML::Node& root, const Ye3tTables* B )
+    {
+      const std::string w = "tagged component";
+      if( req(root, "schema", w).as<std::string>() != "ye3t_tagged_cauchy_slice_v2" ) fail("tagged component: schema ye3t_tagged_cauchy_slice_v2 expected");
+      auto TT = std::make_shared<Ye3tTaggedTables>();
+      Ye3tTaggedTables& t = *TT;
+      t.elements = req(root, "species_order", w).as< std::vector<std::string> >();
+      const int nel = t.nel = t.elements.size();
+      if( nel == 0 ) fail("tagged component: no species");
+      if( B && B->elements != t.elements ) fail("ordinary and tagged components: different elements or element order");
+      t.cutoff = req(root, "cutoff", w).as<double>();
+      if( B && std::abs( B->rcut - t.cutoff ) > 2e-12 * std::max( 1.0 , t.cutoff ) ) fail("ordinary and tagged components: different cutoffs (", B->rcut, ", ", t.cutoff, ")");
+      t.tag_count = req(root, "tag_count", w).as<int>();
+      for(const char* k : { "combination_matrix", "descriptor_selection" }) if( root[k] && !root[k].IsNull() ) fail("tagged component: '", k, "' not supported");
+      if( root["pooling"] && root["pooling"].as<std::string>() != "ordered_sum" ) fail("tagged component: pooling ", root["pooling"].as<std::string>(), " not supported");
+      if( root["context_policy"] && root["context_policy"].as<std::string>() != "inclusive" ) fail("tagged component: context_policy ", root["context_policy"].as<std::string>(), " not supported");
+
+      // radial basis
+      const YAML::Node rd = req(root, "radial_definition", w);
+      if( req(rd, "kind", "radial_definition").as<std::string>() != "pace_cheb_exp_cos" ) fail("tagged component: radial kind pace_cheb_exp_cos expected");
+      const YAML::Node rp = req(rd, "parameters", "radial_definition");
+      t.rc_rad = req(rp, "rc", "radial parameters").as<double>();
+      t.rad.rc = t.rc_rad;
+      t.rad.dcut = req(rp, "cutoff_width", "radial parameters").as<double>();
+      t.rad.lambda = req(rp, "lmbda", "radial parameters").as<double>();
+      t.rad.nbase = req(rp, "radial_count", "radial parameters").as<int>();
+      if( t.rad.nbase < 1 ) fail("tagged component: radial_count < 1");
+
+      // real forms: real coordinate a = sum_row U^-1[a][row] Y_{m(row)} (orthonormal Y) -> coefficients of Re / Im Y_l|m|
+      // in the Y_00 = 1 normalisation (Y_{l,-m} = (-1)^m conj Y_lm)
+      struct Form { int l = 0; std::vector<double> cf; };   // [2l+1][l+1][2]
+      std::map<std::string, Form> forms;
+      const double kappa = 1.0 / std::sqrt( 4.0 * M_PI );
+      // real_form_records {id: record}, or (older slices) compiled_artifact.payload.real_forms [record with real_form_id]
+      std::vector< std::pair<std::string, YAML::Node> > records;
+      if( root["real_form_records"] ) for(const auto& kv : root["real_form_records"]) records.emplace_back( kv.first.as<std::string>(), kv.second );
+      else if( root["compiled_artifact"] && root["compiled_artifact"]["payload"] && root["compiled_artifact"]["payload"]["real_forms"] )
+        for(const auto& r : root["compiled_artifact"]["payload"]["real_forms"]) records.emplace_back( req(r, "real_form_id", "real form").as<std::string>(), r );
+      else fail("tagged component: no real form (real_form_records or compiled_artifact.payload.real_forms)");
+      for(const auto& kv : records)
+      {
+        const YAML::Node r = kv.second;
+        Form f;
+        f.l = req(r, "angular_l", "real form").as<int>();
+        const int n = 2 * f.l + 1;
+        const auto mo = req(r, "magnetic_order", "real form").as< std::vector<int> >();
+        const YAML::Node U = req(r, "real_to_complex_matrix", "real form");
+        if( int(mo.size()) != n || int(U.size()) != n ) fail("real form ", kv.first, ": bad size");
+        std::vector< std::complex<double> > u( size_t(n) * n );
+        for(int row=0;row<n;row++)
+        {
+          if( int(U[row].size()) != n ) fail("real form: bad row");
+          for(int col=0;col<n;col++)
+          {
+            const auto b = req(U[row][col], "binary64", "real form").as< std::vector<double> >();
+            u[size_t(row)*n+col] = std::complex<double>( b.at(0), b.at(1) );
+          }
+        }
+        const auto ui = invert( u, n );
+        f.cf.assign( size_t(n) * ( f.l + 1 ) * 2, 0.0 );
+        for(int a=0;a<n;a++)
+          for(int row=0;row<n;row++)
+          {
+            const std::complex<double> c = kappa * ui[size_t(a)*n+row];
+            const int m = mo[row], am = std::abs( m );
+            if( am > f.l ) fail("real form: bad magnetic order");
+            double* o = f.cf.data() + ( size_t(a) * ( f.l + 1 ) + am ) * 2;
+            if( m >= 0 ) { o[0] += c.real(); o[1] -= c.imag(); }
+            else { const double sg = am % 2 ? -1.0 : 1.0; o[0] += sg * c.real(); o[1] += sg * c.imag(); }
+          }
+        forms[ kv.first ] = f;
+      }
+
+      // channels, components
+      const YAML::Node chs = req(root, "channel_real_forms", w);
+      const int nch = chs.size();
+      std::vector<int> ch_off( nch + 1, -1 );
+      std::vector<YAML::Node> by_index( nch );
+      std::vector<bool> seen( nch, false );
+      for(size_t q=0;q<chs.size();q++)
+      {
+        const YAML::Node c = chs[q];
+        const int ci = req(c, "channel_index", "channel").as<int>();
+        if( ci < 0 || ci >= nch || seen[ci] ) fail("channels: bad or duplicate channel_index");
+        seen[ci] = true;
+        by_index[ci].reset( c );
+      }
+      std::vector<int> comp_rad, comp_nu, comp_l, comp_cf;
+      std::vector<double> cf;
+      for(int ci=0;ci<nch;ci++)
+      {
+        const YAML::Node c = by_index[ci];
+        const int l = req(c, "l", "channel").as<int>(), n = req(c, "radial_channel", "channel").as<int>();
+        const std::string nus = req(c, "neighbor_species", "channel").as<std::string>();
+        const auto it = std::find( t.elements.begin(), t.elements.end(), nus );
+        if( it == t.elements.end() ) fail("channel: unknown neighbour species ", nus);
+        const auto fi = forms.find( req(c, "real_form_id", "channel").as<std::string>() );
+        if( fi == forms.end() || fi->second.l != l ) fail("channel ", ci, ": real form missing or of another l");
+        if( n < 0 || n >= t.rad.nbase ) fail("channel ", ci, ": radial channel out of range");
+        if( l > kYe3tMaxLmax ) fail("channel ", ci, ": l > ", kYe3tMaxLmax);
+        t.lmax = std::max( t.lmax , l );
+        ch_off[ci] = comp_rad.size();
+        for(int a=0;a<2*l+1;a++)
+        {
+          comp_rad.push_back( n ); comp_nu.push_back( it - t.elements.begin() ); comp_l.push_back( l ); comp_cf.push_back( cf.size() );
+          cf.insert( cf.end(), fi->second.cf.begin() + size_t(a) * ( l + 1 ) * 2, fi->second.cf.begin() + size_t(a+1) * ( l + 1 ) * 2 );
+        }
+      }
+      ch_off[nch] = comp_rad.size();
+      t.ncomp = comp_rad.size();
+      auto flat = [&](const YAML::Node& key) -> int
+      {
+        const auto k = key.as< std::vector<int> >();
+        if( k.size() != 2 || k[0] < 0 || k[0] >= nch || k[1] < 0 || k[1] >= ch_off[k[0]+1] - ch_off[k[0]] ) fail("bad (channel, component) key");
+        return ch_off[k[0]] + k[1];
+      };
+
+      // densities, moments (prefix tree)
+      const YAML::Node prog = req(root, "real_moment_program", w);
+      if( prog["tag_count"] && prog["tag_count"].as<int>() != t.tag_count ) fail("real_moment_program: tag_count differs");
+      std::vector<int> den_comp;
+      for(const auto& k : req(prog, "real_density_keys", "real_moment_program")) den_comp.push_back( flat( k ) );
+      t.nden = den_comp.size();
+      std::map< std::vector<int>, std::vector<int> > mkeys;
+      std::vector<int> mzero;
+      {
+        int m = 0;
+        for(const auto& key : req(prog, "real_moment_keys", "real_moment_program"))
+        {
+          std::vector<int> f;
+          for(const auto& k : key) f.push_back( flat( k ) );
+          std::sort( f.begin(), f.end() );
+          if( int(f.size()) > kTaggedMaxDepth ) fail("moment key of ", f.size(), " factors (", kTaggedMaxDepth, " supported)");
+          if( f.empty() ) mzero.push_back( m ); else mkeys[f].push_back( m );
+          ++ m;
+        }
+        t.nmom = m;
+      }
+      t.nvar = t.nden + t.nmom;
+      std::vector<int> mnode_comp, mnode_depth, mt0, mterm;
+      {
+        std::vector<int> path;
+        for(const auto& kv : mkeys)
+        {
+          const auto& f = kv.first;
+          size_t c = 0;
+          while( c < path.size() && c < f.size() && path[c] == f[c] ) ++ c;
+          if( c == f.size() ) fail("moment tree: duplicate key");   // map keys are distinct, a prefix comes first
+          for(size_t d=c;d<f.size();d++) { mnode_comp.push_back( f[d] ); mnode_depth.push_back( d + 1 ); mt0.push_back( mterm.size() ); }
+          mterm.insert( mterm.end(), kv.second.begin(), kv.second.end() );
+          path = f;
+        }
+        mt0.push_back( mterm.size() );
+      }
+
+      // readout: beta per element, terms -> (p, beta coef) per sorted variable list
+      const YAML::Node bt = req(root, "beta", w);
+      std::vector< std::vector<double> > beta( nel );
+      if( bt.IsSequence() ) { if( nel != 1 ) fail("beta: a list is only accepted for one species"); beta[0] = bt.as< std::vector<double> >(); }
+      else for(int e=0;e<nel;e++) beta[e] = req(bt, t.elements[e].c_str(), "beta").as< std::vector<double> >();
+      std::vector<double> offset( nel, 0.0 );
+      if( root["offsets"] && !root["offsets"].IsNull() ) for(int e=0;e<nel;e++) if( root["offsets"][t.elements[e]] ) offset[e] = root["offsets"][t.elements[e]].as<double>();
+      std::vector< std::map< std::vector<int>, std::map<int,double> > > rterms( nel );
+      size_t nterm = 0;
+      for(const auto& term : req(prog, "terms", "real_moment_program"))
+      {
+        const int fe = req(term, "feature_index", "term").as<int>(), p = req(term, "p", "term").as<int>();
+        const double coef = req(term, "coefficient", "term").as<double>();
+        if( p < 0 || p > t.tag_count ) fail("term: p out of range");
+        std::vector<int> v;
+        for(int k : req(term, "density_factor_indices", "term").as< std::vector<int> >()) { if( k < 0 || k >= t.nden ) fail("term: density index out of range"); v.push_back( k ); }
+        for(int k : req(term, "moment_indices", "term").as< std::vector<int> >()) { if( k < 0 || k >= t.nmom ) fail("term: moment index out of range"); v.push_back( t.nden + k ); }
+        std::sort( v.begin(), v.end() );
+        if( int(v.size()) > kTaggedMaxDepth ) fail("term of ", v.size(), " factors (", kTaggedMaxDepth, " supported)");
+        for(int e=0;e<nel;e++)
+        {
+          if( fe < 0 || fe >= int( beta[e].size() ) ) fail("term: feature_index out of range of beta");
+          rterms[e][v][p] += beta[e][fe] * coef;
+        }
+        t.pmax = std::max( t.pmax , p );
+        ++ nterm;
+      }
+      std::vector<int> ro0{ 0 }, rnode_var, rnode_depth, rl0, rl_p, r0terms{ 0 }, r0t_p;
+      std::vector<double> rl_coef, r0t_coef;
+      for(int e=0;e<nel;e++)
+      {
+        std::vector<int> path;
+        for(const auto& kv : rterms[e])
+        {
+          const auto& v = kv.first;
+          if( v.empty() ) { for(const auto& pc : kv.second) { r0t_p.push_back( pc.first ); r0t_coef.push_back( pc.second ); } continue; }
+          size_t c = 0;
+          while( c < path.size() && c < v.size() && path[c] == v[c] ) ++ c;
+          for(size_t d=c;d<v.size();d++) { rnode_var.push_back( v[d] ); rnode_depth.push_back( d + 1 ); rl0.push_back( rl_p.size() ); }
+          for(const auto& pc : kv.second) { rl_p.push_back( pc.first ); rl_coef.push_back( pc.second ); }
+          path = v;
+        }
+        ro0.push_back( rnode_var.size() );
+        r0terms.push_back( r0t_p.size() );
+      }
+      rl0.push_back( rl_p.size() );
+
+      // edge count cutoffs
+      std::vector<double> zc2( size_t(nel) * nel );
+      for(int a=0;a<nel;a++) for(int b=0;b<nel;b++)
+      {
+        const double c = B ? std::max( t.cutoff , B->bonds[size_t(a)*nel+b].rc ) : t.cutoff;
+        zc2[size_t(a)*nel+b] = c * c;
+      }
+
+      t.nlh = ( t.lmax + 1 ) * ( t.lmax + 2 ) / 2;
+      t.ylm_a.resize( t.nlh ); t.ylm_b.resize( t.nlh );
+      ylm_coefficients( t.lmax, t.ylm_a.data(), t.ylm_b.data() );
+      t.zcut2.assign( zc2.begin(), zc2.end() ); t.offset.assign( offset.begin(), offset.end() );
+      t.comp_rad.assign( comp_rad.begin(), comp_rad.end() ); t.comp_nu.assign( comp_nu.begin(), comp_nu.end() );
+      t.comp_l.assign( comp_l.begin(), comp_l.end() ); t.comp_cf.assign( comp_cf.begin(), comp_cf.end() ); t.cf.assign( cf.begin(), cf.end() );
+      t.den_comp.assign( den_comp.begin(), den_comp.end() );
+      t.mnode_comp.assign( mnode_comp.begin(), mnode_comp.end() ); t.mnode_depth.assign( mnode_depth.begin(), mnode_depth.end() );
+      t.mt0.assign( mt0.begin(), mt0.end() ); t.mterm.assign( mterm.begin(), mterm.end() ); t.mzero.assign( mzero.begin(), mzero.end() );
+      {
+        std::vector<int> par( mnode_comp.size(), -1 ), last( kTaggedMaxDepth + 1, -1 );
+        for(size_t n=0;n<mnode_comp.size();n++) { const int d = mnode_depth[n]; par[n] = d > 1 ? last[d-1] : -1; last[d] = n; }
+        t.mnode_parent.assign( par.begin(), par.end() );
+        // reverse sweep: the first child met (largest index) of each parent initialises it
+        std::vector<int> first( par.size(), 0 ), hasch( par.size(), 0 ), seen( par.size(), 0 );
+        for(int n=int(par.size())-1;n>=0;n--) if( par[n] >= 0 ) { hasch[par[n]] = 1; if( !seen[par[n]] ) { seen[par[n]] = 1; first[n] = 1; } }
+        t.mnode_first.assign( first.begin(), first.end() );
+        t.mnode_haschild.assign( hasch.begin(), hasch.end() );
+        std::vector<int> slot( par.size(), -1 ), pslot( par.size(), -1 );
+        int ns = 0;
+        for(size_t n=0;n<par.size();n++) if( hasch[n] ) slot[n] = ns++;
+        for(size_t n=0;n<par.size();n++) pslot[n] = par[n] >= 0 ? slot[par[n]] : -1;
+        t.nslot = ns;
+        t.mnode_slot.assign( slot.begin(), slot.end() );
+        t.mnode_pslot.assign( pslot.begin(), pslot.end() );
+      }
+      {
+        // distinct angular forms of the components
+        std::map< std::pair<int, std::vector<double> >, int > amap;
+        std::vector<int> al, acf, ca;
+        for(int c=0;c<t.ncomp;c++)
+        {
+          const int l = comp_l[c];
+          std::vector<double> row( cf.begin() + comp_cf[c], cf.begin() + comp_cf[c] + 2 * ( l + 1 ) );
+          auto it = amap.find( { l, row } );
+          if( it == amap.end() ) { it = amap.emplace( std::make_pair( l, row ), int( al.size() ) ).first; al.push_back( l ); acf.push_back( comp_cf[c] ); }
+          ca.push_back( it->second );
+        }
+        t.nang = al.size();
+        t.ang_l.assign( al.begin(), al.end() ); t.ang_cf.assign( acf.begin(), acf.end() ); t.comp_ang.assign( ca.begin(), ca.end() );
+      }
+      t.ro0.assign( ro0.begin(), ro0.end() ); t.rnode_var.assign( rnode_var.begin(), rnode_var.end() ); t.rnode_depth.assign( rnode_depth.begin(), rnode_depth.end() );
+      t.rl0.assign( rl0.begin(), rl0.end() ); t.rl_p.assign( rl_p.begin(), rl_p.end() ); t.rl_coef.assign( rl_coef.begin(), rl_coef.end() );
+      t.r0terms.assign( r0terms.begin(), r0terms.end() ); t.r0t_p.assign( r0t_p.begin(), r0t_p.end() ); t.r0t_coef.assign( r0t_coef.begin(), r0t_coef.end() );
+
+      lout << "YE3T tagged-Cauchy (slice v2): " << nel << " element(s), tag_count " << t.tag_count << ", " << nch << " channels (" << t.ncomp
+           << " components, lmax " << t.lmax << ", " << t.rad.nbase << " radials, rc " << t.rc_rad << " ang), " << t.nden << " densities, " << t.nmom
+           << " moments (" << mnode_comp.size() << " product nodes), " << nterm << " terms (" << rnode_var.size() << " readout nodes), "
+           << TT->bytes() / 1024 << " KB of tables" << std::endl;
+      return TT;
+    }
+
+    inline void execute() override final
+    {
+      const std::string path = onika::data_file_path( parameters->file );
+      std::shared_ptr<Ye3tTables> T;
+      std::shared_ptr<Ye3tTaggedTables> TT;
+      std::vector<std::string> elements;
+      double rcut = 0.0;
+      if( path.size() > 5 && path.substr( path.size() - 5 ) == ".json" )
+      {
+        m_fname = path;
+        YAML::Node root;
+        try { root = YAML::LoadFile( path ); }
+        catch( const YAML::Exception& e ) { fail("cannot read model file: ", e.what()); }
+        const std::string schema = req(root, "schema", "model").as<std::string>();
+        const std::string dir = path.find('/') != std::string::npos ? path.substr( 0 , path.rfind('/') + 1 ) : std::string();
+        std::string tagged_path = path;
+        YAML::Node troot = root;
+        if( schema == "ye3t_tagged_cauchy_composite_v1" )
+        {
+          const std::string bp = dir + req(req(root, "ordinary_component", "model"), "path", "ordinary_component").as<std::string>();
+          tagged_path = dir + req(req(root, "tagged_component", "model"), "path", "tagged_component").as<std::string>();
+          T = load_yace( bp );
+          m_fname = tagged_path;
+          try { troot = YAML::LoadFile( tagged_path ); }
+          catch( const YAML::Exception& e ) { fail("cannot read tagged component: ", e.what()); }
+        }
+        else if( schema != "ye3t_tagged_cauchy_slice_v2" ) fail("unsupported schema ", schema, " (ye3t_tagged_cauchy_composite_v1 or ye3t_tagged_cauchy_slice_v2)");
+        TT = load_tagged( troot, T.get() );
+        elements = TT->elements;
+        rcut = TT->cutoff;
+        if( T ) rcut = std::max( rcut , T->rcut );
+      }
+      else
+      {
+        T = load_yace( path );
+        elements = T->elements;
+        rcut = T->rcut;
+      }
+
       // exaStamp species -> model elements, by name
       Ye3tContext& ctx = *ye3t_ctx;
       ctx = Ye3tContext{};
@@ -434,13 +775,11 @@ The exaStamp species are mapped to the model elements by name.
         else lout << "ye3t_init: warning: species " << sp[s].m_name << " is not an element of the model, its atoms are ignored" << std::endl;
       }
       ctx.tables = T;
+      ctx.tagged = TT;
+      ctx.rcut = rcut;
       ctx.mem_gb = parameters->mem_gb;
       ctx.emulate = parameters->emulate;
-      *rcut_max = std::max( *rcut_max , T->rcut );
-
-      lout << "YE3T linear ACE: " << nel << " element(s), " << nfunc << " functions (" << nrows << " rows -> " << nmono
-           << " real monomials, " << nnode << " product nodes), lmax " << T->lmax << ", rcut " << T->rcut << " ang, " << src_kind.size() << " sources, "
-           << T->bytes() / 1024 << " KB of tables" << ( T->analytic ? ", analytic radials" : "" ) << std::endl;
+      *rcut_max = std::max( *rcut_max , rcut );
     }
   };
 

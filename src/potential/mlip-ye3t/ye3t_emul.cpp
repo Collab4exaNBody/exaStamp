@@ -22,7 +22,9 @@ under the License.
 
 #define ye3t_onika ye3t_onika_emulated
 #define ye3t_onika_compute ye3t_onika_compute_emulated
+#define ye3t_tagged_compute ye3t_tagged_compute_emulated
 #include <exaStamp/mlip_ye3t/ye3t_driver.h>
+#include <exaStamp/mlip_ye3t/ye3t_tagged.h>
 
 namespace exaStamp
 {
@@ -33,6 +35,12 @@ namespace exaStamp
     {
       if( nthreads > ONIKA_CU_MAX_THREADS_PER_BLOCK ) nthreads = ONIKA_CU_MAX_THREADS_PER_BLOCK;
       ye3t_onika_compute_emulated( T, buf, bv, out, true, mem_gb, ::mlip_onika_emul::EmulLauncher{ nthreads }, n_rho_limit );
+    }
+    void ye3t_tagged_emul( const Ye3tTaggedTables& T, Ye3tTaggedBuffers& buf, const mlip_utils::BondsView& bv, mlip_utils::OutputsView& out,
+                           int nthreads, double mem_gb )
+    {
+      if( nthreads > ONIKA_CU_MAX_THREADS_PER_BLOCK ) nthreads = ONIKA_CU_MAX_THREADS_PER_BLOCK;
+      ye3t_tagged_compute_emulated( T, buf, bv, out, true, mem_gb, ::mlip_onika_emul::EmulLauncher{ nthreads } );
     }
   }
 }

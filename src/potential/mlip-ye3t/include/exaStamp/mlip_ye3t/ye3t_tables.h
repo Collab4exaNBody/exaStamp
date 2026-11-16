@@ -24,8 +24,9 @@ under the License.
 //   radial base g_0 = fc, g_k = (1 - T_k(x)) / 2 fc (k >= 1) with x = 1 - 2 (exp(-lambda (r/rc - 1)) - 1) / (exp(lambda) - 1),
 //     fc = (1 + cos(pi r / rc)) / 2, times (1 + cos(pi (r - rc + dcut) / dcut)) / 2 within dcut of rc  (ChebExpCos)
 //   contracted radials R_nl = sum_k c_nlk g_k
-//   both tabulated as uniform cubic Hermite splines, h = rc / n, n = floor(rc / deltaSplineBins), nodes (values and
-//     derivatives) at r = h, 2h .. n h = rc, interval k = floor(r / h) >= 1; below h the functions are evaluated directly
+//   g_k tabulated as uniform cubic Hermite splines, h = rc / n, n = floor(rc / deltaSplineBins), nodes (values and
+//     derivatives) at r = h, 2h .. n h = rc, interval k = floor(r / h) >= 1; below h they are evaluated directly; R_nl
+//     contracted from the interpolated g_k (the spline being linear in its nodes, this is the spline of R_nl of PACE)
 //   sources (m >= 0): A_{mu_j k} = sum_j g_k(r_ij) (rank 1), A_{mu_j n l m} = sum_j R_nl(r_ij) Y_lm(r_ij / r) with Y_lm the
 //     complex Condon-Shortley harmonics normalised to Y_00 = 1
 //   channels: a source, or (-1)^m conj of a source for -m
@@ -59,7 +60,6 @@ namespace exaStamp
       int lb = 0;                 // lmax of the bond
       int ncontr = 0;             // nrad (lb + 1), R_nl at n (lb + 1) + l
       int64_t bspl = 0;           // base spline coefficients [(nint+1)][nbase][4]
-      int64_t cspl = 0;           // contracted spline coefficients [(nint+1)][ncontr][4]
       int64_t crad = 0;           // contraction coefficients [ncontr][nbase] (direct evaluation below the table)
     };
 
