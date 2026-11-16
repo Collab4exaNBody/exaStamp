@@ -68,8 +68,8 @@ def rows_rank4(l1, l2, l3, l4, L):
                 m4 = -m1 - m2 - m3
                 if abs(m4) > l4:
                     continue
-                M = m3 + m4
-                c = (-1) ** M * w3j(l1, l2, L, m1, m2, -M) * w3j(l3, l4, L, m3, m4, M)
+                M = m3 + m4   # (l1 l2) coupled to (L, -M), (l3 l4) to (L, M): sum_M (-1)^M 3j(l1 l2 L; m1 m2 M) 3j(l3 l4 L; m3 m4 -M)
+                c = (-1) ** M * w3j(l1, l2, L, m1, m2, M) * w3j(l3, l4, L, m3, m4, -M)
                 if abs(c) > 1e-14:
                     out.append(((m1, m2, m3, m4), c))
     return out
