@@ -65,12 +65,16 @@ add_subdirectory(mlip-n2p2)
 add_subdirectory(mlip-pace)
 # Proper Orthogonal Descriptor Potential
 add_subdirectory(mlip-pod)
+# Polynomial machine-learning potential (pypolymlp), native kernels
+add_subdirectory(mlip-polymlp)
 # Spectral Neighbor Analysis Potential
 add_subdirectory(mlip-snap)
 # Spectral Neighbor Analysis Potential (Legacy version)
 add_subdirectory(mlip-snaplegacy)
 # Spectral Neighbor Analysis Potential (external source version)
 add_subdirectory(mlip-snaplmp)
+# YE3T linear Atomic Cluster Expansion (.yace), native kernels
+add_subdirectory(mlip-ye3t)
 # ======================================================= #
 
 # ======================================================= #

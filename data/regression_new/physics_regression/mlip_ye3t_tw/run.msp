@@ -1,0 +1,35 @@
+# enable-if-EXASTAMP_MLIP_YE3T_BUILD : YE3T linear ACE (ye3t_init + ye3t_force), random Ta/W test model (exaStamp/scripts/python/ye3t_test_model.py tw_test.yace 2026, ranks 1-4), 128-atom bcc Ta/W frame
+includes:
+  - ../common.yaml
+
+compute_force_prolog:
+  - zero_force_energy: { ghost: true }
+
+compute_force_epilog:
+  - update_force_energy_from_ghost
+  - force_to_accel
+
+species:
+  - Ta: { mass: 180.94788 Da, z: 73, charge: 0 e- }
+  - W: { mass: 183.84 Da, z: 74, charge: 0 e- }
+
+init_parameters:
+  - species
+  - ye3t_init:
+      parameters: { file: "tw_test.yace" }
+
+compute_force:
+  - ye3t_force
+
+setup_system:
+  - domain:
+      cell_size: 4.0 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_xyz_file_with_xform:
+      filename: "tw128.xyz"
+  - physics_regression_noise
+
++global:
+  rcut_inc: 0.5 ang
+  dt: 1.0e-3 ps

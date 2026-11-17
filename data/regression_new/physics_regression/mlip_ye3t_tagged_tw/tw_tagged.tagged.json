@@ -1,0 +1,1196 @@
+{
+ "schema": "ye3t_tagged_cauchy_slice_v2",
+ "synthetic_fixture_note": "random test model of exaStamp scripts/python/ye3t_tagged_test_model.py, not fitted",
+ "species_order": [
+  "Ta",
+  "W"
+ ],
+ "cutoff": 4.8,
+ "tag_count": 2,
+ "pooling": "ordered_sum",
+ "context_policy": "inclusive",
+ "combination_matrix": null,
+ "descriptor_selection": null,
+ "offsets": {
+  "Ta": 0.0,
+  "W": 0.0
+ },
+ "beta": {
+  "Ta": [
+   -0.00012842607452982554,
+   0.005596526628606182,
+   -0.0013092639542605954,
+   -0.025899894578390394,
+   -0.0005803306627613951,
+   0.058103649170653006,
+   0.0016205753467086956,
+   -0.06452936163539028,
+   0.0006111392107405278,
+   -0.04033944652888615,
+   0.0018678488006495621,
+   0.016794006421491127,
+   0.005434832165786055,
+   0.0010109283883163464
+  ],
+  "W": [
+   6.061478528940701e-06,
+   0.0130358103350228,
+   -0.0020647781839958725,
+   -0.03223750933724763,
+   -0.0008884031379993637,
+   -0.05473338863131932,
+   0.00010326737338099345,
+   -0.013817587863113712,
+   0.0006527224818903817,
+   -0.09743190352663869,
+   -0.00020919239384511678,
+   -0.005392767954704345,
+   -0.01218409600513784,
+   0.00037946348402421125
+  ]
+ },
+ "radial_definition": {
+  "kind": "pace_cheb_exp_cos",
+  "parameters": {
+   "rc": 4.8,
+   "cutoff_width": 0.01,
+   "lmbda": 0.5,
+   "radial_count": 2
+  }
+ },
+ "real_form_records": {
+  "real_form_test_l0": {
+   "angular_l": 0,
+   "magnetic_order": [
+    0
+   ],
+   "real_coordinate_order": [
+    {
+     "kind": "m_zero",
+     "m": 0
+    }
+   ],
+   "real_to_complex_matrix": [
+    [
+     {
+      "binary64": [
+       1.0,
+       0.0
+      ]
+     }
+    ]
+   ]
+  },
+  "real_form_test_l1": {
+   "angular_l": 1,
+   "magnetic_order": [
+    -1,
+    0,
+    1
+   ],
+   "real_coordinate_order": [
+    {
+     "kind": "cosine",
+     "m": 1
+    },
+    {
+     "kind": "m_zero",
+     "m": 0
+    },
+    {
+     "kind": "sine",
+     "m": 1
+    }
+   ],
+   "real_to_complex_matrix": [
+    [
+     {
+      "binary64": [
+       0.7071067811865476,
+       0.0
+      ]
+     },
+     {
+      "binary64": [
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "binary64": [
+       0.0,
+       -0.7071067811865476
+      ]
+     }
+    ],
+    [
+     {
+      "binary64": [
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "binary64": [
+       1.0,
+       0.0
+      ]
+     },
+     {
+      "binary64": [
+       0.0,
+       0.0
+      ]
+     }
+    ],
+    [
+     {
+      "binary64": [
+       -0.7071067811865476,
+       -0.0
+      ]
+     },
+     {
+      "binary64": [
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "binary64": [
+       0.0,
+       -0.7071067811865476
+      ]
+     }
+    ]
+   ]
+  },
+  "real_form_test_l2": {
+   "angular_l": 2,
+   "magnetic_order": [
+    -2,
+    -1,
+    0,
+    1,
+    2
+   ],
+   "real_coordinate_order": [
+    {
+     "kind": "cosine",
+     "m": 2
+    },
+    {
+     "kind": "cosine",
+     "m": 1
+    },
+    {
+     "kind": "m_zero",
+     "m": 0
+    },
+    {
+     "kind": "sine",
+     "m": 1
+    },
+    {
+     "kind": "sine",
+     "m": 2
+    }
+   ],
+   "real_to_complex_matrix": [
+    [
+     {
+      "binary64": [
+       0.7071067811865476,
+       0.0
+      ]
+     },
+     {
+      "binary64": [
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "binary64": [
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "binary64": [
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "binary64": [
+       0.0,
+       -0.7071067811865476
+      ]
+     }
+    ],
+    [
+     {
+      "binary64": [
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "binary64": [
+       0.7071067811865476,
+       0.0
+      ]
+     },
+     {
+      "binary64": [
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "binary64": [
+       0.0,
+       -0.7071067811865476
+      ]
+     },
+     {
+      "binary64": [
+       0.0,
+       0.0
+      ]
+     }
+    ],
+    [
+     {
+      "binary64": [
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "binary64": [
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "binary64": [
+       1.0,
+       0.0
+      ]
+     },
+     {
+      "binary64": [
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "binary64": [
+       0.0,
+       0.0
+      ]
+     }
+    ],
+    [
+     {
+      "binary64": [
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "binary64": [
+       -0.7071067811865476,
+       -0.0
+      ]
+     },
+     {
+      "binary64": [
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "binary64": [
+       0.0,
+       -0.7071067811865476
+      ]
+     },
+     {
+      "binary64": [
+       0.0,
+       0.0
+      ]
+     }
+    ],
+    [
+     {
+      "binary64": [
+       0.7071067811865476,
+       0.0
+      ]
+     },
+     {
+      "binary64": [
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "binary64": [
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "binary64": [
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "binary64": [
+       0.0,
+       0.7071067811865476
+      ]
+     }
+    ]
+   ]
+  }
+ },
+ "channel_real_forms": [
+  {
+   "channel_index": 0,
+   "l": 0,
+   "neighbor_species": "Ta",
+   "radial_channel": 0,
+   "real_form_id": "real_form_test_l0"
+  },
+  {
+   "channel_index": 1,
+   "l": 0,
+   "neighbor_species": "Ta",
+   "radial_channel": 1,
+   "real_form_id": "real_form_test_l0"
+  },
+  {
+   "channel_index": 2,
+   "l": 1,
+   "neighbor_species": "Ta",
+   "radial_channel": 0,
+   "real_form_id": "real_form_test_l1"
+  },
+  {
+   "channel_index": 3,
+   "l": 2,
+   "neighbor_species": "Ta",
+   "radial_channel": 1,
+   "real_form_id": "real_form_test_l2"
+  },
+  {
+   "channel_index": 4,
+   "l": 0,
+   "neighbor_species": "W",
+   "radial_channel": 0,
+   "real_form_id": "real_form_test_l0"
+  },
+  {
+   "channel_index": 5,
+   "l": 0,
+   "neighbor_species": "W",
+   "radial_channel": 1,
+   "real_form_id": "real_form_test_l0"
+  },
+  {
+   "channel_index": 6,
+   "l": 1,
+   "neighbor_species": "W",
+   "radial_channel": 0,
+   "real_form_id": "real_form_test_l1"
+  },
+  {
+   "channel_index": 7,
+   "l": 2,
+   "neighbor_species": "W",
+   "radial_channel": 1,
+   "real_form_id": "real_form_test_l2"
+  }
+ ],
+ "real_moment_program": {
+  "feature_count": 14,
+  "tag_count": 2,
+  "real_density_keys": [
+   [
+    0,
+    0
+   ],
+   [
+    4,
+    0
+   ],
+   [
+    1,
+    0
+   ],
+   [
+    2,
+    0
+   ],
+   [
+    6,
+    0
+   ],
+   [
+    2,
+    1
+   ],
+   [
+    6,
+    1
+   ],
+   [
+    2,
+    2
+   ],
+   [
+    6,
+    2
+   ],
+   [
+    3,
+    0
+   ],
+   [
+    7,
+    0
+   ],
+   [
+    3,
+    1
+   ],
+   [
+    7,
+    1
+   ],
+   [
+    3,
+    2
+   ],
+   [
+    7,
+    2
+   ],
+   [
+    3,
+    3
+   ],
+   [
+    7,
+    3
+   ],
+   [
+    3,
+    4
+   ],
+   [
+    7,
+    4
+   ]
+  ],
+  "real_moment_keys": [
+   [],
+   [
+    [
+     2,
+     0
+    ],
+    [
+     6,
+     0
+    ]
+   ],
+   [
+    [
+     2,
+     1
+    ],
+    [
+     6,
+     1
+    ]
+   ],
+   [
+    [
+     2,
+     2
+    ],
+    [
+     6,
+     2
+    ]
+   ],
+   [
+    [
+     6,
+     0
+    ],
+    [
+     6,
+     0
+    ]
+   ],
+   [
+    [
+     6,
+     1
+    ],
+    [
+     6,
+     1
+    ]
+   ],
+   [
+    [
+     6,
+     2
+    ],
+    [
+     6,
+     2
+    ]
+   ],
+   [
+    [
+     3,
+     0
+    ],
+    [
+     7,
+     0
+    ]
+   ],
+   [
+    [
+     3,
+     1
+    ],
+    [
+     7,
+     1
+    ]
+   ],
+   [
+    [
+     3,
+     2
+    ],
+    [
+     7,
+     2
+    ]
+   ],
+   [
+    [
+     3,
+     3
+    ],
+    [
+     7,
+     3
+    ]
+   ],
+   [
+    [
+     3,
+     4
+    ],
+    [
+     7,
+     4
+    ]
+   ],
+   [
+    [
+     7,
+     0
+    ],
+    [
+     7,
+     0
+    ]
+   ],
+   [
+    [
+     7,
+     1
+    ],
+    [
+     7,
+     1
+    ]
+   ],
+   [
+    [
+     7,
+     2
+    ],
+    [
+     7,
+     2
+    ]
+   ],
+   [
+    [
+     7,
+     3
+    ],
+    [
+     7,
+     3
+    ]
+   ],
+   [
+    [
+     7,
+     4
+    ],
+    [
+     7,
+     4
+    ]
+   ],
+   [
+    [
+     1,
+     0
+    ]
+   ],
+   [
+    [
+     4,
+     0
+    ]
+   ],
+   [
+    [
+     3,
+     0
+    ],
+    [
+     3,
+     0
+    ]
+   ],
+   [
+    [
+     3,
+     1
+    ],
+    [
+     3,
+     1
+    ]
+   ],
+   [
+    [
+     3,
+     2
+    ],
+    [
+     3,
+     2
+    ]
+   ],
+   [
+    [
+     3,
+     3
+    ],
+    [
+     3,
+     3
+    ]
+   ],
+   [
+    [
+     3,
+     4
+    ],
+    [
+     3,
+     4
+    ]
+   ],
+   [
+    [
+     2,
+     0
+    ],
+    [
+     2,
+     0
+    ],
+    [
+     5,
+     0
+    ]
+   ],
+   [
+    [
+     2,
+     1
+    ],
+    [
+     2,
+     1
+    ],
+    [
+     5,
+     0
+    ]
+   ],
+   [
+    [
+     2,
+     2
+    ],
+    [
+     2,
+     2
+    ],
+    [
+     5,
+     0
+    ]
+   ]
+  ],
+  "terms": [
+   {
+    "feature_index": 0,
+    "coefficient": 1.0,
+    "density_factor_indices": [],
+    "moment_indices": [
+     0
+    ],
+    "p": 2
+   },
+   {
+    "feature_index": 1,
+    "coefficient": 1.0,
+    "density_factor_indices": [
+     0,
+     1
+    ],
+    "moment_indices": [],
+    "p": 0
+   },
+   {
+    "feature_index": 2,
+    "coefficient": 1.0,
+    "density_factor_indices": [
+     2
+    ],
+    "moment_indices": [],
+    "p": 1
+   },
+   {
+    "feature_index": 3,
+    "coefficient": 1.0,
+    "density_factor_indices": [
+     3,
+     4
+    ],
+    "moment_indices": [],
+    "p": 1
+   },
+   {
+    "feature_index": 3,
+    "coefficient": 1.0,
+    "density_factor_indices": [
+     5,
+     6
+    ],
+    "moment_indices": [],
+    "p": 1
+   },
+   {
+    "feature_index": 3,
+    "coefficient": 1.0,
+    "density_factor_indices": [
+     7,
+     8
+    ],
+    "moment_indices": [],
+    "p": 1
+   },
+   {
+    "feature_index": 4,
+    "coefficient": 1.0,
+    "density_factor_indices": [],
+    "moment_indices": [
+     1
+    ],
+    "p": 2
+   },
+   {
+    "feature_index": 4,
+    "coefficient": 1.0,
+    "density_factor_indices": [],
+    "moment_indices": [
+     2
+    ],
+    "p": 2
+   },
+   {
+    "feature_index": 4,
+    "coefficient": 1.0,
+    "density_factor_indices": [],
+    "moment_indices": [
+     3
+    ],
+    "p": 2
+   },
+   {
+    "feature_index": 5,
+    "coefficient": 1.0,
+    "density_factor_indices": [
+     4,
+     4
+    ],
+    "moment_indices": [],
+    "p": 1
+   },
+   {
+    "feature_index": 5,
+    "coefficient": 1.0,
+    "density_factor_indices": [
+     6,
+     6
+    ],
+    "moment_indices": [],
+    "p": 1
+   },
+   {
+    "feature_index": 5,
+    "coefficient": 1.0,
+    "density_factor_indices": [
+     8,
+     8
+    ],
+    "moment_indices": [],
+    "p": 1
+   },
+   {
+    "feature_index": 6,
+    "coefficient": 1.0,
+    "density_factor_indices": [],
+    "moment_indices": [
+     4
+    ],
+    "p": 2
+   },
+   {
+    "feature_index": 6,
+    "coefficient": 1.0,
+    "density_factor_indices": [],
+    "moment_indices": [
+     5
+    ],
+    "p": 2
+   },
+   {
+    "feature_index": 6,
+    "coefficient": 1.0,
+    "density_factor_indices": [],
+    "moment_indices": [
+     6
+    ],
+    "p": 2
+   },
+   {
+    "feature_index": 7,
+    "coefficient": 1.0,
+    "density_factor_indices": [
+     9,
+     10
+    ],
+    "moment_indices": [],
+    "p": 1
+   },
+   {
+    "feature_index": 7,
+    "coefficient": 1.0,
+    "density_factor_indices": [
+     11,
+     12
+    ],
+    "moment_indices": [],
+    "p": 1
+   },
+   {
+    "feature_index": 7,
+    "coefficient": 1.0,
+    "density_factor_indices": [
+     13,
+     14
+    ],
+    "moment_indices": [],
+    "p": 1
+   },
+   {
+    "feature_index": 7,
+    "coefficient": 1.0,
+    "density_factor_indices": [
+     15,
+     16
+    ],
+    "moment_indices": [],
+    "p": 1
+   },
+   {
+    "feature_index": 7,
+    "coefficient": 1.0,
+    "density_factor_indices": [
+     17,
+     18
+    ],
+    "moment_indices": [],
+    "p": 1
+   },
+   {
+    "feature_index": 8,
+    "coefficient": 1.0,
+    "density_factor_indices": [],
+    "moment_indices": [
+     7
+    ],
+    "p": 2
+   },
+   {
+    "feature_index": 8,
+    "coefficient": 1.0,
+    "density_factor_indices": [],
+    "moment_indices": [
+     8
+    ],
+    "p": 2
+   },
+   {
+    "feature_index": 8,
+    "coefficient": 1.0,
+    "density_factor_indices": [],
+    "moment_indices": [
+     9
+    ],
+    "p": 2
+   },
+   {
+    "feature_index": 8,
+    "coefficient": 1.0,
+    "density_factor_indices": [],
+    "moment_indices": [
+     10
+    ],
+    "p": 2
+   },
+   {
+    "feature_index": 8,
+    "coefficient": 1.0,
+    "density_factor_indices": [],
+    "moment_indices": [
+     11
+    ],
+    "p": 2
+   },
+   {
+    "feature_index": 9,
+    "coefficient": 1.0,
+    "density_factor_indices": [
+     10,
+     10
+    ],
+    "moment_indices": [],
+    "p": 1
+   },
+   {
+    "feature_index": 9,
+    "coefficient": 1.0,
+    "density_factor_indices": [
+     12,
+     12
+    ],
+    "moment_indices": [],
+    "p": 1
+   },
+   {
+    "feature_index": 9,
+    "coefficient": 1.0,
+    "density_factor_indices": [
+     14,
+     14
+    ],
+    "moment_indices": [],
+    "p": 1
+   },
+   {
+    "feature_index": 9,
+    "coefficient": 1.0,
+    "density_factor_indices": [
+     16,
+     16
+    ],
+    "moment_indices": [],
+    "p": 1
+   },
+   {
+    "feature_index": 9,
+    "coefficient": 1.0,
+    "density_factor_indices": [
+     18,
+     18
+    ],
+    "moment_indices": [],
+    "p": 1
+   },
+   {
+    "feature_index": 10,
+    "coefficient": 1.0,
+    "density_factor_indices": [],
+    "moment_indices": [
+     12
+    ],
+    "p": 2
+   },
+   {
+    "feature_index": 10,
+    "coefficient": 1.0,
+    "density_factor_indices": [],
+    "moment_indices": [
+     13
+    ],
+    "p": 2
+   },
+   {
+    "feature_index": 10,
+    "coefficient": 1.0,
+    "density_factor_indices": [],
+    "moment_indices": [
+     14
+    ],
+    "p": 2
+   },
+   {
+    "feature_index": 10,
+    "coefficient": 1.0,
+    "density_factor_indices": [],
+    "moment_indices": [
+     15
+    ],
+    "p": 2
+   },
+   {
+    "feature_index": 10,
+    "coefficient": 1.0,
+    "density_factor_indices": [],
+    "moment_indices": [
+     16
+    ],
+    "p": 2
+   },
+   {
+    "feature_index": 11,
+    "coefficient": 1.0,
+    "density_factor_indices": [],
+    "moment_indices": [
+     17,
+     18
+    ],
+    "p": 1
+   },
+   {
+    "feature_index": 12,
+    "coefficient": 1.0,
+    "density_factor_indices": [
+     0
+    ],
+    "moment_indices": [
+     19
+    ],
+    "p": 0
+   },
+   {
+    "feature_index": 12,
+    "coefficient": 1.0,
+    "density_factor_indices": [
+     0
+    ],
+    "moment_indices": [
+     20
+    ],
+    "p": 0
+   },
+   {
+    "feature_index": 12,
+    "coefficient": 1.0,
+    "density_factor_indices": [
+     0
+    ],
+    "moment_indices": [
+     21
+    ],
+    "p": 0
+   },
+   {
+    "feature_index": 12,
+    "coefficient": 1.0,
+    "density_factor_indices": [
+     0
+    ],
+    "moment_indices": [
+     22
+    ],
+    "p": 0
+   },
+   {
+    "feature_index": 12,
+    "coefficient": 1.0,
+    "density_factor_indices": [
+     0
+    ],
+    "moment_indices": [
+     23
+    ],
+    "p": 0
+   },
+   {
+    "feature_index": 13,
+    "coefficient": 1.0,
+    "density_factor_indices": [],
+    "moment_indices": [
+     24
+    ],
+    "p": 2
+   },
+   {
+    "feature_index": 13,
+    "coefficient": 1.0,
+    "density_factor_indices": [],
+    "moment_indices": [
+     25
+    ],
+    "p": 2
+   },
+   {
+    "feature_index": 13,
+    "coefficient": 1.0,
+    "density_factor_indices": [],
+    "moment_indices": [
+     26
+    ],
+    "p": 2
+   }
+  ]
+ }
+}
