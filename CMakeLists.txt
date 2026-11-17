@@ -120,6 +120,14 @@ if(EXASTAMP_BUILD_CONTRIBS)
 endif()
 
 # ===================================
+# === Python package (pyexastamp) ===
+# ===================================
+option(EXASTAMP_BUILD_PYTHON "Build Python (pyexastamp) package" OFF)
+if(EXASTAMP_BUILD_PYTHON)
+  add_subdirectory(python)
+endif()
+
+# ===================================
 # === Documentation               ===
 # ===================================
 option(EXASTAMP_BUILD_DOC "Build documentation" OFF)
