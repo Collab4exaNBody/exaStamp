@@ -48,7 +48,7 @@ namespace exaStamp
     ADD_SLOT( GridT              , grid    , INPUT_OUTPUT);
     ADD_SLOT( double             , alpha   , INPUT , 0.01 );
     ADD_SLOT( double             , dt      , INPUT , REQUIRED );
-    ADD_SLOT( uint64_t           , timestep            , INPUT );
+    ADD_SLOT( long               , timestep            , INPUT );
     ADD_SLOT( double             , time_start, INPUT);
     ADD_SLOT( Domain , domain    , INPUT , REQUIRED );
 
