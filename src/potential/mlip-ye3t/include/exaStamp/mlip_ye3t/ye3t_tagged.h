@@ -678,9 +678,11 @@ namespace exaStamp
         size_t jmax = 0;
         for(int q=0;q<inum;q++) { const int i = bv.ilist[q]; jmax = std::max( jmax , size_t( bv.offset[i+1] - bv.offset[i] ) ); }
         const size_t rec = ( host_tagged_scratch( tv, jmax ) + kTaggedLanes - 1 ) / kTaggedLanes * kTaggedLanes;
-        buf.scratch.resize( rec * size_t( omp_get_max_threads() ) );
+        // the allocator only guarantees the SIMD alignment of the build (32 bytes with AVX2): over-allocate one cache
+        // line and align the base to 64 bytes, so that every per-thread slot (rec is a multiple of 8 doubles) starts on a line
+        buf.scratch.resize( rec * size_t( omp_get_max_threads() ) + 8 );
         double* scr = buf.scratch.data();
-        if( reinterpret_cast<uintptr_t>( scr ) % 64 != 0 ) { std::fprintf( stderr, "ye3t_tagged: scratch not 64-byte aligned\n" ); std::abort(); }
+        scr += ( ( 64 - reinterpret_cast<uintptr_t>( scr ) % 64 ) % 64 ) / sizeof(double);
 #       pragma omp parallel for schedule(dynamic,16)
         for(int q=0;q<inum;q++) TaggedHostFunctor{ tv, bv, out, scr, rec, jmax, prof }( q );
       }
