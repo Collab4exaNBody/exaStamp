@@ -151,6 +151,50 @@ int main()
   }
   check_rel( "integral_0^1000 Ce dT (SI) = 67.6/2*1e6", ce_p.integral(1000.0)/ce_p.unit_factor, 33.8e6, 1e-12 );
 
+  // 6. inverse of the integral (energy-form Te update): Te such that integral_0^Te Ce dT = E
+  //    a) linear Ce = gamma*T (first gold piece): E = gamma*T^2/2, T = sqrt(2E/gamma), analytic
+  {
+    const double gamma = 67.6 * ce_p.unit_factor;
+    double worst = 0.0;
+    for(double Tref : { 1.0, 10.0, 300.0, 1000.0, 2000.0, 2199.0 })
+    {
+      const double E = 0.5 * gamma * Tref * Tref;
+      for(double g : { 0.0, 0.5*Tref, Tref*(1.0+1e-3), 3.0*Tref, 1e5 }) // bad guesses included
+      {
+        const double T = ce_p.inverse_integral( E, g );
+        worst = std::fmax( worst, std::fabs( T - std::sqrt( 2.0*E/gamma ) ) / Tref );
+      }
+    }
+    check( worst <= 4e-16, "inverse_integral, Ce = gamma*T, vs sqrt(2E/gamma)", worst, 4e-16 );
+  }
+  //    b) round trip T -> E -> T over the whole fit, both jumps included, with the explicit-step-like guess
+  {
+    double worst = 0.0, worst_T = 0.0;
+    for(int i=1;i<=100000;i++)
+    {
+      const double T0 = 1e4 * i / 100000.0;
+      for(double g : { T0, T0*(1.0+1e-2), T0*(1.0-1e-2), 0.0 })
+      {
+        const double T = ce_p.inverse_integral( ce_p.integral(T0), g );
+        const double r = std::fabs( T - T0 ) / T0;
+        if( r > worst ) { worst = r; worst_T = T0; }
+      }
+    }
+    std::printf( "     worst round trip at T=%g K\n", worst_T );
+    check( worst <= 1e-15, "inverse_integral(integral(T)) == T on (0,1e4] K", worst, 1e-15 );
+    // around the breaks, where Ce jumps: E is continuous there, the inverse must be too
+    double worst_b = 0.0;
+    for(double Tb : { 2200.0, 5500.0 })
+    for(double d : { -1e-6, -1e-9, 0.0, 1e-9, 1e-6 })
+    {
+      const double T0 = Tb + d;
+      worst_b = std::fmax( worst_b, std::fabs( ce_p.inverse_integral( ce_p.integral(T0), Tb - 50.0 ) - T0 ) / T0 );
+    }
+    check( worst_b <= 1e-15, "inverse_integral round trip at the Ce jumps", worst_b, 1e-15 );
+  }
+  //    c) E <= 0 (energy exhausted) maps to 0 K
+  check( ce_p.inverse_integral( 0.0, 300.0 ) == 0.0 && ce_p.inverse_integral( -1.0, 300.0 ) == 0.0, "inverse_integral(E<=0) == 0", 0, 0 );
+
   std::printf( "%s (%d failure%s)\n", g_failures ? "FAILED" : "PASSED", g_failures, g_failures==1 ? "" : "s" );
   return g_failures ? 1 : 0;
 }

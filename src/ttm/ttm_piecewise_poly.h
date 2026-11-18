@@ -92,6 +92,40 @@ namespace exaStamp
       return integral_offset[k] + scale * ( poly_primitive( k , x_scale*T ) - poly_primitive( k , x_scale*piece_lower_bound(k) ) );
     }
 
+    // Inverse of integral(): the T >= 0 such that integral(T) == E, assuming y > 0 on [0, T] (integral strictly
+    // increasing; it is continuous across the breaks even where y jumps). Safeguarded Newton iteration
+    // (d integral/dT = y) started from T_guess, falling back to bisection whenever a Newton step leaves the
+    // current bracket [lo, hi] (jumps of y at the breaks, y ~ 0 near 0 K). E <= 0 gives 0.
+    static constexpr int MaxInverseIterations = 100;
+    ONIKA_HOST_DEVICE_FUNC inline double inverse_integral( double E, double T_guess ) const
+    {
+      if( ! ( E > 0.0 ) ) return 0.0;
+      // Newton converges quadratically: after a Newton step s, the error is ~ (y'/2y) s^2 ~ s^2/T, so a
+      // relative step below 1e-10 leaves T exact to roundoff. Bisection steps never end the iteration (their
+      // error is of the order of the step), only a bracket down to a few ulps does.
+      constexpr double newton_rtol = 1e-10;
+      constexpr double bracket_rtol = 4e-16;
+      double lo = 0.0;   // integral(lo) <= E
+      double hi = -1.0;  // integral(hi) >= E; < 0 while no upper bound is known
+      double T = T_guess > 0.0 ? T_guess : 1.0;
+      for(int it=0; it<MaxInverseIterations; it++)
+      {
+        const double f = integral(T) - E;
+        if( f == 0.0 ) return T;
+        if( f < 0.0 ) lo = T; else hi = T;
+        if( hi >= 0.0 && hi - lo <= bracket_rtol * hi ) return 0.5 * ( lo + hi );
+        const double d = value(T);
+        double Tn = ( d > 0.0 ) ? T - f/d : -1.0;
+        bool newton = true;
+        if( hi < 0.0 ) { if( ! ( Tn > lo ) ) { Tn = 2.0*lo + 1.0; newton = false; } } // no upper bound yet: grow
+        else if( ! ( Tn > lo && Tn < hi ) ) { Tn = 0.5 * ( lo + hi ); newton = false; } // outside the bracket: bisect
+        const double step = Tn > T ? Tn - T : T - Tn;
+        if( newton && step <= newton_rtol * Tn ) return Tn;
+        T = Tn;
+      }
+      return T;
+    }
+
     // host only, after breaks/coeffs/scales are set
     inline void compute_integral_offsets()
     {

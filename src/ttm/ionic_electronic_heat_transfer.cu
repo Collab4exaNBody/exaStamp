@@ -120,8 +120,7 @@ namespace exaStamp
     ADD_SLOT( onika::memory::CudaMMVector<double> , ttm_scratch_species_mass     , PRIVATE );
     // per-cell partial sums for the GPU reduction of Te (exanb::reduce_grid_cell_values)
     ADD_SLOT( onika::memory::CudaMMVector<double> , ttm_scratch_te_partials      , PRIVATE );
-    // Te-dependent parameters: per-subcell 1/Ce(Te), and per-cell partials of the Te statistics reduction
-    ADD_SLOT( onika::memory::CudaMMVector<double> , ttm_scratch_inv_ce           , PRIVATE );
+    // Te-dependent parameters: per-cell partials of the Te statistics reduction
     ADD_SLOT( onika::memory::CudaMMVector<TtmTeStats> , ttm_scratch_te_stats     , PRIVATE );
     // Te range already reported by the validity warning (re-warn only when the excursion grows)
     ADD_SLOT( double         , ttm_warned_te_min , PRIVATE , 1.e300 );
@@ -593,16 +592,6 @@ namespace exaStamp
         onika::parallel::parallel_for( n_local_cells * size_t(n_subcells), laplacian_func, parallel_execution_context() );
       }
 
-      // Te-dependent Ce: 1/Ce(Te) per subcell, from the Te at the start of this substep
-      double* cell_inv_ce = nullptr;
-      if( ce_dep )
-      {
-        ttm_scratch_inv_ce->resize( n_sub_total );
-        cell_inv_ce = ttm_scratch_inv_ce->data();
-        TtmInvCeFunctor inv_ce_func = { dims, gl, subdiv, Te, cell_te_data.m_stride, ce_te, cell_inv_ce };
-        onika::parallel::parallel_for( n_local_cells * size_t(n_subcells), inv_ce_func, parallel_execution_context() );
-      }
-
       // pre-update sum_Te only feeds the debug-only te_dev conservation check / ldbg below
 #     ifndef NDEBUG
       // sum_Te over local cells: GPU reduction (deterministic, per-cell partials summed in cell order).
@@ -624,7 +613,7 @@ namespace exaStamp
               const size_t scindex = grid_ijk_to_index( IJK{subdiv,subdiv,subdiv} , sc );
               const size_t idx_te = cell_i*cell_te_data.m_stride + scindex;
               const size_t j = cell_i*n_subcells + scindex;
-              const double dTe = ( Te_cond*cell_L_Te[j] * ( ce_dep ? cell_inv_ce[j] : 1.0/Ce_rho_e ) ) * inner_dt;
+              const double dTe = ( Te_cond*cell_L_Te[j] / ( ce_dep ? ce_te.value(Te[idx_te]) : Ce_rho_e ) ) * inner_dt;
               norm_dTe += std::fabs( dTe );
               entropy_Te += Te[idx_te] * std::log(Te[idx_te]) * subcell_volume ;
             }
@@ -650,6 +639,8 @@ namespace exaStamp
       // 3. Compute Te dissipation, Te<->Ti transfer & source terms
 #     ifndef NDEBUG
       double old_sum_Te = sum_Te;
+      // Te-dependent Ce: the check below is on the energy density sum (integral of Ce), sum_dTe on power*inner_dt
+      const double old_sum_energy = ce_dep ? te_stats( ce_te ).sum_energy : 0.0;
       double sum_dTe = 0.0;
       double sum_Se = 0.0;
       double sum_Si = 0.0;
@@ -664,7 +655,7 @@ namespace exaStamp
         Te, cell_te_data.m_stride,
         cell_L_Te, cell_energy_transfer, cell_Se,
         Te_cond, 1.0 / Ce_rho_e, 1.0 / ( subcell_volume * delta_t ), inner_dt,
-        cell_inv_ce
+        ce_te
       };
       onika::parallel::parallel_for( n_local_cells * size_t(n_subcells), te_update_func, parallel_execution_context() );
 
@@ -701,7 +692,7 @@ namespace exaStamp
             sum_Si += cell_Si[idx_ti];
             if( local_cell )
             {
-              sum_dTe += te_update_func.dTe(idx_ti) * inner_dt;
+              sum_dTe += ( ce_dep ? te_update_func.power(idx_ti) : te_update_func.dTe(idx_ti) ) * inner_dt;
             }
           }
         }
@@ -717,9 +708,11 @@ namespace exaStamp
         sum_Si = tmp[3];
       }
 
-      if(sum_Te > 0.)
+      const double new_sum_energy = ce_dep ? te_stats( ce_te ).sum_energy : 0.0;
+      if( ce_dep ? new_sum_energy > 0. : sum_Te > 0. )
       {
-        double te_dev = (sum_Te - old_sum_Te - sum_dTe) / sum_Te;
+        double te_dev = ce_dep ? (new_sum_energy - old_sum_energy - sum_dTe) / new_sum_energy
+                               : (sum_Te - old_sum_Te - sum_dTe) / sum_Te;
         ldbg << "Te dev="<< te_dev << " sum_dTe="<<sum_dTe << " sum_Se="<<sum_Se<<" sum_Si="<<sum_Si<< std::endl;
         if( te_dev > te_deviation_epsilon )
         {
@@ -743,6 +736,13 @@ namespace exaStamp
         {
           const TtmTeStats st = te_stats( ce_te );
           *total_electronic_energy = st.sum_energy * subcell_volume;
+          // the energy-form update maps a negative energy density (sink larger than the energy left) to Te = 0
+          if( ! ( st.min_te > 0.0 ) )
+          {
+            lerr << pathname() << ": step " << *timestep << ": the electronic temperature reached " << st.min_te
+                 << " K (electronic energy exhausted by the coupling sink), reduce dt" << std::endl;
+            std::abort();
+          }
         }
       }
 
@@ -771,6 +771,9 @@ Te-dependent electron parameters (optional): Ce_te and Gei_te are piecewise poly
   y(Te) = y_scale * P_k(x_scale*Te), piece k used while Te < breakpoints[k], converted from 'unit' to internal units.
   Ce_te is the volumetric electron heat capacity and replaces Ce*rho_e (also in the diffusion stability limit,
   which then uses the smallest Ce on the grid, and in total_electronic_energy = sum of integral_0^Te Ce dT).
+  With Ce_te, Te is advanced in energy form: the energy density E(Te) = integral_0^Te Ce dT receives the
+  diffusion, coupling and source power over the step and Te is recovered by inverting E(Te) (Newton iteration),
+  so the electronic energy changes by exactly the exchanged and injected energy.
   Gei_te is the electron-phonon coupling factor and replaces gamma_p per particle:
   gamma_p(Te) = m*Gei(Te)/(3*n_ion*kB), n_ion being the ionic number density (required with Gei_te).
   A warning is printed when Te leaves [te_valid_min, te_valid_max] (default [0, 1e4] K); values are not clipped.
