@@ -79,6 +79,8 @@ setup_system:
 numerical_scheme: verlet_nve
 
 global:
+  # lattice and init_temperature_new both read it: without it the lattice fills its cells in a thread-dependent order
+  deterministic_noise: true
   max_iteration: 100
   simulation_thermostate_screen_frequency: 10
   simulation_thermostate_file_frequency: 1

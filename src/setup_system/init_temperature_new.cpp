@@ -136,6 +136,8 @@ namespace exaStamp
       IJK  dims   = grid->dimension();
       const ssize_t gl    = grid->ghost_layers();
       const IJK    gstart = { gl, gl, gl };
+      // deterministic seed: index of the cell in the whole domain grid, independent of the MPI decomposition
+      const IJK    dom_dims = domain->grid_dimension();
 
       ldbg << "target temperature = "    << *T     << " K"
            << "  distribution = "        << distrib
@@ -173,7 +175,7 @@ namespace exaStamp
             if( *deterministic_noise )
             {
               const auto domain_cell_idx =
-                  grid_ijk_to_index( grid->offset() + loc + gstart, dims );
+                  grid_ijk_to_index( dom_dims, loc + gstart + grid->offset() );
               det_re.seed( static_cast<uint64_t>(domain_cell_idx) * 1023ULL );
             }
 
@@ -243,7 +245,7 @@ namespace exaStamp
           if( *deterministic_noise )
           {
             const auto domain_cell_idx =
-                grid_ijk_to_index( grid->offset() + loc + gstart, dims );
+                grid_ijk_to_index( dom_dims, loc + gstart + grid->offset() );
             det_re.seed( static_cast<uint64_t>(domain_cell_idx) * 1023ULL );
           }
 
