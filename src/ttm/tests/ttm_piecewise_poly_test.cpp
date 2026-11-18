@@ -81,7 +81,7 @@ int main()
   check_rel( "Ce(3000)", Ce(3000.0), 230848.0, 1e-12 );
   check_rel( "Gei(1000)", Gei(1000.0), 2.51e16, 1e-12 );
   check_rel( "Gei(3000)/1e17", Gei(3000.0)/1e17, 0.268119, 2e-6 );
-  // high branches, against the python reference implementation (numpy, temporary_guidelines/ttm_params.py)
+  // high branches, against an independent reference implementation of the fits (numpy, double precision)
   check_rel( "Ce(8000)  vs python ref", Ce(8000.0), 1108810.6164736, 1e-13 );
   check_rel( "Ce(1e4)   vs python ref", Ce(1e4), 1440252.52, 1e-13 );
   check_rel( "Gei(8000) vs python ref", Gei(8000.0), 9.059955090175998e+16, 1e-13 );

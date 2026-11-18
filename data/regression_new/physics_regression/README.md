@@ -6,7 +6,7 @@ file), adds deterministic noise to positions and velocities, runs 10 steps and c
 
 - `ref_values.dat`: positions, velocities and accelerations of sampled particles (`check_values`);
 - `ref_thermo.yaml`: potential, kinetic, rotational and total energies, virial tensor, volume and particle count
-  (`check_thermodynamic_state`).
+  (`check_thermodynamic_state`), plus the electronic energy for the two-temperature model cases (`ttm_*`).
 
 A test fails when the physics changes: different forces or energies, or a missing reference.
 

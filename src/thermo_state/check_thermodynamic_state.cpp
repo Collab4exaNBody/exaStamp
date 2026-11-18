@@ -45,6 +45,7 @@ namespace exaStamp
     ADD_SLOT( double             , rel_threshold       , INPUT , 1.e-10 , DocString{"Maximum relative error for each quantity"} );
     ADD_SLOT( bool               , create_if_missing   , INPUT , true , DocString{"Write the reference file when it does not exist (otherwise fatal error)"} );
     ADD_SLOT( bool               , fatal               , INPUT , true , DocString{"Fatal error when a quantity exceeds the threshold"} );
+    ADD_SLOT( double             , total_electronic_energy , INPUT , OPTIONAL , DocString{"Electronic energy of the two-temperature model, checked as electronic_energy when present"} );
 
   public:
     inline std::string documentation() const override final
@@ -52,6 +53,8 @@ namespace exaStamp
       return R"EOF(
 Compares the final thermodynamic state to a reference file : particle count (exact), potential, kinetic, rotational
 and total energies, virial tensor (error relative to the tensor norm) and volume, in internal units.
+With the two-temperature model (ionic_eletronic_heat_transfer), the electronic energy (total_electronic_energy) is
+also checked, as electronic_energy; the check fails if the reference and the simulation disagree on its presence.
 If the reference file does not exist, it is written from the current state when create_if_missing is true.
 
 Usage example:
@@ -70,12 +73,14 @@ simulation_epilog:
     {
       const ThermodynamicState& ts = *thermodynamic_state;
       const Mat3d& w = ts.virial();
-      const std::vector< std::pair<std::string,double> > scalars = {
+      std::vector< std::pair<std::string,double> > scalars = {
         { "potential_energy"  , ts.potential_energy() } ,
         { "kinetic_energy"    , ts.kinetic_energy_scal() } ,
         { "rotational_energy" , ts.rotational_energy_scal() } ,
         { "total_energy"      , ts.total_energy() } ,
         { "volume"            , ts.volume() } };
+      const bool has_electronic = total_electronic_energy.has_value();
+      if( has_electronic ) scalars.push_back( { "electronic_energy" , *total_electronic_energy } );
       const std::vector<double> virial = { w.m11, w.m12, w.m13, w.m21, w.m22, w.m23, w.m31, w.m32, w.m33 };
 
       int rank = 0;
@@ -124,8 +129,14 @@ simulation_epilog:
               status = 1;
               lout << onika::format_string("  %-17s : %ld (reference %ld)", "particle_count", long(ts.particle_count()), long(ref["particle_count"].as<size_t>())) << std::endl;
             }
+            if( bool(ref["electronic_energy"]) != has_electronic )
+            {
+              status = 1;
+              lout << "  electronic_energy : " << ( has_electronic ? "computed but missing from the reference" : "in the reference but not computed" ) << std::endl;
+            }
             for(const auto& s : scalars)
             {
+              if( s.first == "electronic_energy" && ! ref["electronic_energy"] ) continue; // reported above
               const double r = ref[s.first].as<double>();
               const double err = ( r != 0.0 ) ? std::fabs( s.second - r ) / std::fabs( r ) : std::fabs( s.second );
               const bool ok = err <= *rel_threshold;
