@@ -37,10 +37,12 @@ under the License.
 //   a single neighbor pass, then shifted to the weighted centroid with the binomial formula.
 // - Spherical tensors of rank L store the m >= 0 components only; a_{-m} = (-1)^m conj(a_m)
 //   (the tensors come from real Cartesian tensors).
-// - Clebsch-Gordan coefficients are evaluated with Racah's closed formula; all ranks are <= 4.
+// - Clebsch-Gordan coefficients are evaluated at compile time with Racah's closed formula;
+//   all ranks are <= 4.
 
 #include <onika/cuda/cuda.h>
 #include <cmath>
+#include <utility>
 
 namespace exaStamp
 {
@@ -83,15 +85,32 @@ namespace exaStamp
 
     // ----------------------------------------------------------------------------------
     // Clebsch-Gordan coefficients <j1 m1 j2 m2 | j m> (Racah formula)
+    // Everything here is constexpr: couple() below evaluates each coefficient at compile
+    // time, so the device code only contains literal constants (no factorial loops to
+    // unroll, which made the CUDA device compiler extremely slow).
     // ----------------------------------------------------------------------------------
-    ONIKA_HOST_DEVICE_FUNC inline double factorial( int n )
+    ONIKA_HOST_DEVICE_FUNC inline constexpr double factorial( int n )
     {
       double f = 1.0;
       for(int i=2;i<=n;i++) f *= i;
       return f;
     }
 
-    ONIKA_HOST_DEVICE_FUNC inline double clebsch_gordan( int j1, int m1, int j2, int m2, int j, int m )
+    // Newton iteration, for constant evaluation only (std::sqrt is not constexpr in C++20)
+    ONIKA_HOST_DEVICE_FUNC inline constexpr double constexpr_sqrt( double x )
+    {
+      if( x <= 0.0 ) return 0.0;
+      double g = ( x > 1.0 ) ? x : 1.0;
+      for(int i=0;i<200;i++)
+      {
+        const double n = 0.5 * ( g + x / g );
+        if( n >= g ) break; // monotonically decreasing from above until converged
+        g = n;
+      }
+      return g;
+    }
+
+    ONIKA_HOST_DEVICE_FUNC inline constexpr double clebsch_gordan( int j1, int m1, int j2, int m2, int j, int m )
     {
       if( m1+m2 != m ) return 0.0;
       if( m1>j1 || -m1>j1 || m2>j2 || -m2>j2 || m>j || -m>j ) return 0.0;
@@ -110,7 +129,7 @@ namespace exaStamp
         const double d = factorial(k) * factorial(j1+j2-j-k) * factorial(j1-m1-k) * factorial(j2+m2-k) * factorial(j-j2+m1+k) * factorial(j-j1-m2+k);
         s += ( (k&1) ? -1.0 : 1.0 ) / d;
       }
-      return sqrt( tri * norm ) * s;
+      return constexpr_sqrt( tri * norm ) * s;
     }
 
     // invariant scalar product of two rank L tensors: sum_m <L m L -m|0 0> a_m b_-m,
@@ -124,21 +143,38 @@ namespace exaStamp
     }
 
     // rank L coupling of a (rank L1) and b (rank L2): sum_{m1+m2=m} <L1 m1 L2 m2|L m> a_m1 b_m2
+    // The (m, m1) loops are expanded with integer sequences so that M, M1, M2 are template
+    // constants and each coefficient is a constexpr literal; zero terms are dropped.
+    template<int L, int L1, int L2, int M, int M1>
+    ONIKA_HOST_DEVICE_FUNC inline void couple_term( const SphT<L1>& a, const SphT<L2>& b, Cplx& s )
+    {
+      constexpr int M2 = M - M1;
+      if constexpr ( M2 >= -L2 && M2 <= L2 )
+      {
+        constexpr double cg = clebsch_gordan(L1,M1,L2,M2,L,M);
+        if constexpr ( cg != 0.0 ) s = s + cg * ( component(a,M1) * component(b,M2) );
+      }
+    }
+
+    template<int L, int L1, int L2, int M, int... I>
+    ONIKA_HOST_DEVICE_FUNC inline Cplx couple_m( const SphT<L1>& a, const SphT<L2>& b, std::integer_sequence<int,I...> )
+    {
+      Cplx s = {};
+      ( couple_term<L,L1,L2,M,I-L1>(a,b,s) , ... ); // M1 = -L1 .. L1
+      return s;
+    }
+
+    template<int L, int L1, int L2, int... M>
+    ONIKA_HOST_DEVICE_FUNC inline void couple_all( const SphT<L1>& a, const SphT<L2>& b, SphT<L>& r, std::integer_sequence<int,M...> )
+    {
+      ( ( r.c[M] = couple_m<L,L1,L2,M>( a , b , std::make_integer_sequence<int,2*L1+1>{} ) ) , ... ); // M = 0 .. L
+    }
+
     template<int L, int L1, int L2>
     ONIKA_HOST_DEVICE_FUNC inline SphT<L> couple( const SphT<L1>& a, const SphT<L2>& b )
     {
       SphT<L> r;
-      for(int m=0;m<=L;m++)
-      {
-        Cplx s = {};
-        for(int m1=-L1;m1<=L1;m1++)
-        {
-          const int m2 = m - m1;
-          if( m2 < -L2 || m2 > L2 ) continue;
-          s = s + clebsch_gordan(L1,m1,L2,m2,L,m) * ( component(a,m1) * component(b,m2) );
-        }
-        r.c[m] = s;
-      }
+      couple_all<L,L1,L2>( a , b , r , std::make_integer_sequence<int,L+1>{} );
       return r;
     }
 
@@ -190,7 +226,7 @@ namespace exaStamp
       }
     }
 
-    ONIKA_HOST_DEVICE_FUNC inline double binomial( int n, int k )
+    ONIKA_HOST_DEVICE_FUNC inline constexpr double binomial( int n, int k )
     {
       return factorial(n) / ( factorial(k) * factorial(n-k) );
     }
@@ -217,6 +253,34 @@ namespace exaStamp
       return t;
     }
 
+    // index of the monomial with power k along AXIS and powers u, v along the two other axes
+    template<int AXIS>
+    ONIKA_HOST_DEVICE_FUNC inline constexpr int axis_monomial_index( int k, int u, int v )
+    {
+      if constexpr ( AXIS == 0 ) return monomial_index(k,u,v);
+      else if constexpr ( AXIS == 1 ) return monomial_index(u,k,v);
+      else return monomial_index(u,v,k);
+    }
+
+    // shifts the moments along one axis: mu_k <- sum_a C(k,a) (-c)^(k-a) mu_a, for every
+    // (u,v) power pair of the other axes. Pascal-triangle form (no binomials, no factorials):
+    // applying the three axes in turn gives the full centered moments. This replaces a
+    // 6-deep binomial loop that the CUDA device compiler took more than 15 minutes to compile.
+    template<int AXIS>
+    ONIKA_HOST_DEVICE_FUNC inline void centroid_shift( double* mu, double c )
+    {
+      for(int u=0;u<=MAX_ORDER;u++)
+      for(int v=0;u+v<=MAX_ORDER;v++)
+      {
+        const int P = MAX_ORDER - u - v;
+        for(int i=0;i<P;i++)
+        for(int k=P;k>i;k--)
+        {
+          mu[ axis_monomial_index<AXIS>(k,u,v) ] -= c * mu[ axis_monomial_index<AXIS>(k-1,u,v) ];
+        }
+      }
+    }
+
     // all spherical parts of the centered moments
     struct SFDSpherical
     {
@@ -239,25 +303,12 @@ namespace exaStamp
       const double iW = 1.0 / W;
       const double c[3] = { raw[monomial_index(1,0,0)]*iW , raw[monomial_index(0,1,0)]*iW , raw[monomial_index(0,0,1)]*iW };
 
-      // centered normalized moments mu_pqr = (1/W) sum_j w_j (x-cx)^p (y-cy)^q (z-cz)^r, degrees 2..4
+      // centered normalized moments mu_pqr = (1/W) sum_j w_j (x-cx)^p (y-cy)^q (z-cz)^r
       double mu[N_MONOMIALS];
-      for(int i=0;i<N_MONOMIALS;i++) mu[i] = 0.0;
-      double nc[3][MAX_ORDER+1];
-      for(int d=0;d<3;d++) { nc[d][0] = 1.0; for(int k=1;k<=MAX_ORDER;k++) nc[d][k] = nc[d][k-1] * (-c[d]); }
-      for(int n=2;n<=MAX_ORDER;n++)
-      for(int s=0;s<=n;s++)
-      for(int r=0;r<=s;r++)
-      {
-        const int q = s-r, p = n-s;
-        double v = 0.0;
-        for(int a=0;a<=p;a++)
-        for(int b=0;b<=q;b++)
-        for(int e=0;e<=r;e++)
-        {
-          v += binomial(p,a) * binomial(q,b) * binomial(r,e) * nc[0][p-a] * nc[1][q-b] * nc[2][r-e] * raw[ monomial_index(a,b,e) ];
-        }
-        mu[ monomial_index(p,q,r) ] = v * iW;
-      }
+      for(int i=0;i<N_MONOMIALS;i++) mu[i] = raw[i] * iW;
+      centroid_shift<0>( mu , c[0] );
+      centroid_shift<1>( mu , c[1] );
+      centroid_shift<2>( mu , c[2] );
 #     define SFD_MU(p,q,r) mu[ monomial_index(p,q,r) ]
 
       out.w = W;
