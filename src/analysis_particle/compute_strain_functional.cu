@@ -28,6 +28,7 @@ under the License.
 #include <exanb/compute/compute_cell_particle_pairs.h>
 #include <exanb/compute/compute_cell_particles.h>
 #include <exanb/particle_neighbors/chunk_neighbors.h>
+#include <onika/parallel/parallel_for.h>
 #include <exaStamp/analysis_particle/strain_functional/sfd_math.h>
 
 #include <cmath>
@@ -60,8 +61,7 @@ namespace exaStamp
     const double m_rcut2 = 0.0;
     const double m_inv_sigma = 1.0;
     const size_t * const __restrict__ m_cell_particle_offset = nullptr;
-    double * const __restrict__ m_invariants = nullptr; // N_INVARIANTS per particle
-    double * const __restrict__ m_spherical = nullptr;  // N_SPHERICAL per particle, or nullptr
+    double * const __restrict__ m_raw = nullptr; // N_MONOMIALS raw moment sums per particle
 
     template<class ComputeBufferT, class LocalCellsT>
     ONIKA_HOST_DEVICE_FUNC inline void operator () (ComputeBufferT& ctx, LocalCellsT, size_t, size_t, exanb::ComputePairParticleContextStart) const
@@ -86,8 +86,26 @@ namespace exaStamp
     template<class ComputeBufferT, class LocalCellsT>
     ONIKA_HOST_DEVICE_FUNC ONIKA_ALWAYS_INLINE void operator () (ComputeBufferT& ctx, LocalCellsT, size_t cell_a, size_t p_a, exanb::ComputePairParticleContextStop) const
     {
-      const size_t i = m_cell_particle_offset[cell_a] + p_a;
-      const sfd::SFDSpherical s = sfd::spherical_decomposition( ctx.ext.m_raw );
+      // only store the raw sums here: the (heavy) descriptor math runs in a separate
+      // per-particle pass (StrainFunctionalDescriptorFunctor), which keeps this pair
+      // kernel small (fewer registers, fast to compile for every grid variant)
+      double * __restrict__ out = m_raw + ( m_cell_particle_offset[cell_a] + p_a ) * sfd::N_MONOMIALS;
+      for(int k=0;k<sfd::N_MONOMIALS;k++) out[k] = ctx.ext.m_raw[k];
+    }
+  };
+
+  // per-particle pass over the flat raw moment buffer: spherical decomposition, invariants
+  struct StrainFunctionalDescriptorFunctor
+  {
+    const double * const __restrict__ m_raw = nullptr; // N_MONOMIALS per particle
+    double * const __restrict__ m_invariants = nullptr; // N_INVARIANTS per particle
+    double * const __restrict__ m_spherical = nullptr;  // N_SPHERICAL per particle, or nullptr
+
+    ONIKA_HOST_DEVICE_FUNC inline void operator () ( size_t i ) const
+    {
+      const double * raw = m_raw + i * sfd::N_MONOMIALS;
+      if( raw[0] == 0.0 ) return; // ghost particle (not computed, self weight is 1 otherwise): outputs stay zero
+      const sfd::SFDSpherical s = sfd::spherical_decomposition( raw );
       sfd::invariants( s , m_invariants + i * sfd::N_INVARIANTS );
       if( m_spherical != nullptr ) sfd::spherical_values( s , m_spherical + i * sfd::N_SPHERICAL );
     }
@@ -129,6 +147,18 @@ namespace exanb
   };
 }
 
+namespace onika
+{
+  namespace parallel
+  {
+    template<>
+    struct ParallelForFunctorTraits< exaStamp::StrainFunctionalDescriptorFunctor >
+    {
+      static inline constexpr bool CudaCompatible = true;
+    };
+  }
+}
+
 namespace exaStamp
 {
   using namespace exanb;
@@ -147,6 +177,8 @@ namespace exaStamp
     ADD_SLOT( double                    , rcut_max          , INPUT_OUTPUT , 0.0 , DocString{"Updated max rcut"} );
     ADD_SLOT( DoubleVector              , sfd_invariants    , OUTPUT , DocString{"Per-particle invariants and orientation factors, 36 values per particle at (cell_particle_offset[cell] + particle) * 36, see strain_functional_fields for the column names"} );
     ADD_SLOT( DoubleVector              , sfd_spherical_tensors , OUTPUT , DocString{"Per-particle spherical tensor components, 35 values per particle, same indexing; empty unless spherical_tensors is true"} );
+
+    DoubleVector m_raw; // N_MONOMIALS raw moment sums per particle (intermediate, reused between calls)
 
   public:
     inline void execute () override final
@@ -167,8 +199,9 @@ namespace exaStamp
       exanb::GridChunkNeighborsLightWeightIt<false> nbh_it{ *chunk_neighbors };
       auto compute_buf = make_compute_pair_buffer<ComputeBuffer>();
 
-      StrainFunctionalFunctor compute_op = { (*rcut)*(*rcut) , 1.0/(*sigma) , grid->cell_particle_offset_data()
-                                           , sfd_invariants->data() , (*spherical_tensors) ? sfd_spherical_tensors->data() : nullptr };
+      // pass 1 (pair kernel, one instance per grid variant): raw weighted monomial sums
+      m_raw.assign( n_particles * sfd::N_MONOMIALS , 0.0 ); // ghosts stay zero
+      StrainFunctionalFunctor compute_op = { (*rcut)*(*rcut) , 1.0/(*sigma) , grid->cell_particle_offset_data() , m_raw.data() };
 
       LinearXForm cp_xform { domain->xform() };
       auto optional = make_compute_pair_optional_args( nbh_it, ComputePairNullWeightIterator{} , cp_xform, cp_locks );
@@ -177,6 +210,11 @@ namespace exaStamp
       static constexpr DefaultPositionFields posfields = {};
       compute_cell_particle_pairs2( *grid, *rcut, false, optional, compute_buf, compute_op, compute_field_set
                                    , posfields, parallel_execution_context(), force_use_cells_accessor );
+
+      // pass 2 (flat per-particle kernel, grid independent): spherical decomposition and invariants
+      StrainFunctionalDescriptorFunctor descriptor_op = { m_raw.data() , sfd_invariants->data()
+                                                        , (*spherical_tensors) ? sfd_spherical_tensors->data() : nullptr };
+      onika::parallel::parallel_for( n_particles , descriptor_op , parallel_execution_context() );
     }
 
     inline std::string documentation() const override final
