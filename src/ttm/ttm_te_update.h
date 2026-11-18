@@ -19,6 +19,9 @@ under the License.
 #include <exanb/core/grid_algorithm.h>
 #include <onika/cuda/cuda.h>
 #include <onika/parallel/parallel_for.h>
+#include <exanb/grid_cell_particles/reduce_grid_cell_values.h>
+
+#include "ttm_piecewise_poly.h"
 
 namespace exaStamp
 {
@@ -59,13 +62,17 @@ namespace exaStamp
     double inv_Ce_rho_e = 1.0;  // 1 / (Ce*rho_e)
     double sink_scale = 1.0;    // 1 / (subcell_volume * delta_t), delta_t = full MD step (the sink is spread over it)
     double inner_dt = 0.0;      // diffusion substep
+    // Te-dependent heat capacity: per-subcell 1/Ce(Te) filled by TtmInvCeFunctor at the start of the substep
+    // (same packed layout as lap_te_ptr). nullptr: constant inv_Ce_rho_e above.
+    const double * __restrict__ inv_ce_ptr = nullptr;
 
     ONIKA_HOST_DEVICE_FUNC inline double dTe ( size_t idx ) const
     {
       // energy_transfer is a FIXED total for the whole outer MD step: scale by 1/(volume*delta_t) (not
       // inner_dt) to get the power density sink applied at every inner step.
       const double coupling_sink = energy_transfer_ptr[idx] * sink_scale;
-      return ( Te_cond*lap_te_ptr[idx] - coupling_sink + se_ptr[idx] ) * inv_Ce_rho_e;
+      const double inv_ce = ( inv_ce_ptr != nullptr ) ? inv_ce_ptr[idx] : inv_Ce_rho_e;
+      return ( Te_cond*lap_te_ptr[idx] - coupling_sink + se_ptr[idx] ) * inv_ce;
     }
 
     ONIKA_HOST_DEVICE_FUNC inline void operator () ( size_t idx ) const
@@ -77,6 +84,66 @@ namespace exaStamp
       const size_t cell_i = size_t( grid_ijk_to_index( grid_dims, cell_loc ) );
       const size_t scindex = idx % n_subcells;
       te_ptr[ cell_i*te_stride + scindex ] += dTe( cell_i*n_subcells + scindex ) * inner_dt;
+    }
+  };
+
+  // Te-dependent heat capacity: inv_ce[i] = 1/Ce(Te[i]) over local cells x subcells, from the Te at the start
+  // of the substep (explicit Euler). Same thread-per-index layout as TtmTeUpdateFunctor. Kept out of the Te
+  // update kernel so that TtmTeUpdateFunctor::dTe() still does not read Te (debug sum_dTe re-evaluation).
+  struct TtmInvCeFunctor
+  {
+    IJK grid_dims = { 0, 0, 0 };
+    ssize_t ghost_layers = 0;
+    ssize_t subdiv = 0;
+    const double * __restrict__ te_ptr = nullptr;
+    size_t te_stride = 0;
+    TtmPiecewisePoly ce;
+    double * __restrict__ inv_ce_ptr = nullptr; // packed, cell_i*subdiv^3 + subcell
+
+    ONIKA_HOST_DEVICE_FUNC inline void operator () ( size_t idx ) const
+    {
+      const size_t n_subcells = size_t(subdiv) * size_t(subdiv) * size_t(subdiv);
+      const IJK cell_loc = grid_index_to_ijk( grid_dims - 2*ghost_layers , ssize_t(idx / n_subcells) ) + ghost_layers;
+      const size_t cell_i = size_t( grid_ijk_to_index( grid_dims, cell_loc ) );
+      const size_t scindex = idx % n_subcells;
+      inv_ce_ptr[ cell_i*n_subcells + scindex ] = 1.0 / ce.value( te_ptr[ cell_i*te_stride + scindex ] );
+    }
+  };
+
+  // Per-step Te statistics for the Te-dependent parameters, one reduction over local cells
+  // (exanb::reduce_grid_cell_values): energy density integral of Ce, Te range (validity warning), min Ce (stability).
+  struct TtmTeStats
+  {
+    double sum_te = 0.0;
+    double sum_energy = 0.0;   // sum of integral_0^Te Ce dT (0 if Ce is constant)
+    double min_te = 1.e300;
+    double max_te = -1.e300;
+    double min_ce = 1.e300;    // stays 1e300 if Ce is constant
+  };
+
+  struct TtmTeStatsFunc
+  {
+    TtmPiecewisePoly ce;       // disabled: constant Ce, only the Te range is reduced
+    ONIKA_HOST_DEVICE_FUNC inline void accumulate( TtmTeStats& acc , const double* v ) const
+    {
+      const double te = v[0];
+      acc.sum_te += te;
+      acc.min_te = te < acc.min_te ? te : acc.min_te; // no std::min in device code
+      acc.max_te = te > acc.max_te ? te : acc.max_te;
+      if( ce.enabled() )
+      {
+        acc.sum_energy += ce.integral( te );
+        const double c = ce.value( te );
+        acc.min_ce = c < acc.min_ce ? c : acc.min_ce;
+      }
+    }
+    ONIKA_HOST_DEVICE_FUNC inline void combine( TtmTeStats& acc , const TtmTeStats& p ) const
+    {
+      acc.sum_te += p.sum_te;
+      acc.sum_energy += p.sum_energy;
+      acc.min_te = p.min_te < acc.min_te ? p.min_te : acc.min_te;
+      acc.max_te = p.max_te > acc.max_te ? p.max_te : acc.max_te;
+      acc.min_ce = p.min_ce < acc.min_ce ? p.min_ce : acc.min_ce;
     }
   };
 
@@ -105,5 +172,16 @@ namespace onika
     {
       static inline constexpr bool CudaCompatible = true;
     };
+
+    template<>
+    struct ParallelForFunctorTraits<exaStamp::TtmInvCeFunctor>
+    {
+      static inline constexpr bool CudaCompatible = true;
+    };
   }
+}
+
+namespace exanb
+{
+  template<> struct ReduceGridCellValuesTraits<exaStamp::TtmTeStatsFunc> { static inline constexpr bool CudaCompatible = true; };
 }

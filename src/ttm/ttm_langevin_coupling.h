@@ -23,6 +23,7 @@ under the License.
 #include <onika/cuda/cuda.h>
 
 #include "ttm_langevin_rng.h"
+#include "ttm_piecewise_poly.h"
 
 namespace exaStamp
 {
@@ -63,6 +64,11 @@ namespace exaStamp
     const double * __restrict__ te_ptr = nullptr;    // grid_cell_values "te" field
     size_t te_stride = 0;
     double * __restrict__ cell_energy_transfer_ptr = nullptr; // size n_cells * subdiv^3
+
+    // Te-dependent electron-phonon coupling Gei(Te): when enabled, the friction of each particle is
+    // gamma_p(Te_local) = m * Gei(Te_local) / (3 * n_ion * kB) instead of the constant gamma_p above.
+    TtmPiecewisePoly gei;
+    double inv_3_nion_kB = 0.0; // 1 / (3 * n_ion * kB)
 
     ONIKA_HOST_DEVICE_FUNC inline void operator () ( size_t cell_i, size_t p_i, double rx, double ry, double rz, double vx, double vy, double vz, double& fx, double& fy, double& fz ) const
     {
@@ -125,14 +131,15 @@ namespace exaStamp
       {
         // electronic stopping: friction boosted above the v_0 velocity threshold (LAMMPS fix-ttm
         // convention) -- only the friction term is boosted, not the noise term.
-        double friction = gamma_p;
+        const double gamma_p_local = gei.enabled() ? mass * gei.value( Te_local ) * inv_3_nion_kB : gamma_p;
+        double friction = gamma_p_local;
         if( gamma_s != 0.0 && norm2(v) > v_0_sq ) { friction += gamma_s; }
 
         const double noise_x = use_uniform_noise ? ttm_langevin_uniform_rand(p_id,rng_md_step,0) : ttm_langevin_gauss_rand(p_id,rng_md_step,0);
         const double noise_y = use_uniform_noise ? ttm_langevin_uniform_rand(p_id,rng_md_step,1) : ttm_langevin_gauss_rand(p_id,rng_md_step,1);
         const double noise_z = use_uniform_noise ? ttm_langevin_uniform_rand(p_id,rng_md_step,2) : ttm_langevin_gauss_rand(p_id,rng_md_step,2);
 
-        const double noise_amplitude = std::sqrt( noise_variance_factor * kB * gamma_p * Te_local / delta_t );
+        const double noise_amplitude = std::sqrt( noise_variance_factor * kB * gamma_p_local * Te_local / delta_t );
         const Vec3d f_langevin {
           -friction * v.x + noise_x * noise_amplitude ,
           -friction * v.y + noise_y * noise_amplitude ,
