@@ -192,7 +192,23 @@ int main()
     }
     check( worst_b <= 1e-15, "inverse_integral round trip at the Ce jumps", worst_b, 1e-15 );
   }
-  //    c) E <= 0 (energy exhausted) maps to 0 K
+  //    c) cost: from the explicit-step guess (as in the Te update kernel), Newton needs a few evaluations even when
+  //       the guess is already converged (a sub-ulp step once fell back to ~50 bisections)
+  for(double rel : { 0.0, 1e-12, 1e-8, 1e-4, -1e-4, 1e-2, -1e-2 })
+  {
+    int max_eval = 0;
+    for(int i=0;i<=10000;i++)
+    {
+      const double T0 = 100.0 + 0.99*i;
+      const double E1 = ce_p.integral(T0) * ( 1.0 + rel );
+      int n = 0;
+      ce_p.inverse_integral( E1, T0 + ( E1 - ce_p.integral(T0) ) / ce_p.value(T0), &n );
+      max_eval = n > max_eval ? n : max_eval;
+    }
+    char buf[64]; std::snprintf(buf,sizeof(buf),"inverse_integral evaluations, dE/E=%g",rel);
+    check( max_eval <= 4, buf, max_eval, 4 );
+  }
+  //    d) E <= 0 (energy exhausted) maps to 0 K
   check( ce_p.inverse_integral( 0.0, 300.0 ) == 0.0 && ce_p.inverse_integral( -1.0, 300.0 ) == 0.0, "inverse_integral(E<=0) == 0", 0, 0 );
 
   std::printf( "%s (%d failure%s)\n", g_failures ? "FAILED" : "PASSED", g_failures, g_failures==1 ? "" : "s" );

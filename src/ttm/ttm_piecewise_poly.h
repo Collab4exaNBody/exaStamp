@@ -49,6 +49,12 @@ namespace exaStamp
     double y_scale = 1.0;
     double unit_factor = 1.0;                    // fit unit -> internal units
     double integral_offset[MaxPieces] = {};      // integral of y from 0 to the lower bound of piece k (internal units * K)
+    // Precomputed on the host by finalize(), so that device code has no FP64 division (several times slower
+    // than a multiply-add on GPUs with a weak FP64 rate, and the Te update evaluates integral() 2-4 times):
+    double pcoeffs[MaxPieces][MaxCoeffs] = {};   // primitive coefficients, coeffs[k][i]/(i+1)
+    double value_scale = 1.0;                    // unit_factor * y_scale
+    double integral_scale = 1.0;                 // unit_factor * y_scale / x_scale
+    double integral_base[MaxPieces] = {};        // integral_offset[k] - integral_scale * primitive at the lower bound of piece k
 
     ONIKA_HOST_DEVICE_FUNC inline bool enabled() const { return n_pieces > 0; }
 
@@ -69,18 +75,18 @@ namespace exaStamp
       return p;
     }
 
-    // primitive of P_k, in x: sum_i c_i x^(i+1)/(i+1)
+    // primitive of P_k, in x: sum_i c_i x^(i+1)/(i+1) (pcoeffs, see finalize())
     ONIKA_HOST_DEVICE_FUNC inline double poly_primitive( int k, double x ) const
     {
       double p = 0.0;
-      for(int i=n_coeffs[k]-1;i>=0;i--) p = p*x + coeffs[k][i] / double(i+1);
+      for(int i=n_coeffs[k]-1;i>=0;i--) p = p*x + pcoeffs[k][i];
       return p * x;
     }
 
     // y(T) in internal units
     ONIKA_HOST_DEVICE_FUNC inline double value( double T ) const
     {
-      return unit_factor * y_scale * poly( piece(T) , x_scale * T );
+      return value_scale * poly( piece(T) , x_scale * T );
     }
 
     // integral of y from 0 K to T (internal units * K), e.g. the electronic energy density for Ce(Te).
@@ -88,8 +94,7 @@ namespace exaStamp
     ONIKA_HOST_DEVICE_FUNC inline double integral( double T ) const
     {
       const int k = piece(T);
-      const double scale = unit_factor * y_scale / x_scale;
-      return integral_offset[k] + scale * ( poly_primitive( k , x_scale*T ) - poly_primitive( k , x_scale*piece_lower_bound(k) ) );
+      return integral_base[k] + integral_scale * poly_primitive( k , x_scale*T );
     }
 
     // Inverse of integral(): the T >= 0 such that integral(T) == E, assuming y > 0 on [0, T] (integral strictly
@@ -97,7 +102,8 @@ namespace exaStamp
     // (d integral/dT = y) started from T_guess, falling back to bisection whenever a Newton step leaves the
     // current bracket [lo, hi] (jumps of y at the breaks, y ~ 0 near 0 K). E <= 0 gives 0.
     static constexpr int MaxInverseIterations = 100;
-    ONIKA_HOST_DEVICE_FUNC inline double inverse_integral( double E, double T_guess ) const
+    // n_eval (optional, tests): number of integral() evaluations
+    ONIKA_HOST_DEVICE_FUNC inline double inverse_integral( double E, double T_guess, int* n_eval = nullptr ) const
     {
       if( ! ( E > 0.0 ) ) return 0.0;
       // Newton converges quadratically: after a Newton step s, the error is ~ (y'/2y) s^2 ~ s^2/T, so a
@@ -110,6 +116,7 @@ namespace exaStamp
       double T = T_guess > 0.0 ? T_guess : 1.0;
       for(int it=0; it<MaxInverseIterations; it++)
       {
+        if( n_eval != nullptr ) ++(*n_eval);
         const double f = integral(T) - E;
         if( f == 0.0 ) return T;
         if( f < 0.0 ) lo = T; else hi = T;
@@ -117,8 +124,10 @@ namespace exaStamp
         const double d = value(T);
         double Tn = ( d > 0.0 ) ? T - f/d : -1.0;
         bool newton = true;
-        if( hi < 0.0 ) { if( ! ( Tn > lo ) ) { Tn = 2.0*lo + 1.0; newton = false; } } // no upper bound yet: grow
-        else if( ! ( Tn > lo && Tn < hi ) ) { Tn = 0.5 * ( lo + hi ); newton = false; } // outside the bracket: bisect
+        // the bracket ends are accepted: a Newton step below one ulp gives Tn == T, which is then one of them
+        // (rejecting it would fall back to bisecting from [0, T], ~50 iterations for an already converged T)
+        if( hi < 0.0 ) { if( ! ( Tn >= lo ) ) { Tn = 2.0*lo + 1.0; newton = false; } } // no upper bound yet: grow
+        else if( ! ( Tn >= lo && Tn <= hi ) ) { Tn = 0.5 * ( lo + hi ); newton = false; } // outside the bracket: bisect
         const double step = Tn > T ? Tn - T : T - Tn;
         if( newton && step <= newton_rtol * Tn ) return Tn;
         T = Tn;
@@ -126,16 +135,19 @@ namespace exaStamp
       return T;
     }
 
-    // host only, after breaks/coeffs/scales are set
-    inline void compute_integral_offsets()
+    // host only, after breaks/coeffs/scales are set: primitive coefficients, scales and integral offsets
+    inline void finalize()
     {
-      const double scale = unit_factor * y_scale / x_scale;
+      for(int k=0;k<n_pieces;k++) for(int i=0;i<n_coeffs[k];i++) pcoeffs[k][i] = coeffs[k][i] / double(i+1);
+      value_scale = unit_factor * y_scale;
+      integral_scale = unit_factor * y_scale / x_scale;
       integral_offset[0] = 0.0;
       for(int k=1;k<n_pieces;k++)
       {
         integral_offset[k] = integral_offset[k-1]
-                           + scale * ( poly_primitive( k-1 , x_scale*breaks[k-1] ) - poly_primitive( k-1 , x_scale*piece_lower_bound(k-1) ) );
+                           + integral_scale * ( poly_primitive( k-1 , x_scale*breaks[k-1] ) - poly_primitive( k-1 , x_scale*piece_lower_bound(k-1) ) );
       }
+      for(int k=0;k<n_pieces;k++) integral_base[k] = integral_offset[k] - integral_scale * poly_primitive( k , x_scale*piece_lower_bound(k) );
     }
   };
 
@@ -197,7 +209,7 @@ namespace YAML
         onika::fatal_error() << "TTM piecewise polynomial: x_scale must be > 0" << std::endl;
       }
       v.unit_factor = onika::physics::make_quantity( 1.0 , node["unit"].as<std::string>() ).convert();
-      v.compute_integral_offsets();
+      v.finalize();
       return true;
     }
   };
