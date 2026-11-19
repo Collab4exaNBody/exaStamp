@@ -1,0 +1,60 @@
+# Two-temperature model, Fe (EAM): spherical electronic source term (Gaussian in space and time)
+includes:
+  - ../common.yaml
+
+species:
+  - Fe: { mass: 55.845 Da , z: 26 , charge: 0.0 e- }
+
+eam_alloy_force:
+  rcut: 4.1615 ang
+  parameters:
+    file: "Fe_Olsson_CMS2009.eam.alloy"
+
+compute_force:
+  - eam_alloy_force
+  # the Langevin coupling also runs over ghost particles: their velocities must be fresh
+  - ghost_update_r_v
+  - ionic_eletronic_heat_transfer:
+      gamma_p: 29.5917 Da/ps
+      gamma_s: 47.5679 Da/ps
+      v_0: 3.0 ang/ps        # low threshold: the stopping term acts on part of the particles
+      Ke: 0.005365 eV/ps/ang/K
+      Ce: 1.2470e-5 eV/K
+      rho_e: 0.087614 1/ang^3
+      splat_size: 0.1 ang
+      grid_subdiv: 1
+      ti_source: "null"
+      te_source: 
+        sphere:
+          center: [ 28.55 ang, 28.55 ang, 28.55 ang ]
+          amplitude: 5.0e5 K
+          radius_mean: 15.0 ang
+          radius_dev: 3.0 ang
+          time_mean: 0.005 ps
+          time_dev: 0.002 ps
+      substep_diffusion: true
+
+setup_system:
+  - domain:
+      cell_size: 5.71 ang
+      grid_dims: [ 10, 10, 10 ]
+      bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 57.1 ang, 57.1 ang, 57.1 ang ] ]
+      xform: [ [ 1, 0, 0 ], [ 0, 1, 0 ], [ 0, 0, 1 ] ]
+      periodic: [ true, true, true ]
+      expandable: false
+  - init_rcb_grid
+  - lattice:
+      structure: BCC
+      types: [ Fe, Fe ]
+      size: [ 2.855 ang, 2.855 ang, 2.855 ang ]
+      shift: [ 0.01 ang, 0.01 ang, 0.01 ang ]
+  - physics_regression_noise
+  - resize_grid_cell_values
+  - init_ttm:
+      grid_subdiv: 1
+      ti_source: "null"
+      te_source:
+        constant: 1800.0 K
++global:
+  rcut_inc: 1.0 ang
+  dt: 1.0e-3 ps

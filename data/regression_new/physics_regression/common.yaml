@@ -2,7 +2,7 @@
 # A case includes this file, defines species, the potential, compute_force and setup_system (domain + lattice
 # followed by physics_regression_noise), runs 10 steps and compares the final state to its committed references:
 #  - ref_values.dat  : positions, velocities, accelerations of sampled particles (check_values)
-#  - ref_thermo.yaml : energies, virial, volume, particle count (check_thermodynamic_state)
+#  - ref_thermo.yaml : energies, virial, volume, particle count (check_thermodynamic_state), electronic energy with TTM
 
 global:
   deterministic_noise: true                 # noise drawn per domain cell : same initial state for seq, mt and par

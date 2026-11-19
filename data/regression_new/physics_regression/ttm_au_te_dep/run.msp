@@ -1,0 +1,74 @@
+# Two-temperature model, Au (Lennard-Jones, the interatomic potential is not under test here): Te-dependent electron
+# heat capacity Ce(Te) and electron-phonon coupling Gei(Te) (gold fits), energy-form Te update. The initial Te is
+# linear along x, 1500 K -> 9000 K over the subcell centers, so every piece of both fits is used; the smallest Ce on
+# the grid sets the diffusion stability limit, which splits each step into inner diffusion steps.
+includes:
+  - ../common.yaml
+
+species:
+  - Au: { mass: 196.96657 Da , z: 79 , charge: 0.0 e- }
+
+lj_compute_force:
+  parameters: { epsilon: 0.2294 eV , sigma: 2.629 ang }
+  rcut: 6.5 ang
+
+compute_force:
+  - lj_compute_force
+  # the Langevin coupling also runs over ghost particles: their velocities must be fresh
+  - ghost_update_r_v
+  - ionic_eletronic_heat_transfer:
+      Ke: 0.01 eV/ps/ang/K
+      splat_size: 0.1 ang
+      grid_subdiv: 2
+      ti_source: "null"
+      te_source: "null"
+      substep_diffusion: true
+      # volumetric electron heat capacity [J/m^3/K], replaces Ce*rho_e
+      Ce_te:
+        unit: J/m^3/K
+        breakpoints: [ 2200.0, 5500.0 ]
+        coefficients:
+          - [ 0.0, 67.6 ]
+          - [ 22135.0, 12.685, 1.8962e-2 ]
+          - [ -4.027e5, 210.74, -3.0463e-3, 4.0076e-8, 0.0, 1.0652e-18 ]
+      # electron-phonon coupling [W/m^3/K], fit in x = Te*1e-4 and in units of 1e17 W/m^3/K; replaces gamma_p
+      Gei_te:
+        unit: J/s/m^3/K
+        x_scale: 1.0e-4
+        y_scale: 1.0e17
+        breakpoints: [ 2100.0, 4400.0 ]
+        coefficients:
+          - [ 0.251 ]
+          - [ 0.25353, 0.042859, -0.92027, 3.1317 ]
+          - [ -0.53893, 2.3867, -0.83833, 0.15177, -0.013335, -4.5018e-4 ]
+      n_ion: 0.058983 1/ang^3    # 4 atoms / (4.078 ang)^3
+
+setup_system:
+  - domain:
+      cell_size: 8.156 ang
+      grid_dims: [ 6, 6, 6 ]
+      bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 48.936 ang, 48.936 ang, 48.936 ang ] ]
+      xform: [ [ 1, 0, 0 ], [ 0, 1, 0 ], [ 0, 0, 1 ] ]
+      periodic: [ true, true, true ]
+      expandable: false
+  - init_rcb_grid
+  - lattice:
+      structure: FCC
+      types: [ Au, Au, Au, Au ]
+      size: [ 4.078 ang, 4.078 ang, 4.078 ang ]
+      shift: [ 0.01 ang, 0.01 ang, 0.01 ang ]
+  - physics_regression_noise
+  - resize_grid_cell_values
+  - init_ttm:
+      grid_subdiv: 2
+      ti_source: "null"
+      # Te(x) = 167.195*x + 1159.1 K: 1500 K at the first subcell center (x=2.039 ang), 9000 K at the last (x=46.897 ang)
+      te_source:
+        wavefront:
+          plane: [ 167.195, 0.0, 0.0, 1159.1 ]
+          wave: [ 0.0, 1.0, 0.0, 0.0 ]
+          amplitude: 0.0
+
++global:
+  rcut_inc: 1.0 ang
+  dt: 1.0e-3 ps

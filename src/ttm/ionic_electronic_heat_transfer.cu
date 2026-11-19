@@ -42,6 +42,7 @@ under the License.
 #include "ttm_langevin_coupling.h"
 #include "ttm_laplacian.h"
 #include "ttm_te_update.h"
+#include "ttm_piecewise_poly.h"
 #include <exanb/grid_cell_particles/reduce_grid_cell_values.h>
 #include <exanb/mpi/update_ghosts.h>
 
@@ -86,6 +87,15 @@ namespace exaStamp
     ADD_SLOT( double         , Ce           , INPUT , 1.0 );
     ADD_SLOT( double         , rho_e        , INPUT , 1.0 );
     ADD_SLOT( double         , splat_size   , INPUT , 1.0 );
+    // Te-dependent electron parameters (piecewise polynomials of Te, see ttm_piecewise_poly.h).
+    // Ce_te is the volumetric heat capacity: it replaces Ce*rho_e. Gei_te is the electron-phonon coupling
+    // factor: it replaces gamma_p by gamma_p(Te) = m*Gei(Te)/(3*n_ion*kB), n_ion = ionic number density.
+    ADD_SLOT( TtmPiecewisePoly , Ce_te      , INPUT , OPTIONAL );
+    ADD_SLOT( TtmPiecewisePoly , Gei_te     , INPUT , OPTIONAL );
+    ADD_SLOT( double         , n_ion        , INPUT , OPTIONAL );
+    // validity range of the Te-dependent fits: a warning is printed when Te leaves it (values are not clipped)
+    ADD_SLOT( double         , te_valid_min , INPUT , 0.0 );
+    ADD_SLOT( double         , te_valid_max , INPUT , 1.0e4 );
 
     ADD_SLOT( bool           , copy_ti_te   , INPUT, false );
     ADD_SLOT( long           , grid_subdiv  , INPUT , 3 );
@@ -110,6 +120,11 @@ namespace exaStamp
     ADD_SLOT( onika::memory::CudaMMVector<double> , ttm_scratch_species_mass     , PRIVATE );
     // per-cell partial sums for the GPU reduction of Te (exanb::reduce_grid_cell_values)
     ADD_SLOT( onika::memory::CudaMMVector<double> , ttm_scratch_te_partials      , PRIVATE );
+    // Te-dependent parameters: per-cell partials of the Te statistics reduction
+    ADD_SLOT( onika::memory::CudaMMVector<TtmTeStats> , ttm_scratch_te_stats     , PRIVATE );
+    // Te range already reported by the validity warning (re-warn only when the excursion grows)
+    ADD_SLOT( double         , ttm_warned_te_min , PRIVATE , 1.e300 );
+    ADD_SLOT( double         , ttm_warned_te_max , PRIVATE , -1.e300 );
 
     // Ghost exchange of grid_cell_values ("te") between diffusion substeps, see update_te_ghosts().
     // Same slots as the ghost_update_* operators (exanb/mpi/update_ghosts.h).
@@ -122,6 +137,35 @@ namespace exaStamp
     ADD_SLOT( UpdateGhostsScratch      , ghost_comm_buffers  , PRIVATE );
 
   public:
+
+    // -----------------------------------------------
+    // Te statistics over local cells, all ranks (see TtmTeStats), with the Te-range validity warning
+    // -----------------------------------------------
+    inline TtmTeStats te_stats( const TtmPiecewisePoly& ce )
+    {
+      TtmTeStats st = exanb::reduce_grid_cell_values( *grid_cell_values, "te", grid->ghost_layers(), TtmTeStatsFunc{ce},
+                                                      TtmTeStats{}, *ttm_scratch_te_stats, parallel_execution_context() );
+      double sums[2] = { st.sum_te, st.sum_energy };
+      double mins[3] = { st.min_te, -st.max_te, st.min_ce };
+      MPI_Allreduce(MPI_IN_PLACE,sums,2,MPI_DOUBLE,MPI_SUM,*mpi);
+      MPI_Allreduce(MPI_IN_PLACE,mins,3,MPI_DOUBLE,MPI_MIN,*mpi);
+      st.sum_te = sums[0]; st.sum_energy = sums[1];
+      st.min_te = mins[0]; st.max_te = -mins[1]; st.min_ce = mins[2];
+
+      // warn the first time Te leaves the validity range, then again only if the excursion grows by more
+      // than 10% of the range width (a hot spot above the range would otherwise warn at every step)
+      const double tol = 0.1 * ( *te_valid_max - *te_valid_min );
+      const bool below = st.min_te < *te_valid_min && st.min_te < *ttm_warned_te_min - tol;
+      const bool above = st.max_te > *te_valid_max && st.max_te > *ttm_warned_te_max + tol;
+      if( below || above )
+      {
+        lout << "WARNING: " << pathname() << ": step " << *timestep << ", electronic temperature range [" << st.min_te << ", " << st.max_te
+             << "] K is outside the validity range [" << *te_valid_min << ", " << *te_valid_max << "] K of the Te-dependent parameters (values are not clipped)" << std::endl;
+        if( below ) *ttm_warned_te_min = st.min_te;
+        if( above ) *ttm_warned_te_max = st.max_te;
+      }
+      return st;
+    }
 
     // -----------------------------------------------
     // Refreshes the ghost cells of grid_cell_values ("te") from their owner cells (MPI subdomain
@@ -335,7 +379,20 @@ namespace exaStamp
       const double delta_t = *dt;
       auto* Te = cell_te_data.m_data_ptr;
 
-      ldbg << "Ke="<<Te_cond<<", Ce="<<(*Ce)<<", rho_e="<<(*rho_e)<<", gamma_p="<<gamma_p_coupling<< std::endl;
+      // Te-dependent parameters
+      const TtmPiecewisePoly ce_te = Ce_te.has_value() ? *Ce_te : TtmPiecewisePoly{};
+      const TtmPiecewisePoly gei_te = Gei_te.has_value() ? *Gei_te : TtmPiecewisePoly{};
+      const bool ce_dep = ce_te.enabled();
+      const bool gei_dep = gei_te.enabled();
+      const bool te_dep = ce_dep || gei_dep;
+      if( gei_dep && ! ( n_ion.has_value() && *n_ion > 0.0 ) )
+      {
+        lerr << pathname() << ": Gei_te needs a positive ionic number density n_ion" << std::endl;
+        std::abort();
+      }
+
+      ldbg << "Ke="<<Te_cond<<", Ce="<<(*Ce)<<", rho_e="<<(*rho_e)<<", gamma_p="<<gamma_p_coupling
+           <<", Ce_te="<<(ce_dep?"on (replaces Ce*rho_e)":"off")<<", Gei_te="<<(gei_dep?"on (replaces gamma_p)":"off")<< std::endl;
 
       // LAMMPS fix-ttm never touches Te (nor draws any coupling noise) until end_of_step() first
       // runs, which only happens after step 1 completes -- its own step-0 diagnostics reflect the
@@ -358,6 +415,11 @@ namespace exaStamp
         }
         MPI_Allreduce(MPI_IN_PLACE,&sum_Te_initial,1,MPI_DOUBLE,MPI_SUM,*mpi);
         *total_electronic_energy = sum_Te_initial * subcell_volume * Ce_rho_e;
+        if( te_dep )
+        {
+          const TtmTeStats st = te_stats( ce_te );
+          if( ce_dep ) *total_electronic_energy = st.sum_energy * subcell_volume;
+        }
         *ion_transfer_energy = 0.0;
         return;
       }
@@ -374,7 +436,13 @@ namespace exaStamp
       TtmFillFunctor zero_energy_transfer = { cell_energy_transfer, 0.0 };
       onika::parallel::parallel_for( n_sub_total, zero_energy_transfer, parallel_execution_context() );
       *ion_transfer_energy = 0.0;
-      if( gamma_p_coupling != 0.0 )
+
+      // start-of-step Te statistics: Te range warning (Gei and Ce are evaluated at this Te) and min Ce for
+      // the diffusion stability limit
+      TtmTeStats start_stats;
+      if( te_dep ) { start_stats = te_stats( ce_te ); }
+
+      if( gamma_p_coupling != 0.0 || gei_dep )
       {
         const double kB = onika::physics::make_quantity( onika::physics::boltzmann, "J/K" ).convert();
         const bool use_uniform_noise = *uniform_noise;
@@ -389,7 +457,8 @@ namespace exaStamp
           gamma_p_coupling, *gamma_s, (*v_0)*(*v_0), kB, delta_t, noise_variance_factor, use_uniform_noise, uint64_t(*timestep),
           masses,
           Te, cell_te_data.m_stride,
-          cell_energy_transfer
+          cell_energy_transfer,
+          gei_te, gei_dep ? 1.0 / ( 3.0 * (*n_ion) * kB ) : 0.0
         };
         compute_cell_particles( *grid, true, coupling_func,
           FieldSet<field::_rx,field::_ry,field::_rz,field::_vx,field::_vy,field::_vz,field::_fx,field::_fy,field::_fz>{},
@@ -424,10 +493,17 @@ namespace exaStamp
       if( *substep_diffusion )
       {
         const double diffusion_rate = Te_cond * ( 3.0 / (subcell_size*subcell_size) ); // sum_axes 1/dx^2, isotropic
-        const double stability_criterion = 1.0 - 2.0*delta_t/Ce_rho_e*diffusion_rate;
+        // Te-dependent Ce: the most restrictive (smallest) Ce over the grid, at the start of the step
+        const double Ce_stab = ce_dep ? start_stats.min_ce : Ce_rho_e;
+        if( ! ( Ce_stab > 0.0 ) )
+        {
+          lerr << pathname() << ": non-positive electron heat capacity "<<Ce_stab<<" (min Te="<<start_stats.min_te<<" K), can't continue" << std::endl;
+          std::abort();
+        }
+        const double stability_criterion = 1.0 - 2.0*delta_t/Ce_stab*diffusion_rate;
         if( stability_criterion < 0.0 )
         {
-          inner_dt = 0.5*Ce_rho_e / diffusion_rate;
+          inner_dt = 0.5*Ce_stab / diffusion_rate;
           num_inner_timesteps = static_cast<long>( delta_t/inner_dt ) + 1;
           inner_dt = delta_t / double(num_inner_timesteps);
           ldbg << "substep_diffusion: stability_criterion="<<stability_criterion
@@ -537,7 +613,7 @@ namespace exaStamp
               const size_t scindex = grid_ijk_to_index( IJK{subdiv,subdiv,subdiv} , sc );
               const size_t idx_te = cell_i*cell_te_data.m_stride + scindex;
               const size_t j = cell_i*n_subcells + scindex;
-              const double dTe = ( (Te_cond*cell_L_Te[j]) / Ce_rho_e ) * inner_dt;
+              const double dTe = ( Te_cond*cell_L_Te[j] / ( ce_dep ? ce_te.value(Te[idx_te]) : Ce_rho_e ) ) * inner_dt;
               norm_dTe += std::fabs( dTe );
               entropy_Te += Te[idx_te] * std::log(Te[idx_te]) * subcell_volume ;
             }
@@ -563,6 +639,8 @@ namespace exaStamp
       // 3. Compute Te dissipation, Te<->Ti transfer & source terms
 #     ifndef NDEBUG
       double old_sum_Te = sum_Te;
+      // Te-dependent Ce: the check below is on the energy density sum (integral of Ce), sum_dTe on power*inner_dt
+      const double old_sum_energy = ce_dep ? te_stats( ce_te ).sum_energy : 0.0;
       double sum_dTe = 0.0;
       double sum_Se = 0.0;
       double sum_Si = 0.0;
@@ -576,7 +654,8 @@ namespace exaStamp
         dims, gl, subdiv,
         Te, cell_te_data.m_stride,
         cell_L_Te, cell_energy_transfer, cell_Se,
-        Te_cond, 1.0 / Ce_rho_e, 1.0 / ( subcell_volume * delta_t ), inner_dt
+        Te_cond, 1.0 / Ce_rho_e, 1.0 / ( subcell_volume * delta_t ), inner_dt,
+        ce_te
       };
       onika::parallel::parallel_for( n_local_cells * size_t(n_subcells), te_update_func, parallel_execution_context() );
 
@@ -613,7 +692,7 @@ namespace exaStamp
             sum_Si += cell_Si[idx_ti];
             if( local_cell )
             {
-              sum_dTe += te_update_func.dTe(idx_ti) * inner_dt;
+              sum_dTe += ( ce_dep ? te_update_func.power(idx_ti) : te_update_func.dTe(idx_ti) ) * inner_dt;
             }
           }
         }
@@ -629,9 +708,11 @@ namespace exaStamp
         sum_Si = tmp[3];
       }
 
-      if(sum_Te > 0.)
+      const double new_sum_energy = ce_dep ? te_stats( ce_te ).sum_energy : 0.0;
+      if( ce_dep ? new_sum_energy > 0. : sum_Te > 0. )
       {
-        double te_dev = (sum_Te - old_sum_Te - sum_dTe) / sum_Te;
+        double te_dev = ce_dep ? (new_sum_energy - old_sum_energy - sum_dTe) / new_sum_energy
+                               : (sum_Te - old_sum_Te - sum_dTe) / sum_Te;
         ldbg << "Te dev="<< te_dev << " sum_dTe="<<sum_dTe << " sum_Se="<<sum_Se<<" sum_Si="<<sum_Si<< std::endl;
         if( te_dev > te_deviation_epsilon )
         {
@@ -650,6 +731,19 @@ namespace exaStamp
         // capacity to become one. (Harmless to omit while Ce(Te) was hardcoded to 1.0, but wrong
         // now that Ce/rho_e are real physical inputs.)
         *total_electronic_energy = sum_Te * subcell_volume * Ce_rho_e;
+        // Te-dependent Ce: energy density is integral_0^Te Ce dT, not Ce*Te
+        if( ce_dep )
+        {
+          const TtmTeStats st = te_stats( ce_te );
+          *total_electronic_energy = st.sum_energy * subcell_volume;
+          // the energy-form update maps a negative energy density (sink larger than the energy left) to Te = 0
+          if( ! ( st.min_te > 0.0 ) )
+          {
+            lerr << pathname() << ": step " << *timestep << ": the electronic temperature reached " << st.min_te
+                 << " K (electronic energy exhausted by the coupling sink), reduce dt" << std::endl;
+            std::abort();
+          }
+        }
       }
 
       // ghost Te for the next substep (not needed after the last one: ghost_update_r refreshes it at the next MD step)
@@ -673,6 +767,28 @@ while ionic temperature (Ti) commes from particles kinetic energy.
    source terms) over local cells; if substep_diffusion: true and a single MD step would exceed the explicit-diffusion
    stability limit, this step is subdivided into several smaller inner steps, with a
    ghost exchange of Te between them (ghost Te is otherwise refreshed once per MD step by ghost_update_r)
+Te-dependent electron parameters (optional): Ce_te and Gei_te are piecewise polynomials of Te,
+  y(Te) = y_scale * P_k(x_scale*Te), piece k used while Te < breakpoints[k], converted from 'unit' to internal units.
+  Ce_te is the volumetric electron heat capacity and replaces Ce*rho_e (also in the diffusion stability limit,
+  which then uses the smallest Ce on the grid, and in total_electronic_energy = sum of integral_0^Te Ce dT).
+  With Ce_te, Te is advanced in energy form: the energy density E(Te) = integral_0^Te Ce dT receives the
+  diffusion, coupling and source power over the step and Te is recovered by inverting E(Te) (Newton iteration),
+  so the electronic energy changes by exactly the exchanged and injected energy.
+  Gei_te is the electron-phonon coupling factor and replaces gamma_p per particle:
+  gamma_p(Te) = m*Gei(Te)/(3*n_ion*kB), n_ion being the ionic number density (required with Gei_te).
+  A warning is printed when Te leaves [te_valid_min, te_valid_max] (default [0, 1e4] K); values are not clipped.
+  Example (gold):
+    Ce_te:
+      unit: J/m^3/K
+      breakpoints: [ 2200.0, 5500.0 ]
+      coefficients: [ [ 0.0, 67.6 ], [ 22135.0, 12.685, 1.8962e-2 ], [ -4.027e5, 210.74, -3.0463e-3, 4.0076e-8, 0.0, 1.0652e-18 ] ]
+    Gei_te:
+      unit: J/s/m^3/K
+      x_scale: 1.0e-4
+      y_scale: 1.0e17
+      breakpoints: [ 2100.0, 4400.0 ]
+      coefficients: [ [ 0.251 ], [ 0.25353, 0.042859, -0.92027, 3.1317 ], [ -0.53893, 2.3867, -0.83833, 0.15177, -0.013335, -4.5018e-4 ] ]
+    n_ion: 0.059 1/ang^3
 NOTE: the coupling also runs over ghost particles, whose velocities are only current if a ghost_update_r_v is
 run before this operator (ghost_update_r sends positions only)
 )EOF";

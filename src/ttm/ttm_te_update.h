@@ -19,6 +19,9 @@ under the License.
 #include <exanb/core/grid_algorithm.h>
 #include <onika/cuda/cuda.h>
 #include <onika/parallel/parallel_for.h>
+#include <exanb/grid_cell_particles/reduce_grid_cell_values.h>
+
+#include "ttm_piecewise_poly.h"
 
 namespace exaStamp
 {
@@ -26,6 +29,7 @@ namespace exaStamp
 
   // Pass E of ionic_electronic_heat_transfer: explicit Te update
   //   dTe = ( Ke*Laplacian(Te) - Te/Ti coupling sink + Se ) / (Ce*rho_e),   Te += dTe * inner_dt
+  // or, with a Te-dependent Ce(Te), in energy form: E(Te) += power * inner_dt, E(Te) = integral_0^Te Ce dT
   // one flattened (local cell, subcell) index per thread, dispatched over [0, n_local_cells*subdiv^3) with
   // onika::parallel::parallel_for (thread-per-index), same shape as TtmLaplacianFunctor (ttm_laplacian.h).
   // Must NOT go through block_parallel_for: that runs the functor once per block with ALL threads of the
@@ -33,8 +37,8 @@ namespace exaStamp
   // Every subcell is independent (dTe reads the Laplacian computed by the previous kernel, never a
   // neighbouring Te), so this is race-free; only local cells are updated (ghost Te is refreshed by a ghost exchange between substeps).
   //
-  // dTe() is separate from operator() and does not read Te, so the host-side diagnostic reduction
-  // that runs after the kernel (sum_dTe) can call it again and get exactly the value the kernel used.
+  // power()/dTe() are separate from operator() and do not read Te, so the host-side diagnostic reduction
+  // that runs after the kernel (sum_dTe) can call them again and get exactly the value the kernel used.
   //
   // Se/Si-style source terms are NOT evaluated here: se_ptr is the array precomputed once per outer
   // MD step (ttm_scratch_se), so no virtual ScalarSourceTerm call reaches device code.
@@ -59,13 +63,25 @@ namespace exaStamp
     double inv_Ce_rho_e = 1.0;  // 1 / (Ce*rho_e)
     double sink_scale = 1.0;    // 1 / (subcell_volume * delta_t), delta_t = full MD step (the sink is spread over it)
     double inner_dt = 0.0;      // diffusion substep
+    // Te-dependent heat capacity Ce(Te) (disabled: constant inv_Ce_rho_e above). When enabled, the update is
+    // done in energy form: the energy density E = integral_0^Te Ce dT is advanced by power()*inner_dt and Te
+    // is recovered by inverting E(Te), so the electronic energy changes by exactly the applied power (an
+    // explicit Te += power/Ce(Te) step gains 1/2 Ce'(Te) dTe^2 per step and subcell).
+    TtmPiecewisePoly ce;
 
-    ONIKA_HOST_DEVICE_FUNC inline double dTe ( size_t idx ) const
+    // power density of the Te equation, Ke*Laplacian(Te) - Te/Ti coupling sink + Se (does not read Te)
+    ONIKA_HOST_DEVICE_FUNC inline double power ( size_t idx ) const
     {
       // energy_transfer is a FIXED total for the whole outer MD step: scale by 1/(volume*delta_t) (not
       // inner_dt) to get the power density sink applied at every inner step.
       const double coupling_sink = energy_transfer_ptr[idx] * sink_scale;
-      return ( Te_cond*lap_te_ptr[idx] - coupling_sink + se_ptr[idx] ) * inv_Ce_rho_e;
+      return Te_cond*lap_te_ptr[idx] - coupling_sink + se_ptr[idx];
+    }
+
+    // constant Ce: Te rate (does not read Te)
+    ONIKA_HOST_DEVICE_FUNC inline double dTe ( size_t idx ) const
+    {
+      return power( idx ) * inv_Ce_rho_e;
     }
 
     ONIKA_HOST_DEVICE_FUNC inline void operator () ( size_t idx ) const
@@ -76,7 +92,56 @@ namespace exaStamp
       const IJK cell_loc = grid_index_to_ijk( grid_dims - 2*ghost_layers , ssize_t(idx / n_subcells) ) + ghost_layers;
       const size_t cell_i = size_t( grid_ijk_to_index( grid_dims, cell_loc ) );
       const size_t scindex = idx % n_subcells;
-      te_ptr[ cell_i*te_stride + scindex ] += dTe( cell_i*n_subcells + scindex ) * inner_dt;
+      const size_t j = cell_i*n_subcells + scindex;
+      double& te = te_ptr[ cell_i*te_stride + scindex ];
+      if( ce.enabled() )
+      {
+        const double dE = power( j ) * inner_dt;
+        const double c0 = ce.value( te );
+        const double guess = te + ( c0 > 0.0 ? dE / c0 : 0.0 ); // explicit Te step: Newton converges in a few iterations
+        te = ce.inverse_integral( ce.integral( te ) + dE , guess );
+      }
+      else
+      {
+        te += dTe( j ) * inner_dt;
+      }
+    }
+  };
+
+  // Per-step Te statistics for the Te-dependent parameters, one reduction over local cells
+  // (exanb::reduce_grid_cell_values): energy density integral of Ce, Te range (validity warning), min Ce (stability).
+  struct TtmTeStats
+  {
+    double sum_te = 0.0;
+    double sum_energy = 0.0;   // sum of integral_0^Te Ce dT (0 if Ce is constant)
+    double min_te = 1.e300;
+    double max_te = -1.e300;
+    double min_ce = 1.e300;    // stays 1e300 if Ce is constant
+  };
+
+  struct TtmTeStatsFunc
+  {
+    TtmPiecewisePoly ce;       // disabled: constant Ce, only the Te range is reduced
+    ONIKA_HOST_DEVICE_FUNC inline void accumulate( TtmTeStats& acc , const double* v ) const
+    {
+      const double te = v[0];
+      acc.sum_te += te;
+      acc.min_te = te < acc.min_te ? te : acc.min_te; // no std::min in device code
+      acc.max_te = te > acc.max_te ? te : acc.max_te;
+      if( ce.enabled() )
+      {
+        acc.sum_energy += ce.integral( te );
+        const double c = ce.value( te );
+        acc.min_ce = c < acc.min_ce ? c : acc.min_ce;
+      }
+    }
+    ONIKA_HOST_DEVICE_FUNC inline void combine( TtmTeStats& acc , const TtmTeStats& p ) const
+    {
+      acc.sum_te += p.sum_te;
+      acc.sum_energy += p.sum_energy;
+      acc.min_te = p.min_te < acc.min_te ? p.min_te : acc.min_te;
+      acc.max_te = p.max_te > acc.max_te ? p.max_te : acc.max_te;
+      acc.min_ce = p.min_ce < acc.min_ce ? p.min_ce : acc.min_ce;
     }
   };
 
@@ -106,4 +171,9 @@ namespace onika
       static inline constexpr bool CudaCompatible = true;
     };
   }
+}
+
+namespace exanb
+{
+  template<> struct ReduceGridCellValuesTraits<exaStamp::TtmTeStatsFunc> { static inline constexpr bool CudaCompatible = true; };
 }
