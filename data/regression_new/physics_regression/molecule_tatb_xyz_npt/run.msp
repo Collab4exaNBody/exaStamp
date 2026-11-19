@@ -1,0 +1,37 @@
+# TATB crystal (768 atoms, triclinic cell, read with read_xyz_molecules, force field tatb_ff.cfg), Nose-Hoover NPT
+# with a triclinic cell. The long range correction of the pair energy and virial follows the volume.
+includes:
+  - ../common.yaml
+  - config_molecule.msp
+  - config_nose_hoover.msp
+  - tatb_ff.cfg
+
+numerical_scheme: verlet_nhnpt
+
+init_nose_hoover:
+  algo: NPT
+  Tstart: 300. K
+  Tend:   300. K
+  Tdamp:  0.05 ps
+  tchain: 3
+  Pstart: 1.0e5
+  Pend:   1.0e5
+  Pdamp:  0.2 ps
+  pchain: 3
+  Pmode:  TRI
+
+setup_system:
+  - domain:
+      cell_size: 8. ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_xyz_molecules:
+      filename: "tatb_triclinic_4x4x1.xyz"
+  - molecule_force_field
+  - physics_regression_noise
+
++global:
+  dt: 0.5e-15 s
+  rcut_inc: 2.0 ang
+  pr_acc_threshold: 1.e-7
+  simulation_thermostate_screen_frequency: 1
