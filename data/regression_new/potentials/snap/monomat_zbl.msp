@@ -9,7 +9,7 @@ zbl_compute_force:
 
 # define potential we'll reuse later
 compute_force:
-  - snap_force
+  - snap_force_fp64
   - zbl_compute_force
 
 simulation_epilog:

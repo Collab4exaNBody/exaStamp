@@ -16,6 +16,7 @@ under the License.
 */
 
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 #include <onika/physics/units.h>
 #include "meam_parameters_yaml.h"
 
@@ -26,6 +27,7 @@ namespace YAML
   {
     using onika::physics::Quantity;
     if( !node.IsMap() ) { return false; }
+    exaStamp::check_yaml_keys( node , { "rmax", "rmin", "Ecoh", "E0", "A", "r0", "alpha", "delta", "beta0", "beta1", "beta2", "beta3", "t0", "t1", "t2", "t3", "s0", "s1", "s2", "s3", "Cmin", "Cmax", "Z", "rc", "rp" } , "meam parameters" );
 
 #   define MEAM_PARAMETER(x) do{ if(!node[#x]){return false;} v.x = node[#x].as<Quantity>().convert(); }while(0)
     MEAM_PARAMETER(rmax);

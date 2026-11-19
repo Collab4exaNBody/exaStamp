@@ -268,6 +268,7 @@ namespace exanb
 }
 
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 
 // Yaml conversion operators, allows to read potential parameters from config file
 namespace YAML
@@ -278,6 +279,7 @@ namespace YAML
     {
       v = exaStamp::UserMeamLJPair{};
       if( !node.IsMap() ) { return false; }
+      exaStamp::check_yaml_keys( node , { "type_a", "type_b", "epsilon", "sigma", "rcut" } , "meam lj pair" );
       v.type_a = node["type_a"].as<std::string>();
       v.type_b = node["type_b"].as<std::string>();
       v.lj.lj.epsilon = node["epsilon"].as<onika::physics::Quantity>().convert();

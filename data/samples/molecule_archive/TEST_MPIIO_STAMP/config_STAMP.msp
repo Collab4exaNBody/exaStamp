@@ -1008,7 +1008,7 @@ _: # potential parameters, can be part of an external data base
         D: 0 kcal/mol
 
 compute_force_bond:
-      virial: false
+      compute_virial: false
       potentials_for_bonds:
          - *bond_Cno2_Cno2
          - *bond_Cno2_Cnh2
@@ -1025,7 +1025,7 @@ compute_force_bond:
          - *bond_CM_CM
 
 compute_force_bend:
-      virial: false
+      compute_virial: false
       potentials_for_angles:
          - *bend_Cno2_Cnh2_Cno2
          - *bend_Cnh2_Cno2_Cnh2
@@ -1045,7 +1045,7 @@ compute_force_bend:
          - *bend_CT_CT_CM
 
 compute_force_torsion:
-      virial: false
+      compute_virial: false
       potentials_for_torsions:
          - *torsion_Cno2_Cnh2_Cno2_Cnh2
          - *torsion_Cno2_Cnh2_Cno2_No2
@@ -1067,7 +1067,7 @@ compute_force_torsion:
          - *torsion_CM_CT_CT_CM
 
 compute_force_improper:
-      virial: false
+      compute_virial: false
       potentials_for_impropers:
          - *improper_Cno2_Cnh2_Cnh2_No2
          - *improper_Cnh2_Cno2_Cno2_Nh2

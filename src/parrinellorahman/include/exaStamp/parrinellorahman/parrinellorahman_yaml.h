@@ -21,6 +21,7 @@ under the License.
 #include <onika/math/basic_types_yaml.h>
 #include <onika/physics/constants.h>
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 
 namespace YAML
 {
@@ -33,6 +34,7 @@ namespace YAML
     static inline bool decode(const Node& node, ParrinelloRahmanConfig& v)
     {
       if(!node.IsMap() ) { return false; }
+      exaStamp::check_yaml_keys( node , { "Pext", "Text", "hblend", "hmask", "masseB", "masseNVT" } , "Parrinello-Rahman parameters" );
       v = ParrinelloRahmanConfig{};
       if( node["Text"] )
       {

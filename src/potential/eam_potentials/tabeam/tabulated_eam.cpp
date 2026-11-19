@@ -16,6 +16,7 @@ under the License.
 */
 
 #include "tabulated_eam.h"
+#include <exaStamp/yaml_check_keys.h>
 
 #include <onika/file_utils.h>
 #include <onika/yaml/yaml_utils.h>
@@ -47,6 +48,7 @@ namespace YAML
     else
     {
       if( !node.IsMap() ) { return false; }
+      exaStamp::check_yaml_keys( node , { "file", "format", "r", "rho", "f", "df", "phi", "dphi", "drho", "rhof" } , "tabulated eam parameters" );
       if( node["file"] )
       {
         file_to_load = node["file"].as<std::string>();

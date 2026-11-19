@@ -30,7 +30,6 @@ setup_system:
       structure: SC
       types: [ Ta ]
       size: [ 3 ang, 3 ang, 3 ang ]
-      noise: 0.1 ang
       region: ZONE2 and ( ZONE3 or not ZONE1 )
 
 global:

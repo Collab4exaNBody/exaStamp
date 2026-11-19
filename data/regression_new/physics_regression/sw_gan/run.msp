@@ -1,0 +1,46 @@
+# Stillinger-Weber GaN (sw_init + sw_force), two species, zincblende lattice
+includes:
+  - ../common.yaml
+
+compute_force_prolog:
+  - zero_force_energy: { ghost: true }
+
+compute_force_epilog:
+  - update_force_energy_from_ghost
+  - force_to_accel
+
+species:
+  - Ga: { mass: 69.723 Da, z: 31, charge: 0 e- }
+  - N: { mass: 14.007 Da, z: 7, charge: 0 e- }
+
+init_parameters:
+  - species
+  - sw_init:
+      parameters: { file: "GaN.sw" }
+
+compute_force:
+  - sw_force
+
+setup_system:
+  - domain:
+      cell_size: 4.5 ang
+      grid_dims: [ 4, 4, 4 ]
+      bounds: [ [ 0 ang, 0 ang, 0 ang ], [ 18.0 ang, 18.0 ang, 18.0 ang ] ]
+      xform: [ [ 1, 0, 0 ], [ 0, 1, 0 ], [ 0, 0, 1 ] ]
+      periodic: [ true, true, true ]
+      expandable: false
+  - init_rcb_grid
+  - lattice: # diamond / zincblende, 4x4x4 unit cells
+      structure: CUSTOM
+      types: [ Ga, Ga, Ga, Ga, N, N, N, N ]
+      positions:
+        [
+          [ 0.0, 0.0, 0.0 ], [ 0.0, 0.5, 0.5 ], [ 0.5, 0.0, 0.5 ], [ 0.5, 0.5, 0.0 ],
+          [ 0.25, 0.25, 0.25 ], [ 0.25, 0.75, 0.75 ], [ 0.75, 0.25, 0.75 ], [ 0.75, 0.75, 0.25 ],
+        ]
+      size: [ 4.5 ang, 4.5 ang, 4.5 ang ]
+  - physics_regression_noise
+
++global:
+  rcut_inc: 1.0 ang
+  dt: 1.0e-3 ps

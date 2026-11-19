@@ -15,7 +15,7 @@ zbl_multi_force:
     - { type_a: W , type_b: W , rcut: 4.8 ang , parameters: { r1: 4.0 ang , rc: 4.8 ang } }
 compute_force:
   - zbl_multi_force
-  - snap_force_fp64:   # FP64 always: default snap_force follows SNAP_FP32_MATH (single precision)
+  - snap_force_fp64:
       parameters:
         nt: 1
         param: "W_2940_2017_2.snapparam"

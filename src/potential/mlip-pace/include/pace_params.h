@@ -20,6 +20,7 @@ under the License.
 #pragma once
 
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 #include <string>
 
 struct PaceParams
@@ -37,6 +38,7 @@ namespace YAML
     static bool decode(const Node& node, PaceParams& v)
     {
       if( !node.IsMap() ) { return false; }
+      exaStamp::check_yaml_keys( node , { "coef", "algorithm", "nspecies", "chunksize" } , "pace parameters" );
       if( !node["coef"] ) { return false; }
       v.pace_coef = node["coef"].as<std::string>();
       if( node["algorithm"] ) { v.recursive  = ( node["algorithm"].as<std::string>() == "recursive" ); }

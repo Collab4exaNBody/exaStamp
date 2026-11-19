@@ -23,6 +23,7 @@ under the License.
 #include <onika/physics/units.h>
 
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 
 namespace YAML
 {    
@@ -32,6 +33,7 @@ namespace YAML
     static inline bool decode(const Node& node, exaStamp::PairPotentialUserParameters& v)
     {
       if( ! node.IsMap() ) { return false; }
+      exaStamp::check_yaml_keys( node , { "type_a", "type_b", "rcut", "potential", "parameters" } , "pair potential" );
       v.m_type_a = node["type_a"].as<std::string>();
       v.m_type_b = node["type_b"].as<std::string>();
       if( node["rcut"] )

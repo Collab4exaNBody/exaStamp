@@ -20,6 +20,7 @@ under the License.
 #include <cmath>
 #include <yaml-cpp/yaml.h>
 #include <onika/physics/units.h>
+#include <exaStamp/yaml_check_keys.h>
 
 #include <exaStamp/potential_factory/pair_potential.h>
 #include <exaStamp/potential/pair_potentials/lennard_jones/lennard_jones.h>
@@ -38,7 +39,7 @@ namespace exaStamp
     double lj_ecut = 0.0;
     LennardJonesParms lj;
     CoulWolfParms cw;
-    bool shiftlj;
+    bool shiftlj = true;
   };
 
 //# pragma omp declare simd uniform(p,ppp) notinbranch
@@ -82,6 +83,8 @@ namespace YAML
     static bool decode(const Node& node, LJWOLFParms& v)
     {
       if( !node.IsMap() ) { return false; }
+
+      exaStamp::check_yaml_keys( node , { "lj_rcut", "lj", "shiftlj", "cw" } , "ljwolf parameters" );
       
       if( node["lj_rcut"] ) v.lj_rcut = node["lj_rcut"].as<Quantity>().convert();
       else v.lj_rcut = 0.0;

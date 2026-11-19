@@ -11,7 +11,7 @@ species:
 
 input_data:
   - read_stamp_v3:
-      file: big_lattice.mpio
+      filename: big_lattice.mpio
       bounds_mode: FILE
 
 domain:

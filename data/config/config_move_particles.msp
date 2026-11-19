@@ -27,7 +27,6 @@ trigger_move_particles:
 ################### AMR ############################
 rebuild_amr:
   sub_grid_density: 6.5
-  amr_z_curve: false
   enforced_ordering: 1
 ####################################################
 

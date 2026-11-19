@@ -1,0 +1,57 @@
+# Coherent interfaces in FCC: two Cu twins and one stacking fault (7896 atoms). Generate the input first:
+#   python3 fcc_twins_stacking_faults.py      # writes fcc_twins_sf.xyz
+# With handle_coherent_interfaces (default) the HCP planes join the FCC grains: 2 grains, the two twins,
+# one of them on both sides of the stacking fault. With handle_coherent_interfaces: false, 6 grains.
+
+species:
+  - Cu: { mass: 63.546 Da, z: 29, charge: 0 e- }
+
+compute_force: nop
+
+chunk_neighbors:
+  config:
+    chunk_size: 1
+    build_particle_offset: true
+
+setup_system:
+  - domain:
+      cell_size: 8 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_extended_xyz_file:
+      filename: "fcc_twins_sf.xyz"
+      bounds_mode: FILE
+
+global:
+  max_iteration: 0
+  simulation_thermostate_screen_frequency: 10
+  simulation_thermostate_file_frequency: -1
+  simulation_snapshot_frequency: 10
+  rcut_max: 5.0 ang
+  rcut_inc: 0.5 ang
+  dt: 1.0e-3 ps
+
+compute_ptm:
+  rcut: 4.5 ang
+
+ptm_fields:
+  struct_field: ptm_type
+  orient_field: ptm_orientation
+  rmsd_field: ptm_rmsd
+
+compute_grain_bond_misorientation:
+  rcut: 4.5 ang
+
+compute_grain_clusters:
+  min_grain_atom_count: 100
+  handle_coherent_interfaces: true
+  grains_file: grains_twins.csv
+
+simulation_epilog:
+  - compute_ptm
+  - ptm_fields
+  - ghost_update_opt: { opt_fields: [ ptm_type, ptm_orientation ] }
+  - compute_grain_bond_misorientation
+  - compute_grain_clusters
+  - timestep_file: "result_twins.xyz"
+  - write_xyz: { fields: [ id, type, ptm_type, grain_id ] }

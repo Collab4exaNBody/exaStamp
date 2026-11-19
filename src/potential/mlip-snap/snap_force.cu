@@ -22,22 +22,15 @@ under the License.
 
 namespace exaStamp
 {
-# if defined(SNAP_FP32_MATH) || defined(SNAP_FP64_MATH)
-  template<class GridT> using SnapForceXSTmpl = md::SnapForceGeneric<GridT,field::_ep,field::_virial>;
-# else
-  template<class GridT> using SnapForceXSTmpl = md::SnapForceGenericFP64<GridT,field::_ep,field::_virial>;
-# endif
-
-  // always double precision, whatever SNAP_FP32_MATH says (needed for exact parity with LAMMPS)
+  // explicit precision, independent of exaNBody's SNAP_FP32_MATH option
+  template<class GridT> using SnapForceFP32XSTmpl = md::SnapForceRealT<GridT,float ,field::_ep,field::_virial>;
   template<class GridT> using SnapForceFP64XSTmpl = md::SnapForceRealT<GridT,double,field::_ep,field::_virial>;
 
   // === register factories ===
   ONIKA_AUTORUN_INIT(snap_force)
   {
-    OperatorNodeFactory::instance()->register_factory( "snap_force" ,make_grid_variant_operator< SnapForceXSTmpl > );
+    OperatorNodeFactory::instance()->register_factory( "snap_force_fp32" ,make_grid_variant_operator< SnapForceFP32XSTmpl > );
     OperatorNodeFactory::instance()->register_factory( "snap_force_fp64" ,make_grid_variant_operator< SnapForceFP64XSTmpl > );
   }
 
 }
-
-

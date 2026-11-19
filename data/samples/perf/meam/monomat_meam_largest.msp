@@ -1,5 +1,5 @@
 includes:
-  - monomat_nosymetry_perf_base.cfg
+  - monomat_meam.msp
 
 configuration:
   profiling:
@@ -9,7 +9,7 @@ configuration:
 #    graph_lod: 0
 
 load_balance:
-  - simple_cost_model: { ccost: 1.0 , pdens: 4.0 , pdens2:0.0 , pdens3:0.0 }
+  - simple_cost_model: { cost_model_coefs: [ 0.0, 0.0, 4.0, 1.0 ] }   # X^3, X^2, X, constant (X: particle density)
   - load_balance_rcb
 
 rebuild_amr:
@@ -17,12 +17,7 @@ rebuild_amr:
 
 global:
   simulation_end_iteration: 60004
-  chunk_size: 4
   #amr_z_curve: false
-
-compute_force_pair:
-  chunk: true
-  symetric: false
 
 update_particle_neighbors:
   - amr_grid_pairs
@@ -33,4 +28,3 @@ update_particle_neighbors:
   - grid_stats
   - replicate_domain: [ 1 , 7 , 7 ]
   - grid_stats
-

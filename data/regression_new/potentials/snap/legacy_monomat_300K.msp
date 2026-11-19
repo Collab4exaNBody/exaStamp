@@ -10,7 +10,7 @@ grid_flavor: grid_flavor_multimat
 
 input_data:
   - read_stamp_v3:
-      file: Mo_conf_300K.MpiIO
+      filename: Mo_conf_300K.MpiIO
 
 species:
   - Copper:
@@ -45,9 +45,9 @@ first_iteration:
   - update_force_energy_from_ghost
   - debug_total_force
   - force_to_accel
-  - default_thermodynamic_state
-  - default_print_thermodynamic_state: { lb_flag: false , move_flag: false , print_header: true }
-  - default_dump_thermodynamic_state
+  - default_thermostate_compute
+  - default_thermostate_screen: { print_header: true }
+  - default_thermostate_file
   - next_time_step
 
 numerical_scheme:
@@ -62,6 +62,5 @@ numerical_scheme:
     - debug_total_force
     - force_to_accel
     - push_f_v: { dt_scale: 0.5 }
-    - thermostat
 
 

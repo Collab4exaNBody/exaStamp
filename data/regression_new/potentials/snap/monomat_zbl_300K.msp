@@ -5,7 +5,7 @@ includes:
 
 input_data:
   - read_stamp_v3:
-      file: Mo_conf_300K.MpiIO
+      filename: Mo_conf_300K.MpiIO
       bounds_mode: FILE
 
 zbl_compute_force:
@@ -17,7 +17,7 @@ cpu_gpu_load_balance:
 
 # define potential we'll reuse later
 compute_force:
-  - snap_force
+  - snap_force_fp64
   - zbl_compute_force
 
 simulation_epilog:

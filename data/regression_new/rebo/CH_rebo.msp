@@ -50,7 +50,6 @@ setup_system:
       expandable: false
   - read_xyz_file_with_xform:
       filename: CH216.xyz
-      pbc_adjust_xform: true
   - replicate_domain: [ 8, 8, 4 ]
 
 +first_iteration:

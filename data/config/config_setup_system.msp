@@ -4,7 +4,6 @@
 
 # StampV3 reader
 read_stamp_v3:
-  file: lastLegacyDump
   filename: lastLegacyDump
   bounds_mode: FILE
 
