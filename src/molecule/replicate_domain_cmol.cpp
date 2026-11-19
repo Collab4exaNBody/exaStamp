@@ -41,11 +41,11 @@ namespace exaStamp
     template<class FieldTupleT>
     inline void operator () ( FieldTupleT& tp , int64_t id_offset ) const
     {
-      if constexpr ( tp.has_field( field::id ) )
+      if constexpr ( FieldTupleT::has_field( field::id ) )
       {
         tp[field::id] += id_offset;
       }
-      if constexpr ( tp.has_field( field::cmol ) )
+      if constexpr ( FieldTupleT::has_field( field::cmol ) )
       {
         auto cmol = tp[field::cmol];
         for(size_t i=0;i<cmol.size();i++)
