@@ -86,7 +86,7 @@ its header. Read it back with read_dump_molecule.
       size_t mps = MpiIO::DEFAULT_MAX_FILE_SIZE;
       if( *max_part_size > 0 ) mps = *max_part_size;
 
-      lout << "writing bond_max_stretch = "<< *bond_max_stretch << std::endl;
+      ldbg << "writing bond_max_stretch = "<< *bond_max_stretch << std::endl;
 
       MolIOExt molecule_io = {
         *ffnameVector,
