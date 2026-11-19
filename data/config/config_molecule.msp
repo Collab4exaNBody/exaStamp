@@ -20,7 +20,6 @@ extramolecular_neighbors:
     subcell_compaction: true
     scratch_mem_per_cell: 1048576
     stream_prealloc_factor: 1.05 # standard value to avoid most of dynamic allocations
-    chunk_size: 1
 
 chunk_neighbors_impl: extramolecular_neighbors
 

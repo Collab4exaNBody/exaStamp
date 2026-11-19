@@ -92,14 +92,6 @@ namespace exaStamp
     {
       static const ChemicalPairPotMap empty_pair_pot_map = {};
 
-      if( config->chunk_size != 1 )
-      {
-        lerr << "Warning: chunk_size must be 1 (actual value is "<<config->chunk_size<<"), forcing it to 1." << std::endl;
-        config->chunk_size = 1;
-      }
-      
-      const unsigned int cs = 1;
-      const unsigned int cs_log2 = 0;
       const bool gpu_enabled = ( global_cuda_ctx() != nullptr ) ? global_cuda_ctx()->has_devices() : false;
       
       LinearXForm xform_filter = {domain->xform()};
@@ -110,7 +102,7 @@ namespace exaStamp
       auto field_id = grid->field_const_accessor( field::id );
       auto field_idmol = grid->field_const_accessor( field::idmol );
       ExtraMolecularNeighborFilter< decltype(cells) , decltype(field_id) , decltype(field_idmol) > nbh_filter = { cells , chemical_pair_pot_map.has_value() ? (*chemical_pair_pot_map) : empty_pair_pot_map , field_id , field_idmol };
-      chunk_neighbors_execute(ldbg,*chunk_neighbors,*grid,*amr,*amr_grid_pairs,*config,*chunk_neighbors_scratch,cs,cs_log2,*nbh_dist_lab, xform_filter, gpu_enabled, no_zorder, nbh_filter );
+      chunk_neighbors_execute(ldbg,*chunk_neighbors,*grid,*amr,*amr_grid_pairs,*config,*chunk_neighbors_scratch,*nbh_dist_lab, xform_filter, gpu_enabled, no_zorder, nbh_filter );
     }
 
   };
