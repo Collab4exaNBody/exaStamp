@@ -25,7 +25,6 @@ under the License.
 
 #include <exaStamp/molecule/mol_connectivity.h>
 #include <exaStamp/molecule/molecule_compute_param.h>
-#include <exaStamp/molecule/intramolecular_pair_weight.h>
 #include <exaStamp/molecule/intramolecular_image.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
@@ -44,7 +43,6 @@ namespace exaStamp
     ADD_SLOT( ParticleSpecies             , species       , INPUT , REQUIRED );
     ADD_SLOT( IdMap                       , id_map        , INPUT , DocString{"Owned atom ids to grid locations"} );
     ADD_SLOT( IdMapGhosts                 , id_map_ghosts , INPUT , DocString{"Ghost atom ids to grid locations"} );
-    ADD_SLOT( IntramolecularPairWeighting , weight        , INPUT , IntramolecularPairWeighting{} , DocString{"Not used"} );
     ADD_SLOT( MoleculeComputeParameterSet      , molecule_compute_parameters , INPUT, DocString{"Intramolecular functionals' parameters"} );
     ADD_SLOT( IntramolecularParameterIndexLists, intramolecular_parameters , INPUT_OUTPUT, DocString{"Intramolecular functional parameter index lists"} );
 
@@ -52,7 +50,7 @@ namespace exaStamp
     ADD_SLOT( ChemicalAngles     , chemical_angles       , INPUT_OUTPUT , DocString{"Bending angles (atom triplets, center atom second)"} );    
     ADD_SLOT( ChemicalTorsions   , chemical_torsions     , INPUT_OUTPUT , DocString{"Torsions (4 atoms chained by bonds)"} );
     ADD_SLOT( ChemicalPairs      , chemical_pairs        , INPUT_OUTPUT , DocString{"Intramolecular pairs (atoms 1-2, 1-3 and 1-4 apart)"} );
-    ADD_SLOT( ChemicalPairPotMap , chemical_pair_pot_map , INPUT_OUTPUT , DocString{"Map of intramolecular pair potential parameter set and associated weights"} );
+    ADD_SLOT( ChemicalPairPotMap , chemical_pair_pot_map , INPUT_OUTPUT , DocString{"Intramolecular pairs (atom ids) and their shortest path : 0 bond, 1 bend, 2 torsion"} );
 
   public:
     inline std::string documentation() const override final
@@ -158,10 +156,8 @@ holds these pairs, to exclude them from the neighbor lists (extramolecular_neigh
             fatal_error() << "intramolecular pair atoms are more than "<<IntramolecularImageCodec::MAX_SHIFT<<" periodic images apart" << std::endl;
           }
           const int pair_id = unique_pair_id(ta,tb);
-          int param_idx = -1;
-          // Since weight is only applied on the Coulombic part of RF, we still need that parameters set to be considered
-          param_idx = n_type_pairs * chemicalLinkType + pair_id ;
-          intramolecular_parameters->m_pair_param_idx[ pair_idx ] = param_idx;
+          // pair parameters with the bond, bend or torsion weights of mol_pair_weights (see intramolecular_setup)
+          intramolecular_parameters->m_pair_param_idx[ pair_idx ] = n_type_pairs * chemicalLinkType + pair_id;
           ++ pair_idx;
         }
       }

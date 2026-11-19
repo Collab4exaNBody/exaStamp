@@ -24,7 +24,6 @@ under the License.
 
 #include <exaStamp/molecule/mol_connectivity.h>
 #include <exaStamp/molecule/molecule_compute_param.h>
-#include <exaStamp/molecule/intramolecular_pair_weight.h>
 #include <exaStamp/molecule/intramolecular_image.h>
 #include <exanb/core/grid.h>
 #include <exanb/core/domain.h>
@@ -44,7 +43,6 @@ namespace exaStamp
     ADD_SLOT( ParticleSpecies             , species       , INPUT , REQUIRED );
     ADD_SLOT( IdMap                       , id_map        , INPUT , DocString{"Owned atom ids to grid locations"} );
     ADD_SLOT( IdMapGhosts                 , id_map_ghosts , INPUT , DocString{"Ghost atom ids to grid locations"} );
-    ADD_SLOT( IntramolecularPairWeighting , weight        , INPUT , IntramolecularPairWeighting{} , DocString{"Not used"} );
 
     ADD_SLOT( ChemicalBonds     , chemical_bonds     , INPUT_OUTPUT , DocString{"Bonds (pairs of bonded atoms)"} );
     ADD_SLOT( ChemicalAngles    , chemical_angles    , INPUT_OUTPUT , DocString{"Bending angles (atom triplets, center atom second)"} );    

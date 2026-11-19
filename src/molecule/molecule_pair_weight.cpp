@@ -64,7 +64,7 @@ namespace exaStamp
 
     ADD_SLOT( bool               , ignore_intramolecular , INPUT , false , DocString{"Zero weight for intramolecular pairs"} );
 
-    ADD_SLOT( ChemicalPairPotMap , chemical_pair_pot_map , INPUT , DocString{"Map of intramolecular pair potential parameter set and associated weights"} );
+    ADD_SLOT( ChemicalPairPotMap , chemical_pair_pot_map , INPUT , DocString{"Intramolecular pairs (atom ids) and their shortest path : 0 bond, 1 bend, 2 torsion"} );
 
   public:
     inline std::string documentation() const override final

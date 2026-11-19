@@ -82,7 +82,7 @@ namespace exaStamp
     ADD_SLOT( double              , nbh_dist_lab    , INPUT , DocString{"Neighbor distance"} );
     ADD_SLOT( GridChunkNeighbors  , chunk_neighbors , INPUT_OUTPUT , DocString{"Neighbor lists, without intramolecular pairs"} );
 
-    ADD_SLOT( ChemicalPairPotMap , chemical_pair_pot_map , INPUT , DocString{"Map of intramolecular pair potential parameter set and associated weights"} );
+    ADD_SLOT( ChemicalPairPotMap , chemical_pair_pot_map , INPUT , DocString{"Intramolecular pairs (atom ids) and their shortest path : 0 bond, 1 bend, 2 torsion"} );
 
     ADD_SLOT( ChunkNeighborsConfig, config , INPUT_OUTPUT, ChunkNeighborsConfig{} , DocString{"Neighbor list configuration"} );
     ADD_SLOT( ChunkNeighborsScratchStorage, chunk_neighbors_scratch, PRIVATE );
