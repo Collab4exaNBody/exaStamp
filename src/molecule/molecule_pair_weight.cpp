@@ -52,21 +52,31 @@ namespace exaStamp
 
     ADD_SLOT( MoleculeSpeciesVector , molecules , INPUT , DocString{"Molecule descriptions"} );
 
-    ADD_SLOT( IntramolecularPairWeighting , weight   , INPUT , IntramolecularPairWeighting{} );
+    ADD_SLOT( IntramolecularPairWeighting , weight   , INPUT , IntramolecularPairWeighting{} , DocString{"Pair weights for each molecule type"} );
     ADD_SLOT( MoleculeComputeParameterSet      , molecule_compute_parameters , INPUT, DocString{"Intramolecular functionals' parameters"} );
 
-    ADD_SLOT( CompactGridPairWeights , compact_nbh_weight , INPUT_OUTPUT );
+    ADD_SLOT( CompactGridPairWeights , compact_nbh_weight , INPUT_OUTPUT , DocString{"Per neighbor pair weights (output)"} );
     
     ADD_SLOT( ParticleSpecies    , species           , INPUT , REQUIRED );
-    ADD_SLOT( ChemicalBonds      , chemical_bonds    , INPUT , OPTIONAL );
-    ADD_SLOT( ChemicalAngles     , chemical_angles   , INPUT , OPTIONAL );
-    ADD_SLOT( ChemicalTorsions   , chemical_torsions , INPUT , OPTIONAL );
+    ADD_SLOT( ChemicalBonds      , chemical_bonds    , INPUT , OPTIONAL , DocString{"Bonds (pairs of bonded atoms)"} );
+    ADD_SLOT( ChemicalAngles     , chemical_angles   , INPUT , OPTIONAL , DocString{"Bending angles (atom triplets, center atom second)"} );
+    ADD_SLOT( ChemicalTorsions   , chemical_torsions , INPUT , OPTIONAL , DocString{"Torsions (4 atoms chained by bonds)"} );
 
-    ADD_SLOT( bool               , ignore_intramolecular , INPUT , false );
+    ADD_SLOT( bool               , ignore_intramolecular , INPUT , false , DocString{"Zero weight for intramolecular pairs"} );
 
     ADD_SLOT( ChemicalPairPotMap , chemical_pair_pot_map , INPUT , DocString{"Map of intramolecular pair potential parameter set and associated weights"} );
 
   public:
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+Builds per neighbor pair weights (compact_nbh_weight) for molecules, from the bond, angle and torsion lists and the
+weights of each molecule type. With ignore_intramolecular, intramolecular pairs get a zero weight.
+Not used by the default molecule configuration, where intramolecular pairs are removed from the neighbor lists
+(extramolecular_neighbors) and computed by intramolecular_pair_force.
+)EOF";
+    }
+
     inline void execute () override final
     {
       assert( chunk_neighbors->number_of_cells() == grid->number_of_cells() );

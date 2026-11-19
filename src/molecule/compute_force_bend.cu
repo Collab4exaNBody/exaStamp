@@ -37,7 +37,7 @@ under the License.
 #include <onika/thread.h> // GridParticleLocks
 
 #include <exaStamp/molecule/bends_potentials_parameters.h>
-#include <exaStamp/molecule/angles_force_functor.h>
+#include <exaStamp/molecule/bends_force_functor.h>
 
 namespace exaStamp
 {
@@ -53,17 +53,26 @@ namespace exaStamp
     // -----------------------------------------------
     ADD_SLOT( GridT                    , grid                  , INPUT_OUTPUT );
     ADD_SLOT( Domain                   , domain                , INPUT );
-    ADD_SLOT( ChemicalAngles           , chemical_angles       , INPUT, OPTIONAL );
-    ADD_SLOT( BendsPotentialParameters , potentials_for_angles , INPUT, REQUIRED );
+    ADD_SLOT( ChemicalAngles           , chemical_angles       , INPUT, OPTIONAL , DocString{"Bending angles (atom triplets, center atom second)"} );
+    ADD_SLOT( BendsPotentialParameters , potentials_for_angles , INPUT, REQUIRED , DocString{"Bending angle potentials of the force field"} );
     ADD_SLOT( ParticleSpecies          , species               , INPUT, REQUIRED );
-    ADD_SLOT( GridParticleLocks        , particle_locks        , INPUT_OUTPUT);
+    ADD_SLOT( GridParticleLocks        , particle_locks        , INPUT_OUTPUT , DocString{"Particle locks for concurrent force updates"} );
 
     ADD_SLOT( MoleculeComputeParameterSet  , molecule_compute_parameters , INPUT_OUTPUT, DocString{"Intramolecular functionals' parameters"} );
-    ADD_SLOT( IntramolecularParameterIndexLists, intramolecular_parameters , INPUT_OUTPUT, DocString{"Intramolecular functional parmater index lists"} );
+    ADD_SLOT( IntramolecularParameterIndexLists, intramolecular_parameters , INPUT_OUTPUT, DocString{"Intramolecular functional parameter index lists"} );
 
-    ADD_SLOT( bool                      , trigger_thermo_state, INPUT , OPTIONAL );
+    ADD_SLOT( bool                      , trigger_thermo_state, INPUT , OPTIONAL , DocString{"If set, energy and virial are only computed when true"} );
 
   public:
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+Computes the forces of all bending angles (chemical_angles) with the angle potentials of the force field (potentials_for_angles).
+Parameters come from molecule_compute_parameters (intramolecular_setup) and parameter indices from intramolecular_parameters
+(mol_optimize_connectivity). Energy and virial are only computed on thermodynamic state steps (trigger_thermo_state).
+)EOF";
+    }
+
     inline void execute ()  override final
     {
       if( ! grid.has_value() || grid->number_of_cells()==0 )
@@ -104,7 +113,7 @@ namespace exaStamp
       auto compute_angles_force_opt_virial = [&]( auto cpene, auto cpvir )
       {
         auto cells = grid->cells_accessor();
-        AngleForceOp<decltype(cells),VirialFieldT,cpene.value,cpvir.value> angle_force_op =
+        BendForceOp<decltype(cells),VirialFieldT,cpene.value,cpvir.value> bend_force_op =
           { cells
           , particle_locks->data()
           , molecule_compute_parameters->m_func_params.data()
@@ -114,7 +123,7 @@ namespace exaStamp
           , domain->xform() , domain->xform_is_identity()
           , virial_field };
 
-        /* auto parallel_op = */ parallel_for( chemical_angles->size(), angle_force_op, parallel_execution_context("angle_force") );
+        /* auto parallel_op = */ parallel_for( chemical_angles->size(), bend_force_op, parallel_execution_context("angle_force") );
       };
 
       if( need_virial )      compute_angles_force_opt_virial( onika::TrueType{}  , onika::TrueType{}  );
@@ -129,7 +138,7 @@ namespace exaStamp
   template<class GridT> using ComputeForcesBendsNodeTmpl = ComputeForcesBendsNode<GridT>;
 
   // === register factories ===
-  ONIKA_AUTORUN_INIT(compute_forces_molecules_bends)
+  ONIKA_AUTORUN_INIT(compute_force_bend)
   {
     OperatorNodeFactory::instance()->register_factory( "compute_force_bend", make_grid_variant_operator< ComputeForcesBendsNodeTmpl > );
   }

@@ -79,15 +79,23 @@ namespace exaStamp
     ADD_SLOT( AmrGrid             , amr             , INPUT );
     ADD_SLOT( AmrSubCellPairCache , amr_grid_pairs  , INPUT );
     ADD_SLOT( Domain              , domain          , INPUT );
-    ADD_SLOT( double              , nbh_dist_lab    , INPUT );
-    ADD_SLOT( GridChunkNeighbors  , chunk_neighbors , INPUT_OUTPUT );
+    ADD_SLOT( double              , nbh_dist_lab    , INPUT , DocString{"Neighbor distance"} );
+    ADD_SLOT( GridChunkNeighbors  , chunk_neighbors , INPUT_OUTPUT , DocString{"Neighbor lists, without intramolecular pairs"} );
 
     ADD_SLOT( ChemicalPairPotMap , chemical_pair_pot_map , INPUT , DocString{"Map of intramolecular pair potential parameter set and associated weights"} );
 
-    ADD_SLOT( ChunkNeighborsConfig, config , INPUT_OUTPUT, ChunkNeighborsConfig{} );
+    ADD_SLOT( ChunkNeighborsConfig, config , INPUT_OUTPUT, ChunkNeighborsConfig{} , DocString{"Neighbor list configuration"} );
     ADD_SLOT( ChunkNeighborsScratchStorage, chunk_neighbors_scratch, PRIVATE );
 
   public:
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+Builds the neighbor lists without intramolecular pairs (chemical_pair_pot_map, from intramolecular_pair_list). These pairs
+are computed by intramolecular_pair_force.
+)EOF";
+    }
+
     inline void execute () override final
     {
       static const ChemicalPairPotMap empty_pair_pot_map = {};

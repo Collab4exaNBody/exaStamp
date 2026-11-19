@@ -49,19 +49,29 @@ namespace exaStamp
     // Operator slots
     // -----------------------------------------------
     ADD_SLOT( Domain                  , domain                , INPUT );
-    ADD_SLOT( ChemicalPairs           , chemical_pairs        , INPUT_OUTPUT, OPTIONAL );
+    ADD_SLOT( ChemicalPairs           , chemical_pairs        , INPUT_OUTPUT, OPTIONAL , DocString{"Intramolecular pairs (atoms 1-2, 1-3 and 1-4 apart)"} );
     ADD_SLOT( ParticleSpecies         , species               , INPUT, REQUIRED );
-    ADD_SLOT( BondsPotentialParameters, potentials_for_bonds  , INPUT_OUTPUT, REQUIRED );
+    ADD_SLOT( BondsPotentialParameters, potentials_for_bonds  , INPUT_OUTPUT, REQUIRED , DocString{"Bond potentials of the force field"} );
     ADD_SLOT( GridT                   , grid                  , INPUT_OUTPUT );
-    ADD_SLOT( GridParticleLocks       , particle_locks        , INPUT_OUTPUT);
+    ADD_SLOT( GridParticleLocks       , particle_locks        , INPUT_OUTPUT , DocString{"Particle locks for concurrent force updates"} );
 
     ADD_SLOT( MoleculeComputeParameterSet  , molecule_compute_parameters , INPUT_OUTPUT, DocString{"Intramolecular functionals' parameters"} );
-    ADD_SLOT( IntramolecularParameterIndexLists, intramolecular_parameters , INPUT_OUTPUT, DocString{"Intramolecular functional parmater index lists"} );
+    ADD_SLOT( IntramolecularParameterIndexLists, intramolecular_parameters , INPUT_OUTPUT, DocString{"Intramolecular functional parameter index lists"} );
 
-    ADD_SLOT( bool                      , trigger_thermo_state, INPUT , OPTIONAL );
-    ADD_SLOT( bool                      , per_atom_charge     , INPUT , true );
+    ADD_SLOT( bool                      , trigger_thermo_state, INPUT , OPTIONAL , DocString{"If set, energy and virial are only computed when true"} );
+    ADD_SLOT( bool                      , per_atom_charge     , INPUT , true , DocString{"Use the charge field instead of species charges"} );
 
   public:
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+Computes the pair forces (pair potential and reaction field) of intramolecular pairs : atoms 1-2, 1-3 and 1-4 apart in the
+bond graph (chemical_pairs, built by intramolecular_pair_list). These pairs are excluded from the neighbor lists
+(extramolecular_neighbors). The pair potential and the reaction field of each pair are scaled by the bond, bend or torsion
+weights of mol_pair_weights. Energy and virial are only computed on thermodynamic state steps (trigger_thermo_state).
+)EOF";
+    }
+
     inline void execute() override final
     {
       using onika::parallel::parallel_for;
@@ -140,7 +150,7 @@ namespace exaStamp
   template<class GridT> using IntramolecularPairForceTmpl = IntramolecularPairForce<GridT>;
 
   // === register factories ===
-  ONIKA_AUTORUN_INIT(compute_forces_molecules_pairs)
+  ONIKA_AUTORUN_INIT(intramolecular_pair_force)
   {
     OperatorNodeFactory::instance()->register_factory( "intramolecular_pair_force", make_grid_variant_operator< IntramolecularPairForceTmpl > );
   }

@@ -57,7 +57,19 @@ namespace exaStamp
     }
   };
 
-  template<class GridT> using ReplicateDomainCMol = ReplicateDomain<GridT,ShiftParticleIdAndCMolFunctor>;
+  template<class GridT>
+  class ReplicateDomainCMol : public ReplicateDomain<GridT,ShiftParticleIdAndCMolFunctor>
+  {
+  public:
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+Replicates the system repeat times along each direction. Atom ids and the bonded atom ids (cmol field) of each copy are
+shifted, so that copies are separate molecules. Molecules must be unfolded before (a bond crossing a periodic boundary
+would otherwise join two atoms of the same copy) and renumbered after : see replicate_molecule_domain in config_molecule.msp.
+)EOF";
+    }
+  };
 
    // === register factories ===
   ONIKA_AUTORUN_INIT(replicate_domain_cmol)

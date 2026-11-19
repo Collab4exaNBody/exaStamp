@@ -36,16 +36,16 @@ namespace exaStamp
   class MoleculeForceField : public OperatorNode
   {
     ADD_SLOT( ParticleSpecies              , species                  , INPUT , REQUIRED );
-    ADD_SLOT( BondsPotentialParameters     , potentials_for_bonds     , INPUT_OUTPUT , BondsPotentialParameters{} );
-    ADD_SLOT( BendsPotentialParameters     , potentials_for_angles    , INPUT_OUTPUT , BendsPotentialParameters{} );
-    ADD_SLOT( TorsionsPotentialParameters  , potentials_for_torsions  , INPUT_OUTPUT , TorsionsPotentialParameters{} );
-    ADD_SLOT( ImpropersPotentialParameters , potentials_for_impropers , INPUT_OUTPUT , ImpropersPotentialParameters{} );
-    ADD_SLOT( LJExp6RFMultiParms           , potentials_for_pairs     , INPUT_OUTPUT , LJExp6RFMultiParms{} );
+    ADD_SLOT( BondsPotentialParameters     , potentials_for_bonds     , INPUT_OUTPUT , BondsPotentialParameters{} , DocString{"Bond potentials of the force field"} );
+    ADD_SLOT( BendsPotentialParameters     , potentials_for_angles    , INPUT_OUTPUT , BendsPotentialParameters{} , DocString{"Bending angle potentials of the force field"} );
+    ADD_SLOT( TorsionsPotentialParameters  , potentials_for_torsions  , INPUT_OUTPUT , TorsionsPotentialParameters{} , DocString{"Torsion potentials of the force field"} );
+    ADD_SLOT( ImpropersPotentialParameters , potentials_for_impropers , INPUT_OUTPUT , ImpropersPotentialParameters{} , DocString{"Improper torsion potentials of the force field"} );
+    ADD_SLOT( LJExp6RFMultiParms           , potentials_for_pairs     , INPUT_OUTPUT , LJExp6RFMultiParms{} , DocString{"Pair potentials (LJ or Exp6, plus reaction field) for each pair of species"} );
     ADD_SLOT( IntramolecularPairWeighting  , mol_pair_weights         , INPUT_OUTPUT , IntramolecularPairWeighting{} , DocString{"intramolecular pair weights, keyed by species pair 'typeA_typeB'"} );
-    ADD_SLOT( bool                         , rf_self_pairs            , INPUT_OUTPUT , true );
-    ADD_SLOT( bool                         , long_range_correction    , INPUT_OUTPUT , true );
-    ADD_SLOT( IntraFFtypes                 , ffnameVector             , OUTPUT );
-    ADD_SLOT( double                       , rcut_max                 , INPUT_OUTPUT , 0.0 );
+    ADD_SLOT( bool                         , rf_self_pairs            , INPUT_OUTPUT , true , DocString{"Add the reaction field self energy of each atom"} );
+    ADD_SLOT( bool                         , long_range_correction    , INPUT_OUTPUT , true , DocString{"Long range correction of the pair energy and virial"} );
+    ADD_SLOT( IntraFFtypes                 , ffnameVector             , OUTPUT , DocString{"Force field type names, indexed by force field type id"} );
+    ADD_SLOT( double                       , rcut_max                 , INPUT_OUTPUT , 0.0 , DocString{"Maximum cutoff, updated with the pair potential cutoffs"} );
 
   public:
     inline std::string documentation() const override final

@@ -42,19 +42,28 @@ namespace exaStamp
     ADD_SLOT( GridT                       , grid          , INPUT , REQUIRED );
     ADD_SLOT( Domain                      , domain        , INPUT , REQUIRED );
     ADD_SLOT( ParticleSpecies             , species       , INPUT , REQUIRED );
-    ADD_SLOT( IdMap                       , id_map        , INPUT  );
-    ADD_SLOT( IdMapGhosts                 , id_map_ghosts , INPUT  );
-    ADD_SLOT( IntramolecularPairWeighting , weight        , INPUT , IntramolecularPairWeighting{} );
+    ADD_SLOT( IdMap                       , id_map        , INPUT , DocString{"Owned atom ids to grid locations"} );
+    ADD_SLOT( IdMapGhosts                 , id_map_ghosts , INPUT , DocString{"Ghost atom ids to grid locations"} );
+    ADD_SLOT( IntramolecularPairWeighting , weight        , INPUT , IntramolecularPairWeighting{} , DocString{"Not used"} );
     ADD_SLOT( MoleculeComputeParameterSet      , molecule_compute_parameters , INPUT, DocString{"Intramolecular functionals' parameters"} );
-    ADD_SLOT( IntramolecularParameterIndexLists, intramolecular_parameters , INPUT_OUTPUT, DocString{"Intramolecular functional parmater index lists"} );
+    ADD_SLOT( IntramolecularParameterIndexLists, intramolecular_parameters , INPUT_OUTPUT, DocString{"Intramolecular functional parameter index lists"} );
 
-    ADD_SLOT( ChemicalBonds      , chemical_bonds        , INPUT_OUTPUT );
-    ADD_SLOT( ChemicalAngles     , chemical_angles       , INPUT_OUTPUT );    
-    ADD_SLOT( ChemicalTorsions   , chemical_torsions     , INPUT_OUTPUT );
-    ADD_SLOT( ChemicalPairs      , chemical_pairs        , INPUT_OUTPUT );
+    ADD_SLOT( ChemicalBonds      , chemical_bonds        , INPUT_OUTPUT , DocString{"Bonds (pairs of bonded atoms)"} );
+    ADD_SLOT( ChemicalAngles     , chemical_angles       , INPUT_OUTPUT , DocString{"Bending angles (atom triplets, center atom second)"} );    
+    ADD_SLOT( ChemicalTorsions   , chemical_torsions     , INPUT_OUTPUT , DocString{"Torsions (4 atoms chained by bonds)"} );
+    ADD_SLOT( ChemicalPairs      , chemical_pairs        , INPUT_OUTPUT , DocString{"Intramolecular pairs (atoms 1-2, 1-3 and 1-4 apart)"} );
     ADD_SLOT( ChemicalPairPotMap , chemical_pair_pot_map , INPUT_OUTPUT , DocString{"Map of intramolecular pair potential parameter set and associated weights"} );
 
   public:
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+Builds the list of intramolecular pairs (chemical_pairs) : atoms 1-2, 1-3 and 1-4 apart in the bond graph, from the bond,
+angle and torsion lists. A pair found in several lists is counted once, with the shortest path. chemical_pair_pot_map
+holds these pairs, to exclude them from the neighbor lists (extramolecular_neighbors).
+)EOF";
+    }
+
     inline void execute () override final
     {
       const size_t n_bonds = chemical_bonds->size();

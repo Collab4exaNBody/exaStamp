@@ -153,8 +153,8 @@ namespace exaStamp
   {
     onika::memory::CudaMMVector<MoleculeGenericFuncParam> m_func_params;
     onika::memory::CudaMMVector<IntramolecularPairParams> m_pair_params;
-    onika::memory::CudaMMVector<double> m_energy_correction; // per atome type energy correction
-    onika::memory::CudaMMVector<Mat3d> m_virial_correction; // per atom type virial correction
+    onika::memory::CudaMMVector<double> m_energy_correction; // per atom type energy correction, times the box volume
+    onika::memory::CudaMMVector<Mat3d> m_virial_correction; // per atom type virial correction, times the box volume
     std::map< uint64_t , int > m_intramol_param_map;
     std::set< uint64_t > m_null_param_keys; // type keys whose parameters are all zero (term intentionally ignored)
     bool m_has_improper_potentials = false;  // impropers are created for every atom with 3 neighbors : without any improper potential, none is expected to have parameters

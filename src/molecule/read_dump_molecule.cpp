@@ -47,7 +47,7 @@ namespace exaStamp
     using StringVector = std::vector<std::string>;
 
     ADD_SLOT( MPI_Comm                         , mpi                      , INPUT );
-    ADD_SLOT( std::string                      , filename                 , INPUT );
+    ADD_SLOT( std::string                      , filename                 , INPUT , DocString{"Molecule restart file"} );
     ADD_SLOT( Domain                           , domain                   , INPUT_OUTPUT );
     ADD_SLOT( GridT                            , grid                     , INPUT_OUTPUT );
     ADD_SLOT( ParticleSpecies                  , species                  , INPUT_OUTPUT, REQUIRED );
@@ -55,16 +55,16 @@ namespace exaStamp
     ADD_SLOT( double                           , physical_time            , INPUT       , DocString{"Physical time"} );
 
     ADD_SLOT( MoleculeSpeciesVector            , molecules                , INPUT_OUTPUT, MoleculeSpeciesVector{} , DocString{"Molecule descriptions"} );
-    ADD_SLOT( BondsPotentialParameters         , potentials_for_bonds     , INPUT_OUTPUT, BondsPotentialParameters{} );
-    ADD_SLOT( BendsPotentialParameters         , potentials_for_angles    , INPUT_OUTPUT, BendsPotentialParameters{} );
-    ADD_SLOT( TorsionsPotentialParameters      , potentials_for_torsions  , INPUT_OUTPUT, TorsionsPotentialParameters{} );
-    ADD_SLOT( ImpropersPotentialParameters     , potentials_for_impropers , INPUT_OUTPUT, ImpropersPotentialParameters{} );    
-    ADD_SLOT( LJExp6RFMultiParms               , potentials_for_pairs     , INPUT_OUTPUT, LJExp6RFMultiParms{} );
-    ADD_SLOT( IntramolecularPairWeighting      , mol_pair_weights         , INPUT_OUTPUT, IntramolecularPairWeighting{} );
+    ADD_SLOT( BondsPotentialParameters         , potentials_for_bonds     , INPUT_OUTPUT, BondsPotentialParameters{} , DocString{"Bond potentials of the force field"} );
+    ADD_SLOT( BendsPotentialParameters         , potentials_for_angles    , INPUT_OUTPUT, BendsPotentialParameters{} , DocString{"Bending angle potentials of the force field"} );
+    ADD_SLOT( TorsionsPotentialParameters      , potentials_for_torsions  , INPUT_OUTPUT, TorsionsPotentialParameters{} , DocString{"Torsion potentials of the force field"} );
+    ADD_SLOT( ImpropersPotentialParameters     , potentials_for_impropers , INPUT_OUTPUT, ImpropersPotentialParameters{} , DocString{"Improper torsion potentials of the force field"} );    
+    ADD_SLOT( LJExp6RFMultiParms               , potentials_for_pairs     , INPUT_OUTPUT, LJExp6RFMultiParms{} , DocString{"Pair potentials (LJ or Exp6, plus reaction field) for each pair of species"} );
+    ADD_SLOT( IntramolecularPairWeighting      , mol_pair_weights         , INPUT_OUTPUT, IntramolecularPairWeighting{} , DocString{"Intramolecular pair weights for each pair of species"} );
 
-    ADD_SLOT( IntraFFtypes                     , ffnameVector             , OUTPUT );
-    ADD_SLOT( bool                             , rf_self_pairs            , OUTPUT      , false );
-    ADD_SLOT( bool                             , long_range_correction    , OUTPUT      , false );
+    ADD_SLOT( IntraFFtypes                     , ffnameVector             , OUTPUT , DocString{"Force field type names, indexed by force field type id"} );
+    ADD_SLOT( bool                             , rf_self_pairs            , OUTPUT      , false , DocString{"Reaction field self pairs, from the file"} );
+    ADD_SLOT( bool                             , long_range_correction    , OUTPUT      , false , DocString{"Long range correction, from the file"} );
     ADD_SLOT( double                           , bond_max_dist            , INPUT_OUTPUT, 0.0  , DocString{"molecule bond max distance, in physical space"} );
     ADD_SLOT( double                           , bond_max_stretch         , INPUT_OUTPUT, 1.0  , DocString{"fraction of bond_max_dist."} );
     
@@ -76,6 +76,15 @@ namespace exaStamp
     ADD_SLOT( bool                             , shrink_to_fit            , INPUT       , OPTIONAL , DocString{"if set to true and bounds was wpecified, try to reduce domain's grid size to the minimum size enclosing fixed bounds"} );
 
   public:
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+Reads a molecule restart file (binary dump written by write_dump_molecule) : atoms with their bonds and charges, molecule
+types and the force field stored in its header. Species must be declared. The reaction field cutoff mode is not stored :
+call reaction_field_cutoff_mode again after reading.
+)EOF";
+    }
+
     inline void execute () override final
       {
       using DumpFieldSet = FieldSet< field::_rx,field::_ry,field::_rz, field::_vx,field::_vy,field::_vz, field::_charge, field::_virial, field::_id, field::_idmol, field::_cmol, field::_type >;

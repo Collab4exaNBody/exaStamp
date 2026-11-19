@@ -71,14 +71,23 @@ namespace exaStamp
   class ReadXYZMolecules : public OperatorNode
   {
     ADD_SLOT( MPI_Comm        , mpi          , INPUT , MPI_COMM_WORLD  );
-    ADD_SLOT( std::string     , filename     , INPUT , REQUIRED );
+    ADD_SLOT( std::string     , filename     , INPUT , REQUIRED , DocString{"System file"} );
     ADD_SLOT( Domain          , domain       , INPUT_OUTPUT );
     ADD_SLOT( GridT           , grid         , INPUT_OUTPUT );
-    ADD_SLOT( ParticleSpecies , species      , INPUT ); // optional. if no species given, type ids are allocated automatically
+    ADD_SLOT( ParticleSpecies , species      , INPUT , DocString{"Declared species"} );
     ADD_SLOT( MoleculeSpeciesVector , molecules , INPUT_OUTPUT, MoleculeSpeciesVector{} , DocString{"Molecule descriptions"} );
     ADD_SLOT( std::string     , molecule_name , INPUT , OPTIONAL , DocString{"if set, molecule type name of every atom, instead of the first column of the file"} );
 
   public:
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+Reads atoms and bonds from an ASCII file : number of atoms, cell matrix, then one line per atom with molecule type,
+species, molecule id, atom id, position (ang), ids of up to 4 bonded atoms (-1 for none) and charge.
+Species must be declared. The force field is given separately, with molecule_force_field.
+)EOF";
+    }
+
     inline void execute () override final
     {
       //-------------------------------------------------------------------------------------------

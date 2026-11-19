@@ -62,14 +62,14 @@ namespace exaStamp
     ADD_SLOT( ParticleSpecies              , species           , INPUT , REQUIRED );
     ADD_SLOT( ParticleTypeMap              , particle_type_map , INPUT , REQUIRED );
     
-    ADD_SLOT( BondsPotentialParameters     , potentials_for_bonds     , INPUT, OPTIONAL );
-    ADD_SLOT( BendsPotentialParameters     , potentials_for_angles    , INPUT, OPTIONAL );
-    ADD_SLOT( TorsionsPotentialParameters  , potentials_for_torsions  , INPUT, OPTIONAL );
-    ADD_SLOT( ImpropersPotentialParameters , potentials_for_impropers , INPUT, OPTIONAL );
-    ADD_SLOT( LJExp6RFMultiParms           , potentials_for_pairs     , INPUT, LJExp6RFMultiParms{} );
-    ADD_SLOT( IntraFFtypes                 , ffnameVector             , INPUT, OPTIONAL);
+    ADD_SLOT( BondsPotentialParameters     , potentials_for_bonds     , INPUT, OPTIONAL , DocString{"Bond potentials of the force field"} );
+    ADD_SLOT( BendsPotentialParameters     , potentials_for_angles    , INPUT, OPTIONAL , DocString{"Bending angle potentials of the force field"} );
+    ADD_SLOT( TorsionsPotentialParameters  , potentials_for_torsions  , INPUT, OPTIONAL , DocString{"Torsion potentials of the force field"} );
+    ADD_SLOT( ImpropersPotentialParameters , potentials_for_impropers , INPUT, OPTIONAL , DocString{"Improper torsion potentials of the force field"} );
+    ADD_SLOT( LJExp6RFMultiParms           , potentials_for_pairs     , INPUT_OUTPUT, LJExp6RFMultiParms{} , DocString{"Pair potentials (LJ or Exp6, plus reaction field) for each pair of species. With long_range_correction, their energy shift at the cutoff is removed"} );
+    ADD_SLOT( IntraFFtypes                 , ffnameVector             , INPUT, OPTIONAL , DocString{"Force field type names, indexed by force field type id"} );
     
-    ADD_SLOT( IntramolecularPairWeighting  , mol_pair_weights  , INPUT , IntramolecularPairWeighting{} );
+    ADD_SLOT( IntramolecularPairWeighting  , mol_pair_weights  , INPUT , IntramolecularPairWeighting{} , DocString{"Intramolecular pair weights for each pair of species"} );
 
     ADD_SLOT( GridT                        , grid              , INPUT_OUTPUT);
     ADD_SLOT( MoleculeSpeciesVector        , molecules         , INPUT_OUTPUT , REQUIRED , DocString{"Molecule descriptions"} );
@@ -80,6 +80,17 @@ namespace exaStamp
   public:
     inline bool is_sink() const override final { return true; }
     
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+Prepares the parameters of intramolecular terms (molecule_compute_parameters) : parameter sets of bonds, angles, torsions
+and impropers indexed by force field types, and pair parameters with their bond, bend and torsion weights (mol_pair_weights).
+With long_range_correction, computes the long range correction of the energy and virial per atom type (for LJ or Exp6
+pair potentials beyond their cutoff), applied with the current box volume by zero_force_energy_with_correction, and
+removes the energy shift of pair potentials at their cutoff.
+)EOF";
+    }
+
     inline void execute ()  override final
     {
       const unsigned int nmol = molecules->m_molecules.size();
@@ -127,7 +138,7 @@ namespace exaStamp
       MPI_Allreduce(MPI_IN_PLACE,type_count.data(), type_count.size(), MPI_LONG, MPI_SUM, *mpi );
       for(size_t t=0;t<species->size();t++) ldbg << "Type "<<species->at(t).name()<<" has "<<type_count[t]<<" atoms"<<std::endl;
 
-      // compute global energy correction term
+      // the long range correction needs the same functional form (LJ or Exp6) for all pairs with a pair term
       bool all_lj = true;
       bool all_exp6 = true;
       for(const auto& potelem : potentials_for_pairs->m_potentials)
@@ -135,15 +146,10 @@ namespace exaStamp
         const auto & pot = potelem.m_params;
         ldbg << "pot "<<potelem.m_type_a<<"/"<<potelem.m_type_b<<" : PAIR : A="<<pot.m_A<<", B="<<pot.m_B_ISEXP6<<", C="<<pot.m_C_EPSILON<<", D="<<pot.m_D_SIGMA<<", ecut="<<pot.m_ecut
              << ", RF : RF0="<<pot.m_rf.RF0<<", RF1="<<pot.m_rf.RF1<<", RF2="<<pot.m_rf.RF2<<", ecut="<<pot.m_rf.ecut<<std::endl;
-        if( ! pot.pair_is_null() )
+        if( pot.has_pair_term() )
         {
-          ldbg << "pot "<<potelem.m_type_a<<"/"<<potelem.m_type_b<<" is "<< ( pot.is_lj()?"LJ":"Exp6" ) << std::endl;
           all_lj = all_lj && pot.is_lj();
           all_exp6 = all_exp6 && pot.is_exp6();
-        }
-        else
-        {
-          ldbg << "pot "<<potelem.m_type_a<<"/"<<potelem.m_type_b<<" is empty"<<std::endl;
         }
       }
 
@@ -154,8 +160,6 @@ namespace exaStamp
       for(auto& potelem : potentials_for_pairs->m_potentials)
       {
         auto & pot = potelem.m_params;
-        std::string typea_typeb;
-
 
         if( str2type(potelem.m_type_a)==-1 ) { fatal_error()<<"unknown type "<<potelem.m_type_a<<" in potential description"<<std::endl; }
         if( str2type(potelem.m_type_b)==-1 ) { fatal_error()<<"unknown type "<<potelem.m_type_b<<" in potential description"<<std::endl; }
@@ -163,33 +167,20 @@ namespace exaStamp
         const unsigned int tb = str2type(potelem.m_type_b); 
         const unsigned int pair_id = unique_pair_id(ta,tb);
 
-	      /* string for pairs */
-	      typea_typeb = potelem.m_type_a + "_" + potelem.m_type_b;
-	      auto it = mol_pair_weights->m_molecule_weight.find(typea_typeb);
-	      if (it != mol_pair_weights->m_molecule_weight.end()) {
-          bond_pair_weight = it->second.m_bond_weight;
-          bond_rf_weight = it->second.m_rf_bond_weight;
-          angle_pair_weight = it->second.m_bend_weight;
-          angle_rf_weight = it->second.m_rf_bend_weight;
-          torsion_pair_weight = it->second.m_torsion_weight;
-          torsion_rf_weight = it->second.m_rf_torsion_weight;
-	      } else {
-          typea_typeb = potelem.m_type_b + "_" + potelem.m_type_a;
-	        it = mol_pair_weights->m_molecule_weight.find(typea_typeb);
-	        if (it != mol_pair_weights->m_molecule_weight.end()) {
-            bond_pair_weight = it->second.m_bond_weight;
-            bond_rf_weight = it->second.m_rf_bond_weight;
-            angle_pair_weight = it->second.m_bend_weight;
-            angle_rf_weight = it->second.m_rf_bend_weight;
-            torsion_pair_weight = it->second.m_torsion_weight;
-            torsion_rf_weight = it->second.m_rf_torsion_weight;
-	        } else {
-            fatal_error() << "intramolecular weight for pair (" << potelem.m_type_a << ", " << potelem.m_type_b << ") not found !" << std::endl;
-	        }
-	      }
+        auto it = mol_pair_weights->m_molecule_weight.find( potelem.m_type_a + "_" + potelem.m_type_b );
+        if( it == mol_pair_weights->m_molecule_weight.end() ) it = mol_pair_weights->m_molecule_weight.find( potelem.m_type_b + "_" + potelem.m_type_a );
+        if( it == mol_pair_weights->m_molecule_weight.end() )
+        {
+          fatal_error() << "intramolecular weight for pair (" << potelem.m_type_a << ", " << potelem.m_type_b << ") not found !" << std::endl;
+        }
+        bond_pair_weight = it->second.m_bond_weight;
+        bond_rf_weight = it->second.m_rf_bond_weight;
+        angle_pair_weight = it->second.m_bend_weight;
+        angle_rf_weight = it->second.m_rf_bend_weight;
+        torsion_pair_weight = it->second.m_torsion_weight;
+        torsion_rf_weight = it->second.m_rf_torsion_weight;
 
-        
-        // if long_range_correction is enabled, we must set non-RF pair potenital's ecut to 0
+        // with the long range correction, the pair potential (not the reaction field) is not shifted at its cutoff
         if( *long_range_correction )
         {
           pot.m_ecut = 0.0;
@@ -198,42 +189,23 @@ namespace exaStamp
         molecule_compute_parameters->m_pair_params[ n_type_pairs * 0 + pair_id ] = IntramolecularPairParams{ pot , bond_pair_weight, bond_rf_weight };
         molecule_compute_parameters->m_pair_params[ n_type_pairs * 1 + pair_id ] = IntramolecularPairParams{ pot , angle_pair_weight, angle_rf_weight };
         molecule_compute_parameters->m_pair_params[ n_type_pairs * 2 + pair_id ] = IntramolecularPairParams{ pot , torsion_pair_weight, torsion_rf_weight };
-        
-        const size_t na = type_count[ta]; // number of atom of type A
-        const size_t nb = type_count[tb]; // number of atom of type B
-        double Vtot = 1. ; // total volume of the simulation box
-        double ecorr = 0.; // basis for the energy correction per atom 
-        // global formula for the long range energy correction due to the couple (ta, tb) for EACH atom of type ta:
-        // ecorr = int_rc^(+inf) r^2 * U(r) 4 pi/Vtot 1/2 Nb
-        double vcorr = 0.; //virial correction
-        // global formula for the long range correction to EACH term of the diagonal component of the virial tensor due to the couple (ta, tb) for EACH atom of type ta:
-        // vcorr = - int_rc^(+inf) r^3 * dU/dr 4 pi/Vtot 1/6 Nb
 
-        // total volume calculation
-        if( ! domain->xform_is_identity() )
-        {
-          Mat3d mat = domain->xform();
-          Vec3d a { mat.m11, mat.m21, mat.m31 };
-          Vec3d b { mat.m12, mat.m22, mat.m32 };
-          Vec3d c { mat.m13, mat.m23, mat.m33 };
-          Vtot = dot( cross(a,b) , c );
-        }
-        Vtot *= bounds_volume( domain->bounds() );
+        // no correction for a pair without LJ or Exp6 term (rf-only pair)
+        if( ! *long_range_correction || ! pot.has_pair_term() ) continue;
 
-
-        ldbg << "Compute correction for pair "<<potelem.m_type_a<<" , "<<potelem.m_type_b<<std::endl;
+        // per atom of type ta, from the Nb atoms of type tb beyond rc, times the box volume V (divided by the current
+        // volume in zero_force_energy_with_correction):
+        // ecorr = 2 pi Nb int_rc^inf r^2 U(r) dr , vcorr (each diagonal term) = - 2/3 pi Nb int_rc^inf r^3 dU/dr dr
+        double ecorr = 0.;
+        double vcorr = 0.;
         if( all_lj )
         {
           const double rcut = pot.m_rcut;
           const double epsilon = pot.m_C_EPSILON;
           const double sigma = pot.m_D_SIGMA;
-          //molecule_compute_parameters->m_energy_correction[ta] += 0.0; // so something here ...
-	        // U(r) = 4*epsilon ( (sigma/r)^12 - (sigma/r)^6)
-	        // int_rc^(+inf) r^2 * U(r)  = 4 * epsilon (1/9 sigma^12/rc^9 - 1/3 sigma^6/rc^3)
-	        ecorr = 4.*epsilon * (1./9. *pow(sigma, 12)/pow(rcut, 9) - 1./3.* pow(sigma, 6)/pow(rcut, 3));
-          //molecule_compute_parameters->m_virial_correction[ta] += Mat3d{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 }; // so something here ...
-      	  // - int_rc^(+inf) r^3 * dU/dr = 4 * epsilon (4/3 sigma^12/rc^9 -2 sigma^6/rc^3)
-          vcorr =  4.*epsilon * (4./3.*pow(sigma, 12)/pow(rcut, 9) - 2.*pow(sigma, 6)/pow(rcut, 3));
+          // U(r) = 4 epsilon ( (sigma/r)^12 - (sigma/r)^6 )
+          ecorr = 4.*epsilon * (1./9. *pow(sigma, 12)/pow(rcut, 9) - 1./3.* pow(sigma, 6)/pow(rcut, 3));
+          vcorr = 4.*epsilon * (4./3.*pow(sigma, 12)/pow(rcut, 9) - 2.*pow(sigma, 6)/pow(rcut, 3));
         }
         else if( all_exp6 )
         {
@@ -242,56 +214,34 @@ namespace exaStamp
           const double B = pot.m_B_ISEXP6;
           const double C = pot.m_C_EPSILON;
           const double D = pot.m_D_SIGMA;
-          // U(r) = A exp(-B*r) - C/r^6 + D (12/(B*r))^12
-          // int_rc^(+inf) r^2 * U(r) = A/B  exp(-B*rc) (rc^2 + 2 rc/B + 2/B^2) 
-          //                           -C/3 1/rc^3
-          //                           +D (12/B)^12 1/9 1/rc^9
+          // U(r) = A exp(-B r) - C/r^6 + D (12/(B r))^12
           ecorr = A/B * exp(-B*rc)* (pow(rc, 2) + 2.* rc/B + 2./pow(B, 2)) -C/3. *pow(rc, -3) + D*pow(12./B, 12) *1./9. *pow(rc, -9);
-          // - int_rc^(+inf) r^3 * dU/dr = - (A exp(-B*rc) * (rc^3 + 3 rc^2/B + 6 rc/B^2 + 6/B^3)
-          //                                  + 2 C / rc^3
-	  //                                  - 4/3 D (12/B)^12 1/rc^9)
           vcorr = - (A* exp(-B*rc) * (pow(rc, 3) + 3.*pow(rc, 2)/B + 6.*rc/pow(B, 2) + 6./pow(B,3))
-		     + 2.*C / pow(rc, 3)
-		     - 4./3. *D *pow(12./B, 12) * pow(rc,-9));
-          //molecule_compute_parameters->m_energy_correction[ta] += 0.0; // so something here ...
-          //molecule_compute_parameters->m_virial_correction[ta] += Mat3d{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 }; // so something here ...
+                     + 2.*C / pow(rc, 3)
+                     - 4./3. *D *pow(12./B, 12) * pow(rc,-9));
         }
         else
         {
           fatal_error() << "pair potentials must be all LJ or all Exp6" << std::endl;
         }
+        ecorr *= 4. * M_PI * 1./2. ;
+        vcorr *= 4. * M_PI * 1./6. ;
 
-        //multiplication of the energy and virial corrections by factors common to the different potentials
-        ecorr *= 4. * M_PI / Vtot * 1./2. ;
-        vcorr *= 4. * M_PI / Vtot * 1./6. ;
-  
-        if (*long_range_correction) {
-          // addition of the corrections due to the couple [ta, tb] to the corrections of atoms of type ta
-          molecule_compute_parameters->m_energy_correction[ta] += ecorr *nb;
-          molecule_compute_parameters->m_virial_correction[ta] += Mat3d{ vcorr*nb, 0.0, 0.0, 0.0, vcorr*nb, 0.0, 0.0, 0.0, vcorr*nb };
-        } else {
-          molecule_compute_parameters->m_energy_correction[ta] += 0.;
-          molecule_compute_parameters->m_virial_correction[ta] += Mat3d{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
-        }
-  
-        //In the case where ta is different from tb, addition of the corrections to atoms of type tb
-        // the couple (ta, tb) is encountered only once
-        if (ta != tb) {
-          if( *long_range_correction )
-          {
-	    molecule_compute_parameters->m_energy_correction[tb] += ecorr *na;
-            molecule_compute_parameters->m_virial_correction[tb] += Mat3d{ vcorr*na, 0.0, 0.0, 0.0, vcorr*na, 0.0, 0.0, 0.0, vcorr*na };
-          } else {
-            molecule_compute_parameters->m_energy_correction[tb] += 0.;
-	    molecule_compute_parameters->m_virial_correction[tb] += Mat3d{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
-	  }
-        }
-
-
-        for(size_t t=0;t<species->size();t++)
+        // the couple (ta, tb) is listed once: correct atoms of type ta, and atoms of type tb if different
+        const double nb = type_count[tb];
+        const double na = type_count[ta];
+        molecule_compute_parameters->m_energy_correction[ta] += ecorr * nb;
+        molecule_compute_parameters->m_virial_correction[ta] += Mat3d{ vcorr*nb, 0.0, 0.0, 0.0, vcorr*nb, 0.0, 0.0, 0.0, vcorr*nb };
+        if( ta != tb )
         {
-          ldbg << "Correction for type "<<species->at(t).name()<<" : energy="<<molecule_compute_parameters->m_energy_correction[t]<<" , virial="<<molecule_compute_parameters->m_virial_correction[t]<<std::endl;
+          molecule_compute_parameters->m_energy_correction[tb] += ecorr * na;
+          molecule_compute_parameters->m_virial_correction[tb] += Mat3d{ vcorr*na, 0.0, 0.0, 0.0, vcorr*na, 0.0, 0.0, 0.0, vcorr*na };
         }
+      }
+
+      for(size_t t=0;t<species->size();t++)
+      {
+        ldbg << "Correction for type "<<species->at(t).name()<<" (times volume) : energy="<<molecule_compute_parameters->m_energy_correction[t]<<" , virial="<<molecule_compute_parameters->m_virial_correction[t]<<std::endl;
       }
       /************************************************************/        
 
@@ -443,7 +393,7 @@ namespace exaStamp
         molecule_compute_parameters->m_func_params[ pidx ] = p.first;
       }
             
-      // look for and initialize pair potentials
+      // print the intramolecular pair weights
       if( mol_pair_weights.has_value() )
       {
         ldbg << "Intramolecular pair weighting map :"<<std::endl;      
@@ -455,17 +405,6 @@ namespace exaStamp
         }
       }
 
-      // count number of different pair potential parameters
-      std::map< std::pair<int,int> , LJExp6RFMultiParmsPair > pair_param_map;
-      for( const auto & pp : potentials_for_pairs->m_potentials )
-      {
-        ldbg << "molecule pair : " << pp.m_type_a <<" / "<<pp.m_type_b<<std::endl;
-        int ta = str2type(pp.m_type_a);
-        int tb = str2type(pp.m_type_b);
-        if( ta > tb ) std::swap(ta,tb);
-        pair_param_map[ {ta,tb} ] = pp;
-      }
-      
       ldbg << molecule_compute_parameters->m_pair_params.size()<<" pair parameters and "<<molecule_compute_parameters->m_func_params.size()<<" intra parameters"<<std::endl;     
     }
 

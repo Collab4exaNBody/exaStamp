@@ -36,8 +36,16 @@ namespace exaStamp
   struct IdMapNode : public OperatorNode
   {
     ADD_SLOT( GridT , grid   , INPUT);
-    ADD_SLOT( IdMap , id_map , INPUT_OUTPUT);
-    ADD_SLOT( IdMapGhosts , id_map_ghosts , INPUT_OUTPUT);
+    ADD_SLOT( IdMap , id_map , INPUT_OUTPUT , DocString{"Owned atom ids to grid locations"} );
+    ADD_SLOT( IdMapGhosts , id_map_ghosts , INPUT_OUTPUT , DocString{"Ghost atom ids to grid locations"} );
+
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+Builds the maps from atom ids to their location in the grid (cell and index), for owned atoms (id_map) and ghost atoms
+(id_map_ghosts). Used to locate the atoms of bonds, angles, torsions, impropers and intramolecular pairs.
+)EOF";
+    }
 
     inline void execute ()  override final
     {

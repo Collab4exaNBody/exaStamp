@@ -42,19 +42,28 @@ namespace exaStamp
     ADD_SLOT( GridT                       , grid          , INPUT , REQUIRED );
     ADD_SLOT( Domain                      , domain        , INPUT , REQUIRED );
     ADD_SLOT( ParticleSpecies             , species       , INPUT , REQUIRED );
-    ADD_SLOT( IdMap                       , id_map        , INPUT  );
-    ADD_SLOT( IdMapGhosts                 , id_map_ghosts , INPUT  );
-    ADD_SLOT( IntramolecularPairWeighting , weight        , INPUT , IntramolecularPairWeighting{} );
+    ADD_SLOT( IdMap                       , id_map        , INPUT , DocString{"Owned atom ids to grid locations"} );
+    ADD_SLOT( IdMapGhosts                 , id_map_ghosts , INPUT , DocString{"Ghost atom ids to grid locations"} );
+    ADD_SLOT( IntramolecularPairWeighting , weight        , INPUT , IntramolecularPairWeighting{} , DocString{"Not used"} );
 
-    ADD_SLOT( ChemicalBonds     , chemical_bonds     , INPUT_OUTPUT );
-    ADD_SLOT( ChemicalAngles    , chemical_angles    , INPUT_OUTPUT );    
-    ADD_SLOT( ChemicalTorsions  , chemical_torsions  , INPUT_OUTPUT );
-    ADD_SLOT( ChemicalImpropers , chemical_impropers , INPUT_OUTPUT );
+    ADD_SLOT( ChemicalBonds     , chemical_bonds     , INPUT_OUTPUT , DocString{"Bonds (pairs of bonded atoms)"} );
+    ADD_SLOT( ChemicalAngles    , chemical_angles    , INPUT_OUTPUT , DocString{"Bending angles (atom triplets, center atom second)"} );    
+    ADD_SLOT( ChemicalTorsions  , chemical_torsions  , INPUT_OUTPUT , DocString{"Torsions (4 atoms chained by bonds)"} );
+    ADD_SLOT( ChemicalImpropers , chemical_impropers , INPUT_OUTPUT , DocString{"Improper torsions (center atom first)"} );
 
     ADD_SLOT( MoleculeComputeParameterSet      , molecule_compute_parameters , INPUT, DocString{"Intramolecular functionals' parameters"} );
-    ADD_SLOT( IntramolecularParameterIndexLists, intramolecular_parameters , INPUT_OUTPUT, DocString{"Intramolecular functional parmater index lists"} );
+    ADD_SLOT( IntramolecularParameterIndexLists, intramolecular_parameters , INPUT_OUTPUT, DocString{"Intramolecular functional parameter index lists"} );
 
   public:
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+Replaces atom ids in the bond, angle, torsion and improper lists by grid locations (id_map, id_map_ghosts), and finds the
+potential parameters of each term from the force field types of its atoms. The number of terms without parameters is
+reported once, in a warning. Also stores the periodic image of each atom of a term.
+)EOF";
+    }
+
     inline void execute () override final
     {
       const size_t n_bonds = chemical_bonds->size();

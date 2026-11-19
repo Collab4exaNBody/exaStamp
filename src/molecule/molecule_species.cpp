@@ -33,6 +33,13 @@ namespace exaStamp
   public:
     inline bool is_sink() const override final { return true; }
     
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+Declares the molecule types (molecules). Prints the molecule names in debug output.
+)EOF";
+    }
+
     inline void execute ()  override final
     {
       for(const auto& mol:molecules->m_molecules)

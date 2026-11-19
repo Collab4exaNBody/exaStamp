@@ -34,7 +34,7 @@ namespace exaStamp
 {
 
   template<class CellsT, class VirialFieldT, bool ComputeEnergy = true, bool ComputeVirial = false>
-  struct AngleForceOp
+  struct BendForceOp
   {
     CellsT m_cells;
     exanb::spin_mutex_array * m_particle_locks = nullptr;
@@ -173,7 +173,7 @@ namespace onika
 {
   namespace parallel
   {
-    template<class CellsT, class VirialFieldT, bool ene, bool vir> struct ParallelForFunctorTraits< exaStamp::AngleForceOp<CellsT,VirialFieldT,ene,vir> >
+    template<class CellsT, class VirialFieldT, bool ene, bool vir> struct ParallelForFunctorTraits< exaStamp::BendForceOp<CellsT,VirialFieldT,ene,vir> >
     {
       static inline constexpr bool CudaCompatible = true;
     };

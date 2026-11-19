@@ -29,9 +29,9 @@ namespace exaStamp
 
   class MoleculeCheckDomain : public OperatorNode
   {
-    ADD_SLOT(Domain , domain        , INPUT , REQUIRED ); // for info printing only
-    ADD_SLOT(double , bond_max_dist , INPUT , REQUIRED ); // molecule bond max distance
-    ADD_SLOT(double , bond_max_dist_eps   , INPUT  , 1.e-3 ); // fraction of bond_max_dist.
+    ADD_SLOT(Domain , domain        , INPUT , REQUIRED , DocString{"Domain, for printing only"} );
+    ADD_SLOT(double , bond_max_dist , INPUT , REQUIRED , DocString{"Molecule bond max distance"} );
+    ADD_SLOT(double , bond_max_dist_eps   , INPUT  , 1.e-3 , DocString{"Tolerance, as a fraction of bond_max_dist"} );
     // a periodic copy of an original particle is guaranteed to be at least 2*(bond_max_dist+bond_max_eps) far away from original
 
   public:

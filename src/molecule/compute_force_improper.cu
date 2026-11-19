@@ -35,34 +35,42 @@ under the License.
 #include <onika/log.h>
 #include <onika/thread.h>  // GridParticleLocks
 
-#include <exaStamp/molecule/torsions_potentials_parameters.h>
-#include <exaStamp/molecule/torsions_force_functor.h>
+#include <exaStamp/molecule/impropers_potentials_parameters.h>
+#include <exaStamp/molecule/impropers_force_functor.h>
 
 namespace exaStamp
 {
-
 
   template<
     class GridT,
     class = AssertGridHasFields< GridT, field::_fx, field::_fy, field::_fz, field::_ep >
     >
-  class ComputeForcesTorsionsNode : public OperatorNode
-  {
+  class ComputeForcesImpropersNode : public OperatorNode
+  {    
     // -----------------------------------------------
     // Operator slots
     // -----------------------------------------------
-    ADD_SLOT( GridT                       , grid                    , INPUT_OUTPUT );
-    ADD_SLOT( Domain                      , domain                  , INPUT );
-    ADD_SLOT( ChemicalTorsions            , chemical_torsions       , INPUT, OPTIONAL );
-    ADD_SLOT( TorsionsPotentialParameters , potentials_for_torsions , INPUT, REQUIRED );
-    ADD_SLOT( ParticleSpecies             , species                 , INPUT, REQUIRED );
-    
-    ADD_SLOT( GridParticleLocks        , particle_locks        , INPUT_OUTPUT);
+    ADD_SLOT( Domain                       , domain                   , INPUT );
+    ADD_SLOT( ChemicalImpropers            , chemical_impropers       , INPUT, OPTIONAL , DocString{"Improper torsions (center atom first)"} );
+    ADD_SLOT( ParticleSpecies              , species                  , INPUT, REQUIRED );
+    ADD_SLOT( ImpropersPotentialParameters , potentials_for_impropers , INPUT_OUTPUT, REQUIRED , DocString{"Improper torsion potentials of the force field"} );
+    ADD_SLOT( GridT                        , grid                     , INPUT_OUTPUT );
+    ADD_SLOT( GridParticleLocks            , particle_locks           , INPUT_OUTPUT , DocString{"Particle locks for concurrent force updates"} );
 
     ADD_SLOT( MoleculeComputeParameterSet  , molecule_compute_parameters , INPUT_OUTPUT, DocString{"Intramolecular functionals' parameters"} );
-    ADD_SLOT( IntramolecularParameterIndexLists, intramolecular_parameters , INPUT_OUTPUT, DocString{"Intramolecular functional parmater index lists"} );
+    ADD_SLOT( IntramolecularParameterIndexLists, intramolecular_parameters , INPUT_OUTPUT, DocString{"Intramolecular functional parameter index lists"} );
 
-    ADD_SLOT( bool                      , trigger_thermo_state, INPUT , OPTIONAL );
+    ADD_SLOT( bool                      , trigger_thermo_state, INPUT , OPTIONAL , DocString{"If set, energy and virial are only computed when true"} );
+
+  public:
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+Computes the forces of all improper torsions (chemical_impropers) with the improper potentials of the force field (potentials_for_impropers).
+Parameters come from molecule_compute_parameters (intramolecular_setup) and parameter indices from intramolecular_parameters
+(mol_optimize_connectivity). Energy and virial are only computed on thermodynamic state steps (trigger_thermo_state).
+)EOF";
+    }
 
     inline void execute ()  override final
     {
@@ -71,11 +79,11 @@ namespace exaStamp
         return;
       }
 
-      if( ! chemical_torsions.has_value() )
+      if( ! chemical_impropers.has_value() )
       {
-        fatal_error() << "chemical_torsions input missing" << std::endl;
+        fatal_error() << "chemical_impropers input missing" << std::endl;
       }
-      
+
       // energy and virial are computed on thermodynamic state steps only
       bool log_energy = false;
       if( trigger_thermo_state.has_value() )
@@ -93,47 +101,45 @@ namespace exaStamp
       VirialFieldT virial_field = {};
       if( need_virial ) virial_field = grid->field_accessor( field::virial );
 
-      ldbg<<"n_torsions = "<<chemical_torsions->size()<<std::endl;
+      ldbg<<"n_impropers = "<<chemical_impropers->size()<<std::endl;
 
       const Vec3d size_box {std::abs(domain->extent().x - domain->origin().x),
                       std::abs(domain->extent().y - domain->origin().y),
                       std::abs(domain->extent().z - domain->origin().z)};
 
 
-      auto compute_torsions_force_opt_virial = [&]( auto cpene, auto cpvir )
+      auto compute_impropers_force_opt_virial = [&]( auto cpene, auto cpvir )
       {
         auto cells = grid->cells_accessor();
-        TorsionForceOp<decltype(cells),VirialFieldT,cpene.value,cpvir.value> torsion_force_op =
+        ImproperForceOp<decltype(cells),VirialFieldT,cpene.value,cpvir.value> improper_force_op =
           { cells
           , particle_locks->data()
           , molecule_compute_parameters->m_func_params.data()
-          , intramolecular_parameters->m_torsion_param_idx.data()
-          , chemical_torsions->data()
-          , intramolecular_parameters->m_torsion_image.data() , size_box
+          , intramolecular_parameters->m_improper_param_idx.data()
+          , chemical_impropers->data()
+          , intramolecular_parameters->m_improper_image.data() , size_box
           , domain->xform() , domain->xform_is_identity()
           , virial_field };
 
-        /* auto parallel_op = */ parallel_for( chemical_torsions->size(), torsion_force_op, parallel_execution_context("torsion_force") );
+        /* auto parallel_op = */ parallel_for( chemical_impropers->size(), improper_force_op, parallel_execution_context("improper_force") );
       };
 
-      if( need_virial )      compute_torsions_force_opt_virial( onika::TrueType{}  , onika::TrueType{}  );
-      else if( need_energy ) compute_torsions_force_opt_virial( onika::TrueType{}  , onika::FalseType{} );
-      else                   compute_torsions_force_opt_virial( onika::FalseType{} , onika::FalseType{} );
+      if( need_virial )      compute_impropers_force_opt_virial( onika::TrueType{}  , onika::TrueType{}  );
+      else if( need_energy ) compute_impropers_force_opt_virial( onika::TrueType{}  , onika::FalseType{} );
+      else                   compute_impropers_force_opt_virial( onika::FalseType{} , onika::FalseType{} );
 
-      ldbg<<"compute_force_torsion done"<<std::endl;
+      ldbg<<"compute_force_improper done"<<std::endl;
     }
 
   };
 
-
-  template<class GridT> using ComputeForcesTorsionsNodeTmpl = ComputeForcesTorsionsNode<GridT>;
+  template<class GridT> using ComputeForcesImpropersNodeTmpl = ComputeForcesImpropersNode<GridT>;
 
   // === register factories ===
-  ONIKA_AUTORUN_INIT(compute_forces_molecules_torsions)
+  ONIKA_AUTORUN_INIT(compute_force_improper)
   {
-    OperatorNodeFactory::instance()->register_factory( "compute_force_torsion", make_grid_variant_operator< ComputeForcesTorsionsNodeTmpl> );
+    OperatorNodeFactory::instance()->register_factory( "compute_force_improper", make_grid_variant_operator< ComputeForcesImpropersNodeTmpl > );
   }
 
 }
-
 

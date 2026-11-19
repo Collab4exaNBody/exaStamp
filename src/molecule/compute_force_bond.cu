@@ -49,18 +49,27 @@ namespace exaStamp
     // Operator slots
     // -----------------------------------------------
     ADD_SLOT( Domain                  , domain                , INPUT );
-    ADD_SLOT( ChemicalBonds           , chemical_bonds        , INPUT, OPTIONAL );
+    ADD_SLOT( ChemicalBonds           , chemical_bonds        , INPUT, OPTIONAL , DocString{"Bonds (pairs of bonded atoms)"} );
     ADD_SLOT( ParticleSpecies         , species               , INPUT, REQUIRED );
-    ADD_SLOT( BondsPotentialParameters, potentials_for_bonds  , INPUT_OUTPUT, REQUIRED );
+    ADD_SLOT( BondsPotentialParameters, potentials_for_bonds  , INPUT_OUTPUT, REQUIRED , DocString{"Bond potentials of the force field"} );
     ADD_SLOT( GridT                   , grid                  , INPUT_OUTPUT );
-    ADD_SLOT( GridParticleLocks       , particle_locks        , INPUT_OUTPUT);
+    ADD_SLOT( GridParticleLocks       , particle_locks        , INPUT_OUTPUT , DocString{"Particle locks for concurrent force updates"} );
 
     ADD_SLOT( MoleculeComputeParameterSet  , molecule_compute_parameters , INPUT_OUTPUT, DocString{"Intramolecular functionals' parameters"} );
-    ADD_SLOT( IntramolecularParameterIndexLists, intramolecular_parameters , INPUT_OUTPUT, DocString{"Intramolecular functional parmater index lists"} );
+    ADD_SLOT( IntramolecularParameterIndexLists, intramolecular_parameters , INPUT_OUTPUT, DocString{"Intramolecular functional parameter index lists"} );
 
-    ADD_SLOT( bool                      , trigger_thermo_state, INPUT , OPTIONAL );
+    ADD_SLOT( bool                      , trigger_thermo_state, INPUT , OPTIONAL , DocString{"If set, energy and virial are only computed when true"} );
 
   public:
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+Computes the forces of all bonds (chemical_bonds) with the bond potentials of the force field (potentials_for_bonds).
+Parameters come from molecule_compute_parameters (intramolecular_setup) and parameter indices from intramolecular_parameters
+(mol_optimize_connectivity). Energy and virial are only computed on thermodynamic state steps (trigger_thermo_state).
+)EOF";
+    }
+
     inline void execute() override final
     {
       using onika::parallel::parallel_for;
@@ -128,7 +137,7 @@ namespace exaStamp
   template<class GridT> using ComputeForcesBondsNodeTmpl = ComputeForcesBondsNode<GridT>;
 
   // === register factories ===
-  ONIKA_AUTORUN_INIT(compute_forces_molecules_bonds)
+  ONIKA_AUTORUN_INIT(compute_force_bond)
   {
     OperatorNodeFactory::instance()->register_factory( "compute_force_bond", make_grid_variant_operator< ComputeForcesBondsNodeTmpl > );
   }

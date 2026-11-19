@@ -48,7 +48,7 @@ namespace exaStamp
     ADD_SLOT( MPI_Comm    , mpi             , INPUT );
     ADD_SLOT( GridT       , grid     , INPUT , REQUIRED );
     ADD_SLOT( Domain      , domain   , INPUT , REQUIRED );
-    ADD_SLOT( std::string , filename , INPUT , "molecule.dump" );
+    ADD_SLOT( std::string , filename , INPUT , "molecule.dump" , DocString{"Molecule restart file"} );
     ADD_SLOT( long        , timestep      , INPUT , DocString{"Iteration number"} );
     ADD_SLOT( double      , physical_time , INPUT , DocString{"Physical time"} );
     ADD_SLOT( long        , compression_level , INPUT , 6 , DocString{"Zlib compression level"} );
@@ -56,21 +56,29 @@ namespace exaStamp
 
     ADD_SLOT( ParticleSpecies                  , species                  , INPUT, REQUIRED );
     ADD_SLOT( MoleculeSpeciesVector            , molecules                , INPUT, OPTIONAL , DocString{"Molecule descriptions"} );
-    ADD_SLOT( BondsPotentialParameters         , potentials_for_bonds     , INPUT, OPTIONAL );
-    ADD_SLOT( BendsPotentialParameters         , potentials_for_angles    , INPUT, OPTIONAL );
-    ADD_SLOT( TorsionsPotentialParameters      , potentials_for_torsions  , INPUT, OPTIONAL );
-    ADD_SLOT( ImpropersPotentialParameters     , potentials_for_impropers , INPUT, OPTIONAL );    
-    ADD_SLOT( LJExp6RFMultiParms               , potentials_for_pairs     , INPUT, OPTIONAL );
-    ADD_SLOT( IntramolecularPairWeighting      , mol_pair_weights         , INPUT, OPTIONAL );
+    ADD_SLOT( BondsPotentialParameters         , potentials_for_bonds     , INPUT, OPTIONAL , DocString{"Bond potentials of the force field"} );
+    ADD_SLOT( BendsPotentialParameters         , potentials_for_angles    , INPUT, OPTIONAL , DocString{"Bending angle potentials of the force field"} );
+    ADD_SLOT( TorsionsPotentialParameters      , potentials_for_torsions  , INPUT, OPTIONAL , DocString{"Torsion potentials of the force field"} );
+    ADD_SLOT( ImpropersPotentialParameters     , potentials_for_impropers , INPUT, OPTIONAL , DocString{"Improper torsion potentials of the force field"} );    
+    ADD_SLOT( LJExp6RFMultiParms               , potentials_for_pairs     , INPUT, OPTIONAL , DocString{"Pair potentials (LJ or Exp6, plus reaction field) for each pair of species"} );
+    ADD_SLOT( IntramolecularPairWeighting      , mol_pair_weights         , INPUT, OPTIONAL , DocString{"Intramolecular pair weights for each pair of species"} );
 
-    ADD_SLOT( IntraFFtypes                     , ffnameVector             , INPUT, REQUIRED);
-    ADD_SLOT( bool                             , rf_self_pairs            , INPUT, REQUIRED);
-    ADD_SLOT( bool                             , long_range_correction    , INPUT, REQUIRED);
+    ADD_SLOT( IntraFFtypes                     , ffnameVector             , INPUT, REQUIRED , DocString{"Force field type names, indexed by force field type id"} );
+    ADD_SLOT( bool                             , rf_self_pairs            , INPUT, REQUIRED , DocString{"Reaction field self pairs, stored in the file"} );
+    ADD_SLOT( bool                             , long_range_correction    , INPUT, REQUIRED , DocString{"Long range correction, stored in the file"} );
     
     ADD_SLOT(double , bond_max_dist     , INPUT , 0.0 , DocString{"molecule bond max distance, in physical space"} );
     ADD_SLOT(double , bond_max_stretch  , INPUT , 0.0 , DocString{"fraction of bond_max_dist."} );
 
   public:
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+Writes a molecule restart file (binary dump) : atoms with their bonds and charges, molecule types and the force field in
+its header. Read it back with read_dump_molecule.
+)EOF";
+    }
+
     inline void execute () override final
     {
       using DumpFieldSet = FieldSet< field::_rx,field::_ry,field::_rz, field::_vx,field::_vy,field::_vz, field::_charge, field::_virial, field::_id, field::_idmol, field::_cmol, field::_type >; 

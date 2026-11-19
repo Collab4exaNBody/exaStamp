@@ -37,14 +37,22 @@ namespace exaStamp
   {
     ADD_SLOT( Domain            , domain             , INPUT );
     ADD_SLOT( GridT             , grid               , INPUT );
-    ADD_SLOT( IdMap             , id_map             , INPUT  );
-    ADD_SLOT( IdMapGhosts       , id_map_ghosts      , INPUT  );
-    ADD_SLOT( ChemicalBonds     , chemical_bonds     , INPUT_OUTPUT );
-    ADD_SLOT( ChemicalAngles    , chemical_angles    , INPUT_OUTPUT );
-    ADD_SLOT( ChemicalTorsions  , chemical_torsions  , INPUT_OUTPUT );
-    ADD_SLOT( ChemicalImpropers , chemical_impropers , INPUT_OUTPUT );
+    ADD_SLOT( IdMap             , id_map             , INPUT , DocString{"Owned atom ids to grid locations"} );
+    ADD_SLOT( IdMapGhosts       , id_map_ghosts      , INPUT , DocString{"Ghost atom ids to grid locations"} );
+    ADD_SLOT( ChemicalBonds     , chemical_bonds     , INPUT_OUTPUT , DocString{"Bonds (pairs of bonded atoms)"} );
+    ADD_SLOT( ChemicalAngles    , chemical_angles    , INPUT_OUTPUT , DocString{"Bending angles (atom triplets, center atom second)"} );
+    ADD_SLOT( ChemicalTorsions  , chemical_torsions  , INPUT_OUTPUT , DocString{"Torsions (4 atoms chained by bonds)"} );
+    ADD_SLOT( ChemicalImpropers , chemical_impropers , INPUT_OUTPUT , DocString{"Improper torsions (center atom first)"} );
 
   public:
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
+Builds the lists of bonds, bending angles, torsions and improper torsions from the bond neighbors of each atom (cmol field).
+Terms are stored with atom ids. An improper torsion is created for each atom with exactly three bonded neighbors.
+)EOF";
+    }
+
     inline void execute () override final
     {
       extract_connectivity( domain->grid_dimension(), *grid, *chemical_bonds, *chemical_angles, *chemical_torsions, *chemical_impropers, *id_map, *id_map_ghosts );

@@ -246,19 +246,19 @@ namespace exaStamp
   {
     using ParmsT = std::conditional_t< MixedPrecision , LJExp6RFParmsFP32 , LJExp6RFParms >;
     // ========= I/O slots =======================
-    ADD_SLOT( LJExp6RFMultiParms        , parameters          , INPUT , REQUIRED );
+    ADD_SLOT( LJExp6RFMultiParms        , parameters          , INPUT , REQUIRED , DocString{"Pair potentials (LJ or Exp6, plus reaction field) for each pair of species"} );
     ADD_SLOT( exanb::GridChunkNeighbors , chunk_neighbors     , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
-    ADD_SLOT( CompactGridPairWeights    , compact_nbh_weight  , INPUT , OPTIONAL );
-    ADD_SLOT( bool                      , enable_pair_weights , INPUT, true );
-    ADD_SLOT( bool                      , per_atom_charge     , INPUT, true );
-    ADD_SLOT( bool                      , use_symmetry        , INPUT, false );
-    ADD_SLOT( bool                      , rf_self_pairs       , INPUT, true );
-    ADD_SLOT( bool                      , trigger_thermo_state, INPUT , OPTIONAL );
+    ADD_SLOT( CompactGridPairWeights    , compact_nbh_weight  , INPUT , OPTIONAL , DocString{"Per neighbor pair weights, if enabled"} );
+    ADD_SLOT( bool                      , enable_pair_weights , INPUT, true , DocString{"Use compact_nbh_weight when available"} );
+    ADD_SLOT( bool                      , per_atom_charge     , INPUT, true , DocString{"Use the charge field instead of species charges"} );
+    ADD_SLOT( bool                      , use_symmetry        , INPUT, false , DocString{"Compute each pair once (symmetric neighbor lists)"} );
+    ADD_SLOT( bool                      , rf_self_pairs       , INPUT, true , DocString{"Add the reaction field self energy of each atom"} );
+    ADD_SLOT( bool                      , trigger_thermo_state, INPUT , OPTIONAL , DocString{"If set, energy and virial are only computed when true"} );
     ADD_SLOT( Domain                    , domain              , INPUT , REQUIRED );
     ADD_SLOT( ParticleSpecies           , species             , INPUT , REQUIRED );    
 
     ADD_SLOT( GridT                     , grid                , INPUT_OUTPUT );
-    ADD_SLOT( double                    , rcut_max            , INPUT_OUTPUT , 0.0 );
+    ADD_SLOT( double                    , rcut_max            , INPUT_OUTPUT , 0.0 , DocString{"Maximum cutoff, updated with the pair potential cutoffs"} );
 
     ADD_SLOT( GridParticleLocks         , particle_locks      , INPUT_OUTPUT , OPTIONAL , DocString{"particle access locks"} );
 
@@ -271,6 +271,17 @@ namespace exaStamp
 
   public:
     // Operator execution
+    inline std::string documentation() const override final
+    {
+      std::string doc = R"EOF(
+Computes the non-bonding forces of molecular systems : LJ or Exp6 pair potentials plus reaction field, with parameters
+for each pair of species (potentials_for_pairs). Intramolecular pairs are removed from the neighbor lists and computed by
+intramolecular_pair_force. Energy and virial are only computed on thermodynamic state steps (trigger_thermo_state).
+)EOF";
+      if constexpr ( MixedPrecision ) doc += "Pair terms in single precision, sums of forces, energies and virial in double precision.\n";
+      return doc;
+    }
+
     inline void execute () override final
     {
       assert( chunk_neighbors->number_of_cells() == grid->number_of_cells() );
