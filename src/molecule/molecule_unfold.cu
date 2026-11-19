@@ -90,14 +90,6 @@ Use molecule_restore_positions after an output to restore folded positions.
       // basic assumption
       assert( domain->origin() == grid->origin() );
 
-/*
-      const auto ghost_update_fields = onika::make_flat_tuple( idmol_field ); 
-      auto ghost_comm_buffers = UpdateGhostsUtils::make_forward_ghost_update_manager( cells, ghost_update_fields );
-        grid_update_ghosts( exanb::ldbg, *mpi, *ghost_comm_scheme, *grid, *domain, nullptr,
-                            ghost_comm_buffers, pecfunc, peqfunc, ghost_update_fields, *update_ghost_config );
-
-*/
-
       // those two lambdas are used to launch parallel kernels within a function exterior to this OperatorNode's implementation
       auto pecfunc = [self=this](auto ... args) { return self->parallel_execution_context(args ...); };
       auto peqfunc = [self=this]() -> onika::parallel::ParallelExecutionQueue& { return self->parallel_execution_queue(); };
@@ -183,7 +175,6 @@ Use molecule_restore_positions after an output to restore folded positions.
               fatal_error() << "duplicate owner particle for molecule id #"<<mol_ids[p_i]<<std::endl;
             }
             molecule_owner.insert( { mid , ploc } );
-            // ldbg << "cell #"<<cell_i<<" particle #"<<p_i<<" owner of molid #"<<mid<<std::endl;
           }
           else
           {

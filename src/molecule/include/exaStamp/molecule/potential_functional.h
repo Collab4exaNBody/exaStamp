@@ -128,7 +128,7 @@ namespace exaStamp
     virtual ~IntraMolecularPotentialFunctional() = default;
   };
 
-  // Harm potential
+  // Parameters read from a molecule dump
   class IntraMolecularDumpFunctional : public IntraMolecularPotentialFunctional
   {
   public:
@@ -136,8 +136,6 @@ namespace exaStamp
     inline ScalarForceEnergy force_energy(double t) const override final
     {
       return intramolecular_func( generic_parameters() , t );
-/*      return {       k *     (t - t0)
-             , 0.5 * k * pow((t - t0),2) }; */
     }
     inline MoleculeGenericFuncParam generic_parameters() const override final
     {
@@ -155,8 +153,6 @@ namespace exaStamp
     inline ScalarForceEnergy force_energy(double t) const override final
     {
       return intramolecular_func( generic_parameters() , t );
-/*      return {       k *     (t - t0)
-             , 0.5 * k * pow((t - t0),2) }; */
     }
     inline MoleculeGenericFuncParam generic_parameters() const override final
     {
@@ -175,8 +171,6 @@ namespace exaStamp
     inline ScalarForceEnergy force_energy(double t) const override final
     {
       return intramolecular_func( generic_parameters() , t );
-/*      return { 2.0 * k *     (t - t0)
-             ,       k * pow((t - t0),2) }; */
     }
     inline MoleculeGenericFuncParam generic_parameters() const override final
     {
@@ -195,15 +189,6 @@ namespace exaStamp
     inline ScalarForceEnergy force_energy(double t) const override final
     {
       return intramolecular_func( generic_parameters() , t );
-/*      double tmp = t-t0;
-      return { 2 * k2 *      tmp
-             + 3 * k3 *  pow(tmp,2)
-             + 4 * k4 *  pow(tmp,3)
-             ,
-               k2 * pow(tmp,2)
-             + k3 * pow(tmp,3)
-             + k4 * pow(tmp,4)
-             };*/
     }
     inline MoleculeGenericFuncParam generic_parameters() const override final
     {
@@ -224,15 +209,6 @@ namespace exaStamp
     inline ScalarForceEnergy force_energy(double phi) const override final
     {
       return intramolecular_func( generic_parameters() , phi );
-/*      return {
-             k1 * sin(  phi)
-       + 2 * k2 * sin(2*phi)
-       + 3 * k3 * sin(3*phi)
-       ,
-         k1 * ( 1 - cos(  phi) )
-       + k2 * ( 1 - cos(2*phi) )
-       + k3 * ( 1 - cos(3*phi) )
-       }; */
     }
     inline MoleculeGenericFuncParam generic_parameters() const override final
     {
@@ -252,15 +228,6 @@ namespace exaStamp
     inline ScalarForceEnergy force_energy(double phi) const override final
     {
       return intramolecular_func( generic_parameters() , phi );
-/*      return {
-           0.5 * k1 * sin(  phi)
-         +       k2 * sin(2*phi)
-         + 1.5 * k3 * sin(3*phi)
-       ,
-           k1/2 * ( 1 - cos(  phi) )
-         + k2/2 * ( 1 - cos(2*phi) )
-         + k3/2 * ( 1 - cos(3*phi) )
-       }; */
     }
     inline MoleculeGenericFuncParam generic_parameters() const override final
     {
@@ -280,15 +247,6 @@ namespace exaStamp
     inline ScalarForceEnergy force_energy(double phi) const override final
     {
       return intramolecular_func( generic_parameters() , phi );
-/*      return {
-         - 0.5 * k1 * sin(  phi)
-         +       k2 * sin(2*phi)
-         - 1.5 * k3 * sin(3*phi)
-       ,
-           0.5 * k1 * ( 1 + cos(  phi) )
-         + 0.5 * k2 * ( 1 - cos(2*phi) )
-         + 0.5 * k3 * ( 1 + cos(3*phi) )
-       }; */
     }
     inline MoleculeGenericFuncParam generic_parameters() const override final
     {
@@ -309,12 +267,6 @@ namespace exaStamp
     inline ScalarForceEnergy force_energy(double phi) const override final
     {
       return intramolecular_func( generic_parameters() , phi );
-/*
-      double tmp = phi - phi0;
-      return {       k * sin(2*tmp)
-             , 0.5 * k * ( 1 - cos(2*tmp) ) 
-             };
-*/
     }
     inline MoleculeGenericFuncParam generic_parameters() const override final
     {
@@ -333,15 +285,6 @@ namespace exaStamp
     inline ScalarForceEnergy force_energy(double phi) const override final
     {
       return intramolecular_func( generic_parameters() , phi );
-/*      return {
-           n1*k1 * sin(n1*phi)
-         + n2*k2 * sin(n2*phi)
-         + n3*k3 * sin(n3*phi)
-       ,
-           k1 * ( 1 - cos(n1*phi) )
-         + k2 * ( 1 - cos(n2*phi) )
-         + k3 * ( 1 - cos(n3*phi) )
-       }; */
     }
     inline MoleculeGenericFuncParam generic_parameters() const override final
     {

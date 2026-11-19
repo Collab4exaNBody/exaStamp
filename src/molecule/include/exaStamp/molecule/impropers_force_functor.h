@@ -53,7 +53,6 @@ namespace exaStamp
       static constexpr bool LOCK = ! gpu_device_execution();
       exanb::ComputePairOptionalLocks<LOCK> cp_locks = {};
       init_cp_locks( cp_locks , m_particle_locks );
-//      if constexpr ( LOCK ) { cp_locks.m_locks = m_particle_locks; }
       using ParticleLockT = decltype( cp_locks[0][0] );
       
       const int param_idx = m_improper_param_idx[i];
@@ -114,18 +113,12 @@ namespace exaStamp
         const double sqr_norm_r2 = dot(r12,r12);
         const Vec3d  Fc = - cross( cross(r23+r12,Fd) + cross(r10,Fa) , r12 ) / sqr_norm_r2;
 
-        //e /= 4.;
         const Vec3d Fo = - (Fa+Fc+Fd);
 
         if constexpr ( ComputeVirial )
         {
-          //the total virial must satisfy  W = r0 x Fa + r1 x Fb + r2 x Fc + r3 x Fd
-          //as the sum of all forces is 0, Fb = - (Fa+Fc+Fd)
-          //this leads to : W = (r0-r1)xFa + (r2-r1)x(Fc+Fd) + (r3-r2)xFd
-          //                  = vira       + virc            + vird
-          // half of  vira is attributed (arbitrarily) to atom 0/a and the other half to 1/b
-          // half of virc is attributed ti 1/b and the other half to 2/c
-          // half of vird is attributed to 3/d and the other half to 2/c
+          // W = (r0-r1)xFa + (r2-r1)x(Fc+Fd) + (r3-r2)xFd = vira + virc + vird, since Fb = -(Fa+Fc+Fd); each term is split
+          // in halves between its two atoms: vira to a and b, virc to b and c, vird to c and d
           const Mat3d vira = tensor (Fa,r10) * 0.5;
           const Mat3d virc = tensor (Fc+Fd,r12) * 0.5;
           const Mat3d vird = tensor (Fd,r23) * 0.5;

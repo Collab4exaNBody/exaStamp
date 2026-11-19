@@ -41,21 +41,6 @@ under the License.
 namespace exaStamp
 {
 
-  ///**
-  // * Signum function : give the sign of an expression (+1, -1 or 0)
-  // */
-  //template <typename T>
-  //typename std::enable_if<std::is_unsigned<T>::value, int>::type
-  //inline constexpr signum(T x) noexcept {
-  //  return T(0) < x;
-  //}
-
-  //template <typename T>
-  //typename std::enable_if<std::is_signed<T>::value, int>::type
-  //inline constexpr signum(T x) noexcept {
-  //  return (T(0) < x) - (x < T(0));
-  //}
-
 
   template<
     class GridT,
@@ -129,7 +114,6 @@ namespace exaStamp
           , virial_field };
 
         /* auto parallel_op = */ parallel_for( chemical_torsions->size(), torsion_force_op, parallel_execution_context("torsion_force") );
-        // auto exec_ctrl_obj = parallel_execution_stream() << std::move(parallel_op) ;
       };
 
       if( need_virial )      compute_torsions_force_opt_virial( onika::TrueType{}  , onika::TrueType{}  );

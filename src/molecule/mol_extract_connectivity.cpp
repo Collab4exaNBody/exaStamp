@@ -44,7 +44,6 @@ namespace exaStamp
     ADD_SLOT( ChemicalTorsions  , chemical_torsions  , INPUT_OUTPUT );
     ADD_SLOT( ChemicalImpropers , chemical_impropers , INPUT_OUTPUT );
 
-//    REGISTER_OPERATOR(set_connectivity);
   public:
     inline void execute () override final
     {

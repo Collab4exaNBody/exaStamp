@@ -92,9 +92,8 @@ namespace exaStamp
       return n_bytes;
     }
 
-    // Pair potential parameters as stored in dumps : layout of LJExp6RFParms before the reaction field cutoff modes
-    // were added, kept so that dumps stay readable. The reaction field cutoff mode is not stored : it is set in the
-    // input file (reaction_field_cutoff_mode operator).
+    // Dump layout of the pair potential parameters, unchanged so that dumps stay readable. The reaction field cutoff mode
+    // is not stored (set by reaction_field_cutoff_mode).
     struct LJExp6RFParmsIO
     {
       double m_A = 0.0;
@@ -373,11 +372,6 @@ namespace exaStamp
       const int vermaj = header_version/100;
       const int vermin = header_version%100;
       n_bytes += read_func( n_ffname );
-      // if( n_ffname>0 && m_ffnameVector.size() < 1 )
-      // {
-      //   fatal_error() << "Missing ffnameVector container to read ffnames" << std::endl;
-      // }
-      //      if( m_ffnameVector.size() > 0 ) m_ffnameVector.resize( n_ffname );
       m_ffnameVector.resize( n_ffname );
       for(size_t i=0;i<n_ffname;i++)
       {

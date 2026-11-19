@@ -142,9 +142,6 @@ namespace exaStamp
 #             endif
               const uint64_t* id_b    = cells[cell_b][field::id];
 
-              // assert( cell_a>=0 && cell_a<n_cells );
-              //assert( p_nbh_index == nbh_weight[cell_a].size() );
-              //assert( p_nbh_index == cgpw.m_cell_weights[cell_a].size() );
 
               onika::oarray_t<uint64_t,2> pair = { id_a[p_a] , id_b[p_b] };
               if( pair[0] > pair[1] )
@@ -195,8 +192,6 @@ namespace exaStamp
         GRID_OMP_FOR_END
       }
 
-//      T2 = std::chrono::high_resolution_clock::now();
-//      lout << "T1-T0 = "<< (T1-T0).count()/1000.0 << ", T2-T1 = "<< (T2-T1).count()/1000.0 << std::endl;
       int ratio_precent = n_total_nbh>0 ? (n_positive_weights*100)/n_total_nbh : 0 ;
       ldbg << "nbh="<<n_total_nbh<<", n_positive_weights="<<n_positive_weights<<", ratio="<< ratio_precent << "%" << std::endl;
 

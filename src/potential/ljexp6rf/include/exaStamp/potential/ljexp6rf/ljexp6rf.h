@@ -231,10 +231,8 @@ namespace exaStamp
 
   inline std::ostream& operator << (std::ostream& out , const LJExp6RFParms& p) { return p.to_stream(out); }
 
-  // Single precision copy of LJExp6RFParms, for the mixed precision kernel (ljexp6rf_pc_fp32): the pair terms are
-  // evaluated in FP32, the caller accumulates forces, energies and virials in FP64.
-  // Cutoffs are stored squared (FLT_MAX when the term has no cutoff of its own) and 12/B is precomputed, so that the
-  // only division is one reciprocal per pair.
+  // Single precision copy of LJExp6RFParms for ljexp6rf_pc_fp32 (pair terms in FP32, sums in FP64 by the caller).
+  // Squared cutoffs (FLT_MAX without cutoff) and 12/B precomputed: one reciprocal per pair.
   struct LJExp6RFParmsFP32
   {
     float m_A = 0.0f;

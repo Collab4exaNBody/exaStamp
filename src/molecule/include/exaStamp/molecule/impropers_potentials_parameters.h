@@ -39,9 +39,6 @@ namespace exaStamp
     std::string type;
     std::array<std::string,4> species;
   
-    //std::vector<double> params;
-    //std::function<double(double)> f_energy;
-    //std::function<double(double)> f_forces;
     std::shared_ptr<IntraMolecularPotentialFunctional> m_potential_function;
   };
   
@@ -110,40 +107,21 @@ namespace YAML
       // Energy and forces gestion
       if(b.type=="harm_improper")
         {
-
-          //b.params.push_back(node["parameters"]["k"   ].as<Quantity>().convert());
-          //b.params.push_back(node["parameters"]["chi0"].as<Quantity>().convert());
-          double k    = node["parameters"]["k"   ].as<Quantity>().convert(); //b.params.at(0);
-          double chi0 = node["parameters"]["chi0"].as<Quantity>().convert(); //b.params.at(1);
-
+          double k    = node["parameters"]["k"   ].as<Quantity>().convert();
+          double chi0 = node["parameters"]["chi0"].as<Quantity>().convert();
 
           // e = 1/2 k * (chi-chi0)^2
           // F = k * (chi-chi0)
-          /*
-          b.f_energy = [k,chi0](const double chi){return 0.5 * k * pow((chi - chi0),2);};
-          b.f_forces = [k,chi0](const double chi){return       k *     (chi - chi0);};
-          */
           b.m_potential_function = std::make_shared<IntraMolecularHarmFunctional>(k,chi0);
         }
       else if(b.type=="opls_improper")
         {
-
-          //b.params.push_back(node["parameters"]["k1"   ].as<Quantity>().convert());
-          //b.params.push_back(node["parameters"]["k2"   ].as<Quantity>().convert());
-          //b.params.push_back(node["parameters"]["k3"   ].as<Quantity>().convert());
-          double k1    = node["parameters"]["k1"].as<Quantity>().convert(); //b.params.at(0);
-          double k2    = node["parameters"]["k2"].as<Quantity>().convert(); //b.params.at(1);
-          double k3    = node["parameters"]["k3"].as<Quantity>().convert(); //b.params.at(2);
-
+          double k1    = node["parameters"]["k1"].as<Quantity>().convert();
+          double k2    = node["parameters"]["k2"].as<Quantity>().convert();
+          double k3    = node["parameters"]["k3"].as<Quantity>().convert();
 
           // e = k1/2(1 + cos(chi)) + k2/2(1-cos(2 chi)) + k3/2(1+cos(3 chi))
           // F = -k1/2 sin(chi) + k2 sin(2 chi) - 3/2 k3 sin(3 chi)
-          //b.f_energy = [k1,k2,k3](const double chi){return   0.5 * k1 * (1 + cos(  chi))
-          //                                          +      0.5 * k2 * (1 - cos(2*chi))
-          //                                          +      0.5 * k3 * (1 + cos(3*chi));};
-          //b.f_forces = [k1,k2,k3](const double chi){return  -0.5 * k1 * sin(  chi)
-          //                                          +            k2 * sin(2*chi)  
-          //                                          -      1.5 * k3 * sin(3*chi);};
 
           b.m_potential_function = std::make_shared<IntraMolecularCosOPLSFunctional>(k1,k2,k3);
         }
@@ -152,8 +130,6 @@ namespace YAML
           // e = 0
           // F = 0
           b.m_potential_function = std::make_shared<IntraMolecularPotentialFunctional>();
-          //b.f_energy = [](const double){return 0;};
-          //b.f_forces = [](const double){return 0;};
         }
       else
         {

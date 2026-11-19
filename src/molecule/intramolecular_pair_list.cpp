@@ -69,15 +69,8 @@ namespace exaStamp
       ProfilingTimer T;
       profiling_timer_start( T );
 
-      // first build list of interaction pair to be excluded from standard neighbor list
-      // and for which a pair weight is applied.
-      // this map is built using original ids, not localized ones transformed in the second parallel section.
-      //
-      // Rules:
-      //   - canonical key (min(i,j), max(i,j)) deduplicates (i,j)/(j,i) for 1-4 torsion pairs
-      //   - if a pair appears in multiple lists, keep the shortest-path interaction (lowest priority):
-      //       0 = 1-2 bond,  1 = 1-3 angle,  2 = 1-4 torsion
-      //   - ChemicalPairPotMap is a MultiThreadedConcurrentMap, so concurrent insertions are safe
+      // pairs excluded from the neighbor lists and weighted, keyed by original ids (min id, max id). A pair found in several
+      // lists keeps the shortest path (0 = 1-2 bond, 1 = 1-3 angle, 2 = 1-4 torsion). Concurrent insertions are safe.
 
       // Helper: insert with canonical key; if key already exists, keep the lower priority value (shorter path).
       // We lock the meta-bucket manually (same pattern as MultiThreadedConcurrentMap::insert()) to make
@@ -156,12 +149,10 @@ namespace exaStamp
             fatal_error() << "intramolecular pair atoms are more than "<<IntramolecularImageCodec::MAX_SHIFT<<" periodic images apart" << std::endl;
           }
           const int pair_id = unique_pair_id(ta,tb);
-          // const auto & potparm = molecule_compute_parameters->m_pair_params[ n_type_pairs * chemicalLinkType + pair_id ];
           int param_idx = -1;
           // Since weight is only applied on the Coulombic part of RF, we still need that parameters set to be considered
           param_idx = n_type_pairs * chemicalLinkType + pair_id ;
           intramolecular_parameters->m_pair_param_idx[ pair_idx ] = param_idx;
-          //x.second = param_idx;
           ++ pair_idx;
         }
       }

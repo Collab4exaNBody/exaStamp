@@ -110,10 +110,8 @@ namespace exaStamp
                        )
   {
     ldbg << "Begin read_stamp_v4  " << std::endl << std::flush ;
-    //using namespace stampv4;
     using IndexT = std::conditional_t< options.Version==41 , int32_t , int64_t >;
     using stampv4::IOVersion;
-    //using IOGraines = stampv4::IOGraines;
     using IOMolecules = stampv4::IOMolecules;
     using IOEntete = stampv4::IOEntete<IndexT>;
     using IOAtomes = stampv4::IOAtomes<IndexT>;
@@ -141,7 +139,6 @@ namespace exaStamp
     file.increment_offset( entete.get() );
     assert( onika::mpi::all_value_equal(comm, *entete.get()) );
 
-    //AABB file_bounds = { Vec3d{ entete.xmin , entete.ymin , entete.zmin } * coord_conv , Vec3d{ entete.xmax , entete.ymax , entete.zmax } * coord_conv };
 
     lout << "Format            = Stamp_v4\n";
     lout << "Version           = " << options.Version << "\n";

@@ -407,15 +407,6 @@ namespace exaStamp
       
       if( pair_weights ) compute_force_energy_opt_weights( CompactPairWeightIterator{ compact_nbh_weight->m_cell_weights.data() } );
       else               compute_force_energy_opt_weights( ComputePairNullWeightIterator{} );
-
-      // // Self RF
-      // if( self_rf )
-      //   {
-      //     using EnergyOp = ReactionFieldSelfOp<ChargeFieldT,TypeFieldT,true>;
-      //     auto ep = grid->field_accessor( field::ep );
-      //     compute_cell_particles( *grid , false , EnergyOp{scratch->m_potentials.data(), species->data(), charge_field, type_field}, ep , parallel_execution_context() );
-      //   }
-      
     }
 
   };

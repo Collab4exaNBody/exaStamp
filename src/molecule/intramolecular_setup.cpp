@@ -82,8 +82,6 @@ namespace exaStamp
     
     inline void execute ()  override final
     {
-      //static constexpr MoleculeGenericFuncParam null_param = {0.0,0.0,0.0,0.0};
-      
       const unsigned int nmol = molecules->m_molecules.size();
       ldbg << "Number of molecule species : "<<nmol<<std::endl;
       if( nmol == 1 && molecules->m_molecules.front().name().empty() ) molecules->m_molecules.front().set_name("MOL");
@@ -98,7 +96,6 @@ namespace exaStamp
         }
       }
 
-//      molecule_compute_parameters->m_molecules.assign( nmol , MoleculeComputeParams{} );   
       const auto & tmap = *particle_type_map;
       auto str2type = [&tmap]( const std::string& s ) -> int
         {
@@ -151,18 +148,6 @@ namespace exaStamp
       }
 
       double torsion_pair_weight=1.0, torsion_rf_weight=1.0, angle_pair_weight=1.0, angle_rf_weight=1.0, bond_pair_weight=1.0, bond_rf_weight=1.0;
-      //for( const auto & p : mol_pair_weights->m_molecule_weight )
-      //{
-      //  ldbg << p.first << " : bond="<<p.second.m_bond_weight<<" , bond_rf="<<p.second.m_rf_bond_weight
-      //                  <<" , bend="<<p.second.m_bend_weight<<" , bend_rf="<<p.second.m_rf_bend_weight
-      //                  <<" , torsion="<<p.second.m_torsion_weight<<" , torsion_rf="<<p.second.m_rf_torsion_weight<<std::endl;
-      //  bond_pair_weight = p.second.m_bond_weight;
-      //  bond_rf_weight = p.second.m_rf_bond_weight;
-      //  angle_pair_weight = p.second.m_bend_weight;
-      //  angle_rf_weight = p.second.m_rf_bend_weight;
-      //  torsion_pair_weight = p.second.m_torsion_weight;
-      //  torsion_rf_weight = p.second.m_rf_torsion_weight;
-      //}
 
       const unsigned int n_type_pairs = unique_pair_count( species->size() );
       molecule_compute_parameters->m_pair_params.assign( n_type_pairs * 3 , IntramolecularPairParams{ LJExp6RFParms{}, 0.0, 0.0 } );
@@ -344,7 +329,6 @@ namespace exaStamp
         a = ff_type_id( bond.species[0] );
         b = ff_type_id( bond.species[1] );
 
-        //std::cout << "read bond " << bond.species[0] << "("<< a << ")" << "," << bond.species[1] << "("<< b << ")" <<std::endl;
         const auto types = bond_key(a,b);
         ldbg << "read bond " << bond.species[0] << ","<< bond.species[1] <<" -> "<<(const void*)types<<std::endl;
         auto param = bond.potential->generic_parameters();
@@ -471,17 +455,6 @@ namespace exaStamp
         }
       }
 
-      //for(unsigned int m=0;m<nmol;m++)
-      //{
-      //  if( mol_pair_weights.has_value() )
-      //  {
-      //    if( mol_pair_weights->m_molecule_weight.find( molecules->m_molecules.at(m).name() ) == mol_pair_weights->m_molecule_weight.end() )
-      //    {
-      //      fatal_error() << "mol_pair_weights has no entry for molecule name '"<<molecules->m_molecules.at(m).name()<<"'" << std::endl;
-      //    }
-      //  }
-      //}
-      
       // count number of different pair potential parameters
       std::map< std::pair<int,int> , LJExp6RFMultiParmsPair > pair_param_map;
       for( const auto & pp : potentials_for_pairs->m_potentials )

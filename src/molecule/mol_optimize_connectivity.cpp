@@ -106,11 +106,9 @@ namespace exaStamp
           // to get the id of the particles types ta and tb
           decode_cell_particle( /*IN*/ b[0], /*OUT*/ c,p, ta );
           decode_cell_particle( /*IN*/ b[1], /*OUT*/ c,p, tb );
-	  //ldbg << "In mol_optimize_connectivity.cpp bond full atome types id ta = " << ta << " tb = " << tb << std::endl;
           // to convert the ids in particles FFtypes, same name ta and tb
 	  ta = species->at(ta).m_FFtypeId;
 	  tb = species->at(tb).m_FFtypeId;
-	  //ldb << "In mol_optimize_connectivity.cpp bond FF types id ta = " << ta << " tb = " << tb << std::endl;
           const uint64_t key = bond_key(ta,tb);
           const auto it = param_map.find( key );
           if( it != param_map.end() ) intramolecular_parameters->m_bond_param_idx[i] = it->second;

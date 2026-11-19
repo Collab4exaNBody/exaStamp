@@ -31,11 +31,8 @@ namespace exaStamp
 {
   using namespace exanb;
 
-  // Treatment of the reaction field at its cutoff rc. The energy is always zero at rc, the force is not:
-  // - RF_CUTOFF_TRUNCATED : plain reaction field, the force drops from a finite value to zero at rc (default)
-  // - RF_CUTOFF_SHIFTED_FORCE : the force at rc is subtracted at every distance, E(r) - (r-rc) E'(rc)
-  // - RF_CUTOFF_SWITCHING : E(r) is multiplied by a quintic switching function S, S=1 for r <= rs, S=0 at rc,
-  //   S' and S'' zero at rs and rc. Forces are unchanged below rs.
+  // Treatment of the force at the reaction field cutoff rc (the energy is always zero at rc): truncated (default),
+  // shifted force E(r) - (r-rc) E'(rc), or switching S(x) E(r) with a quintic S between rs and rc.
   static constexpr int RF_CUTOFF_TRUNCATED = 0;
   static constexpr int RF_CUTOFF_SHIFTED_FORCE = 1;
   static constexpr int RF_CUTOFF_SWITCHING = 2;

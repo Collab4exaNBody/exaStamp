@@ -101,7 +101,6 @@ namespace exaStamp
     {
       using IndexT = std::conditional_t< Version::value==41 , int32_t , int64_t >;
       using stampv4::IOVersion;
-      //using IOGraines = stampv4::IOGraines;
       using IOMolecules = stampv4::IOMolecules;
       using IOMonomeres = stampv4::IOMonomeres;
       using IOEntete = stampv4::IOEntete<IndexT>;
@@ -161,12 +160,6 @@ namespace exaStamp
       auto cells = grid->cells();
       Mat3d xform = domain->xform();
 
-      //if( ! is_diagonal(xform) )
-      //{
-      //  lerr<<"StampV4 writer does not support non diagonal transform matrix"<<std::endl;
-      //  std::abort();
-      //}
-
       unsigned long long number_of_particles = 0;
       GRID_BLOCK_FOR_BEGIN(dims,gstart,gend,i,_)
       {
@@ -195,7 +188,6 @@ namespace exaStamp
 
       // open MPIIO file
       exanb::MpiIO file;
-      // file.set_compression( *compression );
       file.open( (*filename) ,"w",*max_file_size) ;
 
       //==========================================================================================
@@ -394,7 +386,6 @@ namespace exaStamp
           }
           else
           {
-            //r = xform * r;
             atomes[pcounter].Position[0] = ( r.x - domain->origin().x ) / ( domain->extent().x - domain->origin().x ) - 0.5; //atomic positions should be in "STAMP-compatible" reduced coordinates
             atomes[pcounter].Position[1] = ( r.y - domain->origin().y ) / ( domain->extent().y - domain->origin().y ) - 0.5;
             atomes[pcounter].Position[2] = ( r.z - domain->origin().z ) / ( domain->extent().z - domain->origin().z ) - 0.5;
@@ -641,11 +632,7 @@ namespace exaStamp
         delete [] rmol;
       }
 
-      //####################################################
-      //##  this MONOMER section is useless to exaStamp  ##
-      //##  BUT it is necessary to provide compatibility  ##
-      //##  with Stamp4.                                  ##
-      //####################################################
+      // MONOMER section: unused by exaStamp, needed for Stamp4 compatibility
       if( entete.bloc_monomeres )
       {
         ldbg << "\t-> Start writing monomers section - offset = " << file.current_offset() << "\n" << std::endl ;
@@ -663,7 +650,6 @@ namespace exaStamp
           size_t n = cells[i].size();
           for(size_t j=0;j<n;j++)
           {
-            // ParticleTupleIO pt = cells[i][j];
 
             monomeres[pcounter].reactivite      = -1 ;
             monomeres[pcounter].numeroMonomere  = -1 ;

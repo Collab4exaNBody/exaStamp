@@ -105,7 +105,6 @@ namespace exaStamp
             {
               mol_ids[p_i] = molidmin;
               ++ update_count;
-              // ldbg << "cell #"<<cell_i<<" particle #"<<p_i<<" molid "<<mol_ids[p_i]<<" -> "<<molidmin<<std::endl;
             }
           }
         }

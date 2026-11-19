@@ -65,13 +65,7 @@ namespace exaStamp
 {
   using namespace exanb;
 
-  // Read XYZ files.
-  // This files must be ASCII files
-  // first line : number of particles
-  // second line : xform of simulation domain
-  // next lines : typeFF X Y Z molid moltype connectivity[5]
-  // example : Cno2 5.3 9.23 -3.5 1 0 6 2 7 -1 -1
-  // Note : the typeFF have to match a specie name
+  // Reads read_xyz_molecules files (ASCII, format described in the user documentation). Atom types are species names.
 
   template<typename GridT>
   class ReadXYZMolecules : public OperatorNode
@@ -187,7 +181,6 @@ namespace exaStamp
           assert( ! file.eof() && file.good() );
           file >> typeMol >> typeAtom >> moleculeid >> at_id >> x >> y >> z >> c0 >> c1 >> c2 >> c3 >> c4 >> charge;
           if( molecule_name.has_value() ) typeMol = *molecule_name;
-          //lout <<"eof="<<file.eof()<<" good="<<file.good()<<" typeMol="<<typeMol<<" typeAtom="<<typeAtom<<" moleculeid="<<moleculeid<<" at_id="<<at_id<<" r="<<x<<","<<y<<","<<z<<" con="<<c0<<","<<c1<<","<<c2<<","<<c3 << std::endl;
 
           if( c4 != -1 )
           {
@@ -318,7 +311,6 @@ namespace exaStamp
           grid->cell(loc).push_back( tp );
         }
 
-        //fatal_error() << "not fully implemented" << std::endl;
         
         molecules->m_molecules.clear();
         for(const auto& p : molecule_name_map)

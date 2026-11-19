@@ -53,7 +53,6 @@ namespace exaStamp
       static constexpr bool LOCK = ! gpu_device_execution();
       exanb::ComputePairOptionalLocks<LOCK> cp_locks = {};
       init_cp_locks( cp_locks , m_particle_locks );
-//      if constexpr ( LOCK ) { cp_locks.m_locks = m_particle_locks; }
       using ParticleLockT = decltype( cp_locks[0][0] );
       
       const int param_idx = m_angle_param_idx[i];
@@ -82,7 +81,6 @@ namespace exaStamp
         // second harm
         Vec3d r2 = intramolecular_delta( rb , 1 , rc , 2 , m_images[i] , m_size_box ); // rc - rb;
         
-        //ldbg << "r1 avant : " << r1 << std::endl;
         if( ! m_xform_is_identity )
         {
           r1 = m_xform * r1;

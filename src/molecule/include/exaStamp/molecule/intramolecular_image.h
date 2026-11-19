@@ -31,15 +31,9 @@ namespace exaStamp
   using onika::math::Vec3d;
   using onika::math::Mat3d;
 
-  // Periodic images of the atoms of an intramolecular term (bond, angle, torsion, improper, pair).
-  //
-  // Forces of a term are applied to the owned copy of each atom (bonded forces are never folded back from ghosts),
-  // so a term references the owned copy whenever it exists. When a molecule crosses a periodic boundary, these
-  // copies may be one box length apart : the image shift of each atom, in box lengths along each grid axis, is
-  // computed when term lists are rebuilt, so that atom k of the term is at r_k + n_k * L, with n_0 = 0.
-  // Positions evolve continuously between two rebuilds, so the shifts stay valid until the next one.
-  //
-  // Encoding : 3 bits per axis (shift + 4, shift in [-4,3]), 9 bits per atom for atoms 1 to 3 -> 27 bits.
+  // Periodic image of each atom of an intramolecular term, computed when term lists are rebuilt: atom k of the term is
+  // at r_k + n_k * L (n_0 = 0, owned copies used whenever they exist). 3 bits per axis (n + 4, n in [-4,3]), 9 bits per
+  // atom for atoms 1 to 3.
   using IntramolecularImage = uint32_t;
 
   struct IntramolecularImageCodec

@@ -179,7 +179,6 @@ namespace exaStamp
       {}
   };
   
-  //using MoleculeSpeciesVector = std::vector<MoleculeSpecies>; // onika::memory::CudaMMVector<MoleculeSpecies>;
   
 
 }

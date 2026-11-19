@@ -75,18 +75,8 @@ namespace exaStamp
 {
   using namespace exanb;
 
-  // Read FAtomes files.
-  // This files must be ASCII files
-  // ATTENTION : we make many assumptions (not made in Stamp but valid for our test case so far) in this  function.
-  // We assume that the order of the sections is
-  // 1. atom types (also true in Stamp)
-  // 2. "Potentiel"
-  // 3. PositionDesAtomes
-  // 4. Vitesses
-  // 5. ModificationDesCharges
-  // 6. ChampDeForce (intra)
-  // 7. Zmatrice
-  // 8. ContribDispRepIntra
+  // Reads FAtomes files (ASCII). The sections must come in this order: atom types, Potentiel, PositionDesAtomes,
+  // Vitesses, ModificationDesCharges, ChampDeForce, Zmatrice, ContribDispRepIntra.
 
   template<typename GridT>
   class ReadFAtomesMolecules : public OperatorNode
@@ -124,7 +114,6 @@ namespace exaStamp
       //-------------------------------------------------------------------------------------------
 
       using MoleculeTupleIO = onika::soatl::FieldTuple<field::_rx, field::_ry, field::_rz, field::_vx, field::_vy, field::_vz, field::_id, field::_type, field::_idmol, field::_cmol, field::_charge>;
-      //using MoleculeTuple = decltype( grid.cells()[0][0] );      
       assert( grid->number_of_particles() == 0 );
 
       // MPI Initialization
@@ -222,7 +211,6 @@ namespace exaStamp
         // lambda function to read units
         auto read_unit = [this] ( std::string u ) -> std::string
         {
-          //const std::map<std::string,std::string> replace = { {"J/mol.m6","J*m^6   "} , {"ang2","ang^2"} , {"deg","degree"} , {"m6","m^6"} , {"m-1","m^-1"} , {"kcal/mol", "kcal"}};
           const std::map<std::string,std::string> replace = { {"J.m6","J*m^6   "} , {"ang2","ang^2"} , {"ang-1","ang^-1"}, {"deg","degree"} , {"degreere","degree"}, {"m6","m^6"} , {"m-1","m^-1"} , {"metre", "m"}, {"kcal/mol.ang^6", "kcal/mol*ang^6"}, {"kcal/mol.ang6", "kcal/mol*ang^6"}};
 
           for(const auto& r : replace)
@@ -230,8 +218,6 @@ namespace exaStamp
             auto p = u.find(r.first);
             while( p != std::string::npos )
             {
-              //ldbg << "found "<<r.first<<" @"<<p<<std::endl;
-              //if( r.second.find(r.first)!=0 || p != u.find(r.second,p) ) u.replace( p , r.second.length() , r.second );
 	            u.replace( p , r.first.length() , r.second );
               p = u.find( r.first , p + r.second.length() );
             }
@@ -289,8 +275,6 @@ namespace exaStamp
 	            tb = species->at(itb).name();
             }
 
-            //std::string ta = species->at(ita).name();
-            //std::string tb = species->at(itb).name();
             ldbg << "pair potential "<<typepot<<" for pair "<<ta<<" , "<<tb<<std::endl;
             std::map<std::string,double> params;
             LJExp6RFMultiParmsPair pot = { ta, tb }; // declare 'mixed' potential
@@ -301,7 +285,6 @@ namespace exaStamp
 	            int flag_rc_propSigma = 0;
 
               iss >> p1 >> v1 >> u1 >> p2 >> v2 >> u2 >> p3 >> v3 >> u3;
-	            //if (u1 == "-" || u2 == "-" || u3 == "-") flag_rc_propSigma = 1;
 	            if (u1 == "-") {
 		            flag_rc_propSigma = 1;
 		            u1 = "ang";
@@ -401,12 +384,8 @@ namespace exaStamp
         std::map<std::string,size_t> atom_type_index;
         while( atom_type_count < nb_atom_types )
         {
-          //ldbg << "read atom types : atom_type_count="<<atom_type_count<<std::endl;
           process_kw_line( next_line() );
-	        /* Attention: this line assumes that either nom or masse or charge is the last useful feature read for an atom type */
-	        /* if a feature is located after that, it is not saved. The next "while" goes directly to the next line without saving the piece of info */
-          //if( !atom_name.empty() && !std::isnan(atom_mass) && !std::isnan(atom_charge) )
-	        /* CL Tout devrait bien aller avec la ligne suivante : supprimer les lignes commentees avant, en fait si il peut encore y avoir un probleme si c'est nomXYZ qui est lu en dernier */
+	        // an atom type is stored once its required keys are read: a key read after them (e.g. nomXYZ) is lost
 	        if (maille_long_read && maille_angle_read && type_read && structure_read && maille_orient_read && maille_ref_read && !atom_name.empty() && !std::isnan(atom_mass) && !std::isnan(atom_charge) && !atom_FFname.empty())
                 {
                   ldbg << "Add atom type "<<atom_name<<" : mass="<<atom_mass<<" , charge="<<atom_charge<<std::endl;
@@ -495,7 +474,6 @@ namespace exaStamp
              {
                // initialize the potential for the cross term
                LJExp6RFMultiParmsPair pot = { species->at(ita).name(), species->at(itb).name() };
-               //LJExp6RFMultiParmsPair pot = { species->at(itb).name(), species->at(ita).name() };
 
                // get the parameters of the interactions (ita, ita) and (itb, itb)
                LJExp6RFParms* params_ita = potentials_for_pairs->params_for_pair( species->at(ita).name(), species->at(ita).name() );
@@ -652,9 +630,7 @@ namespace exaStamp
         // Read atom positions
         for(uint64_t cnt=0;cnt<count;cnt++)
         {
-          //int64_t moleculeid = -1;
           double x=0.0, y=0.0, z=0.0;
-          //int64_t c0=-1 , c1=-1 , c2=-1 , c3=-1 , c4=-1;
           double charge = 0.0;
 
           assert( ! file.eof() && file.good() );
@@ -766,10 +742,8 @@ namespace exaStamp
               double r0 = onika::physics::make_quantity( p1 , read_unit(u1) ).convert(); if( std::isnan(r0) ) r0=0.0;
               double k  = onika::physics::make_quantity( p2 , read_unit(u2) ).convert(); if( std::isnan(k)  ) k=0.0;
               if (ff_pot_kind == "bond_0.5_harm" || ff_pot_kind == "bond_charmm") k = k/2.0;
-            //	          if (ff_pot_kind == "bond_gaff" || ff_pot_kind == "bond_0.5_harm" || ff_pot_kind == "bond_charmm") k = k/2.0;
             
-              // p3 = onika::physics::make_quantity( p3 , read_unit(u3) ).convert(); if( std::isnan(p3) ) p3=0.0; // 2nd and 3rd parameter ignored
-              // p4 = onika::physics::make_quantity( p4 , read_unit(u4) ).convert(); if( std::isnan(p4) ) p4=0.0;
+              // parameters 3 and 4 are not used
               ldbg << "Intramolecular "<<ff_pot_kind<<" for "<<t1<<","<<t2<<" : r0="<<r0<<" , k="<<k << std::endl;
               potentials_for_bonds->m_bond_desc.push_back( BondPotential{ ff_pot_kind , {t1,t2} , std::make_shared<IntraMolecularBondOPLSFunctional>(k,r0) } );
             }
@@ -782,10 +756,8 @@ namespace exaStamp
               double phi0 = onika::physics::make_quantity( p1 , read_unit(u1) ).convert(); if( std::isnan(phi0) ) phi0=0.0;
               double k    = onika::physics::make_quantity( p2 , read_unit(u2) ).convert(); if( std::isnan(k)    ) k=0.0;
               if (ff_pot_kind == "angle_0.5_harm" || ff_pot_kind == "angle_charmm" ) k = k/2.0;
-              //              if (ff_pot_kind == "angle_gaff" || ff_pot_kind == "angle_0.5_harm" || ff_pot_kind == "angle_charmm" ) k = k/2.0;
               
-              // p3 = onika::physics::make_quantity( p3 , read_unit(u3) ).convert(); if( std::isnan(p3) ) p3=0.0;  // 2nd and 3rd parameter ignored
-              // p4 = onika::physics::make_quantity( p4 , read_unit(u4) ).convert(); if( std::isnan(p4) ) p4=0.0;
+              // parameters 3 and 4 are not used
               ldbg << "Intramolecular "<<ff_pot_kind<<" for "<<t1<<","<<t2<<" : "<<t3<<" : phi0="<<phi0<<" , k="<<k << std::endl;
               potentials_for_angles->m_potentials.push_back( BendPotential{ ff_pot_kind , {t1,t2,t3} , std::make_shared<IntraMolecularBondOPLSFunctional>(k,phi0) } );
             }
@@ -909,17 +881,8 @@ namespace exaStamp
                 }
               }
 
-	            /* Fit the GAFF functional form of the torsion potential into the OPLS functional form */
-	            /* EGAFF(phi) = k/m (1 + cos (n phi - phi0)) (up to three different terms, with different k, m, n, phi0) */
-	            /* EOPLS(phi) = k1/2 (1 + cos(phi)) + k2/2 (1 - cos(2phi)) + k3/2 (1 + cos (3phi)) */
-	            /* In GAFF phi0 = 0 or pi, n = 1, 2, 3 or 4 or -1, -2, -3, -4 */
-	            /* A negative value of n is a convention in GAFF to indicate that there is at least another term of the same torsion */
-	            /* The absolute value of n should be taken into account in the formula */
-	            /* if n = 4, the code as is does not work */
-	            /* if n = 1,2,3 the formula to convert GAFF into OPLS (up to a nonzero but constant energy) is */
-	            /* k_n = +/- 2*kGAFF/m */
-	            /* if n = 1 or 3, + when phi0 = 0   and - phi0 = 180 */
-	            /* if n = 2,      + when phi0 = 180 and - phi0 = 0 */
+	            // GAFF torsion k/m (1 + cos(n phi - phi0)), phi0 = 0 or pi, |n| = 1..3 (n < 0: more terms follow), in OPLS form
+	            // (up to a constant): k_|n| = +-2 k/m, + for |n| = 1,3 with phi0 = 0 and |n| = 2 with phi0 = pi. |n| = 4 unsupported.
 
 	            if (int(fabs(p3)) == 4 || int(fabs(p7)) == 4 || int(fabs(p11)) == 4) {
                       fatal_error() << " n = 4 for force field type torsion_gaff is not available "<<std::endl;
@@ -1051,23 +1014,6 @@ namespace exaStamp
             ta_tb = ta + "_" + tb;
 	          mol_pair_weights->m_molecule_weight[ta_tb] = w;
 
-            //for(const auto& p : molecule_name_map)
-            //{
-            //  const auto it = mol_pair_weights->m_molecule_weight.find(p.first);
-            //  if( it != mol_pair_weights->m_molecule_weight.end() )
-            //  {
-            //    if( it->second.m_bond_weight != w.m_bond_weight || it->second.m_bend_weight != w.m_bend_weight || it->second.m_torsion_weight != w.m_torsion_weight
-            //      ||it->second.m_rf_bond_weight != w.m_rf_bond_weight || it->second.m_rf_bend_weight != w.m_rf_bend_weight || it->second.m_rf_torsion_weight != w.m_rf_torsion_weight )
-            //    {
-            //      fatal_error() << "Different pair weights for distinct particle type pairs is not supported yet" << std::endl;
-            //    }
-            //  }
-            //  else
-            //  {
-            //    ldbg << "Add intramolecular weights for molecule '"<<p.first<<"'"<<std::endl;
-            //    mol_pair_weights->m_molecule_weight[ p.first ] = w;
-            //  }
-            //}
           }
         }
 
@@ -1084,7 +1030,6 @@ namespace exaStamp
         // if available, open and read Stamp init file to get reaction field parameters
         if( stampinput.has_value() )
         {
-          //ldbg << "Init file = "<< *stampinput << std::endl;
           file.open( onika::data_file_path( *stampinput ) );
         }
         if( file.good() )
@@ -1097,7 +1042,6 @@ namespace exaStamp
             std::string k;
             double v = 0.0;
             next_line() >> k >> v;
-            //ldbg << "READ "<<k<<" = "<<v<<std::endl;
             init[k] = v;
           }
           if( init["CorrectionVdwLongueDistance"] == 1 ) {
@@ -1229,12 +1173,9 @@ namespace exaStamp
         {
           const Vec3d r = { tp[field::rx] , tp[field::ry] , tp[field::rz] };
           IJK loc = grid->locate_cell( r ); // domain_periodic_location( *domain, r );
-//          const Vec3d v = { tp[field::vx] , tp[field::vy] , tp[field::vz] };
-//          ldbg << onika::format_string("\t%d : %s , Pos=(% .5e,% .5e,% .5e) , V=(% .5e,% .5e,% .5e)\n",tp[field::id], species->at(tp[field::type]).name(), r.x,r.y,r.z, v.x,v.y,v.z );
           grid->cell(loc).push_back( tp );
         }
 
-        //fatal_error() << "not fully implemented" << std::endl;
         
         molecules->m_molecules.clear();
         for(const auto& p : molecule_name_map)
@@ -1277,10 +1218,6 @@ namespace exaStamp
       if( molecule_header_size != serialize_buffer.size() ) fatal_error() << "deserialize buffer size error" << std::endl;
 
       int nmol = molecules->m_molecules.size();
-//      MPI_Bcast(&nmol, 1, MPI_INT, 0, *mpi);
-//      molecules->m_bridge_molecules.clear();
-//      molecules->m_molecules.resize( nmol );
-//      MPI_Bcast( molecules->m_molecules.data() , sizeof(MoleculeSpecies)*nmol , MPI_CHARACTER , 0 , *mpi );
 
       // Broadcast of IntraFFtypes
       int nFFtypes = -1;
@@ -1305,9 +1242,6 @@ namespace exaStamp
         ffnameVector->at(i) = & ff_names[i*FF_TYPE_NAME_MAX_LEN];
       }
 
-      /////////////////////////////////////////////////////////////////////////////////////////////
-      // P. Lafourcade : This is a temporary fix to allow for polymer multiprocessor simulations //
-      /////////////////////////////////////////////////////////////////////////////////////////////
       // Broadcast species data from rank 0 to all other ranks
       {
         static constexpr size_t SPECIES_NAME_MAX_LEN = 32;

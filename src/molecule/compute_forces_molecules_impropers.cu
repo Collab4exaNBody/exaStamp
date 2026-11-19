@@ -113,7 +113,6 @@ namespace exaStamp
           , virial_field };
 
         /* auto parallel_op = */ parallel_for( chemical_impropers->size(), improper_force_op, parallel_execution_context("improper_force") );
-        // auto exec_ctrl_obj = parallel_execution_stream() << std::move(parallel_op) ;
       };
 
       if( need_virial )      compute_impropers_force_opt_virial( onika::TrueType{}  , onika::TrueType{}  );

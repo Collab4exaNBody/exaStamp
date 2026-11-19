@@ -46,7 +46,6 @@ namespace exaStamp
     std::unordered_map< uint64_t, std::shared_ptr<IntraMolecularPotentialFunctional> > m_type_to_potential;
   };
 
-  //using BendsPotentialParameters = std::vector<BendPotential>;
 }
 
 // Yaml conversion operators, allows to read bends potentials parameters from config file

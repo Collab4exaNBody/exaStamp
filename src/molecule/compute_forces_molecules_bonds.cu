@@ -114,7 +114,6 @@ namespace exaStamp
           , virial_field };
 
        /* auto parallel_op = */ parallel_for( chemical_bonds->size(), bond_force_op, parallel_execution_context("bond_force") );
-        //auto exec_ctrl_obj = parallel_execution_stream() << std::move(parallel_op) ;
       };
 
       if( need_virial )      compute_bonds_force_opt_virial( onika::TrueType{}  , onika::TrueType{}  );

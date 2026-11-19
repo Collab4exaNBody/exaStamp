@@ -126,7 +126,6 @@ namespace exaStamp
           , charge_field, virial_field };
 
         /* auto parallel_op = */ parallel_for( chemical_pairs->size(), pair_force_op, parallel_execution_context("intramol_pair_force") );
-        // auto exec_ctrl_obj = parallel_execution_stream() << std::move(parallel_op) ;
       };
 
       if( need_virial )      compute_pair_force_opt_virial( onika::TrueType{}  , onika::TrueType{}  );

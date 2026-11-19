@@ -39,9 +39,6 @@ namespace exaStamp
     std::string type;
     std::array<std::string,4> species;
 
-    //std::vector<double> params;
-  //  std::function<double(double)> f_energy;
-  //  std::function<double(double)> f_forces;
     std::shared_ptr<IntraMolecularPotentialFunctional> m_potential_function;
   };
 
@@ -94,107 +91,52 @@ namespace YAML
       // Energy and forces gestion
       if(b.type=="harm_torsion")
       {
-        //b.params.push_back(node["parameters"]["k"   ].as<Quantity>().convert());
-        //b.params.push_back(node["parameters"]["phi0"].as<Quantity>().convert());
-        double k    = node["parameters"]["k"   ].as<Quantity>().convert(); //b.params.at(0);
-        double phi0 = node["parameters"]["phi0"].as<Quantity>().convert(); //b.params.at(1);
+        double k    = node["parameters"]["k"   ].as<Quantity>().convert();
+        double phi0 = node["parameters"]["phi0"].as<Quantity>().convert();
 
         // e = 1/2 k * (phi-phi0)^2
-        // F = k * (phi-phi0)^2
-        /*
-        b.f_energy = [k,phi0](const double phi){return 0.5 * k * pow((phi - phi0),2);};
-        b.f_forces = [k,phi0](const double phi){return       k *     (phi - phi0);};
-        */
+        // F = k * (phi-phi0)
         b.m_potential_function = std::make_shared<IntraMolecularHarmFunctional>(k,phi0);
       }
       else if(b.type=="compass_torsion")
       {
-        //b.params.push_back(node["parameters"]["k1"].as<Quantity>().convert());
-        //b.params.push_back(node["parameters"]["k2"].as<Quantity>().convert());
-        //b.params.push_back(node["parameters"]["k3"].as<Quantity>().convert());
-        double k1 = node["parameters"]["k1"].as<Quantity>().convert(); //b.params.at(0);
-        double k2 = node["parameters"]["k2"].as<Quantity>().convert(); //b.params.at(1);
-        double k3 = node["parameters"]["k3"].as<Quantity>().convert(); //b.params.at(2);
+        double k1 = node["parameters"]["k1"].as<Quantity>().convert();
+        double k2 = node["parameters"]["k2"].as<Quantity>().convert();
+        double k3 = node["parameters"]["k3"].as<Quantity>().convert();
 
         // e = k1 * (1-cos(phi)) +     k2 * (1-cos(2(phi)))  +     k3 * (1-cos(3(phi)))
         // F = k1 * sin(phi)     + 2 * k2 * sin(2*(phi))     + 3 * k3 * sin(3(phi))
-/*
-        b.f_energy = [k1,k2,k3](const double phi){
-                       return   k1 * ( 1 - cos(  phi) )
-                         +      k2 * ( 1 - cos(2*phi) )
-                         +      k3 * ( 1 - cos(3*phi) );};
-        b.f_forces = [k1,k2,k3](const double phi){
-                       return       k1 * sin(  phi)
-                         +      2 * k2 * sin(2*phi)
-                         +      3 * k3 * sin(3*phi);};
-*/
         b.m_potential_function = std::make_shared<IntraMolecularCompassFunctional>(k1,k2,k3);
       }
       else if(b.type=="0.5compass_torsion")
       {
-        //b.params.push_back(node["parameters"]["k1"].as<Quantity>().convert());
-        //b.params.push_back(node["parameters"]["k2"].as<Quantity>().convert());
-        //b.params.push_back(node["parameters"]["k3"].as<Quantity>().convert());
-        double k1 = node["parameters"]["k1"].as<Quantity>().convert(); //b.params.at(0);
-        double k2 = node["parameters"]["k2"].as<Quantity>().convert(); //b.params.at(1);
-        double k3 = node["parameters"]["k3"].as<Quantity>().convert(); //b.params.at(2);
+        double k1 = node["parameters"]["k1"].as<Quantity>().convert();
+        double k2 = node["parameters"]["k2"].as<Quantity>().convert();
+        double k3 = node["parameters"]["k3"].as<Quantity>().convert();
 
         // e = k1/2 * (1-cos(phi)) +     k2/2 * (1-cos(2(phi)))  +     k3/2 * (1-cos(3(phi)))
         // F = k1/2 * sin(phi)     +     k2 * sin(2*(phi))       + 3/2 * k3 * sin(3(phi))
-/*
-        b.f_energy = [k1,k2,k3](const double phi){
-                       return   k1/2 * ( 1 - cos(  phi) )
-                         +      k2/2 * ( 1 - cos(2*phi) )
-                         +      k3/2 * ( 1 - cos(3*phi) );};
-        b.f_forces = [k1,k2,k3](const double phi){
-                       return 0.5 * k1 * sin(  phi)
-                         +          k2 * sin(2*phi)
-                         +    1.5 * k3 * sin(3*phi);};
-*/
         b.m_potential_function = std::make_shared<IntraMolecularHalfCompassFunctional>(k1,k2,k3);
       }
       else if(b.type=="opls_torsion")
       {
-        //b.params.push_back(node["parameters"]["k1"].as<Quantity>().convert());
-        //b.params.push_back(node["parameters"]["k2"].as<Quantity>().convert());
-        //b.params.push_back(node["parameters"]["k3"].as<Quantity>().convert());
-        double k1 = node["parameters"]["k1"].as<Quantity>().convert(); //b.params.at(0);
-        double k2 = node["parameters"]["k2"].as<Quantity>().convert(); //b.params.at(1);
-        double k3 = node["parameters"]["k3"].as<Quantity>().convert(); //b.params.at(2);
+        double k1 = node["parameters"]["k1"].as<Quantity>().convert();
+        double k2 = node["parameters"]["k2"].as<Quantity>().convert();
+        double k3 = node["parameters"]["k3"].as<Quantity>().convert();
 
         // e =   0.5 * k1 * (1+cos(phi)) + 0.5* k2 * (1-cos(2(phi))) + 0.5 * k3 * (1+cos(3(phi))) 
         // F = - 0.5 * k1 * sin(phi)     +  k2 * sin(2*phi)          - 3/2 * k3 * sin(3*phi)     
-/*
-        b.f_energy = [k1,k2,k3](const double phi){
-                       return   0.5 * k1 * ( 1 + cos(  phi) )
-                         +      0.5 * k2 * ( 1 - cos(2*phi) )
-                         +      0.5 * k3 * ( 1 + cos(3*phi) );};
-        b.f_forces = [k1,k2,k3](const double phi){
-                       return   - 0.5  * k1 * sin(  phi)
-                         +               k2 * sin(2*phi)
-                         -        1.5  * k3 * sin(3*phi);};
-*/
         // optional constant energy offset e0 (e.g. GAFF torsions written in OPLS form)
         const double e0 = node["parameters"]["e0"] ? node["parameters"]["e0"].as<Quantity>().convert() : 0.0;
         b.m_potential_function = std::make_shared<IntraMolecularCosOPLSFunctional>(k1,k2,k3,e0);
       }
     else if(b.type=="cos_two")
       {
-        //b.params.push_back(node["parameters"]["k"].as<Quantity>().convert());
-        //b.params.push_back(node["parameters"]["phi0"].as<Quantity>().convert());
-        double k = node["parameters"]["k"].as<Quantity>().convert(); //b.params.at(0);
-        double phi0 = node["parameters"]["phi0"].as<Quantity>().convert(); //b.params.at(1);
+        double k = node["parameters"]["k"].as<Quantity>().convert();
+        double phi0 = node["parameters"]["phi0"].as<Quantity>().convert();
 
         // e = k/2 * (1-cos(2(phi-phi0)))
         // F = k * sin(2*(phi-phi0))
-/*
-        b.f_energy = [k,phi0](const double phi){
-                       double tmp = phi-phi0;
-                       return   0.5 * k * ( 1 - cos(2*tmp) );};
-        b.f_forces = [k,phi0](const double phi){
-                       double tmp = phi-phi0;
-                       return         k * sin(2*tmp);};
-*/
         b.m_potential_function = std::make_shared<IntraMolecularCosTwoFunctional>(k,phi0);
       }
       else if(b.type=="no_potential")
@@ -202,8 +144,6 @@ namespace YAML
         // e = 0
         // F = 0
         b.m_potential_function = std::make_shared<IntraMolecularPotentialFunctional>();
-        //b.f_energy = [](const double){return 0;};
-        //b.f_forces = [](const double){return 0;};
       }
       else
       {
@@ -229,6 +169,5 @@ namespace YAML
       return true;
     }
   };
-  
-  
+
 }

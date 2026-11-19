@@ -88,11 +88,7 @@ namespace exaStamp
         }
         // ------------------------------------------------------------------------------
 
-        // fill bonds, angles, torsions
-        // example : entry -> 1 : [2,3,4]
-        // bonds  : (1,2) (1,3) (1,4)
-        // angles : (2,1,3) (2,1,4) (3,1,4)
-        // torsion : to find
+        // bonds, angles and torsions of the atom and its neighbors
         for(size_t a=0; a<neigh.size(); ++a)
         {
           uint64_t id_a = neigh[a];
@@ -105,20 +101,13 @@ namespace exaStamp
 
           assert(id_a!=p_id);
 
-          // BONDS CASE -------------------------------------------------------------------
-          // here, we sort id to suppress duplicate in bonds after
-          // why ? because bond (1,2) involved bond (2,1)
-          // so we keep only (1,2)
+          // bonds are stored once, as (smallest id, largest id)
           if(p_id<id_a) bonds.emplace_back( ChemicalBond{p_id, id_a} );
           else          bonds.emplace_back( ChemicalBond{id_a, p_id} );
           // ------------------------------------------------------------------------------
 
 
-          //-----------------------------PARTICULAR CASE-----------------------------
-          // Case for angles
-          // one atom with two ghosts neighbour
-          // this case is not taken into account
-          // (the looking atom can't be a central atom in the following)
+          // angle with two ghost neighbors: not computed here (the atom cannot be a central atom later)
           for(size_t z=0; z<cells[cell_i][field::cmol][i].size(); ++z)
           {
             uint64_t id_z = cells[cell_i][field::cmol][i][z];
@@ -193,11 +182,7 @@ namespace exaStamp
               std::abort();
             }
 
-            //-----------------------------PARTICULAR CASE-----------------------------
-            // Second case torsions
-            // if the two extrem atoms of the torsion potential are ghosts
-            // we need to get the interaction here because
-            // they will not be seen in the the next
+            // torsion with two ghost end atoms: computed here, it is not seen later
             for(size_t z=0; z<cells[cell_i][field::cmol][i].size(); ++z)
             {
               uint64_t id_z = cells[cell_i][field::cmol][i][z];
@@ -307,10 +292,7 @@ namespace exaStamp
     }
     
   }
-  /*
-    Set the connectivity of the molecules
-    Add an id to the molecules
-  */
+  // Sets the connectivity of the molecules and adds an id to the molecules
   template<typename GridT> inline  void extract_connectivity(
     IJK domain_cells,
     GridT& grid,
@@ -323,15 +305,12 @@ namespace exaStamp
   {
     using namespace extract_connectivity_details;
     static constexpr uint64_t atom_not_found = std::numeric_limits<uint64_t>::max();
-//    auto T0 = std::chrono::high_resolution_clock::now();
 
     assert( ! omp_in_parallel() );
 
-    // size_t n_cells = grid.number_of_cells();
     auto cells = grid.cells_accessor();
 
     IJK dims = grid.dimension();
-    // int gl = grid.ghost_layers();
     
     int max_nt = omp_get_max_threads();
     PerThreadCount per_thread_counts [max_nt];
@@ -352,11 +331,6 @@ namespace exaStamp
 
     per_thread_impropers[0] = std::move( result_impropers );
     per_thread_impropers[0].clear();
-
-//    lout << "domain dimensions = "<<domain_cells<<std::endl;
-//    lout << "grid dimensions = "<<dims<<std::endl;
-//    lout << "grid offset = "<<grid.offset()<<std::endl;
-//    lout << "max_nt = "<<max_nt<<std::endl;
 
     std::set<int64_t> atomIds;
     std::set<int64_t> atomGhostIds;
@@ -387,7 +361,6 @@ namespace exaStamp
       GRID_OMP_FOR_BEGIN(dims,cell_i,cell_loc, schedule(dynamic) nowait )
       {
         bool cell_is_here = ! grid.is_ghost_cell(cell_loc); // 'here' meaning in the central area (not ghost) of the local processor
-        // bool cell_is_leader = is_leader_cell(cell_is_here,grid,cell_loc,domain_cells);
         size_t n_particles = cells[cell_i].size();
         const auto * __restrict__ ids = cells[cell_i][field::id];
         const auto * __restrict__ cmols = cells[cell_i].field_pointer_or_null(field_cmol);
@@ -417,7 +390,6 @@ namespace exaStamp
             }
           }
           
-          // assert( neigh[3]==std::numeric_limits<uint64_t>::max() );
           const bool p_is_leader = ( encode_cell_particle(cell_i,p,types[p]) == atom_from_idmap(p_id,id_map,id_map_ghosts) );
           if( p_is_leader )
           {        
@@ -618,7 +590,6 @@ namespace exaStamp
         s.insert(i);
       }
       lout << "impropers: "<<s.size()<<std::endl;
-      //assert( impropers.size() == impropers2.size() );
       impropers.assign( s.begin(), s.end() );
       std::sort( impropers.begin(), impropers.end() );
       if( impropers == impropers2 ) { lout << "impropers equal" << std::endl; }

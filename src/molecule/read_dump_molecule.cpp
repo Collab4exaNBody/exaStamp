@@ -155,7 +155,6 @@ namespace exaStamp
       ldbg << "--- Molecule compute parameters ---" << std::endl;
       molecule_io.print( ldbg , *species );
 
-      //      MPI_Allreduce( MPI_IN_PLACE, &reader_ffnameVector , 1 , MPI_DOUBLE , MPI_MAX , *mpi );
       MPI_Allreduce( MPI_IN_PLACE, &reader_rf_self_pairs , 1 , MPI_C_BOOL , MPI_LOR , *mpi );
       MPI_Allreduce( MPI_IN_PLACE, &reader_long_range_correction , 1 , MPI_C_BOOL , MPI_LOR , *mpi );
       MPI_Allreduce( MPI_IN_PLACE, &reader_bond_max_dist , 1 , MPI_DOUBLE , MPI_MAX , *mpi );
