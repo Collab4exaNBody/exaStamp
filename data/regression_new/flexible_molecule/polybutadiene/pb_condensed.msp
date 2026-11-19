@@ -1,4 +1,6 @@
 # no-seq
+# Melt of 4096 free butadiene units (C4H6, 40960 atoms), initial state of a polymerisation case: the CT-CT bond, angle and
+# torsion terms of the force field are for the chains grown by polymerisation, not available here, and are unused.
 includes:
   - config_molecule.msp
 
