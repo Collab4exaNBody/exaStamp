@@ -18,6 +18,7 @@ under the License.
 #pragma once
 
 #include <cmath>
+#include <limits>
 #include <yaml-cpp/yaml.h>
 #include <exaStamp/yaml_check_keys.h>
 #include <onika/physics/units.h>
@@ -223,6 +224,95 @@ namespace exaStamp
   };
 
   inline std::ostream& operator << (std::ostream& out , const LJExp6RFParms& p) { return p.to_stream(out); }
+
+  // Single precision copy of LJExp6RFParms, for the mixed precision kernel (ljexp6rf_pc_fp32): the pair terms are
+  // evaluated in FP32, the caller accumulates forces, energies and virials in FP64.
+  // Cutoffs are stored squared (FLT_MAX when the term has no cutoff of its own) and 12/B is precomputed, so that the
+  // only division is one reciprocal per pair.
+  struct LJExp6RFParmsFP32
+  {
+    float m_A = 0.0f;
+    float m_B = 0.0f;           // Exp6 B, 0 for LJ
+    float m_12_over_B = 0.0f;   // Exp6 only
+    float m_C_EPSILON = 0.0f;
+    float m_D_SIGMA = 0.0f;     // Exp6 D, or LJ sigma
+    float m_sigma2 = 0.0f;      // LJ only
+    float m_rcut2 = 0.0f;
+    float m_ecut = 0.0f;
+    float m_rf_rc2 = 0.0f;
+    float m_RF0 = 0.0f;
+    float m_RF1 = 0.0f;
+    float m_RF2 = 0.0f;
+    double m_RF2_fp64 = 0.0;    // self energy, constant per particle : kept exact
+    bool m_is_lj = false;
+    bool m_has_pair_term = false;
+
+    LJExp6RFParmsFP32() = default;
+
+    inline LJExp6RFParmsFP32(const LJExp6RFParms& p)
+    {
+      constexpr float no_cutoff = std::numeric_limits<float>::max();
+      m_is_lj = p.is_lj();
+      m_has_pair_term = p.has_pair_term();
+      m_A = p.m_A;
+      m_B = m_is_lj ? 0.0f : static_cast<float>( p.m_B_ISEXP6 );
+      m_12_over_B = m_is_lj ? 0.0f : static_cast<float>( 12.0 / p.m_B_ISEXP6 );
+      m_C_EPSILON = p.m_C_EPSILON;
+      m_D_SIGMA = p.m_D_SIGMA;
+      m_sigma2 = p.m_D_SIGMA * p.m_D_SIGMA;
+      m_rcut2 = p.m_rcut > 0.0 ? static_cast<float>( p.m_rcut * p.m_rcut ) : no_cutoff;
+      m_ecut = p.m_ecut;
+      m_rf_rc2 = p.m_rf.rc > 0.0 ? static_cast<float>( p.m_rf.rc * p.m_rf.rc ) : no_cutoff;
+      m_RF0 = p.m_rf.RF0;
+      m_RF1 = p.m_rf.RF1;
+      m_RF2 = p.m_rf.RF2;
+      m_RF2_fp64 = p.m_rf.RF2;
+    }
+
+    ONIKA_HOST_DEVICE_FUNC inline double compute_self_energy(double charge_product) const
+    {
+      return - charge_product * m_RF2_fp64;
+    }
+
+    // returns { (dE/dr)/r , E } at squared distance r2, same terms and cutoffs as LJExp6RFParms::compute_force_energy
+    ONIKA_HOST_DEVICE_FUNC inline void compute_force_energy(float r2, float charge_product, float& de_over_r, float& e) const
+    {
+      const float inv_r2 = 1.0f / r2;
+      const float r = sqrtf( r2 );
+      const float inv_r = r * inv_r2;
+      de_over_r = 0.0f;
+      e = 0.0f;
+      if( m_has_pair_term && r2 < m_rcut2 )
+      {
+        if( m_is_lj )
+        {
+          const float s2 = m_sigma2 * inv_r2;
+          const float s6 = s2 * s2 * s2;
+          const float s12 = s6 * s6;
+          e = 4.0f * m_C_EPSILON * ( s12 - s6 );
+          de_over_r = -24.0f * m_C_EPSILON * ( 2.0f * s12 - s6 ) * inv_r2;
+        }
+        else
+        {
+          const float inv_r6 = inv_r2 * inv_r2 * inv_r2;
+          const float Cr6 = m_C_EPSILON * inv_r6;
+          const float t = m_12_over_B * inv_r;
+          const float t2 = t * t;
+          const float t4 = t2 * t2;
+          const float Dt12 = m_D_SIGMA * ( t4 * t4 * t4 );
+          const float Aexp = m_A * expf( - m_B * r );
+          e = Aexp - Cr6 + Dt12;
+          de_over_r = ( - m_B * Aexp ) * inv_r + ( 6.0f * Cr6 - 12.0f * Dt12 ) * inv_r2;
+        }
+        e -= m_ecut;
+      }
+      if( r2 < m_rf_rc2 )
+      {
+        e += charge_product * ( m_RF0 * inv_r + m_RF1 * r2 - m_RF2 );
+        de_over_r += charge_product * ( 2.0f * m_RF1 - m_RF0 * inv_r2 * inv_r );
+      }
+    }
+  };
 
   struct LJExp6RFMultiParmsPair
   {

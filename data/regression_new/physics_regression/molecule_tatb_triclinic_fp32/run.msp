@@ -1,0 +1,54 @@
+# Same as molecule_tatb_triclinic, with the mixed precision non-bonding forces ljexp6rf_pc_fp32 (pair terms in single
+# precision, accumulation in double precision). Condensed TATB in a triclinic cell, 3072 atoms.
+# tatb_triclinic_3072.MpiIO is the 2-molecule triclinic unit cell (FAtomes_tatb_condensed) replicated 4x4x4 and folded
+# back into the box, so that many molecules cross the periodic boundaries of the sheared cell. Molecules are unfolded
+# (across MPI processes in the parallel run) and folded back before the run.
+includes:
+  - ../common.yaml
+  - config_molecule.msp
+
+ljexp6rf_pc_fp32:
+  enable_pair_weights: false
+  per_atom_charge: true
+  use_symmetry: false
+
+compute_nonbonding_forces:
+  rebind: { parameters: potentials_for_pairs }
+  body: [ ljexp6rf_pc_fp32 ]
+
+compute_bonding_forces:
+  - compute_force_bond
+  - compute_force_bend
+  - compute_force_torsion
+  - compute_force_improper
+  - intramolecular_pair_force
+
+setup_system:
+  - read_dump_molecule:
+      filename: "tatb_triclinic_3072.MpiIO"
+  - nbh_dist
+  - move_particles
+  - load_balance_cost_model
+  - load_balance_rcb
+  - migrate_cell_particles
+  - ghost_comm_scheme
+  - ghost_update_all_impl
+  - id_map
+  - molecule_unfold
+  - move_particles
+  - load_balance_cost_model
+  - load_balance_rcb
+  - migrate_cell_particles: { ghost_dist: 0. ang }
+  - physics_regression_noise
+
++global:
+  dt: 0.5e-15 s
+  rcut_inc: 2.0 ang
+  # mixed precision (references made on GPU, 1 rank 1 thread). Measured spread vs references (L2): GPU seq/mt/par:
+  # pos 6e-14, vel 2e-12, acc 3e-9, energies 8e-16 ; CPU seq/mt/par: pos 6.2e-8, vel 1.4e-5, acc 1.05e-2,
+  # energies 1.6e-8, virial 1.35e-7. Double precision (ljexp6rf_pc) differs from these references by 5.4e-7 on the
+  # potential energy: pr_thermo_threshold still tells the two precisions apart
+  pr_pos_threshold: 1.e-6
+  pr_vel_threshold: 2.e-4
+  pr_acc_threshold: 0.1
+  pr_thermo_threshold: 3.e-7

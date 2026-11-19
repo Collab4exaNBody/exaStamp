@@ -56,9 +56,11 @@ namespace exaStamp
   };
 
   // Reaction Field Compute functor
-  template<class ChargeFieldT, class TypeFieldT , class VirialFieldT, bool _PerAtomCharge=false, bool _UseSymetry=false, bool _ComputeEnergy = false, bool _ComputeVirial = false, bool _ComputeRFSelfPairs = true>
+  // ParmsT = LJExp6RFParms (FP64) or LJExp6RFParmsFP32 (pair terms in FP32, accumulation in FP64)
+  template<class ParmsT, class ChargeFieldT, class TypeFieldT , class VirialFieldT, bool _PerAtomCharge=false, bool _UseSymetry=false, bool _ComputeEnergy = false, bool _ComputeVirial = false, bool _ComputeRFSelfPairs = true>
   struct LJExp6RFForceOp
   {
+    static inline constexpr bool MixedPrecision = std::is_same_v<ParmsT,LJExp6RFParmsFP32>;
     static inline constexpr bool PerAtomCharge = _PerAtomCharge;
     static inline constexpr bool ComputeEnergy = _ComputeEnergy;
     static inline constexpr bool ComputeVirial = _ComputeVirial;
@@ -68,7 +70,7 @@ namespace exaStamp
     static_assert( !ComputeVirial || ComputeEnergy );
 
     // poetential parameters
-    const LJExp6RFParms * __restrict__ m_params = nullptr;
+    const ParmsT * __restrict__ m_params = nullptr;
     const ParticleSpecie * __restrict__ m_species = nullptr;
     exanb::spin_mutex_array * m_particle_locks = nullptr;
     ChargeFieldT m_charge_field;
@@ -148,10 +150,23 @@ namespace exaStamp
       if constexpr (  PerAtomCharge ) charge_b = cells[cell_b][m_charge_field][p_b];
       if constexpr ( !PerAtomCharge ) charge_b = m_species[ type_b ].m_charge;
 
-      const double r = std::sqrt(d2);
-      auto [ de , e ] = m_params[pair_id].compute_force_energy( r, ctx.ext.charge_a * charge_b );
-      e *= weight; de *= weight; // weighting function
-      de /= r;
+      double e = 0.0;
+      double de = 0.0; // (dE/dr) / r
+      if constexpr ( MixedPrecision )
+      {
+        float de_over_r = 0.0f;
+        float e_fp32 = 0.0f;
+        m_params[pair_id].compute_force_energy( static_cast<float>(d2), static_cast<float>(ctx.ext.charge_a * charge_b), de_over_r, e_fp32 );
+        e = static_cast<double>(e_fp32) * weight;
+        de = static_cast<double>(de_over_r) * weight;
+      }
+      else
+      {
+        const double r = std::sqrt(d2);
+        auto [ de_r , e_r ] = m_params[pair_id].compute_force_energy( r, ctx.ext.charge_a * charge_b );
+        e = e_r * weight; de = de_r * weight; // weighting function
+        de /= r;
+      }
       const Vec3d dr_fe = de * dr;
       ctx.ext.f += dr_fe;
       [[maybe_unused]] Mat3d virial;
@@ -199,8 +214,8 @@ namespace exaStamp
 
 namespace exanb
 {
-  template<class ChargeFieldT, class TypeFieldT , class VirialFieldT, bool _PerAtomCharge, bool _UseSymetry, bool _ComputeEnergy, bool _ComputeVirial, bool _ComputeRFSelfPairs>
-  struct ComputePairTraits< exaStamp::LJExp6RFForceOp<ChargeFieldT,TypeFieldT,VirialFieldT,_PerAtomCharge,_UseSymetry,_ComputeEnergy,_ComputeVirial,_ComputeRFSelfPairs> >
+  template<class ParmsT, class ChargeFieldT, class TypeFieldT , class VirialFieldT, bool _PerAtomCharge, bool _UseSymetry, bool _ComputeEnergy, bool _ComputeVirial, bool _ComputeRFSelfPairs>
+  struct ComputePairTraits< exaStamp::LJExp6RFForceOp<ParmsT,ChargeFieldT,TypeFieldT,VirialFieldT,_PerAtomCharge,_UseSymetry,_ComputeEnergy,_ComputeVirial,_ComputeRFSelfPairs> >
   {
     static inline constexpr bool RequiresBlockSynchronousCall = false;
     static inline constexpr bool ComputeBufferCompatible      = false;
@@ -219,14 +234,17 @@ namespace exaStamp
   struct LJExp6RFScratch
   {
     onika::memory::CudaMMVector<LJExp6RFParms> m_potentials;
+    onika::memory::CudaMMVector<LJExp6RFParmsFP32> m_potentials_fp32;
   };
 
   template<
     class GridT,
+    bool MixedPrecision,
     class = AssertGridHasFields< GridT, field::_ep ,field::_fx ,field::_fy ,field::_fz >
     >
   class LJExp6RFParticleCharge : public OperatorNode
   {
+    using ParmsT = std::conditional_t< MixedPrecision , LJExp6RFParmsFP32 , LJExp6RFParms >;
     // ========= I/O slots =======================
     ADD_SLOT( LJExp6RFMultiParms        , parameters          , INPUT , REQUIRED );
     ADD_SLOT( exanb::GridChunkNeighbors , chunk_neighbors     , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
@@ -234,7 +252,6 @@ namespace exaStamp
     ADD_SLOT( bool                      , enable_pair_weights , INPUT, true );
     ADD_SLOT( bool                      , per_atom_charge     , INPUT, true );
     ADD_SLOT( bool                      , use_symmetry        , INPUT, false );
-    ADD_SLOT( bool                      , compute_virial      , INPUT, false );
     ADD_SLOT( bool                      , rf_self_pairs       , INPUT, true );
     ADD_SLOT( bool                      , trigger_thermo_state, INPUT , OPTIONAL );
     ADD_SLOT( Domain                    , domain              , INPUT , REQUIRED );
@@ -285,7 +302,7 @@ namespace exaStamp
       }
        
       const bool need_particle_locks = ( omp_get_max_threads() > 1 ) && ( *use_symmetry ) ;
-      const bool need_virial = log_energy ; // && *compute_virial;
+      const bool need_virial = log_energy;
       const bool pair_weights = compact_nbh_weight.has_value() && ( *enable_pair_weights );
       const bool need_ghost = *use_symmetry;
       const bool compute_rf_self_pairs = *rf_self_pairs;
@@ -324,7 +341,11 @@ namespace exaStamp
           scratch->m_potentials[pair_id] = pot.m_params;
           ldbg<<"found parameters for "<<pot.m_type_a<<" / "<<pot.m_type_b <<std::endl;
         }
+        scratch->m_potentials_fp32.assign( scratch->m_potentials.begin() , scratch->m_potentials.end() );
       }
+      const ParmsT * params_ptr = nullptr;
+      if constexpr ( MixedPrecision ) params_ptr = scratch->m_potentials_fp32.data();
+      else                            params_ptr = scratch->m_potentials.data();
 
       using ChargeFieldT = decltype( grid->field_accessor( field::charge ) );
       using VirialFieldT = decltype( grid->field_accessor( field::virial ) );
@@ -365,22 +386,22 @@ namespace exaStamp
           {
             if ( compute_rf_self_pairs )
               {
-                using ForceOp = LJExp6RFForceOp<ChargeFieldT,TypeFieldT,VirialFieldT,true,false,true,true,true>;
+                using ForceOp = LJExp6RFForceOp<ParmsT,ChargeFieldT,TypeFieldT,VirialFieldT,true,false,true,true,true>;
                 using CPBufT = ComputePairBuffer2<false,false, LJExp6RFComputeContext<true,true> >;
-                compute_force_energy( cp_weight, ForceOp{scratch->m_potentials.data(), species->data(), particle_locks->data(), charge_field, type_field, virial_field} , make_compute_pair_buffer<CPBufT>() );
+                compute_force_energy( cp_weight, ForceOp{params_ptr, species->data(), particle_locks->data(), charge_field, type_field, virial_field} , make_compute_pair_buffer<CPBufT>() );
               }
             else
               {
-                using ForceOp = LJExp6RFForceOp<ChargeFieldT,TypeFieldT,VirialFieldT,true,false,true,true,false>;
+                using ForceOp = LJExp6RFForceOp<ParmsT,ChargeFieldT,TypeFieldT,VirialFieldT,true,false,true,true,false>;
                 using CPBufT = ComputePairBuffer2<false,false, LJExp6RFComputeContext<true,true> >;
-                compute_force_energy( cp_weight, ForceOp{scratch->m_potentials.data(), species->data(), particle_locks->data(), charge_field, type_field, virial_field} , make_compute_pair_buffer<CPBufT>() );
+                compute_force_energy( cp_weight, ForceOp{params_ptr, species->data(), particle_locks->data(), charge_field, type_field, virial_field} , make_compute_pair_buffer<CPBufT>() );
               }
           }
         else
           {
-            using ForceOp = LJExp6RFForceOp<ChargeFieldT,TypeFieldT,VirialFieldT,true,false,false,false>;
+            using ForceOp = LJExp6RFForceOp<ParmsT,ChargeFieldT,TypeFieldT,VirialFieldT,true,false,false,false>;
             using CPBufT = ComputePairBuffer2<false,false, LJExp6RFComputeContext<false,false> >;
-            compute_force_energy( cp_weight, ForceOp{scratch->m_potentials.data(), species->data(), particle_locks->data(), charge_field, type_field, virial_field} , make_compute_pair_buffer<CPBufT>() );
+            compute_force_energy( cp_weight, ForceOp{params_ptr, species->data(), particle_locks->data(), charge_field, type_field, virial_field} , make_compute_pair_buffer<CPBufT>() );
           }
       };
       
@@ -399,12 +420,14 @@ namespace exaStamp
 
   };
 
-  template<class GridT> using LJExp6RFParticleChargeTmpl = LJExp6RFParticleCharge<GridT>;
+  template<class GridT> using LJExp6RFParticleChargeTmpl = LJExp6RFParticleCharge<GridT,false>;
+  template<class GridT> using LJExp6RFParticleChargeFP32Tmpl = LJExp6RFParticleCharge<GridT,true>;
 
   // === register factories ===  
   ONIKA_AUTORUN_INIT(ljexp6rf)
   {  
     OperatorNodeFactory::instance()->register_factory( "ljexp6rf_pc" , make_grid_variant_operator<LJExp6RFParticleChargeTmpl> );
+    OperatorNodeFactory::instance()->register_factory( "ljexp6rf_pc_fp32" , make_grid_variant_operator<LJExp6RFParticleChargeFP32Tmpl> );
   }
 
 }
