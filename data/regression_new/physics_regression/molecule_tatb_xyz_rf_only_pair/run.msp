@@ -1,0 +1,21 @@
+# TATB crystal (768 atoms, triclinic cell, read with read_xyz_molecules), force field given in the input file, with
+# the H-H pair reduced to its reaction field. The long range correction must skip pairs without LJ or Exp6 term.
+includes:
+  - ../common.yaml
+  - config_molecule.msp
+  - tatb_ff_rf_only_pair.cfg
+
+setup_system:
+  - domain:
+      cell_size: 8. ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_xyz_molecules:
+      filename: "tatb_triclinic_4x4x1.xyz"
+  - molecule_force_field
+  - physics_regression_noise
+
++global:
+  dt: 0.5e-15 s
+  rcut_inc: 2.0 ang
+  pr_acc_threshold: 1.e-7
