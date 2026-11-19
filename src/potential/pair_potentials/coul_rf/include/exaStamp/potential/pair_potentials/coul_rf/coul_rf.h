@@ -17,7 +17,10 @@ under the License.
 
 #pragma once
 
+#include <cmath>
+#include <string>
 #include <yaml-cpp/yaml.h>
+#include <onika/log.h>
 #include <exaStamp/yaml_check_keys.h>
 #include <onika/physics/units.h>
 #include <onika/physics/constants.h>
@@ -27,6 +30,15 @@ under the License.
 namespace exaStamp
 {
   using namespace exanb;
+
+  // Treatment of the reaction field at its cutoff rc. The energy is always zero at rc, the force is not:
+  // - RF_CUTOFF_TRUNCATED : plain reaction field, the force drops from a finite value to zero at rc (default)
+  // - RF_CUTOFF_SHIFTED_FORCE : the force at rc is subtracted at every distance, E(r) - (r-rc) E'(rc)
+  // - RF_CUTOFF_SWITCHING : E(r) is multiplied by a quintic switching function S, S=1 for r <= rs, S=0 at rc,
+  //   S' and S'' zero at rs and rc. Forces are unchanged below rs.
+  static constexpr int RF_CUTOFF_TRUNCATED = 0;
+  static constexpr int RF_CUTOFF_SHIFTED_FORCE = 1;
+  static constexpr int RF_CUTOFF_SWITCHING = 2;
 
   // Reaction field coulomb potential (dielectric continuum beyond rc). Single definition, used by the coul_rf pair style,
   // the ljrf, exp6rf and ljexp6rf pair styles, the ljexp6rf_pc molecular force field and coulombic_rf (per atom charges).
@@ -38,10 +50,88 @@ namespace exaStamp
     double RF1 = 0.0;
     double RF2 = 0.0;
     double ecut = 0.0;
+    int cutoff_mode = RF_CUTOFF_TRUNCATED;
+    double rs = 0.0;                // switching start (RF_CUTOFF_SWITCHING)
+    double inv_rc2 = 0.0;           // 1/rc^2 (RF_CUTOFF_SHIFTED_FORCE)
+    double inv_switch_width = 0.0;  // 1/(rc-rs) (RF_CUTOFF_SWITCHING)
     
     ONIKA_HOST_DEVICE_FUNC
     inline bool is_null() const { return RF0==0.0 && RF1==0.0 && RF2==0.0; }    
   };
+
+  // Cutoff treatment, as given in input files
+  struct ReactionFieldCutoffMode
+  {
+    int mode = RF_CUTOFF_TRUNCATED;
+    double rs = 0.0;
+  };
+
+  inline const char* reaction_field_cutoff_mode_name(int mode)
+  {
+    switch( mode )
+    {
+      case RF_CUTOFF_SHIFTED_FORCE : return "shifted_force";
+      case RF_CUTOFF_SWITCHING : return "switching";
+      default : return "truncated";
+    }
+  }
+
+  inline int reaction_field_cutoff_mode_from_name(const std::string& name)
+  {
+    if( name == "truncated" ) return RF_CUTOFF_TRUNCATED;
+    if( name == "shifted_force" ) return RF_CUTOFF_SHIFTED_FORCE;
+    if( name == "switching" ) return RF_CUTOFF_SWITCHING;
+    onika::fatal_error() << "reaction field: unknown cutoff mode '" << name << "' (expected truncated, shifted_force or switching)" << std::endl;
+    return RF_CUTOFF_TRUNCATED;
+  }
+
+  // Sets the cutoff treatment of initialized parameters (rc, RF0, RF1, RF2). Without reaction field (null parameters),
+  // there is nothing to modify.
+  inline void reaction_field_set_cutoff_mode(ReactionFieldParms& v, const ReactionFieldCutoffMode& m)
+  {
+    v.cutoff_mode = RF_CUTOFF_TRUNCATED;
+    v.rs = 0.0;
+    v.inv_rc2 = 0.0;
+    v.inv_switch_width = 0.0;
+    if( v.is_null() ) return;
+    if( m.mode == RF_CUTOFF_SHIFTED_FORCE )
+    {
+      v.cutoff_mode = RF_CUTOFF_SHIFTED_FORCE;
+      v.inv_rc2 = 1.0 / ( v.rc * v.rc );
+    }
+    else if( m.mode == RF_CUTOFF_SWITCHING )
+    {
+      if( !( m.rs > 0.0 && m.rs < v.rc ) )
+      {
+        onika::fatal_error() << "reaction field: switching start rs="<<m.rs<<" must be between 0 and rc="<<v.rc << std::endl;
+      }
+      v.cutoff_mode = RF_CUTOFF_SWITCHING;
+      v.rs = m.rs;
+      v.inv_switch_width = 1.0 / ( v.rc - m.rs );
+    }
+  }
+
+  // Applies the cutoff treatment to the reaction field energy e and its derivative de = dE/dr, for r < rc.
+  // weight scales the 1/r term, as in reaction_field_compute_energy_weighted.
+  ONIKA_HOST_DEVICE_FUNC
+  inline void reaction_field_apply_cutoff_mode(const ReactionFieldParms& p_rc, double c, double r, double& e, double& de, double weight = 1.0)
+  {
+    if( p_rc.cutoff_mode == RF_CUTOFF_SHIFTED_FORCE )
+    {
+      const double de_rc = c * ( 2. * p_rc.RF1 * p_rc.rc - weight * p_rc.RF0 * p_rc.inv_rc2 );
+      e  -= ( r - p_rc.rc ) * de_rc;
+      de -= de_rc;
+    }
+    else if( p_rc.cutoff_mode == RF_CUTOFF_SWITCHING && r > p_rc.rs )
+    {
+      const double x = ( r - p_rc.rs ) * p_rc.inv_switch_width;
+      const double x2 = x * x;
+      const double s = 1. - x * x2 * ( 10. - 15. * x + 6. * x2 );
+      const double ds = -30. * x2 * ( 1. - x ) * ( 1. - x ) * p_rc.inv_switch_width;
+      de = de * s + e * ds;
+      e  = e * s;
+    }
+  }
 
   // core computation kernel for reaction field potential
   ONIKA_HOST_DEVICE_FUNC
@@ -59,6 +149,7 @@ namespace exaStamp
     
     e  =  e_coul +  e_corr;
     de = de_coul + de_corr;
+    reaction_field_apply_cutoff_mode( p_rc, c, r, e, de );
   }
 
   // core computation kernel for reaction field potential
@@ -79,7 +170,7 @@ namespace exaStamp
     
     e  =  e_coul +  e_corr;
     de = de_coul + de_corr;
-    
+    reaction_field_apply_cutoff_mode( p_rc, c, r, e, de, weight );
   }
 
   // core computation kernel for reaction field potential
@@ -106,7 +197,9 @@ namespace exaStamp
       v.RF0     = one_FourPiEpsilon0;
       v.RF1     = one_FourPiEpsilon0 / pow(v.rc,3) * (epsilon - 1.)/(2.*epsilon + 1.);
       v.RF2     = one_FourPiEpsilon0 / v.rc * (3. * epsilon)/(2.*epsilon + 1.);
-    }      
+    }
+    // new rc and coefficients : back to the plain truncated reaction field
+    reaction_field_set_cutoff_mode( v , ReactionFieldCutoffMode{} );
   }
 
 }
@@ -119,13 +212,44 @@ namespace YAML
   using exaStamp::reaction_field_compute_energy;
   using onika::physics::Quantity;
 
+  // cutoff_mode: truncated | shifted_force | { mode: switching, rs: <distance> }
+  template<> struct convert<exaStamp::ReactionFieldCutoffMode>
+  {
+    static bool decode(const Node& node, exaStamp::ReactionFieldCutoffMode& v)
+    {
+      v = exaStamp::ReactionFieldCutoffMode{};
+      if( node.IsScalar() )
+      {
+        v.mode = exaStamp::reaction_field_cutoff_mode_from_name( node.as<std::string>() );
+      }
+      else if( node.IsMap() )
+      {
+        exaStamp::check_yaml_keys( node , { "mode", "rs" } , "reaction field cutoff_mode" );
+        if( !node["mode"] ) { onika::fatal_error() << "reaction field cutoff_mode: missing key 'mode'" << std::endl; }
+        v.mode = exaStamp::reaction_field_cutoff_mode_from_name( node["mode"].as<std::string>() );
+        if( node["rs"] ) v.rs = node["rs"].as<Quantity>().convert();
+      }
+      else { return false; }
+      if( v.mode == exaStamp::RF_CUTOFF_SWITCHING && v.rs <= 0.0 )
+      {
+        onika::fatal_error() << "reaction field cutoff_mode: switching needs the switching start rs, e.g. { mode: switching, rs: 11.5 ang }" << std::endl;
+      }
+      if( v.mode != exaStamp::RF_CUTOFF_SWITCHING && v.rs != 0.0 )
+      {
+        onika::fatal_error() << "reaction field cutoff_mode: rs is only used with mode: switching" << std::endl;
+      }
+      return true;
+    }
+  };
+
   template<> struct convert<ReactionFieldParms>
   {
     static bool decode(const Node& node, ReactionFieldParms& v)
     {
       if( !node.IsMap() ) { return false; }
-      exaStamp::check_yaml_keys( node , { "rc", "epsilon" } , "reaction field parameters" );
+      exaStamp::check_yaml_keys( node , { "rc", "epsilon", "cutoff_mode" } , "reaction field parameters" );
       init_rf( v, node["rc"].as<Quantity>().convert() , node["epsilon"].as<double>() );
+      if( node["cutoff_mode"] ) reaction_field_set_cutoff_mode( v , node["cutoff_mode"].as<exaStamp::ReactionFieldCutoffMode>() );
       return true;
     }
   };

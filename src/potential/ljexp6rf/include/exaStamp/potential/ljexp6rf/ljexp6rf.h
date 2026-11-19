@@ -133,8 +133,8 @@ namespace exaStamp
     inline bool operator < ( const LJExp6RFParms& r ) const
     {
       // ecut and ecut_rf omitted on prupose
-      const std::array<double,11> A = {   m_A,   m_B_ISEXP6,   m_C_EPSILON,   m_D_SIGMA,   m_rcut,   m_ecut,   m_rf.rc,   m_rf.RF0,   m_rf.RF1,   m_rf.RF2,   m_rf.ecut };
-      const std::array<double,11> B = { r.m_A, r.m_B_ISEXP6, r.m_C_EPSILON, r.m_D_SIGMA, r.m_rcut, r.m_ecut, r.m_rf.rc, r.m_rf.RF0, r.m_rf.RF1, r.m_rf.RF2, r.m_rf.ecut };
+      const std::array<double,13> A = {   m_A,   m_B_ISEXP6,   m_C_EPSILON,   m_D_SIGMA,   m_rcut,   m_ecut,   m_rf.rc,   m_rf.RF0,   m_rf.RF1,   m_rf.RF2,   m_rf.ecut, double(  m_rf.cutoff_mode),   m_rf.rs };
+      const std::array<double,13> B = { r.m_A, r.m_B_ISEXP6, r.m_C_EPSILON, r.m_D_SIGMA, r.m_rcut, r.m_ecut, r.m_rf.rc, r.m_rf.RF0, r.m_rf.RF1, r.m_rf.RF2, r.m_rf.ecut, double(r.m_rf.cutoff_mode), r.m_rf.rs };
       return A < B;
     }
     inline bool operator == ( const LJExp6RFParms& r ) const
@@ -217,7 +217,13 @@ namespace exaStamp
         out<<",rcut="<<m_rcut<<",ecut="<<m_ecut<<")";
         sep = "+";
       }
-      if(m_rf.rc>0.0) out << sep << "RF(rc="<<m_rf.rc<<",RF0="<<m_rf.RF0<<",RF1="<<m_rf.RF1<<",RF2="<<m_rf.RF2<<",ecut="<<m_rf.ecut<<")";
+      if(m_rf.rc>0.0)
+      {
+        out << sep << "RF(rc="<<m_rf.rc<<",RF0="<<m_rf.RF0<<",RF1="<<m_rf.RF1<<",RF2="<<m_rf.RF2<<",ecut="<<m_rf.ecut;
+        if( m_rf.cutoff_mode != RF_CUTOFF_TRUNCATED ) out << ","<<reaction_field_cutoff_mode_name(m_rf.cutoff_mode);
+        if( m_rf.cutoff_mode == RF_CUTOFF_SWITCHING ) out << ",rs="<<m_rf.rs;
+        out << ")";
+      }
       return out;
     }
 
@@ -244,6 +250,11 @@ namespace exaStamp
     float m_RF1 = 0.0f;
     float m_RF2 = 0.0f;
     double m_RF2_fp64 = 0.0;    // self energy, constant per particle : kept exact
+    int m_rf_cutoff_mode = RF_CUTOFF_TRUNCATED;
+    float m_rf_rc = 0.0f;
+    float m_rf_de_rc = 0.0f;    // shifted force : dE/dr at rc for a unit charge product
+    float m_rf_rs = 0.0f;       // switching start
+    float m_rf_inv_switch_width = 0.0f;
     bool m_is_lj = false;
     bool m_has_pair_term = false;
 
@@ -267,6 +278,11 @@ namespace exaStamp
       m_RF1 = p.m_rf.RF1;
       m_RF2 = p.m_rf.RF2;
       m_RF2_fp64 = p.m_rf.RF2;
+      m_rf_cutoff_mode = p.m_rf.cutoff_mode;
+      m_rf_rc = p.m_rf.rc;
+      m_rf_de_rc = 2.0 * p.m_rf.RF1 * p.m_rf.rc - p.m_rf.RF0 * p.m_rf.inv_rc2;
+      m_rf_rs = p.m_rf.rs;
+      m_rf_inv_switch_width = p.m_rf.inv_switch_width;
     }
 
     ONIKA_HOST_DEVICE_FUNC inline double compute_self_energy(double charge_product) const
@@ -308,8 +324,26 @@ namespace exaStamp
       }
       if( r2 < m_rf_rc2 )
       {
-        e += charge_product * ( m_RF0 * inv_r + m_RF1 * r2 - m_RF2 );
-        de_over_r += charge_product * ( 2.0f * m_RF1 - m_RF0 * inv_r2 * inv_r );
+        float e_rf = charge_product * ( m_RF0 * inv_r + m_RF1 * r2 - m_RF2 );
+        float de_rf_over_r = charge_product * ( 2.0f * m_RF1 - m_RF0 * inv_r2 * inv_r );
+        // cutoff treatment, as reaction_field_apply_cutoff_mode
+        if( m_rf_cutoff_mode == RF_CUTOFF_SHIFTED_FORCE )
+        {
+          const float de_rc = charge_product * m_rf_de_rc;
+          e_rf -= ( r - m_rf_rc ) * de_rc;
+          de_rf_over_r -= de_rc * inv_r;
+        }
+        else if( m_rf_cutoff_mode == RF_CUTOFF_SWITCHING && r > m_rf_rs )
+        {
+          const float x = ( r - m_rf_rs ) * m_rf_inv_switch_width;
+          const float x2 = x * x;
+          const float s = 1.0f - x * x2 * ( 10.0f - 15.0f * x + 6.0f * x2 );
+          const float ds = -30.0f * x2 * ( 1.0f - x ) * ( 1.0f - x ) * m_rf_inv_switch_width;
+          de_rf_over_r = de_rf_over_r * s + e_rf * ds * inv_r;
+          e_rf *= s;
+        }
+        e += e_rf;
+        de_over_r += de_rf_over_r;
       }
     }
   };

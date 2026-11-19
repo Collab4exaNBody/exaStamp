@@ -92,11 +92,42 @@ namespace exaStamp
       return n_bytes;
     }
 
+    // Pair potential parameters as stored in dumps : layout of LJExp6RFParms before the reaction field cutoff modes
+    // were added, kept so that dumps stay readable. The reaction field cutoff mode is not stored : it is set in the
+    // input file (reaction_field_cutoff_mode operator).
+    struct LJExp6RFParmsIO
+    {
+      double m_A = 0.0;
+      double m_B_ISEXP6 = 1.0;
+      double m_C_EPSILON = 0.0;
+      double m_D_SIGMA = 0.0;
+      double m_rcut = 0.0;
+      double m_ecut = 0.0;
+      double m_rf_rc = 0.0;
+      double m_rf_RF0 = 0.0;
+      double m_rf_RF1 = 0.0;
+      double m_rf_RF2 = 0.0;
+      double m_rf_ecut = 0.0;
+
+      LJExp6RFParmsIO() = default;
+      inline LJExp6RFParmsIO(const LJExp6RFParms& p)
+        : m_A(p.m_A), m_B_ISEXP6(p.m_B_ISEXP6), m_C_EPSILON(p.m_C_EPSILON), m_D_SIGMA(p.m_D_SIGMA), m_rcut(p.m_rcut), m_ecut(p.m_ecut)
+        , m_rf_rc(p.m_rf.rc), m_rf_RF0(p.m_rf.RF0), m_rf_RF1(p.m_rf.RF1), m_rf_RF2(p.m_rf.RF2), m_rf_ecut(p.m_rf.ecut) {}
+      inline LJExp6RFParms params() const
+      {
+        LJExp6RFParms p;
+        p.m_A = m_A; p.m_B_ISEXP6 = m_B_ISEXP6; p.m_C_EPSILON = m_C_EPSILON; p.m_D_SIGMA = m_D_SIGMA; p.m_rcut = m_rcut; p.m_ecut = m_ecut;
+        p.m_rf.rc = m_rf_rc; p.m_rf.RF0 = m_rf_RF0; p.m_rf.RF1 = m_rf_RF1; p.m_rf.RF2 = m_rf_RF2; p.m_rf.ecut = m_rf_ecut;
+        return p;
+      }
+    };
+    static_assert( sizeof(LJExp6RFParmsIO) == 11 * sizeof(double) , "dump layout of pair potential parameters must not change" );
+
     struct IntramolecularPairIO
     {
       char m_type_a[32];
       char m_type_b[32];
-      LJExp6RFParms m_params;
+      LJExp6RFParmsIO m_params;
     };
     
     struct IntramolecularPairWeightIO
@@ -294,7 +325,7 @@ namespace exaStamp
             IntramolecularPairIO descio;
             std::strncpy( descio.m_type_a, pairpot.m_type_a.c_str(), 31 );
             std::strncpy( descio.m_type_b, pairpot.m_type_b.c_str(), 31 );
-            descio.m_params = pairpot.m_params;
+            descio.m_params = LJExp6RFParmsIO( pairpot.m_params );
             n_bytes += write_func( descio );
           }
         }
@@ -487,7 +518,7 @@ namespace exaStamp
           {
             IntramolecularPairIO descio;
             n_bytes += read_func( descio );
-            LJExp6RFMultiParmsPair pot = { descio.m_type_a , descio.m_type_b , descio.m_params };
+            LJExp6RFMultiParmsPair pot = { descio.m_type_a , descio.m_type_b , descio.m_params.params() };
             m_potentials_for_pairs->m_potentials.push_back( pot );
           }
         }
