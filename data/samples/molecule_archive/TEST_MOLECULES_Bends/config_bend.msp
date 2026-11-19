@@ -70,12 +70,10 @@ compute_LCHBOP:
 
 
 compute_force_bond:
-      compute_virial: false
       potentials:
          - *bond_A_B
 
 compute_force_bend:
-      compute_virial: false
       potentials_for_angles:
          - *bend_A_B_A
 

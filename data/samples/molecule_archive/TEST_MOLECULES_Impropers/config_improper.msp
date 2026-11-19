@@ -108,21 +108,18 @@ _: # potential parameters, can be part of an external data base
 
 
 compute_force_bond:
-      compute_virial: false
       potentials:
          - *bond_A_B
          - *bond_A_C
          - *bond_A_D
 
 compute_force_bend:
-      compute_virial: false
       potentials_for_angles:
          - *bend_B_A_C
          - *bend_B_A_D
          - *bend_C_A_D
 
 compute_force_improper:
-      compute_virial: false
       potentials_for_impropers:
          - *improper_A_B_C_D
 

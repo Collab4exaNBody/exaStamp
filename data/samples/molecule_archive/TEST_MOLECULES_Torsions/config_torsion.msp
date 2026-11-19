@@ -101,20 +101,17 @@ _: # potential parameters, can be part of an external data base
 
 
 compute_force_bond:
-      compute_virial: false
       potentials:
          - *bond_A_B
          - *bond_B_C
          - *bond_C_D
 
 compute_force_bend:
-      compute_virial: false
       potentials_for_angles:
          - *bend_A_B_C
          - *bend_B_C_D
 
 compute_force_torsion:
-      compute_virial: false
       potentials_for_torsions:
          - *torsion_A_B_C_D
 

@@ -62,7 +62,6 @@ namespace exaStamp
     ADD_SLOT( IntramolecularParameterIndexLists, intramolecular_parameters , INPUT_OUTPUT, DocString{"Intramolecular functional parmater index lists"} );
 
     ADD_SLOT( bool                      , trigger_thermo_state, INPUT , OPTIONAL );
-    ADD_SLOT( bool                      , compute_virial      , INPUT , false );
 
   public:
     inline void execute ()  override final
@@ -78,7 +77,7 @@ namespace exaStamp
         std::abort();
       }
 
-      // do we need to compute energy and virial
+      // energy and virial are computed on thermodynamic state steps only
       bool log_energy = false;
       if( trigger_thermo_state.has_value() )
       {
@@ -88,7 +87,7 @@ namespace exaStamp
       {
         ldbg << "trigger_thermo_state missing " << std::endl;
       }
-      const bool need_virial = log_energy && *compute_virial;
+      const bool need_virial = log_energy;
       // per particle energy is only needed when thermodynamic state is computed. if unknown, keep computing it
       const bool need_energy = trigger_thermo_state.has_value() ? *trigger_thermo_state : true;
       using VirialFieldT = decltype( grid->field_accessor( field::virial ) );

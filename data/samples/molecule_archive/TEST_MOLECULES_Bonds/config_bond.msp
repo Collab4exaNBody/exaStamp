@@ -59,7 +59,6 @@ _: # potential parameters, can be part of an external data base
 
 
 compute_force_bond:
-      compute_virial: false
       potentials:
         - *bond_A_B
 

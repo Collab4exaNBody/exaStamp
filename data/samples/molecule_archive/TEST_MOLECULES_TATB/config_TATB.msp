@@ -236,7 +236,6 @@ _: # potential parameters, can be part of an external data base
             k: 2.1 kcal/mol/rad^2
 
 compute_force_bond:
-      compute_virial: false
       potentials:
          - *bond_CNO2_CNO2
          - *bond_CNO2_CNH2
@@ -247,7 +246,6 @@ compute_force_bond:
          - *bond_NH2_H
 
 compute_force_bend:
-      compute_virial: false
       potentials_for_angles:
          - *bend_CNO2_CNH2_CNO2
          - *bend_CNH2_CNO2_CNH2
@@ -259,7 +257,6 @@ compute_force_bend:
          - *bend_H_NH2_H
 
 compute_force_torsion:
-      compute_virial: false
       potentials_for_torsions:
          - *torsion_CNO2_CNH2_CNO2_CNH2
          - *torsion_CNO2_CNH2_CNO2_NO2
@@ -270,7 +267,6 @@ compute_force_torsion:
          - *torsion_O_NO2_CNO2_CNH2
 
 compute_force_improper:
-      compute_virial: false
       potentials_for_impropers:
          - *improper_CNO2_CNH2_CNH2_NO2
          - *improper_CNH2_CNO2_CNO2_NH2
