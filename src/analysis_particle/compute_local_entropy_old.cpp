@@ -17,7 +17,7 @@
 #include <exaStamp/thermo_state/thermodynamic_state.h>
 #include <exaStamp/particle_species/particle_specie.h>
 
-#include <exaStamp/analysis_particle/compute_local_entropy.h>
+#include <exaStamp/analysis_particle/compute_local_entropy_old.h>
 
 namespace exaStamp
 {
@@ -25,7 +25,7 @@ namespace exaStamp
 using namespace exanb;
 
 template <class GridT, class = AssertGridHasFields<GridT, field::_ep, field::_fx, field::_fy, field::_fz>>
-class ComputeLocalEntropyOp : public OperatorNode {
+class ComputeLocalEntropyOldOp : public OperatorNode {
 
   // ========= I/O slots =======================
   ADD_SLOT( exanb::GridChunkNeighbors    , chunk_neighbors   , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
@@ -52,6 +52,11 @@ class ComputeLocalEntropyOp : public OperatorNode {
                                                  "\t\t local = %s\n";
 
 public:
+
+  inline std::string documentation() const override final
+  {
+    return R"EOF(Legacy CPU-only per-atom two-body excess entropy (buffered pair version), kept as numerical reference. Use compute_local_entropy instead.)EOF";
+  }
 
   inline void execute () override final 
   {
@@ -102,11 +107,11 @@ public:
   }
 };
 
-template <class GridT> using ComputeLocalEntropyOpTmpl = ComputeLocalEntropyOp<GridT>;
+template <class GridT> using ComputeLocalEntropyOldOpTmpl = ComputeLocalEntropyOldOp<GridT>;
 
 // === register factories ===
-ONIKA_AUTORUN_INIT(compute_local_entropy) {
-  OperatorNodeFactory::instance()->register_factory("compute_local_entropy",
-                                                    make_grid_variant_operator<ComputeLocalEntropyOpTmpl>);
+ONIKA_AUTORUN_INIT(compute_local_entropy_old) {
+  OperatorNodeFactory::instance()->register_factory("compute_local_entropy_old",
+                                                    make_grid_variant_operator<ComputeLocalEntropyOldOpTmpl>);
 }
 } // namespace exaStamp
