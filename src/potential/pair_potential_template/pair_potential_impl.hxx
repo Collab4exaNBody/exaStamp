@@ -105,7 +105,7 @@ namespace exaStamp
 #   if defined(USTAMP_POTENTIAL_RIGIDMOL) || defined(USTAMP_POTENTIAL_MULTI_PARAM)
     ADD_SLOT( USTAMP_POTENTIAL_PARAMS   , common_parameters    , INPUT , OPTIONAL , DocString{"Potential parameters applied to type pairs without user specified parameters"} );
 #   endif
-    ADD_SLOT( PotParameters             , parameters           , INPUT , PotParameters{} );
+    ADD_SLOT( PotParameters             , parameters           , INPUT , PotParameters() );
     ADD_SLOT( double                    , rcut                 , INPUT , REQUIRED );
     ADD_SLOT( double                    , rcut_max             , INPUT_OUTPUT , 0.0 );
     ADD_SLOT( exanb::GridChunkNeighbors , chunk_neighbors      , INPUT , exanb::GridChunkNeighbors{} , DocString{"neighbor list"} );
