@@ -1,0 +1,47 @@
+# Unsupervised classification of planar defects in FCC Cu with strain functional descriptors
+# and a Gaussian mixture model (Kober et al., arXiv:2402.04191, section 3.6).
+# Periodic configuration with two twin planes, one stacking fault and 24 vacancies:
+#   python3 fcc_planar_defects.py      # writes fcc_planar_defects.xyz
+species:
+  - Cu: { mass: 63.546 Da, z: 29, charge: 0 e- }
+
+chunk_neighbors:
+  config:
+    chunk_size: 1
+    build_particle_offset: true
+
+setup_system:
+  - domain:
+      cell_size: 8 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_extended_xyz_file:
+      filename: "fcc_planar_defects.xyz"
+      bounds_mode: FILE
+
+global:
+  max_iteration: 0
+  simulation_thermostate_screen_frequency: 10
+  simulation_thermostate_file_frequency: -1
+  simulation_snapshot_frequency: 10
+  rcut_inc: 1.0 ang
+  dt: 1.0e-3 ps
+  rcut_max: 6.0 ang
+
+compute_strain_functional:
+  rcut: 5.093590329 ang
+  sigma: 0.909569702 ang
+
+sfd_gmm_fit:
+  n_components: [ 2, 3, 4, 5, 6 ]
+  select_by: dbi      # 2 classes: bulk FCC / twin, stacking-fault and vacancy environments
+  model_file: sfd_gmm_planar_defects_model.yaml
+
+simulation_epilog:
+  - compute_strain_functional
+  - sfd_gmm_fit
+  - sfd_gmm_classify
+  - compute_cna: { rcut: 4.0 ang }
+  - cna_fields: { struct_field: cna_type }
+  - timestep_file: "sfd_gmm_planar_defects.xyz"
+  - write_xyz: { fields: [ id, sfd_class, sfd_class_prob, cna_type ] }

@@ -19,6 +19,7 @@ under the License.
 
 #include <cmath>
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 #include <onika/physics/units.h>
 #include <onika/physics/units.h>
 #include <onika/math/basic_types.h>
@@ -83,6 +84,7 @@ namespace YAML
     static bool decode(const Node& node, EamSuttonChenParameters& v)
     {
       if( !node.IsMap() ) { return false; }
+      exaStamp::check_yaml_keys( node , { "a0", "c", "epsilon", "m", "n" } , "eam sutton_chen parameters" );
       v.c = node["c"].as<Quantity>().convert();
       v.epsilon = node["epsilon"].as<Quantity>().convert();
       v.a0 = node["a0"].as<Quantity>().convert();

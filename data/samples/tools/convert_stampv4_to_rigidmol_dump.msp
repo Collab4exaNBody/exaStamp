@@ -1,7 +1,7 @@
 # override parameters with user file :
 # ------------------------------------
 
-includes: [ stampv4_to_rigidmol_dump.msp ]
+includes: [ ../../tutorial/stampv4_to_rigidmol_dump.msp ]
 
 # Domain properties (some will be overwritten by data reader)
 domain:
@@ -31,7 +31,6 @@ species:
       mass: 1.801400000000000e+01
       z: 0
       charge: 0.000000000000000e+00
-      radius: 9.185687975082679e-01
       rigid_molecule:
         - O: [0.000000000000000e+00,0.000000000000000e+00,0.000000000000000e+00]
         - H: [7.569503300000000e-01,5.203795092705673e-01,0.000000000000000e+00]

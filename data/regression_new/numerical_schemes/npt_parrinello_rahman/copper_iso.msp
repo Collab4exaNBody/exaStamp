@@ -48,7 +48,7 @@ init_prolog:
 
 input_data:
   - read_stamp_v3:
-     file: Geo_20x20x20_300K.mpio
+     filename: Geo_20x20x20_300K.mpio
      bounds_mode: DOMAIN
 
 domain:

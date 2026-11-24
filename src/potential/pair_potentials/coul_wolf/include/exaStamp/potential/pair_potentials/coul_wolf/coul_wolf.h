@@ -20,6 +20,7 @@ under the License.
 
 #include <cmath>
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 #include <onika/physics/units.h>
 #include <exaStamp/potential_factory/pair_potential.h>
 #include <onika/physics/constants.h>
@@ -88,6 +89,7 @@ namespace YAML
     {
       using onika::physics::Quantity;
       if( !node.IsMap() ) { return false; }
+      exaStamp::check_yaml_keys( node , { "alpha", "rc" } , "coul_wolf parameters" );
       v.alpha = node["alpha"].as<Quantity>().convert();
       v.rc = node["rc"].as<Quantity>().convert();
       v.e_shift = erfc(v.alpha * v.rc) / v.rc;

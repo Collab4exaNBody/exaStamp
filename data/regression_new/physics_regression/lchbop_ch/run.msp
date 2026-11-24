@@ -11,7 +11,6 @@ species:
   - H: { z: 1, mass: 1.00794 Da, charge: -0.4680 e- }
 
 LCHBOP_inits:
-  flag_vmr: true
 
 # LCHBOP builds its own neighbour data (LCHBOP_InitEF) after particles moved across cells
 update_particle_neighbors: nop
@@ -42,7 +41,6 @@ setup_system:
       expandable: false
   - read_xyz_file_with_xform:
       filename: CH216.xyz
-      pbc_adjust_xform: true
   - replicate_domain: [ 2, 2, 2 ]   # the CH216 box is a single cell : replicated so that it can be split over MPI ranks
   - LCHBOP_inits
   - physics_regression_noise

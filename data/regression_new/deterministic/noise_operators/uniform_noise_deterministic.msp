@@ -5,8 +5,8 @@ includes:
   deterministic_noise: true
 
 +setup_system:
-  - uniform_noise_r: { sigma: 0.1 ang, sigma_cut: 0.5 ang }
-  - uniform_noise_v: { sigma: 0.2 ang/ps, sigma_cut: 2 ang/ps }
+  - uniform_noise_r: { sigma: 0.1 ang }
+  - uniform_noise_v: { sigma: 0.2 ang/ps }
 
 simulation_epilog:
   - check_values:

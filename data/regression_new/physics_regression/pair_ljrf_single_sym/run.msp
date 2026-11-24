@@ -10,7 +10,7 @@ species:
 
 ljrf_compute_force_symetric:
   rcut: 12.5 ang
-  parameters: { rcut: 12.5 ang, rf: { epsilon: 100., rc: 12.5 ang }, lj: { epsilon: 0.01 kcal/mol, sigma: 3.830864488 ang } }
+  parameters: { lj_rcut: 12.5 ang, rf: { epsilon: 100., rc: 12.5 ang }, lj: { epsilon: 0.01 kcal/mol, sigma: 3.830864488 ang } }
 
 compute_force: ljrf_compute_force_symetric
 

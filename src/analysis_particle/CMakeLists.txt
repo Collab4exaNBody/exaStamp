@@ -15,6 +15,8 @@
 # under the License.
 #
 
+# lib/ + include/: Polyhedral Template Matching library (MIT, see PTM_LICENSE),
+# https://github.com/pmla/polyhedral-template-matching
 set(exaStampAnalysisParticle_LINK_LIBRARIES exaStampCompute exaStampThermoState exanbDefBox exanbIO exanbParticleNeighbors exaStampParticleSpecies)
 onika_add_plugin(exaStampAnalysisParticle ${CMAKE_CURRENT_SOURCE_DIR})
 

@@ -4,7 +4,6 @@ includes:
 setup_system:
   - read_dump_atoms:
       filename: "input_Ta.mpiio"
-      bounds_mode: FILE
 
 global:
   max_iteration: 40

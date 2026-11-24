@@ -44,7 +44,6 @@ species:
      charge: -0.4680 e-
 
 LCHBOP_inits:
-   flag_vmr: true
 #   parameters
 #   nbclist
 #   LCHBOP_rc_perf         : [8e-10, 1.2e-10] 

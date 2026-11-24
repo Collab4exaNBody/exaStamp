@@ -16,6 +16,7 @@ under the License.
 */
 
 #include "eam_alloy.h"
+#include <exaStamp/yaml_check_keys.h>
 #include <onika/file_utils.h>
 #include <onika/log.h>
 #include <onika/physics/constants.h>
@@ -77,6 +78,7 @@ namespace YAML
     else
     {
       if( !node.IsMap() ) { return false; }
+      exaStamp::check_yaml_keys( node , { "file" } , "eam_alloy parameters" );
       if( node["file"] )
       {
         file_to_load = onika::data_file_path( node["file"].as<std::string>() );

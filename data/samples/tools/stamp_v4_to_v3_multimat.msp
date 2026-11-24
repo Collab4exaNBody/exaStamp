@@ -28,7 +28,7 @@ simulation:
         bounds_mode: FILE
         version: 42
   - reduce_species
-  - simple_cost_model: { ccost: 1.0 , pdens: 4.0 , pdens2:0.0 , pdens3:0.003 }
+  - simple_cost_model: { cost_model_coefs: [ 0.003, 0.0, 4.0, 1.0 ] }   # X^3, X^2, X, constant (X: particle density)
   - load_balance_rcb
   - migrate_cell_particles
   - ghost_comm_scheme
@@ -37,5 +37,5 @@ simulation:
   - print_thermodynamic_state
   - grid_stats
   - timestep_file: "dump_%09d.StampV4"
-  - dump_data_stamp_v3
+  - write_restart_stamp_v3
 
