@@ -17,14 +17,14 @@
 
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exaStamp/thermo_state/thermodynamic_state.h>
-#include <exaStamp/analysis_particle/compute_local_centrosymmetry.h>
+#include <exaStamp/analysis_particle/compute_local_centrosymmetry_old.h>
 
 namespace exaStamp
 {
 using namespace exanb;
 
 template <class GridT, class = AssertGridHasFields<GridT, field::_ep, field::_fx, field::_fy, field::_fz>>
-class ComputeCentroOp : public OperatorNode {
+class ComputeCentroOldOp : public OperatorNode {
 
   ADD_SLOT(exanb::GridChunkNeighbors, chunk_neighbors, INPUT, exanb::GridChunkNeighbors{}, DocString{"neighbor list"});
   ADD_SLOT(bool, ghost, INPUT, false);
@@ -46,6 +46,10 @@ class ComputeCentroOp : public OperatorNode {
                                                  "\t\t nnn  = %d\n";
 
 public:
+  inline std::string documentation() const override final {
+    return "Legacy CPU-only per-atom centro-symmetry parameter (buffered pair version), kept as numerical reference. Use compute_local_csp instead.";
+  }
+
   inline void execute() override final {
 
     assert(chunk_neighbors->number_of_cells() == grid->number_of_cells());
@@ -92,11 +96,11 @@ public:
   }
 };
 
-template <class GridT> using ComputeCentroOpTmpl = ComputeCentroOp<GridT>;
+template <class GridT> using ComputeCentroOldOpTmpl = ComputeCentroOldOp<GridT>;
 
 // === register factories ===
-ONIKA_AUTORUN_INIT(compute_local_csp) {
-  OperatorNodeFactory::instance()->register_factory("compute_local_csp",
-                                                    make_grid_variant_operator<ComputeCentroOpTmpl>);
+ONIKA_AUTORUN_INIT(compute_local_csp_old) {
+  OperatorNodeFactory::instance()->register_factory("compute_local_csp_old",
+                                                    make_grid_variant_operator<ComputeCentroOldOpTmpl>);
 }
 } // namespace exaStamp

@@ -18,7 +18,7 @@
 
 #include <exaStamp/particle_species/particle_specie.h>
 #include <exaStamp/thermo_state/thermodynamic_state.h>
-#include <exaStamp/analysis_particle/compute_local_centrosymmetry.h>
+#include <exaStamp/analysis_particle/compute_local_centrosymmetry_old.h>
 
 
 struct MyGenericType {
