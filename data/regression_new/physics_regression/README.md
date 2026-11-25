@@ -29,6 +29,12 @@ ctest -R physics_regression_eam_alloy  # one family
 
 Each case runs in `<build>/regression_runs/physics_regression/<case>/`.
 
+## Portability of the references
+
+- Noise uses `std::*_distribution`, whose output depends on the standard library. References are made with libstdc++;
+  on macOS build the whole stack with Homebrew GCC (yaml-cpp included, `-DONIKA_HAVE_OPENMP_TOOLS=OFF`).
+- Single precision cases have GPU references; their thresholds are set from measured CPU spread (see each case's `run.msp`).
+
 ## (Re)generating references
 
 Regenerate references only for an intentional change of the physics, and commit the reference diff together with

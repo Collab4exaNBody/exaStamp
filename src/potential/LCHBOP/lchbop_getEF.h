@@ -757,7 +757,7 @@ inline void getvclpcl(CellT&,size_t,size_t,VCStr&);
     rcutsr.y=(rcutsr0/volvscb)*avscb[1]*hcb.y;
     rcutsr.z=(rcutsr0/volvscb)*avscb[2]*hcb.z;
 
-    IJK mvclcb{floor(hcb.x/rcutsr.x),floor(hcb.y/rcutsr.y),floor(hcb.z/rcutsr.z)};
+    IJK mvclcb{static_cast<ssize_t>(floor(hcb.x/rcutsr.x)),static_cast<ssize_t>(floor(hcb.y/rcutsr.y)),static_cast<ssize_t>(floor(hcb.z/rcutsr.z))};
 
     vcs.dvcl={hcb.x/mvclcb.i,hcb.y/mvclcb.j,hcb.z/mvclcb.k};
     vcs.dvcli={1.0/vcs.dvcl.x,1.0/vcs.dvcl.y,1.0/vcs.dvcl.z};
@@ -775,7 +775,7 @@ inline void getvclpcl(CellT&,size_t,size_t,VCStr&);
   {
     double dghost0=8.4;
     double dgh=dghost0+vcs.rcutinc0;
-    IJK mvclg{floor(dgh*vcs.dvcli.x),floor(dgh*vcs.dvcli.y),floor(dgh*vcs.dvcli.z)};
+    IJK mvclg{static_cast<ssize_t>(floor(dgh*vcs.dvcli.x)),static_cast<ssize_t>(floor(dgh*vcs.dvcli.y)),static_cast<ssize_t>(floor(dgh*vcs.dvcli.z))};
     mvclg=mvclg+1;
     vcs.xyz0=vcs.xyz0-0.5*vcs.rcutinc0;
     vcs.xyz0.x=vcs.xyz0.x-mvclg.i*vcs.dvcl.x;

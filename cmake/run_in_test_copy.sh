@@ -16,8 +16,14 @@ esac
 mkdir -p "$run_dir" || exit 1
 copy_inputs()
 {
-  cp -rLu "$input_dir"/. "$run_dir"/ || return 1
-  [ -e "$run_dir/data" ] || ln -s "$potentials_dir" "$run_dir/data"
+  # cp -u is GNU only
+  if cp --version > /dev/null 2>&1 ; then
+    cp -rLu "$input_dir"/. "$run_dir"/ || return 1
+  else
+    rsync -rL --update "$input_dir"/ "$run_dir"/ || return 1
+  fi
+  # atomic symlink (no flock on macOS); -n: don't follow an existing link
+  [ -e "$run_dir/data" ] || ln -sn "$potentials_dir" "$run_dir/data" 2> /dev/null || [ -L "$run_dir/data" ]
 }
 if command -v flock > /dev/null ; then
   # tests of the same folder may start together (ctest -j)
