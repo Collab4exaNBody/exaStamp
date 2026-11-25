@@ -11,7 +11,6 @@ simulation:
         rebind: { text: file }
         body: [ input_text: { mesg: "xyz file : " } ]
     - read_xyz_file_with_xform:
-        pbc_adjust_xform: true
   - reduce_species_after_read
   - user_temperature:
       rebind: { value: init_temperature }
@@ -25,3 +24,16 @@ simulation:
         dt: 0.0
         timestep: 0
 
+
+# atoms: set velocities to the temperature given by the user, if positive
+do_init_temperature:
+  - block1:
+      rebind: { value: init_temperature, result: enable_init_temperature }
+      body:
+        - greater_than: { threshold: 0.0 K }
+  - block3:
+      condition: enable_init_temperature
+      rebind: { T: init_temperature }
+      body:
+        - message: "Initialize temperature"
+        - init_temperature

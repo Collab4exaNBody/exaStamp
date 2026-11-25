@@ -48,7 +48,6 @@ replicate_domain:
 input_data:
   - read_xyz_file_with_xform:
       file: noisy_W_Be.xyz
-      pbc_adjust_xform: true
   - replicate_domain
 
 compute_force:

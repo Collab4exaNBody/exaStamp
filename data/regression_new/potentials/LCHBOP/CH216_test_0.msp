@@ -45,7 +45,7 @@ dump_data_if_triggered:
 
 final_dump:
     - init_particles
-    - dump_data_stamp_v3
+    - write_restart_stamp_v3
 
 # atoms descriptions
 species:
@@ -59,7 +59,6 @@ species:
      charge: -0.4680 e-
 
 LCHBOP_inits:
-  flag_vmr: true
   NPT: false
 #  nbclist
 #   parameters

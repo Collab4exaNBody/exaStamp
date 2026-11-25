@@ -13,7 +13,7 @@ configuration:
     graph: false
     graph_lod: 0
 
-snap_force_virial:
+snaplegacy_force:
   parameters:
     nt: 2
     param: "data.snapparam"
@@ -30,7 +30,7 @@ grid_flavor: grid_flavor_full
 
 input_data:
   - read_stamp_v3:
-      file: Mo_conf_300K.MpiIO
+      filename: Mo_conf_300K.MpiIO
       bounds_mode: FILE
       enlarge_bounds: 1.0 ang
   - replicate_domain: [ 1 , 4 , 4 ]
@@ -45,14 +45,14 @@ global:
   simulation_end_iteration: 4
   simulation_log_frequency: 1
 
-zbl_compute_force_virial:
+zbl_compute_force:
   parameters: { r1: 0.1 ang , rc: 4.615858 ang }
   rcut: 4.615858 ang
 
 # define potential we'll reuse later
 compute_force:
-  - snap_force_virial
-  - zbl_compute_force_virial
+  - snaplegacy_force
+  - zbl_compute_force
 
 simulation_epilog:
   - check_values:

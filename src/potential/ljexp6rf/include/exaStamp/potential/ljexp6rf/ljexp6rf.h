@@ -19,6 +19,7 @@ under the License.
 
 #include <cmath>
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 #include <onika/physics/units.h>
 
 #include <exaStamp/potential_factory/pair_potential.h>
@@ -246,6 +247,7 @@ namespace YAML
     static bool decode(const Node& node, exaStamp::LJExp6RFParms& v)
     {
       if( !node.IsMap() ) { return false; }
+      exaStamp::check_yaml_keys( node , { "exp6", "lj", "rcut", "rf" } , "ljexp6rf parameters" );
       if( node["exp6"] && node["lj"] )
       {
         exanb::fatal_error()<<"Specifying both Exp6 and LJ parameters is forbidden. Choose one or another."<<std::endl;

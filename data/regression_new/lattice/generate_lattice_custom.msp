@@ -12,7 +12,6 @@ setup_system:
   - init_rcb_grid
   - lattice:
       structure: CUSTOM
-      np: 4
       types: [ Ta, Ta, Ta, Ta ]
       positions:
         [

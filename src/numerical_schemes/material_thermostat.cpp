@@ -34,6 +34,7 @@ under the License.
 #include <exanb/core/domain.h>
 
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 #include <string>
 
 namespace exaStamp
@@ -57,6 +58,7 @@ namespace YAML
       using onika::physics::Quantity;
       
       if( ! node.IsMap() ) return false;
+      exaStamp::check_yaml_keys( node , { "T", "gamma", "type" } , "material Langevin thermostat" );
       if( ! node["gamma"] ) return false;
       if( ! node["T"] ) return false;
       if( ! node["type"] ) return false;

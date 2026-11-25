@@ -18,6 +18,7 @@ under the License.
 #pragma once
 
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 #include <onika/memory/allocator.h>
 #include <string>
 
@@ -65,6 +66,7 @@ namespace YAML
     static bool decode(const Node& node, exaStamp::SWParams& v)
     {
       if( !node.IsMap() )   { return false; }
+      exaStamp::check_yaml_keys( node , { "file", "threebody" } , "sw parameters" );
       if( !node["file"] )   { return false; }
       v.file = node["file"].as<std::string>();
       if( node["threebody"] ) { v.threebody = node["threebody"].as<bool>(); }

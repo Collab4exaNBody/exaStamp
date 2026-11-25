@@ -37,7 +37,7 @@ simulation:
     - read_stamp_v3:
         bounds_mode: FILE
   - reduce_species
-  - simple_cost_model: { ccost: 1.0 , pdens: 4.0 , pdens2:0.0 , pdens3:0.003 }
+  - simple_cost_model: { cost_model_coefs: [ 0.003, 0.0, 4.0, 1.0 ] }   # X^3, X^2, X, constant (X: particle density)
   - load_balance_rcb
   - migrate_cell_particles
   - ghost_comm_scheme
@@ -46,7 +46,7 @@ simulation:
   - print_thermodynamic_state
   - resize_grid_cell_values
   - grid_stats
-  - grid_cell_particle_splatting
+  - atom_cell_projection
   - timestep_file: "grid_%09d.vtk"
   - write_grid_vtklegacy
 

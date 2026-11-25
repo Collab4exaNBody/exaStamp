@@ -47,7 +47,6 @@ species:
      charge: -0.4680 e-
 
 LCHBOP_inits:
-   flag_vmr: true
    NPT: false
 #   parameters
 #   nbclist

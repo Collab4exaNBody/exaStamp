@@ -18,6 +18,7 @@ under the License.
 #pragma once
 
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 #include <exaStamp/particle_species/particle_specie.h>
 #include <onika/physics/units.h>
 #include <onika/math/basic_types_yaml.h>
@@ -57,6 +58,7 @@ namespace YAML
       //atom.m_rigid_atom_names.clear();
       
       YAML::Node params = node.begin()->second;
+      exaStamp::check_yaml_keys( params , { "mass", "charge", "z", "molecule", "rigid_molecule" } , "species" );
 
       atom.m_mass = params["mass"].as<Quantity>().convert(); 
       if(params["charge"]  ) { atom.m_charge = params["charge"].as<Quantity>().convert(); }

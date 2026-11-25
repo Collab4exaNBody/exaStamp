@@ -15,11 +15,12 @@ configuration:
     debug: false
 
 ghost_config: &ghost_update_parms
-  gpu_buffer_pack: true
-  async_buffer_pack: true
-  staging_buffer: true
-  serialize_pack_send: true
-  wait_all: false
+  update_ghost_config:
+    gpu_buffer_pack: true
+    async_buffer_pack: true
+    staging_buffer: true
+    serialize_pack_send: true
+    wait_all: false
 
 update_force_energy_from_ghost: *ghost_update_parms
 

@@ -45,7 +45,7 @@ species:
 
 input_data:
   - read_stamp_v3:
-      file: microjet.mpio
+      filename: microjet.mpio
       bounds_mode: FILE
 
 init_epilog:
@@ -65,7 +65,4 @@ global:
   simulation_load_balance_frequency: 10
   rcut_inc: 1.0 ang
   enable_task_graph: false
-
-chunk_neighbors:
-  chunk_size: 8
 

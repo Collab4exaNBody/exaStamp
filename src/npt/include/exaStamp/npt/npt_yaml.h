@@ -21,6 +21,7 @@ under the License.
 #include <onika/math/basic_types_yaml.h>
 #include <onika/physics/constants.h>
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 
 // bool hasValue(const YAML::Node& node) {
 //   return node && node.IsDefined() && !node.IsNull();
@@ -37,6 +38,7 @@ namespace YAML
     static inline bool decode(const Node& node, NPTConfig& v)
     {
       if(!node.IsMap() ) { return false; }
+      exaStamp::check_yaml_keys( node , { "Pdamp", "Pend", "Pmode", "Pstart", "Tdamp", "Tend", "Tstart", "mode" } , "npt parameters" );
       v = NPTConfig{};
       if( node["Tstart"] )
         {

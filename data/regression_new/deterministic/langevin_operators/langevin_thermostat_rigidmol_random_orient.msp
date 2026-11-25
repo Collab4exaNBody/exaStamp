@@ -11,37 +11,37 @@ ljrf_rigidmol_force:
         type_a: O,
         type_b: O,
         rcut: 8 ang,
-        parameters: { rf_rcut: 8 ang, rf: { epsilon: 100, rc: 8 ang } },
+        parameters: { rf: { epsilon: 100, rc: 8 ang } },
       }
     - {
         type_a: O,
         type_b: M,
         rcut: 8 ang,
-        parameters: { rf_rcut: 8 ang, rf: { epsilon: 100, rc: 8 ang } },
+        parameters: { rf: { epsilon: 100, rc: 8 ang } },
       }
     - {
         type_a: O,
         type_b: H,
         rcut: 8 ang,
-        parameters: { rf_rcut: 8 ang, rf: { epsilon: 100, rc: 8 ang } },
+        parameters: { rf: { epsilon: 100, rc: 8 ang } },
       }
     - {
         type_a: H,
         type_b: M,
         rcut: 8 ang,
-        parameters: { rf_rcut: 8 ang, rf: { epsilon: 100, rc: 8 ang } },
+        parameters: { rf: { epsilon: 100, rc: 8 ang } },
       }
     - {
         type_a: M,
         type_b: M,
         rcut: 8 ang,
-        parameters: { rf_rcut: 8 ang, rf: { epsilon: 100, rc: 8 ang } },
+        parameters: { rf: { epsilon: 100, rc: 8 ang } },
       }
     - {
         type_a: H,
         type_b: H,
         rcut: 8 ang,
-        parameters: { rf_rcut: 8 ang, rf: { epsilon: 100, rc: 8 ang } },
+        parameters: { rf: { epsilon: 100, rc: 8 ang } },
       }
 
 compute_force:

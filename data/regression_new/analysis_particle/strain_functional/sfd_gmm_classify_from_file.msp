@@ -1,0 +1,45 @@
+# Classification with a Gaussian mixture model trained offline by scripts/python/sfd_gmm_train.py
+# on the same configuration as sfd_gmm_planar_defects.msp:
+#   python3 fcc_planar_defects.py      # writes fcc_planar_defects.xyz
+#   (run with strain_functional_fields + write_xyz of the sfd_* fields, then)
+#   python3 sfd_gmm_train.py features.xyz -k 2 3 4 5 6 -o sfd_gmm_model_example.yaml
+# The model has 3 components: bulk FCC (0), twin and stacking-fault planes (1), vacancy neighbors (2).
+species:
+  - Cu: { mass: 63.546 Da, z: 29, charge: 0 e- }
+
+setup_system:
+  - domain:
+      cell_size: 8 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_extended_xyz_file:
+      filename: "fcc_planar_defects.xyz"
+      bounds_mode: FILE
+
+global:
+  max_iteration: 0
+  simulation_thermostate_screen_frequency: 10
+  simulation_thermostate_file_frequency: -1
+  simulation_snapshot_frequency: 10
+  rcut_inc: 1.0 ang
+  dt: 1.0e-3 ps
+  rcut_max: 6.0 ang
+
+compute_strain_functional:
+  rcut: 5.093590329 ang
+  sigma: 0.909569702 ang
+
+chunk_neighbors:
+  config:
+    chunk_size: 1
+    build_particle_offset: true
+
+simulation_epilog:
+  - compute_strain_functional
+  - sfd_gmm_classify:
+      model_file: sfd_gmm_model_example.yaml
+      min_probability: 0.9
+  - compute_cna: { rcut: 4.0 ang }
+  - cna_fields: { struct_field: cna_type }
+  - timestep_file: "sfd_gmm_classify_from_file.xyz"
+  - write_xyz: { fields: [ id, sfd_class, sfd_class_prob, cna_type ] }

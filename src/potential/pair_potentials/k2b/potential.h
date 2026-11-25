@@ -41,6 +41,7 @@ under the License.
 #include <cassert>
 #include <cmath>
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 
 #include <onika/physics/units.h>
 #include <exaStamp/potential_factory/pair_potential.h>
@@ -129,6 +130,7 @@ namespace YAML
   {
     static bool decode(const Node& node, exaStamp::K2bPotentialParameters& v)
     {
+      exaStamp::check_yaml_keys( node , {"n_rbf", "r_min", "r_cut", "sigma", "delta", "w"} , "k2b parameters" );
       if( node["n_rbf"] ) v.n_rbf  = node["n_rbf"].as<int>();
       if( node["r_min"] ) v.r_min  = node["r_min"].as<double>();
       if( node["r_cut"] ) v.r_cut  = node["r_cut"].as<double>();

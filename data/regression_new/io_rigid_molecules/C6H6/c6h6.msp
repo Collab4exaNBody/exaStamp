@@ -26,7 +26,7 @@ input_data:
       bounds_mode: FILE
       enlarge_bounds: 5.0 ang
 
-default_thermodynamic_state: simulation_thermodynamic_state_rigidmol
+default_thermostate_compute: simulation_thermodynamic_state_rigidmol
 
 domain:
 #  periodic: [false,false,false]

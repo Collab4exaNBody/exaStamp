@@ -19,6 +19,7 @@ under the License.
 #pragma once
 
 #include <yaml-cpp/yaml.h>
+#include <exaStamp/yaml_check_keys.h>
 #include <onika/physics/units.h>
 #include <onika/memory/allocator.h>
 #include <onika/math/basic_types.h>
@@ -409,6 +410,7 @@ namespace YAML
     static bool decode(const Node& node, EwaldParameters& v)
     {
       if( !node.IsMap() ) { return false; }
+      exaStamp::check_yaml_keys( node , { "accuracy_relative", "g_ewald", "kmax", "radius", "size" } , "ewald parameters" );
       double g_ewald = 0.0;
       if( node["g_ewald"] )
       {
