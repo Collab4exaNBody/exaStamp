@@ -40,10 +40,8 @@ setup_system:
 +global:
   rcut_inc: 1.0 ang
   dt: 0.125e-3 ps
-  # single precision bond-angle spline (references made on GPU). Measured spread vs references (L2, thermo max rel.):
-  # CPU (arm64 GCC) seq/mt/par: pos 8.2e-8, vel 1.2e-4, acc 0.27, thermo 3.0e-9 ; same with -ffp-contract=off:
-  # pos 2.6e-7, vel 3.8e-4, acc 0.87, thermo 7.7e-9. rebo_manybody (double) differs from these references by
-  # pos 1.6e-6, vel 2.5e-3, acc 2.2, thermo 2.9e-7: the thresholds still tell the two precisions apart
+  # fp32 spline, GPU references. CPU spread: pos 8.2e-8, vel 1.2e-4, acc 0.27, thermo 3e-9 (x3 with -ffp-contract=off)
+  # rebo_manybody (fp64) vs these refs: pos 1.6e-6, vel 2.5e-3, acc 2.2, thermo 2.9e-7
   pr_pos_threshold: 8.e-7
   pr_vel_threshold: 1.2e-3
   pr_acc_threshold: 1.5

@@ -31,14 +31,9 @@ Each case runs in `<build>/regression_runs/physics_regression/<case>/`.
 
 ## Portability of the references
 
-- The noise draws through `std::normal_distribution` and `std::uniform_real_distribution`, whose algorithms depend on
-  the C++ standard library. The references are made with libstdc++ (GCC): a build using libc++ (LLVM clang on macOS)
-  starts every case from another state and fails all of them. On macOS, build the whole stack with Homebrew GCC
-  (yaml-cpp included, `-DONIKA_HAVE_OPENMP_TOOLS=OFF` for onika: libgomp has no OMPT).
-- Single precision cases (e.g. `mlip_snap_fp32_wbe`, `rebo_ch_mixedprec`) have references made on GPU, which no CPU
-  build reproduces bit for bit. Their thresholds are measured: CPU spread against the references (with and without
-  FMA contraction) below the threshold, the double precision variant above it. The measurements are in the comment of
-  each case.
+- Noise uses `std::*_distribution`, whose output depends on the standard library. References are made with libstdc++;
+  on macOS build the whole stack with Homebrew GCC (yaml-cpp included, `-DONIKA_HAVE_OPENMP_TOOLS=OFF`).
+- Single precision cases have GPU references; their thresholds are set from measured CPU spread (see each case's `run.msp`).
 
 ## (Re)generating references
 

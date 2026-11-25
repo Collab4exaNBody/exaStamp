@@ -16,15 +16,13 @@ esac
 mkdir -p "$run_dir" || exit 1
 copy_inputs()
 {
-  # 'cp -u' is GNU only (not in macOS / BSD cp): rsync --update does the same there
+  # cp -u is GNU only
   if cp --version > /dev/null 2>&1 ; then
     cp -rLu "$input_dir"/. "$run_dir"/ || return 1
   else
     rsync -rL --update "$input_dir"/ "$run_dir"/ || return 1
   fi
-  # tests of the same folder may race here (no flock on macOS): a single symlink() without -f is
-  # atomic, the loser just finds the link. -n: never follow an existing 'data' link, which would
-  # create a link inside the potentials directory it points to
+  # atomic symlink (no flock on macOS); -n: don't follow an existing link
   [ -e "$run_dir/data" ] || ln -sn "$potentials_dir" "$run_dir/data" 2> /dev/null || [ -L "$run_dir/data" ]
 }
 if command -v flock > /dev/null ; then

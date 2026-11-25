@@ -121,7 +121,7 @@ inline namespace coulombic_ewald
       const int off[3] = { 0 , m_table.oy , m_table.oz };
       for(int d=0;d<3;d++)
       {
-        // sin and cos rather than sincos, a GNU extension missing on macOS (compilers merge the two calls)
+        // sincos is a GNU extension
         const double s = sin( 2.0 * M_PI * u[d] );
         const double c = cos( 2.0 * M_PI * u[d] );
         const Complexd e1 = { c , s };

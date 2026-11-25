@@ -21,7 +21,7 @@ find_package(ZLIB REQUIRED)
 
 set(exaStampIO_LINK_LIBRARIES exaStampCompute exaStampThermoState exanbMPI exanbIO exanbDefBox exaStampParticleSpecies exanbGridCellParticles exanbParticleNeighbors ${ZLIB_LIBRARIES})
 if(NOT APPLE)
-  # libc++ (macOS) has <filesystem> built in since C++17; no separate link needed
+  # libc++ needs no stdc++fs
   list(APPEND exaStampIO_LINK_LIBRARIES stdc++fs)
 endif()
 set(exaStampIO_INCLUDE_DIRS ${ZLIB_INCLUDE_DIR} ${BASEN_INCLUDE_DIRS}) 
