@@ -40,7 +40,9 @@ function(find_and_enable_compression target package macro enabled)
 
             target_link_libraries(${target} INTERFACE "${${lib_var}}")
             target_include_directories(${target} INTERFACE "${${include_var}}")
-            target_compile_definitions(${target} INTERFACE "${macro}")
+            # aio (aio.hpp) reads its own switch name: USE_ZLIB -> AIO_WITH_ZLIB
+            string(REPLACE "USE_" "AIO_WITH_" aio_macro "${macro}")
+            target_compile_definitions(${target} INTERFACE "${macro}" "${aio_macro}=1")
         else()
             message(STATUS "${package} not found — ${macro} disabled")
         endif()
@@ -53,8 +55,8 @@ endfunction()
 add_library(libZIP INTERFACE)
 
 option(WITH_ZLIB   "Enable ZLIB compression support"    ON)
-option(WITH_BZIP2  "Enable BZip2 compression support"   OFF)
-option(WITH_LZMA   "Enable LZMA/XZ compression support" OFF)
+option(WITH_BZIP2  "Enable BZip2 compression support"   ON)
+option(WITH_LZMA   "Enable LZMA/XZ compression support" ON)
 
 find_and_enable_compression(libZIP ZLIB    USE_ZLIB  WITH_ZLIB )
 find_and_enable_compression(libZIP BZip2   USE_BZIP2 WITH_BZIP2)
