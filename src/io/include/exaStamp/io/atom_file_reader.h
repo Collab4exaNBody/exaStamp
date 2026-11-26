@@ -5,10 +5,11 @@
 // that reads its format into a sink. Compression is detected by aio from
 // the file content (aio::text::with_source).
 //
-// Flow (rank 0 reads, as the previous read_external_atom_format_v2):
-//   1. header parsed -> box, domain and grid geometry set (begin())
-//   2. each atom line: grid-frame position and cell computed, staged by index
-//      (GridFiller); a Velocities section fills the same staging slots
+// Flow (read_into_grid, shared with read_hdf5; text: rank 0 reads, as the
+// previous read_external_atom_format_v2):
+//   1. header parsed -> box, domain and grid geometry set (begin(), GridPlacer)
+//   2. each atom line: grid-frame position and cell computed (GridPlacer::place),
+//      staged by index (GridFiller); a Velocities section fills the same staging slots
 //   3. GridFiller::commit: counting sort by cell, one resize per cell,
 //      sequential writes (much faster than one push_back per atom, ADR 0007)
 //   4. generic per-atom properties (formats with named columns: extxyz,
@@ -288,6 +289,32 @@ private:
   bool m_late_label = false;
 };
 
+
+// The generic fields a property with `ncomp` components becomes: ncomp 1 ->
+// scalar, 3 -> Vec3, 9 -> Mat3 (row-major, as write_xyz writes it), otherwise
+// one scalar per component, `name_c`.
+inline std::vector<std::pair<std::string, GenericKind>> generic_field_names(const std::string& name, std::size_t ncomp) {
+  if (ncomp == 1)
+    return {{name, GenericKind::Real}};
+  if (ncomp == 3)
+    return {{name, GenericKind::Vec3}};
+  if (ncomp == 9)
+    return {{name, GenericKind::Mat3}};
+  std::vector<std::pair<std::string, GenericKind>> v;
+  for (std::size_t c = 0; c < ncomp; ++c)
+    v.emplace_back(name + "_" + std::to_string(c), GenericKind::Real);
+  return v;
+}
+
+// Grid geometry of `domain` (every rank, before particles are added).
+template <class GridT>
+inline void set_grid_geometry(GridT& grid, const Domain& domain) {
+  grid.set_offset(IJK{0, 0, 0});
+  grid.set_origin(domain.bounds().bmin);
+  grid.set_cell_size(domain.cell_size());
+  grid.set_dimension(domain.grid_dimension());
+}
+
 // GridFiller: generic, format-independent grid insertion (rank 0).
 // Readers stage atoms by index in any order (stage / stage_velocity), then
 // commit() places them: count per cell, one resize per cell with the grid's
@@ -311,17 +338,22 @@ public:
   }
   std::size_t size() const { return m_n; }
 
-  void stage(std::size_t index, std::uint32_t cell, const Vec3d& r, std::uint8_t type) {
+  AIO_INLINE void stage(std::size_t index, std::uint32_t cell, const Vec3d& r, std::uint8_t type) {
     Staged& s = m_staged[index];
     s.r[0] = r.x, s.r[1] = r.y, s.r[2] = r.z;
     s.cell = cell;
     s.type = type;
   }
-  void stage_velocity(std::size_t index, double vx, double vy, double vz) {
-    if (!m_vel) // first velocity: atoms without one keep 0
-      m_vel.reset(new double[3 * m_n]());
-    double* v = &m_vel[3 * index];
+  AIO_INLINE void stage_velocity(std::size_t index, double vx, double vy, double vz) {
+    double* v = &velocity_storage(true)[3 * index]; // first velocity: atoms without one keep 0
     v[0] = vx, v[1] = vy, v[2] = vz;
+  }
+  // Velocities as vx vy vz per atom. `zero`: false when the caller writes all 3n values
+  // (a direct read), so the array is not filled twice.
+  AIO_INLINE double* velocity_storage(bool zero) {
+    if (AIO_UNLIKELY(!m_vel))
+      m_vel.reset(zero ? new double[3 * m_n]() : new double[3 * m_n]);
+    return m_vel.get();
   }
 
   // Staging of a generic property with `ncomp` components per atom (one array
@@ -336,23 +368,8 @@ public:
   }
   bool has_properties() const { return !m_props.empty(); }
 
-  // The generic fields the staged properties become: ncomp 1 -> scalar,
-  // 3 -> Vec3, 9 -> Mat3 (row-major, as write_xyz writes it), otherwise one
-  // scalar per component, `name_c`.
-  static std::vector<std::pair<std::string, GenericKind>> field_names(const std::string& name, std::size_t ncomp) {
-    if (ncomp == 1)
-      return {{name, GenericKind::Real}};
-    if (ncomp == 3)
-      return {{name, GenericKind::Vec3}};
-    if (ncomp == 9)
-      return {{name, GenericKind::Mat3}};
-    std::vector<std::pair<std::string, GenericKind>> v;
-    for (std::size_t c = 0; c < ncomp; ++c)
-      v.emplace_back(name + "_" + std::to_string(c), GenericKind::Real);
-    return v;
-  }
   static void fields_of(const std::string& name, std::size_t ncomp, std::vector<GenericFieldInfo>& out) {
-    for (const auto& [n, k] : field_names(name, ncomp)) {
+    for (const auto& [n, k] : generic_field_names(name, ncomp)) {
       GenericFieldInfo f;
       std::strncpy(f.name, n.c_str(), kGenericNameMax); // checked by the sink: never truncated
       f.kind = k;
@@ -410,8 +427,9 @@ public:
     return created;
   }
 
-  // Appends the staged atoms to the grid cells (ids = index) and frees the staging.
-  void commit(GridT& grid) {
+  // Appends the staged atoms to the grid cells and frees the staging. The id of
+  // atom i is file_ids[i] - 1 (1-based ids from the file) or id_offset + i.
+  void commit(GridT& grid, std::uint64_t id_offset = 0, const std::int64_t* file_ids = nullptr) {
     using CellTuple = std::remove_cv_t<std::remove_reference_t<decltype(grid.cells()[0][0])>>;
     const std::size_t ncells = grid.number_of_cells();
     const std::size_t n = m_n;
@@ -443,8 +461,8 @@ public:
         const std::uint32_t i = order[start[c] + j];
         const Staged& s = staged[i];
         const double* v = vel ? vel + 3 * i : kZero;
-        cell.set_tuple(base + j, CellTuple(ParticleTupleIO(s.r[0], s.r[1], s.r[2], v[0], v[1], v[2],
-                                                           static_cast<uint64_t>(i), s.type)));
+        const std::uint64_t id = file_ids ? static_cast<std::uint64_t>(file_ids[i] - 1) : id_offset + i;
+        cell.set_tuple(base + j, CellTuple(ParticleTupleIO(s.r[0], s.r[1], s.r[2], v[0], v[1], v[2], id, s.type)));
       }
     }
     m_staged.reset();
@@ -474,49 +492,166 @@ private:
   std::vector<std::uint32_t> m_order;
 };
 
-// aio stream sink, shared by every format: box transform, wrap, type map and
-// cell of each atom; insertion is left to GridFiller (rank 0).
-template <class GridT>
-class GridStreamSink {
+// File position -> grid-frame position and grid cell, shared by every sink.
+// begin() fits the deck's domain to the file cell (BoxTransform, ADR 0010) and
+// caches the grid geometry; place() is the per-atom work.
+class GridPlacer {
 public:
-  GridStreamSink(Domain& domain, GridT& grid, const ReaderSettings& settings)
-      : m_domain(domain), m_grid(grid), m_species(settings.species), m_bounds_mode(settings.bounds_mode),
-        m_read_velocities(settings.read_velocities), m_file_has_pbc(settings.file_has_pbc), m_props(settings.properties),
-        m_reserved(reserved_field_names(typename GridT::Fields{})) {}
-
-  // Header known: box, domain and grid geometry, before any atom line.
-  aio::Status begin(const aio::atoms::FrameInfo& info) {
-    m_natoms = info.natoms;
-    m_ntypes = info.ntypes;
-    if (m_natoms > std::numeric_limits<std::uint32_t>::max())
+  aio::Status begin(const aio::atoms::FrameInfo& info, Domain& domain, ReadBoundsSelectionMode bounds_mode,
+                    bool file_has_pbc, const char* no_cell_hint) {
+    if (info.natoms > std::numeric_limits<std::uint32_t>::max())
       return aio::make_error(aio::Errc::Unsupported, 0, 0, "more than 2^32 atoms on one rank");
     const auto& h = info.cell.h;
     const double det = h(0, 0) * (h(1, 1) * h(2, 2) - h(1, 2) * h(2, 1)) -
                        h(0, 1) * (h(1, 0) * h(2, 2) - h(1, 2) * h(2, 0)) +
                        h(0, 2) * (h(1, 0) * h(2, 1) - h(1, 1) * h(2, 0));
     if (!(std::abs(det) > 0.0))
-      return aio::make_error(aio::Errc::Unsupported, 0, 0, "the file defines no simulation cell (extxyz: no Lattice)");
-    if (m_file_has_pbc) {
-      const bool dp[3] = {m_domain.periodic_boundary_x(), m_domain.periodic_boundary_y(), m_domain.periodic_boundary_z()};
+      return aio::make_error(aio::Errc::Unsupported, 0, 0, "the file defines no simulation cell (%s)", no_cell_hint);
+    if (file_has_pbc) {
+      const bool dp[3] = {domain.periodic_boundary_x(), domain.periodic_boundary_y(), domain.periodic_boundary_z()};
       if (dp[0] != info.cell.pbc[0] || dp[1] != info.cell.pbc[1] || dp[2] != info.cell.pbc[2])
         lout << "Warning: file pbc = " << std::boolalpha << info.cell.pbc[0] << "," << info.cell.pbc[1] << ","
              << info.cell.pbc[2] << " differs from the domain's periodic flags; the domain's are used" << std::endl;
     }
-    m_box.init(info.cell, m_domain, m_bounds_mode);
-    m_grid.set_offset(IJK{0, 0, 0});
-    m_grid.set_origin(m_domain.bounds().bmin);
-    m_grid.set_cell_size(m_domain.cell_size());
-    m_grid.set_dimension(m_domain.grid_dimension());
-    m_dims = m_domain.grid_dimension();
-    m_grid_origin = m_domain.origin();
-    m_cell = m_domain.cell_size();
+    m_box.init(info.cell, domain, bounds_mode);
+    m_domain = &domain;
+    m_dims = domain.grid_dimension();
+    m_grid_origin = domain.origin();
+    m_cell = domain.cell_size();
     m_dims_d[0] = static_cast<double>(m_dims.i);
     m_dims_d[1] = static_cast<double>(m_dims.j);
     m_dims_d[2] = static_cast<double>(m_dims.k);
-    m_periodic[0] = m_domain.periodic_boundary_x();
-    m_periodic[1] = m_domain.periodic_boundary_y();
-    m_periodic[2] = m_domain.periodic_boundary_z();
-    m_filler.reset(m_natoms);
+    m_periodic[0] = domain.periodic_boundary_x();
+    m_periodic[1] = domain.periodic_boundary_y();
+    m_periodic[2] = domain.periodic_boundary_z();
+    return {};
+  }
+
+  // Grid-frame position r of the file position p and its cell index. False:
+  // outside the domain on a non-periodic axis.
+  AIO_INLINE bool place(const Vec3d& p, Vec3d& r, std::uint32_t& cell) const {
+    // grid frame, relative to the domain origin (0 + x is exact: bit-identical when bmin = 0)
+    r = m_box.inv_xform * (p - m_box.origin);
+    if (m_periodic[0])
+      r.x = wrap(r.x, m_box.grid_len.x);
+    if (m_periodic[1])
+      r.y = wrap(r.y, m_box.grid_len.y);
+    if (m_periodic[2])
+      r.z = wrap(r.z, m_box.grid_len.z);
+    r = r + m_box.grid_origin;
+    // Fast path: inside the grid, truncation == floor and domain_periodic_location()
+    // would not change r (same arithmetic as make_ijk((r - origin) / cell_size)).
+    const double qx = (r.x - m_grid_origin.x) / m_cell;
+    const double qy = (r.y - m_grid_origin.y) / m_cell;
+    const double qz = (r.z - m_grid_origin.z) / m_cell;
+    IJK loc;
+    if (AIO_LIKELY(qx >= 0.0 && qy >= 0.0 && qz >= 0.0 && qx < m_dims_d[0] && qy < m_dims_d[1] && qz < m_dims_d[2]))
+      loc = IJK{static_cast<ssize_t>(qx), static_cast<ssize_t>(qy), static_cast<ssize_t>(qz)};
+    else {
+      loc = domain_periodic_location(*m_domain, r);
+      if (loc.i < 0 || loc.j < 0 || loc.k < 0 || loc.i >= m_dims.i || loc.j >= m_dims.j || loc.k >= m_dims.k)
+        return false;
+    }
+    cell = static_cast<std::uint32_t>(grid_ijk_to_index(m_dims, loc));
+    return true;
+  }
+
+  const BoxTransform& box() const { return m_box; }
+
+private:
+  BoxTransform m_box;
+  const Domain* m_domain = nullptr;
+  IJK m_dims{};
+  Vec3d m_grid_origin{};
+  double m_cell = 1.0;
+  double m_dims_d[3] = {0, 0, 0};
+  bool m_periodic[3] = {true, true, true};
+};
+
+// Generic per-atom properties without a grid slot (ADR 0011), shared by every
+// sink: selected ones are bound to GridFiller staging (then stored as generic
+// fields); the others stay unbound, so aio skips them without parsing.
+class PropertyFilter {
+public:
+  PropertyFilter(PropertySelection sel, std::vector<std::string> reserved)
+      : m_sel(std::move(sel)), m_reserved(std::move(reserved)) {}
+
+  // aio's bind_property hook: called once per component, before the atoms.
+  template <class FillerT>
+  aio::atoms::FieldBinding bind(FillerT& filler, std::string_view name, std::size_t ncomp, std::size_t comp) {
+    if (!m_sel.selects(name))
+      return {};
+    if (comp == 0) {
+      m_seen.emplace_back(name);
+      std::string why;
+      for (const auto& [fname, kind] : generic_field_names(std::string(name), ncomp)) {
+        if (fname.size() > kGenericNameMax)
+          why = "generic field name '" + fname + "' longer than " + std::to_string(kGenericNameMax) + " characters";
+        else if (std::find(m_reserved.begin(), m_reserved.end(), fname) != m_reserved.end())
+          why = "'" + fname + "' is a field of the grid";
+      }
+      if (!why.empty()) {
+        if (m_sel.named(name))
+          m_error += (m_error.empty() ? "" : "; ") + ("property '" + std::string(name) + "': " + why);
+        else
+          m_skipped.push_back(std::string(name) + " (" + why + ")");
+        m_rejected.emplace_back(name);
+        return {};
+      }
+    } else if (std::find(m_rejected.begin(), m_rejected.end(), name) != m_rejected.end()) {
+      return {};
+    }
+    double* d = filler.property_storage(name, ncomp);
+    if (!d)
+      return {};
+    return aio::atoms::FieldBinding::of(d, static_cast<std::ptrdiff_t>(ncomp), static_cast<std::ptrdiff_t>(comp));
+  }
+
+  // At the end of the read: the selection is valid and every named property was found.
+  aio::Status check(std::string& msg, const char* missing_hint) const {
+    if (!m_error.empty()) {
+      msg = m_error;
+      return aio::make_error(aio::Errc::Sink, 0, 0, "invalid generic property selection");
+    }
+    std::string missing;
+    for (const std::string& n : m_sel.names)
+      if (std::find(m_seen.begin(), m_seen.end(), n) == m_seen.end())
+        missing += (missing.empty() ? "" : ", ") + n;
+    if (!missing.empty()) {
+      msg = std::string(missing_hint) + ": " + missing;
+      return aio::make_error(aio::Errc::Sink, 0, 0, "selected properties not found");
+    }
+    return {};
+  }
+
+  const std::string& error() const { return m_error; }
+  // Properties selected by "*" but not stored (name too long, grid field).
+  const std::vector<std::string>& skipped() const { return m_skipped; }
+
+private:
+  PropertySelection m_sel;
+  std::vector<std::string> m_reserved; // reserved_field_names()
+  std::vector<std::string> m_seen, m_rejected, m_skipped;
+  std::string m_error;
+};
+
+// aio stream sink, shared by the text formats: type map and placement of each
+// atom; insertion is left to GridFiller (rank 0).
+template <class GridT>
+class GridStreamSink {
+public:
+  GridStreamSink(Domain& domain, GridT& grid, const ReaderSettings& settings)
+      : m_domain(domain), m_grid(grid), m_species(settings.species), m_bounds_mode(settings.bounds_mode),
+        m_read_velocities(settings.read_velocities), m_file_has_pbc(settings.file_has_pbc),
+        m_props(settings.properties, reserved_field_names(typename GridT::Fields{})) {}
+
+  // Header known: box, domain and grid geometry, before any atom line.
+  aio::Status begin(const aio::atoms::FrameInfo& info) {
+    m_ntypes = info.ntypes;
+    if (aio::Status st = m_place.begin(info, m_domain, m_bounds_mode, m_file_has_pbc, "extxyz: no Lattice"); !st.ok())
+      return st;
+    set_grid_geometry(m_grid, m_domain);
+    m_filler.reset(info.natoms);
     return {};
   }
 
@@ -530,39 +665,9 @@ public:
 
   void set_type_label(std::int64_t type, std::string_view label) { m_types.set_label(type, label); }
 
-  // aio hook for per-atom properties without a grid slot (ADR 0011): bound
-  // (staged, then stored as generic fields) if selected; unbound otherwise,
-  // so aio skips the column without parsing it. Called once per component,
-  // before the atom lines.
   aio::atoms::FieldBinding bind_property(std::string_view name, std::size_t ncomp, std::size_t comp,
                                          aio::atoms::ScalarType) {
-    if (!m_props.selects(name))
-      return {};
-    const bool named = m_props.named(name);
-    if (comp == 0) {
-      m_seen.emplace_back(name);
-      std::string why;
-      for (const auto& [fname, kind] : GridFiller<GridT>::field_names(std::string(name), ncomp)) {
-        if (fname.size() > kGenericNameMax)
-          why = "generic field name '" + fname + "' longer than " + std::to_string(kGenericNameMax) + " characters";
-        else if (std::find(m_reserved.begin(), m_reserved.end(), fname) != m_reserved.end())
-          why = "'" + fname + "' is a field of the grid";
-      }
-      if (!why.empty()) {
-        if (named)
-          m_prop_error += (m_prop_error.empty() ? "" : "; ") + ("property '" + std::string(name) + "': " + why);
-        else
-          m_skipped.push_back(std::string(name) + " (" + why + ")");
-        m_rejected.emplace_back(name);
-        return {};
-      }
-    } else if (std::find(m_rejected.begin(), m_rejected.end(), name) != m_rejected.end()) {
-      return {};
-    }
-    double* d = m_filler.property_storage(name, ncomp);
-    if (!d)
-      return {};
-    return aio::atoms::FieldBinding::of(d, static_cast<std::ptrdiff_t>(ncomp), static_cast<std::ptrdiff_t>(comp));
+    return m_props.bind(m_filler, name, ncomp, comp);
   }
 
   // Before the first atom line: the type labels are complete, and we learn
@@ -577,30 +682,21 @@ public:
   aio::Errc atom(std::size_t index, const aio::atoms::AtomValues& a) {
     if (m_type_error)
       return aio::Errc::Sink;
-    if (!m_prop_error.empty()) {
-      m_msg = m_prop_error;
+    if (!m_props.error().empty()) {
+      m_msg = m_props.error();
       return aio::Errc::Sink;
     }
     if (a.type < 1 || static_cast<std::size_t>(a.type) > m_types.size()) {
       m_msg = "atom type " + std::to_string(a.type) + " outside [1, " + std::to_string(m_types.size()) + "]";
       return aio::Errc::Sink;
     }
-    // grid frame, relative to the domain origin (0 + x is exact: bit-identical when bmin = 0)
-    Vec3d r = m_box.inv_xform * (Vec3d{a.x, a.y, a.z} - m_box.origin);
-    if (m_periodic[0])
-      r.x = wrap(r.x, m_box.grid_len.x);
-    if (m_periodic[1])
-      r.y = wrap(r.y, m_box.grid_len.y);
-    if (m_periodic[2])
-      r.z = wrap(r.z, m_box.grid_len.z);
-    r = r + m_box.grid_origin;
-    const IJK loc = cell_of(r);
-    if (loc.i < 0 || loc.j < 0 || loc.k < 0 || loc.i >= m_dims.i || loc.j >= m_dims.j || loc.k >= m_dims.k) {
+    Vec3d r;
+    std::uint32_t cell;
+    if (!m_place.place(Vec3d{a.x, a.y, a.z}, r, cell)) {
       m_msg = "atom outside the domain on a non-periodic axis";
       return aio::Errc::Sink;
     }
-    m_filler.stage(index, static_cast<std::uint32_t>(grid_ijk_to_index(m_dims, loc)), r,
-                   m_types[static_cast<std::size_t>(a.type - 1)]);
+    m_filler.stage(index, cell, r, m_types[static_cast<std::size_t>(a.type - 1)]);
     if (m_vel_in_atoms)
       m_filler.stage_velocity(index, a.vx, a.vy, a.vz);
     ++m_count;
@@ -615,46 +711,19 @@ public:
   aio::Status end() {
     if (m_types.late_label())
       return aio::make_error(aio::Errc::Unsupported, 0, 0, "type labels after the Atoms section are not supported");
-    if (!m_prop_error.empty()) {
-      m_msg = m_prop_error;
-      return aio::make_error(aio::Errc::Sink, 0, 0, "invalid generic property selection");
-    }
-    std::string missing;
-    for (const std::string& n : m_props.names)
-      if (std::find(m_seen.begin(), m_seen.end(), n) == m_seen.end())
-        missing += (missing.empty() ? "" : ", ") + n;
-    if (!missing.empty()) {
-      m_msg = "not in the file, string-valued, or read as a grid field: " + missing;
-      return aio::make_error(aio::Errc::Sink, 0, 0, "selected properties not found");
-    }
-    return {};
+    return m_props.check(m_msg, "not in the file, string-valued, or read as a grid field");
   }
 
-  // Grid cell of r. Fast path: inside the grid, truncation == floor and
-  // domain_periodic_location() would not change r. Otherwise: the exanb code.
-  IJK cell_of(Vec3d& r) const {
-    // same arithmetic as make_ijk((r - origin) / cell_size): identical cells
-    const double qx = (r.x - m_grid_origin.x) / m_cell;
-    const double qy = (r.y - m_grid_origin.y) / m_cell;
-    const double qz = (r.z - m_grid_origin.z) / m_cell;
-    if (qx >= 0.0 && qy >= 0.0 && qz >= 0.0 && qx < m_dims_d[0] && qy < m_dims_d[1] && qz < m_dims_d[2])
-      return IJK{static_cast<ssize_t>(qx), static_cast<ssize_t>(qy), static_cast<ssize_t>(qz)};
-    return domain_periodic_location(m_domain, r);
-  }
-
-  // Puts the staged atoms into the grid (after a successful read).
+  // Puts the staged atoms into the grid (after a successful read). id = index.
   void commit() { m_filler.commit(m_grid); }
 
   // After commit() and rebuild_particle_offsets(): generic properties ->
   // grid flat arrays. Returns the fields created.
   std::vector<GenericFieldInfo> fill_properties() { return m_filler.fill_properties(m_grid); }
-
-  // Properties selected by "*" but not stored (name too long, grid field).
-  const std::vector<std::string>& skipped_properties() const { return m_skipped; }
-
+  const std::vector<std::string>& skipped_properties() const { return m_props.skipped(); }
   const std::string& message() const { return m_msg; }
   std::size_t count() const { return m_count; }
-  const BoxTransform& box() const { return m_box; }
+  const BoxTransform& box() const { return m_place.box(); }
 
 private:
   Domain& m_domain;
@@ -663,38 +732,54 @@ private:
   ReadBoundsSelectionMode m_bounds_mode;
   bool m_read_velocities = true;
   bool m_file_has_pbc = false;
-  PropertySelection m_props;
-  std::vector<std::string> m_reserved;           // reserved_field_names()
-  std::vector<std::string> m_seen, m_rejected, m_skipped;
-  std::string m_prop_error;
-  BoxTransform m_box;
+  PropertyFilter m_props;
+  GridPlacer m_place;
   TypeMap m_types;
   GridFiller<GridT> m_filler;
-  IJK m_dims{};
-  Vec3d m_grid_origin{};
-  double m_cell = 1.0;
-  double m_dims_d[3] = {0, 0, 0};
-  bool m_periodic[3] = {true, true, true};
-  std::size_t m_natoms = 0, m_ntypes = 0, m_count = 0;
+  std::size_t m_ntypes = 0, m_count = 0;
   bool m_type_error = false;
   bool m_vel_in_atoms = false;
   std::string m_msg;
 };
 
-// Rank-0 result sent to every rank.
+// Result sent to every rank (from rank 0, or from the first failing rank).
 struct ReadOutcome {
   int ok = 1;
   char msg[sizeof(aio::Error::msg) + 512] = {};
 };
 
-// Shared flow of every atom file reader. `read_fn(path, sink)` reads one
-// format into the sink and returns an aio::Status.
-template <class GridT, class ReadFn>
-void read_atom_file(const char* op_name, MPI_Comm comm, Domain& domain, GridT& grid, const ReaderSettings& settings,
-                    const std::string& path, ReadFn&& read_fn) {
-  lout << "======== " << op_name << " ========" << std::endl;
-  int rank = 0;
+// Every rank learns the outcome; fatal_error everywhere on failure, so no
+// rank waits forever. Parallel: the first failing rank's message.
+inline void agree_on_outcome(const char* op_name, MPI_Comm comm, bool parallel, ReadOutcome& out) {
+  int rank = 0, nranks = 1;
   MPI_Comm_rank(comm, &rank);
+  MPI_Comm_size(comm, &nranks);
+  int from = 0;
+  if (parallel) {
+    from = out.ok ? nranks : rank;
+    MPI_Allreduce(MPI_IN_PLACE, &from, 1, MPI_INT, MPI_MIN, comm);
+  }
+  if (from < nranks)
+    MPI_Bcast(&out, sizeof(ReadOutcome), MPI_BYTE, from, comm);
+  if (!out.ok)
+    fatal_error() << op_name << ": " << out.msg << std::endl;
+}
+
+// Shared flow of every atom file reader. `make_sink()` builds the sink;
+// `read_fn(path, sink)` reads the file into it and returns an aio::Status.
+//   - serial (parallel = false): rank 0 reads, as the previous
+//     read_external_atom_format_v2; the other ranks get the geometry.
+//   - parallel: every rank reads its share (HDF5 MPIO) into its own grid; the
+//     deck's load balancing / migration redistributes the atoms, as after any read.
+// A sink may have `std::string global_check(MPI_Comm, bool parallel)` (empty: ok),
+// run after a successful read on the reading ranks (collective when parallel).
+template <class GridT, class MakeSink, class ReadFn>
+void read_into_grid(const char* op_name, MPI_Comm comm, Domain& domain, GridT& grid, const std::string& path,
+                    bool parallel, MakeSink&& make_sink, ReadFn&& read_fn) {
+  lout << "======== " << op_name << " ========" << std::endl;
+  int rank = 0, nranks = 1;
+  MPI_Comm_rank(comm, &rank);
+  MPI_Comm_size(comm, &nranks);
 
   if (grid.number_of_particles() != 0) {
     lerr << op_name << ": system already defined, skipping" << std::endl;
@@ -703,75 +788,84 @@ void read_atom_file(const char* op_name, MPI_Comm comm, Domain& domain, GridT& g
   // The deck's domain (cell size, dims, bounds, periodic, expandable, xform) is
   // kept: BoxTransform fits it to the file cell (ADR 0010).
 
+  const bool reads = parallel || rank == 0;
   ReadOutcome out;
-  std::vector<GenericFieldInfo> generic; // created on rank 0, then on every rank
-  if (rank == 0) {
-    GridStreamSink<GridT> sink(domain, grid, settings);
+  std::vector<GenericFieldInfo> generic; // created by the readers, then on every rank (serial)
+  unsigned long long count = 0;
+  bool uniform_scale = true;
+  bool checked = false;
+  double ms_read = 0, ms_check = 0, ms_grid = 0;
+  {
+    auto sink = make_sink();
     using clock = std::chrono::steady_clock;
+    if (parallel)
+      MPI_Barrier(comm); // times the read only (MPI's first collectives may set up connections)
     const auto t0 = clock::now();
-    const aio::Status st = read_fn(path.c_str(), sink);
+    aio::Status st;
+    if (reads)
+      st = read_fn(path.c_str(), sink);
     const auto t1 = clock::now();
-    if (st.ok()) {
+    if (reads && !st.ok()) {
+      out.ok = 0;
+      const aio::Error& e = st.error();
+      const char* sep = sink.message().empty() ? "" : " -- ";
+      if (e.line > 0)
+        std::snprintf(out.msg, sizeof out.msg, "%s:%llu: %s%s%s", path.c_str(), static_cast<unsigned long long>(e.line),
+                      e.msg, sep, sink.message().c_str());
+      else
+        std::snprintf(out.msg, sizeof out.msg, "%s: %s%s%s", path.c_str(), e.msg, sep, sink.message().c_str());
+    }
+    agree_on_outcome(op_name, comm, parallel, out);
+
+    const auto t2 = clock::now();
+    if constexpr (requires { sink.global_check(comm, parallel); }) {
+      checked = true;
+      if (reads) {
+        const std::string err = sink.global_check(comm, parallel);
+        if (!err.empty()) {
+          out.ok = 0;
+          std::snprintf(out.msg, sizeof out.msg, "%s: %s", path.c_str(), err.c_str());
+        }
+      }
+      agree_on_outcome(op_name, comm, parallel, out);
+    }
+
+    const auto t3 = clock::now();
+    if (reads) {
       sink.commit();
       grid.rebuild_particle_offsets(); // flat arrays are indexed by these offsets
       generic = sink.fill_properties();
+      count = sink.count();
+      uniform_scale = sink.box().uniform_scale;
+      if (rank == 0)
+        for (const std::string& sk : sink.skipped_properties())
+          lout << "Skipped property = " << sk << std::endl;
     }
-    const auto t2 = clock::now();
-    const double ms_parse = std::chrono::duration<double, std::milli>(t1 - t0).count();
-    const double ms_grid = std::chrono::duration<double, std::milli>(t2 - t1).count();
-    if (!st.ok()) {
-      out.ok = 0;
-      const aio::Error& e = st.error();
-      if (e.line > 0)
-        std::snprintf(out.msg, sizeof out.msg, "%s:%llu: %s%s%s", path.c_str(),
-                      static_cast<unsigned long long>(e.line), e.msg, sink.message().empty() ? "" : " -- ",
-                      sink.message().c_str());
-      else
-        std::snprintf(out.msg, sizeof out.msg, "%s: %s%s%s", path.c_str(), e.msg,
-                      sink.message().empty() ? "" : " -- ", sink.message().c_str());
-    } else {
-      lout << onika::format_string("Read %zu atoms in %.1f ms (parse %.1f ms, grid insert %.1f ms)", sink.count(),
-                                   ms_parse + ms_grid, ms_parse, ms_grid)
-           << std::endl;
-      lout << "Uniform scale    = " << std::boolalpha << sink.box().uniform_scale << std::endl;
-      lout << "Particles        = " << sink.count() << std::endl;
-      lout << "Domain XForm     = " << domain.xform() << std::endl;
-      lout << "Domain bounds    = " << domain.bounds() << std::endl;
-      lout << "Domain size      = " << bounds_size(domain.bounds()) << std::endl;
-      lout << "Real size        = "
-           << bounds_size(domain.bounds()) * Vec3d{domain.xform().m11, domain.xform().m22, domain.xform().m33}
-           << std::endl;
-      lout << "Cell size        = " << domain.cell_size() << std::endl;
-      lout << "Grid dimensions  = " << domain.grid_dimension() << " (" << grid_cell_count(domain.grid_dimension())
-           << " cells)" << std::endl;
-      lout << "Domain periodic  = " << std::boolalpha << domain.periodic_boundary_x() << "," << domain.periodic_boundary_y()
-           << "," << domain.periodic_boundary_z() << std::endl;
-      lout << "Domain expandable = " << std::boolalpha << domain.expandable() << std::endl;
-      for (const GenericFieldInfo& f : generic)
-        lout << "Generic field    = " << f.name << " (" << generic_kind_name(f.kind) << ")" << std::endl;
-      for (const std::string& sk : sink.skipped_properties())
-        lout << "Skipped property = " << sk << std::endl;
-    }
+    ms_read = std::chrono::duration<double, std::milli>(t1 - t0).count();
+    ms_check = std::chrono::duration<double, std::milli>(t3 - t2).count();
+    ms_grid = std::chrono::duration<double, std::milli>(clock::now() - t3).count();
   }
 
-  // Every rank learns the outcome: no rank waits forever on a rank-0 error.
-  MPI_Bcast(&out, sizeof(ReadOutcome), MPI_BYTE, 0, comm);
-  if (!out.ok)
-    fatal_error() << op_name << ": " << out.msg << std::endl;
-
+  // Domain: rank 0's for everyone. Parallel readers computed it from the same file cell: it must match.
+  const Domain mine = domain;
   MPI_Bcast(&domain, sizeof(Domain), MPI_BYTE, 0, comm);
-  if (rank != 0) {
-    grid.set_offset(IJK{0, 0, 0});
-    grid.set_origin(domain.bounds().bmin);
-    grid.set_cell_size(domain.cell_size());
-    grid.set_dimension(domain.grid_dimension());
+  if (parallel) {
+    const bool same = mine.bounds().bmin == domain.bounds().bmin && mine.bounds().bmax == domain.bounds().bmax &&
+                      mine.cell_size() == domain.cell_size() && mine.grid_dimension() == domain.grid_dimension() &&
+                      mine.xform() == domain.xform();
+    int differs = same ? 0 : 1;
+    MPI_Allreduce(MPI_IN_PLACE, &differs, 1, MPI_INT, MPI_MAX, comm);
+    if (differs)
+      fatal_error() << op_name << ": ranks computed different domains from the file cell" << std::endl;
+  } else if (rank != 0) {
+    set_grid_geometry(grid, domain);
   }
   grid.rebuild_particle_offsets();
 
-  // Same generic fields on every rank (empty where there are no particles).
+  // Same generic fields on every rank (empty where there are no particles; parallel: each reader made them).
   int ngeneric = static_cast<int>(generic.size());
   MPI_Bcast(&ngeneric, 1, MPI_INT, 0, comm);
-  if (ngeneric > 0) {
+  if (ngeneric > 0 && !parallel) {
     generic.resize(static_cast<std::size_t>(ngeneric));
     MPI_Bcast(generic.data(), static_cast<int>(ngeneric * sizeof(GenericFieldInfo)), MPI_BYTE, 0, comm);
     if (rank != 0)
@@ -779,11 +873,45 @@ void read_atom_file(const char* op_name, MPI_Comm comm, Domain& domain, GridT& g
         generic_field_data(grid, f);
   }
 
+  if (parallel) {
+    MPI_Allreduce(MPI_IN_PLACE, &count, 1, MPI_UNSIGNED_LONG_LONG, MPI_SUM, comm);
+    double ms[3] = {ms_read, ms_check, ms_grid};
+    MPI_Allreduce(MPI_IN_PLACE, ms, 3, MPI_DOUBLE, MPI_MAX, comm);
+    ms_read = ms[0], ms_check = ms[1], ms_grid = ms[2];
+  }
+  lout << onika::format_string("Read %llu atoms in %.1f ms (read %.1f ms, ", count, ms_read + ms_check + ms_grid, ms_read)
+       << (checked ? onika::format_string("id check %.1f ms, ", ms_check) : std::string())
+       << onika::format_string("grid insert %.1f ms; %s", ms_grid, parallel ? "MPIO on " : "rank 0")
+       << (parallel ? std::to_string(nranks) + (nranks > 1 ? " ranks" : " rank") : std::string()) << ")" << std::endl;
+  lout << "Uniform scale    = " << std::boolalpha << uniform_scale << std::endl;
+  lout << "Particles        = " << count << std::endl;
+  lout << "Domain XForm     = " << domain.xform() << std::endl;
+  lout << "Domain bounds    = " << domain.bounds() << std::endl;
+  lout << "Domain size      = " << bounds_size(domain.bounds()) << std::endl;
+  lout << "Real size        = "
+       << bounds_size(domain.bounds()) * Vec3d{domain.xform().m11, domain.xform().m22, domain.xform().m33} << std::endl;
+  lout << "Cell size        = " << domain.cell_size() << std::endl;
+  lout << "Grid dimensions  = " << domain.grid_dimension() << " (" << grid_cell_count(domain.grid_dimension())
+       << " cells)" << std::endl;
+  lout << "Domain periodic  = " << std::boolalpha << domain.periodic_boundary_x() << "," << domain.periodic_boundary_y()
+       << "," << domain.periodic_boundary_z() << std::endl;
+  lout << "Domain expandable = " << std::boolalpha << domain.expandable() << std::endl;
+  for (const GenericFieldInfo& f : generic)
+    lout << "Generic field    = " << f.name << " (" << generic_kind_name(f.kind) << ")" << std::endl;
+
   if (!check_domain(domain)) {
     lout << "domain = " << domain << std::endl;
     fatal_error() << op_name << ": invalid domain configuration" << std::endl;
   }
   lout << "===========================================" << std::endl << std::endl;
+}
+
+// The text readers: rank 0 reads through GridStreamSink.
+template <class GridT, class ReadFn>
+void read_atom_file(const char* op_name, MPI_Comm comm, Domain& domain, GridT& grid, const ReaderSettings& settings,
+                    const std::string& path, ReadFn&& read_fn) {
+  read_into_grid(
+      op_name, comm, domain, grid, path, false, [&] { return GridStreamSink<GridT>(domain, grid, settings); }, read_fn);
 }
 
 } // namespace exaStamp::atom_io

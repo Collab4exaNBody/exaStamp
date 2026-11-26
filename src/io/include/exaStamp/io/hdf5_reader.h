@@ -17,27 +17,23 @@ specific language governing permissions and limitations
 under the License.
 */
 
-// HDF5 atom reader (read_hdf5, aio ADR 0016).
-//
-// Kept apart from atom_file_reader.h on purpose: the text readers are the
-// reference and their code paths are not touched. This header only *uses*
-// its helpers (BoxTransform, TypeMap, GridFiller, ...).
+// HDF5 atom reader (read_hdf5, aio ADR 0016, 0017).
 //
 // GridBindSink stages atoms in contiguous arrays (r[3n] or x[n] y[n] z[n],
-// type[n], ids[n], properties), so aio reads each dataset with one H5Dread
-// straight into them (aio ADR 0015). end() then does the per-atom work of
-// GridStreamSink::atom() (box transform, wrap, cell, type map) and stages the
-// atoms in GridFiller, whose commit() fills the grid as for the text readers.
+// type[n], ids[n], properties; one (N,3) velocity dataset goes straight into
+// GridFiller), so aio reads each dataset with one H5Dread straight into them
+// (aio ADR 0015). end() then places each atom with GridPlacer and stages it in
+// GridFiller, as GridStreamSink does for the text formats (atom_file_reader.h).
 //
-// Flows (read_hdf5_into_grid):
+// Flows (read_into_grid, shared with the text readers):
 //   - MPIO (parallel HDF5, mpio: true): every rank reads its slab of rows and
 //     fills its own grid (full-domain geometry, as the other ranks get after a
 //     rank-0 read). The deck's load balancing / migration redistributes the
 //     atoms afterwards, as after any read.
-//   - serial: rank 0 reads, then the rank-0 flow of read_atom_file. Used when
-//     HDF5 has no parallel I/O (with a warning if several ranks run) or with
-//     mpio: false.
+//   - serial: rank 0 reads. Used when HDF5 has no parallel I/O (with a warning
+//     if several ranks run) or with mpio: false.
 //   - stream_sink: true (debug / benchmark): read_atom_file with GridStreamSink.
+// File ids are checked for range and uniqueness (GridBindSink::global_check).
 #pragma once
 
 #include <cstdint>
@@ -86,7 +82,8 @@ inline std::ostream& operator<<(std::ostream& out, const Hdf5Schema& h) {
   return out << " }";
 }
 
-// GridBindSink: contiguous staging for direct HDF5 reads, then GridFiller.
+// GridBindSink: contiguous staging for direct HDF5 reads (aio ADR 0015), then
+// the placement and GridFiller staging shared with GridStreamSink.
 template <class GridT>
 class GridBindSink {
 public:
@@ -94,49 +91,23 @@ public:
                bool interleaved_vel, bool ids_from_file)
       : m_domain(domain), m_grid(grid), m_species(settings.species), m_bounds_mode(settings.bounds_mode),
         m_read_velocities(settings.read_velocities), m_file_has_pbc(settings.file_has_pbc),
-        m_props(settings.properties), m_reserved(reserved_field_names(typename GridT::Fields{})),
+        m_props(settings.properties, reserved_field_names(typename GridT::Fields{})),
         m_interleaved_pos(interleaved_pos), m_interleaved_vel(interleaved_vel), m_ids_from_file(ids_from_file) {}
 
-  // shortcut: begin(), bind_property() and cell_of() are copies of GridStreamSink's (private
-  // there; the text readers stay untouched). Merge them once read_hdf5 is validated.
   aio::Status begin(const aio::atoms::FrameInfo& info) {
     m_natoms = info.natoms;
     m_natoms_global = info.natoms_global ? info.natoms_global : info.natoms;
     m_first_row = info.first_row;
-    if (m_natoms > std::numeric_limits<std::uint32_t>::max())
-      return aio::make_error(aio::Errc::Unsupported, 0, 0, "more than 2^32 atoms on one rank");
-    const auto& h = info.cell.h;
-    const double det = h(0, 0) * (h(1, 1) * h(2, 2) - h(1, 2) * h(2, 1)) -
-                       h(0, 1) * (h(1, 0) * h(2, 2) - h(1, 2) * h(2, 0)) +
-                       h(0, 2) * (h(1, 0) * h(2, 1) - h(1, 1) * h(2, 0));
-    if (!(std::abs(det) > 0.0))
-      return aio::make_error(aio::Errc::Unsupported, 0, 0, "the file defines no simulation cell (schema: cell)");
-    if (m_file_has_pbc) {
-      const bool dp[3] = {m_domain.periodic_boundary_x(), m_domain.periodic_boundary_y(), m_domain.periodic_boundary_z()};
-      if (dp[0] != info.cell.pbc[0] || dp[1] != info.cell.pbc[1] || dp[2] != info.cell.pbc[2])
-        lout << "Warning: file pbc = " << std::boolalpha << info.cell.pbc[0] << "," << info.cell.pbc[1] << ","
-             << info.cell.pbc[2] << " differs from the domain's periodic flags; the domain's are used" << std::endl;
-    }
-    m_box.init(info.cell, m_domain, m_bounds_mode);
-    m_grid.set_offset(IJK{0, 0, 0});
-    m_grid.set_origin(m_domain.bounds().bmin);
-    m_grid.set_cell_size(m_domain.cell_size());
-    m_grid.set_dimension(m_domain.grid_dimension());
-    m_dims = m_domain.grid_dimension();
-    m_grid_origin = m_domain.origin();
-    m_cell = m_domain.cell_size();
-    m_dims_d[0] = static_cast<double>(m_dims.i);
-    m_dims_d[1] = static_cast<double>(m_dims.j);
-    m_dims_d[2] = static_cast<double>(m_dims.k);
-    m_periodic[0] = m_domain.periodic_boundary_x();
-    m_periodic[1] = m_domain.periodic_boundary_y();
-    m_periodic[2] = m_domain.periodic_boundary_z();
+    if (aio::Status st = m_place.begin(info, m_domain, m_bounds_mode, m_file_has_pbc, "schema: cell"); !st.ok())
+      return st;
+    set_grid_geometry(m_grid, m_domain);
     m_filler.reset(m_natoms);
     return {};
   }
 
   // Contiguous staging, allocated for the fields the schema has (aio binds those only).
-  // Not zero-filled: aio's direct reads write every value.
+  // Not zero-filled: aio's direct reads write every value. One (N,3) velocity
+  // dataset is read straight into GridFiller's velocity array.
   aio::atoms::FieldBinding bind(aio::atoms::Field f) {
     using F = aio::atoms::Field;
     using B = aio::atoms::FieldBinding;
@@ -156,7 +127,9 @@ public:
     case F::VZ:
       if (!m_read_velocities)
         return {};
-      return vec_binding(m_vel, m_interleaved_vel, static_cast<int>(f) - static_cast<int>(F::VX));
+      if (m_interleaved_vel)
+        return B::of(m_filler.velocity_storage(false), 3, static_cast<int>(f) - static_cast<int>(F::VX));
+      return vec_binding(m_vel, false, static_cast<int>(f) - static_cast<int>(F::VX));
     default:
       return {};
     }
@@ -164,50 +137,13 @@ public:
 
   aio::atoms::FieldBinding bind_property(std::string_view name, std::size_t ncomp, std::size_t comp,
                                          aio::atoms::ScalarType) {
-    if (!m_props.selects(name))
-      return {};
-    const bool named = m_props.named(name);
-    if (comp == 0) {
-      m_seen.emplace_back(name);
-      std::string why;
-      for (const auto& [fname, kind] : GridFiller<GridT>::field_names(std::string(name), ncomp)) {
-        if (fname.size() > kGenericNameMax)
-          why = "generic field name '" + fname + "' longer than " + std::to_string(kGenericNameMax) + " characters";
-        else if (std::find(m_reserved.begin(), m_reserved.end(), fname) != m_reserved.end())
-          why = "'" + fname + "' is a field of the grid";
-      }
-      if (!why.empty()) {
-        if (named)
-          m_prop_error += (m_prop_error.empty() ? "" : "; ") + ("property '" + std::string(name) + "': " + why);
-        else
-          m_skipped.push_back(std::string(name) + " (" + why + ")");
-        m_rejected.emplace_back(name);
-        return {};
-      }
-    } else if (std::find(m_rejected.begin(), m_rejected.end(), name) != m_rejected.end()) {
-      return {};
-    }
-    double* d = m_filler.property_storage(name, ncomp);
-    if (!d)
-      return {};
-    return aio::atoms::FieldBinding::of(d, static_cast<std::ptrdiff_t>(ncomp), static_cast<std::ptrdiff_t>(comp));
+    return m_props.bind(m_filler, name, ncomp, comp);
   }
 
-  // All datasets read: the per-atom work of GridStreamSink::atom(), then GridFiller staging.
+  // All datasets read: type map, id range, placement, then GridFiller staging.
   aio::Status end() {
-    if (!m_prop_error.empty()) {
-      m_msg = m_prop_error;
-      return aio::make_error(aio::Errc::Sink, 0, 0, "invalid generic property selection");
-    }
-    std::string missing;
-    for (const std::string& n : m_props.names)
-      if (std::find(m_seen.begin(), m_seen.end(), n) == m_seen.end())
-        missing += (missing.empty() ? "" : ", ") + n;
-    if (!missing.empty()) {
-      m_msg = "not in the schema or read as a grid field: " + missing;
-      return aio::make_error(aio::Errc::Sink, 0, 0, "selected properties not found");
-    }
-
+    if (aio::Status st = m_props.check(m_msg, "not in the schema or read as a grid field"); !st.ok())
+      return st;
     // Types: t -> species t - 1 (no labels in HDF5). Without species, the largest type sets the count.
     std::size_t ntypes = m_species ? m_species->size() : 1;
     if (!m_species && m_type)
@@ -215,7 +151,67 @@ public:
         ntypes = std::max<std::size_t>(ntypes, static_cast<std::size_t>(std::max<std::int32_t>(m_type[i], 1)));
     if (!m_types.freeze(ntypes, m_species, m_msg))
       return aio::make_error(aio::Errc::Sink, 0, 0, "atom types");
+    const aio::Status st = m_interleaved_pos ? stage_all<true>() : stage_all<false>();
+    for (auto& a : m_pos)
+      a.reset();
+    for (auto& a : m_vel)
+      a.reset();
+    m_type.reset();
+    if (st.ok())
+      m_count = m_natoms;
+    return st;
+  }
 
+  // After a successful read on every reading rank (collective when parallel).
+  // File ids are in [1, N] (end()) and the rows add up to N, so they are unique
+  // iff no id repeats. Sorted files (id = row + 1 everywhere) are not checked.
+  // Serial: a bitset of N bits. Parallel: id k goes to rank k / B, B = ceil(N / P),
+  // which tests it in a bitset of B bits (4 B sent per atom).
+  std::string global_check(MPI_Comm comm, bool parallel) const {
+    if (!m_ids_from_file)
+      return {}; // remap_atom: id = global row
+    int sorted = m_ids_are_rows ? 1 : 0;
+    if (parallel)
+      MPI_Allreduce(MPI_IN_PLACE, &sorted, 1, MPI_INT, MPI_LAND, comm);
+    if (sorted)
+      return {};
+    int nranks = 1;
+    if (parallel)
+      MPI_Comm_size(comm, &nranks);
+    std::uint64_t dup = kNoId;
+    if (nranks > 1) {
+      dup = repeated_id_parallel(comm);
+    } else {
+      aio::formats::common::SeenSet seen(m_natoms_global);
+      for (std::size_t i = 0; i < m_natoms && dup == kNoId; ++i)
+        if (seen.test_and_set(static_cast<std::size_t>(m_ids[i] - 1)))
+          dup = static_cast<std::uint64_t>(m_ids[i]);
+    }
+    if (dup == kNoId)
+      return {};
+    return "atom id " + std::to_string(dup) + " appears more than once in the file";
+  }
+
+  // Puts the staged atoms into the grid, with id = file id - 1, or the global row
+  // (remap_atom, or file ids equal to the rows).
+  void commit() {
+    const bool by_row = !m_ids_from_file || m_ids_are_rows;
+    m_filler.commit(m_grid, m_first_row, by_row ? nullptr : m_ids.get());
+    m_ids.reset();
+  }
+
+  std::vector<GenericFieldInfo> fill_properties() { return m_filler.fill_properties(m_grid); }
+  const std::vector<std::string>& skipped_properties() const { return m_props.skipped(); }
+  const std::string& message() const { return m_msg; }
+  std::size_t count() const { return m_count; }
+  const BoxTransform& box() const { return m_place.box(); }
+
+private:
+  static constexpr std::uint64_t kNoId = std::numeric_limits<std::uint64_t>::max();
+
+  template <bool kInterleavedPos>
+  aio::Status stage_all() {
+    const bool split_vel = static_cast<bool>(m_vel[0]);
     for (std::size_t i = 0; i < m_natoms; ++i) {
       const std::int64_t t = m_type ? m_type[i] : 1; // no types in the schema: every atom is type 1
       if (t < 1 || static_cast<std::size_t>(t) > m_types.size()) {
@@ -223,73 +219,76 @@ public:
                 std::to_string(m_types.size()) + "]";
         return aio::make_error(aio::Errc::Sink, 0, 0, "atom type out of range");
       }
-      if (m_ids_from_file && (m_ids[i] < 1 || static_cast<std::uint64_t>(m_ids[i]) > m_natoms_global)) {
-        m_msg = "atom id " + std::to_string(m_ids[i]) + " at row " + std::to_string(m_first_row + i) +
-                " outside [1, " + std::to_string(m_natoms_global) + "]";
-        return aio::make_error(aio::Errc::IdOutOfRange, 0, 0, "atom id out of range");
-      }
-      if (m_ids_from_file)
+      if (m_ids_from_file) {
+        if (m_ids[i] < 1 || static_cast<std::uint64_t>(m_ids[i]) > m_natoms_global) {
+          m_msg = "atom id " + std::to_string(m_ids[i]) + " at row " + std::to_string(m_first_row + i) +
+                  " outside [1, " + std::to_string(m_natoms_global) + "]";
+          return aio::make_error(aio::Errc::IdOutOfRange, 0, 0, "atom id out of range");
+        }
         m_ids_are_rows = m_ids_are_rows && static_cast<std::uint64_t>(m_ids[i]) == m_first_row + i + 1;
-      const Vec3d p = component(m_pos, m_interleaved_pos, i);
-      // grid frame, relative to the domain origin (as GridStreamSink::atom)
-      Vec3d r = m_box.inv_xform * (p - m_box.origin);
-      if (m_periodic[0])
-        r.x = wrap(r.x, m_box.grid_len.x);
-      if (m_periodic[1])
-        r.y = wrap(r.y, m_box.grid_len.y);
-      if (m_periodic[2])
-        r.z = wrap(r.z, m_box.grid_len.z);
-      r = r + m_box.grid_origin;
-      const IJK loc = cell_of(r);
-      if (loc.i < 0 || loc.j < 0 || loc.k < 0 || loc.i >= m_dims.i || loc.j >= m_dims.j || loc.k >= m_dims.k) {
+      }
+      const Vec3d p = kInterleavedPos ? Vec3d{m_pos[0][3 * i], m_pos[0][3 * i + 1], m_pos[0][3 * i + 2]}
+                                      : Vec3d{m_pos[0][i], m_pos[1][i], m_pos[2][i]};
+      Vec3d r;
+      std::uint32_t cell;
+      if (!m_place.place(p, r, cell)) {
         m_msg = "atom at row " + std::to_string(m_first_row + i) + " outside the domain on a non-periodic axis";
         return aio::make_error(aio::Errc::Sink, 0, 0, "atom outside the domain");
       }
-      m_filler.stage(i, static_cast<std::uint32_t>(grid_ijk_to_index(m_dims, loc)), r,
-                     m_types[static_cast<std::size_t>(t - 1)]);
-      if (m_vel[0]) {
-        const Vec3d v = component(m_vel, m_interleaved_vel, i);
-        m_filler.stage_velocity(i, v.x, v.y, v.z);
-      }
+      m_filler.stage(i, cell, r, m_types[static_cast<std::size_t>(t - 1)]);
+      if (split_vel)
+        m_filler.stage_velocity(i, m_vel[0][i], m_vel[1][i], m_vel[2][i]);
     }
-    m_count = m_natoms;
-    for (auto& a : m_pos)
-      a.reset();
-    for (auto& a : m_vel)
-      a.reset();
-    m_type.reset();
     return {};
   }
 
-  // Puts the staged atoms into the grid. GridFiller sets id = local index i: rewritten to the
-  // global id (file id - 1, or first_row + i with remap_atom).
-  // shortcut: ids are checked in [1, N] but not for uniqueness (it would need communication in
-  // MPIO); read_lammps_data / read_extxyz check it, read_hdf5 trusts the file.
-  void commit() {
-    m_filler.commit(m_grid);
-    const bool by_row = !m_ids_from_file || m_ids_are_rows; // id = first_row + i: no lookup
-    if (by_row && m_first_row == 0)
-      return; // ids are already the indices
-    auto cells = m_grid.cells();
-    const std::size_t ncells = m_grid.number_of_cells();
-    for (std::size_t c = 0; c < ncells; ++c) {
-      const std::size_t n = cells[c].size();
-      auto* id = cells[c][field::id];
-      for (std::size_t p = 0; p < n; ++p) {
-        const std::size_t i = static_cast<std::size_t>(id[p]);
-        id[p] = by_row ? m_first_row + i : static_cast<std::uint64_t>(m_ids[i] - 1);
+  // shortcut: MPI int counts limit this to 2^31 atoms per rank; use MPI_Alltoallv_c (MPI 4) beyond.
+  std::uint64_t repeated_id_parallel(MPI_Comm comm) const {
+    int rank = 0, nranks = 1;
+    MPI_Comm_rank(comm, &rank);
+    MPI_Comm_size(comm, &nranks);
+    const std::size_t P = static_cast<std::size_t>(nranks);
+    const std::uint64_t B = (m_natoms_global + P - 1) / P; // ids per owner; < 2^32 (rows per rank are)
+    // k / B without a 64-bit division per atom: reciprocal, corrected by one (exact for k < 2^53)
+    const double inv_b = 1.0 / static_cast<double>(B);
+    auto owner_of = [B, inv_b](std::uint64_t k) {
+      std::uint64_t q = static_cast<std::uint64_t>(static_cast<double>(k) * inv_b);
+      if (q * B > k)
+        --q;
+      else if ((q + 1) * B <= k)
+        ++q;
+      return q;
+    };
+    std::vector<int> scount(P, 0), rcount(P), sdispl(P + 1, 0), rdispl(P + 1, 0);
+    for (std::size_t i = 0; i < m_natoms; ++i)
+      ++scount[owner_of(static_cast<std::uint64_t>(m_ids[i] - 1))];
+    MPI_Alltoall(scount.data(), 1, MPI_INT, rcount.data(), 1, MPI_INT, comm);
+    for (std::size_t r = 0; r < P; ++r) {
+      sdispl[r + 1] = sdispl[r] + scount[r];
+      rdispl[r + 1] = rdispl[r] + rcount[r];
+    }
+    std::vector<std::uint32_t> sbuf(m_natoms), rbuf(static_cast<std::size_t>(rdispl[P]));
+    {
+      std::vector<int> next(sdispl.begin(), sdispl.end() - 1);
+      for (std::size_t i = 0; i < m_natoms; ++i) {
+        const std::uint64_t k = static_cast<std::uint64_t>(m_ids[i] - 1);
+        const std::uint64_t owner = owner_of(k);
+        sbuf[static_cast<std::size_t>(next[owner]++)] = static_cast<std::uint32_t>(k - owner * B);
       }
     }
-    m_ids.reset();
+    MPI_Alltoallv(sbuf.data(), scount.data(), sdispl.data(), MPI_UINT32_T, rbuf.data(), rcount.data(), rdispl.data(),
+                  MPI_UINT32_T, comm);
+    std::uint64_t dup = kNoId;
+    aio::formats::common::SeenSet seen(static_cast<std::size_t>(B));
+    for (const std::uint32_t v : rbuf)
+      if (seen.test_and_set(v)) {
+        dup = static_cast<std::uint64_t>(rank) * B + v + 1;
+        break;
+      }
+    MPI_Allreduce(MPI_IN_PLACE, &dup, 1, MPI_UINT64_T, MPI_MIN, comm);
+    return dup;
   }
 
-  std::vector<GenericFieldInfo> fill_properties() { return m_filler.fill_properties(m_grid); }
-  const std::vector<std::string>& skipped_properties() const { return m_skipped; }
-  const std::string& message() const { return m_msg; }
-  std::size_t count() const { return m_count; }
-  const BoxTransform& box() const { return m_box; }
-
-private:
   template <typename T>
   T* alloc(std::unique_ptr<T[]>& p, std::size_t n) {
     if (!p)
@@ -303,20 +302,6 @@ private:
       return aio::atoms::FieldBinding::of(alloc(a[0], 3 * m_natoms), 3, c);
     return aio::atoms::FieldBinding::of(alloc(a[c], m_natoms));
   }
-  static Vec3d component(const std::unique_ptr<double[]> (&a)[3], bool interleaved, std::size_t i) {
-    if (interleaved)
-      return Vec3d{a[0][3 * i], a[0][3 * i + 1], a[0][3 * i + 2]};
-    return Vec3d{a[0][i], a[1][i], a[2][i]};
-  }
-
-  IJK cell_of(Vec3d& r) const {
-    const double qx = (r.x - m_grid_origin.x) / m_cell;
-    const double qy = (r.y - m_grid_origin.y) / m_cell;
-    const double qz = (r.z - m_grid_origin.z) / m_cell;
-    if (qx >= 0.0 && qy >= 0.0 && qz >= 0.0 && qx < m_dims_d[0] && qy < m_dims_d[1] && qz < m_dims_d[2])
-      return IJK{static_cast<ssize_t>(qx), static_cast<ssize_t>(qy), static_cast<ssize_t>(qz)};
-    return domain_periodic_location(m_domain, r);
-  }
 
   Domain& m_domain;
   GridT& m_grid;
@@ -324,158 +309,47 @@ private:
   ReadBoundsSelectionMode m_bounds_mode;
   bool m_read_velocities = true;
   bool m_file_has_pbc = false;
-  PropertySelection m_props;
-  std::vector<std::string> m_reserved;
-  std::vector<std::string> m_seen, m_rejected, m_skipped;
-  std::string m_prop_error;
+  PropertyFilter m_props;
   bool m_interleaved_pos, m_interleaved_vel, m_ids_from_file;
-  bool m_ids_are_rows = true; // file ids == row + 1 (sorted files): no id lookup in commit()
-  BoxTransform m_box;
+  bool m_ids_are_rows = true; // file ids == global row + 1 (sorted files): no id lookup, no uniqueness check
+  GridPlacer m_place;
   TypeMap m_types;
   GridFiller<GridT> m_filler;
-  std::unique_ptr<double[]> m_pos[3], m_vel[3];
+  std::unique_ptr<double[]> m_pos[3], m_vel[3]; // m_vel: split x/y/z velocities only
   std::unique_ptr<std::int32_t[]> m_type;
   std::unique_ptr<std::int64_t[]> m_ids;
-  IJK m_dims{};
-  Vec3d m_grid_origin{};
-  double m_cell = 1.0;
-  double m_dims_d[3] = {0, 0, 0};
-  bool m_periodic[3] = {true, true, true};
   std::size_t m_natoms = 0, m_natoms_global = 0, m_first_row = 0, m_count = 0;
   std::string m_msg;
 };
-
-// The domain fields every rank must share after an MPIO read.
-inline bool same_domain(const Domain& a, const Domain& b) {
-  return a.bounds().bmin == b.bounds().bmin && a.bounds().bmax == b.bounds().bmax &&
-         a.cell_size() == b.cell_size() && a.grid_dimension() == b.grid_dimension() && a.xform() == b.xform();
-}
 
 // read_hdf5 flows (see the header comment). `mpio`: every rank reads its slab (needs
 // AIO_HDF5_HAVE_MPIO); otherwise rank 0 reads everything.
 template <class GridT>
 void read_hdf5_into_grid(MPI_Comm comm, Domain& domain, GridT& grid, const ReaderSettings& settings,
                          const std::string& path, const aio::formats::hdf5::Schema& schema, bool remap_atom, bool mpio) {
-  const char* op_name = "read_hdf5";
-  lout << "======== " << op_name << " ========" << std::endl;
-  int rank = 0, nranks = 1;
-  MPI_Comm_rank(comm, &rank);
-  MPI_Comm_size(comm, &nranks);
-  if (grid.number_of_particles() != 0) {
-    lerr << op_name << ": system already defined, skipping" << std::endl;
-    return;
-  }
 #if !AIO_HDF5_HAVE_MPIO
+  int nranks = 1;
+  MPI_Comm_size(comm, &nranks);
   if (mpio && nranks > 1)
-    lout << "Warning: " << op_name
-         << ": HDF5 built without parallel I/O (H5_HAVE_PARALLEL): reading on rank 0 only, then the atoms are "
-            "distributed as after any rank-0 read"
+    lout << "Warning: read_hdf5: HDF5 built without parallel I/O (H5_HAVE_PARALLEL): reading on rank 0 only, then "
+            "the atoms are distributed as after any rank-0 read"
          << std::endl;
   mpio = false;
 #endif
-
-  aio::formats::hdf5::Options opt; // row order: ids are handled by the sink
-  const bool reads = mpio || rank == 0;
-  ReadOutcome out;
-  std::vector<GenericFieldInfo> generic;
-  std::size_t count = 0;
-  double ms_read = 0, ms_grid = 0;
-  {
-    GridBindSink<GridT> sink(domain, grid, settings, !schema.positions.path.empty(),
-                             !schema.velocities.path.empty(), !remap_atom);
-    aio::Status st;
-    using clock = std::chrono::steady_clock;
-    MPI_Barrier(comm); // times the read only (MPI's first collectives may set up connections)
-    const auto t0 = clock::now();
-    if (reads) {
+  const aio::formats::hdf5::Options opt; // row order: ids are handled by the sink
+  read_into_grid(
+      "read_hdf5", comm, domain, grid, path, mpio,
+      [&] {
+        return GridBindSink<GridT>(domain, grid, settings, !schema.positions.path.empty(),
+                                   !schema.velocities.path.empty(), !remap_atom);
+      },
+      [&](const char* p, GridBindSink<GridT>& sink) {
 #if AIO_HDF5_HAVE_MPIO
-      st = mpio ? aio::formats::hdf5::read_file_mpio(comm, path.c_str(), schema, sink, opt)
-                : aio::formats::hdf5::read_file(path.c_str(), schema, sink, opt);
-#else
-      st = aio::formats::hdf5::read_file(path.c_str(), schema, sink, opt);
+        if (mpio)
+          return aio::formats::hdf5::read_file_mpio(comm, p, schema, sink, opt);
 #endif
-    }
-    const auto t1 = clock::now();
-    if (reads && !st.ok()) {
-      out.ok = 0;
-      std::snprintf(out.msg, sizeof out.msg, "%s: %s%s%s", path.c_str(), st.error().msg,
-                    sink.message().empty() ? "" : " -- ", sink.message().c_str());
-    }
-    // Every rank learns the outcome (MPIO: the first failing rank's message).
-    if (mpio) {
-      int bad = out.ok ? nranks : rank;
-      MPI_Allreduce(MPI_IN_PLACE, &bad, 1, MPI_INT, MPI_MIN, comm);
-      if (bad < nranks)
-        MPI_Bcast(&out, sizeof(ReadOutcome), MPI_BYTE, bad, comm);
-    } else {
-      MPI_Bcast(&out, sizeof(ReadOutcome), MPI_BYTE, 0, comm);
-    }
-    if (!out.ok)
-      fatal_error() << op_name << ": " << out.msg << std::endl;
-    const auto t2 = clock::now();
-    if (reads) {
-      sink.commit();
-      grid.rebuild_particle_offsets(); // flat arrays are indexed by these offsets
-      generic = sink.fill_properties();
-      count = sink.count();
-      if (rank == 0)
-        for (const std::string& sk : sink.skipped_properties())
-          lout << "Skipped property = " << sk << std::endl;
-    }
-    ms_read = std::chrono::duration<double, std::milli>(t1 - t0).count();
-    ms_grid = std::chrono::duration<double, std::milli>(clock::now() - t2).count(); // commit + offsets + fields
-  }
-
-  // Domain: rank 0's for everyone. MPIO ranks computed it from the same file cell: it must match.
-  Domain mine = domain;
-  MPI_Bcast(&domain, sizeof(Domain), MPI_BYTE, 0, comm);
-  if (mpio) {
-    int differs = same_domain(mine, domain) ? 0 : 1;
-    MPI_Allreduce(MPI_IN_PLACE, &differs, 1, MPI_INT, MPI_MAX, comm);
-    if (differs)
-      fatal_error() << op_name << ": ranks computed different domains from the file cell" << std::endl;
-  } else if (rank != 0) {
-    grid.set_offset(IJK{0, 0, 0});
-    grid.set_origin(domain.bounds().bmin);
-    grid.set_cell_size(domain.cell_size());
-    grid.set_dimension(domain.grid_dimension());
-  }
-  grid.rebuild_particle_offsets();
-
-  // Same generic fields on every rank (MPIO: each rank created them in fill_properties).
-  int ngeneric = static_cast<int>(generic.size());
-  MPI_Bcast(&ngeneric, 1, MPI_INT, 0, comm);
-  if (ngeneric > 0 && !mpio) {
-    generic.resize(static_cast<std::size_t>(ngeneric));
-    MPI_Bcast(generic.data(), static_cast<int>(ngeneric * sizeof(GenericFieldInfo)), MPI_BYTE, 0, comm);
-    if (rank != 0)
-      for (const GenericFieldInfo& f : generic)
-        generic_field_data(grid, f);
-  }
-
-  unsigned long long total = count;
-  MPI_Allreduce(MPI_IN_PLACE, &total, 1, MPI_UNSIGNED_LONG_LONG, MPI_SUM, comm);
-  MPI_Allreduce(MPI_IN_PLACE, &ms_read, 1, MPI_DOUBLE, MPI_MAX, comm);
-  MPI_Allreduce(MPI_IN_PLACE, &ms_grid, 1, MPI_DOUBLE, MPI_MAX, comm);
-  lout << onika::format_string("Read %llu atoms in %.1f ms (read %.1f ms, grid insert %.1f ms; %s on %d rank%s)",
-                               total, ms_read + ms_grid, ms_read, ms_grid, mpio ? "MPIO" : "rank 0",
-                               mpio ? nranks : 1, (mpio && nranks > 1) ? "s" : "")
-       << std::endl;
-  lout << "Domain XForm     = " << domain.xform() << std::endl;
-  lout << "Domain bounds    = " << domain.bounds() << std::endl;
-  lout << "Cell size        = " << domain.cell_size() << std::endl;
-  lout << "Grid dimensions  = " << domain.grid_dimension() << " (" << grid_cell_count(domain.grid_dimension())
-       << " cells)" << std::endl;
-  lout << "Domain periodic  = " << std::boolalpha << domain.periodic_boundary_x() << "," << domain.periodic_boundary_y()
-       << "," << domain.periodic_boundary_z() << std::endl;
-  lout << "Domain expandable = " << std::boolalpha << domain.expandable() << std::endl;
-  for (const GenericFieldInfo& f : generic)
-    lout << "Generic field    = " << f.name << " (" << generic_kind_name(f.kind) << ")" << std::endl;
-  if (!check_domain(domain)) {
-    lout << "domain = " << domain << std::endl;
-    fatal_error() << op_name << ": invalid domain configuration" << std::endl;
-  }
-  lout << "===========================================" << std::endl << std::endl;
+        return aio::formats::hdf5::read_file(p, schema, sink, opt);
+      });
 }
 
 } // namespace exaStamp::atom_io
