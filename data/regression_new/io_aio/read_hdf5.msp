@@ -1,0 +1,24 @@
+# enable-if-EXASTAMP_AIO_WITH_HDF5
+includes:
+  - baseline.yaml
+
+# HDF5: the schema gives the dataset paths. positions / velocities are one (N,3) dataset or a
+# list of three (N) datasets, e.g. [ /split/x, /split/y, /split/z ]. cell is 3x3 (rows a, b, c),
+# a dataset or an attribute written object@name. With a parallel HDF5, every rank reads its share
+# of the rows (MPI-IO); otherwise rank 0 reads everything.
+setup_system:
+  # the readers keep the deck's domain (cell size, periodicity) and fit it to the file's box
+  - domain:
+      cell_size: 6.6 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_hdf5:
+      file: Ta_bcc.h5
+      schema:
+        positions: /atoms/pos
+        velocities: /atoms/vel
+        ids: /atoms/id
+        types: /atoms/type
+        cell: /box@h
+        origin: /box/origin
+        pbc: /box@pbc
