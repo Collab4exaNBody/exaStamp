@@ -40,9 +40,7 @@ function(find_and_enable_compression target package macro enabled)
 
             target_link_libraries(${target} INTERFACE "${${lib_var}}")
             target_include_directories(${target} INTERFACE "${${include_var}}")
-            # aio (aio.hpp) reads its own switch name: USE_ZLIB -> AIO_WITH_ZLIB
-            string(REPLACE "USE_" "AIO_WITH_" aio_macro "${macro}")
-            target_compile_definitions(${target} INTERFACE "${macro}" "${aio_macro}=1")
+            target_compile_definitions(${target} INTERFACE "${macro}=1")
         else()
             message(STATUS "${package} not found — ${macro} disabled")
         endif()
@@ -58,9 +56,10 @@ option(WITH_ZLIB   "Enable ZLIB compression support"    ON)
 option(WITH_BZIP2  "Enable BZip2 compression support"   ON)
 option(WITH_LZMA   "Enable LZMA/XZ compression support" ON)
 
-find_and_enable_compression(libZIP ZLIB    USE_ZLIB  WITH_ZLIB )
-find_and_enable_compression(libZIP BZip2   USE_BZIP2 WITH_BZIP2)
-find_and_enable_compression(libZIP LibLZMA USE_LZMA  WITH_LZMA )
+# aio.hpp reads AIO_WITH_*: a codec not found gives a clear error on such files
+find_and_enable_compression(libZIP ZLIB    AIO_WITH_ZLIB  WITH_ZLIB )
+find_and_enable_compression(libZIP BZip2   AIO_WITH_BZIP2 WITH_BZIP2)
+find_and_enable_compression(libZIP LibLZMA AIO_WITH_LZMA  WITH_LZMA )
 
 
 set(exaStampIO_LINK_LIBRARIES exaStampCompute exaStampThermoState exanbMPI exanbIO exanbDefBox exaStampParticleSpecies exanbGridCellParticles exanbParticleNeighbors libZIP stdc++fs)
