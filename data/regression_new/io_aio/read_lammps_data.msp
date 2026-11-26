@@ -1,0 +1,12 @@
+includes:
+  - baseline.yaml
+
+# LAMMPS data file (write_data output): Atoms section, type t -> species t-1, Velocities section.
+setup_system:
+  # the readers keep the deck's domain (cell size, periodicity) and fit it to the file's box
+  - domain:
+      cell_size: 6.6 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_lammps_data:
+      file: Ta_bcc.lmp

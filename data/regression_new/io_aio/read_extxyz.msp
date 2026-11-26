@@ -1,0 +1,15 @@
+includes:
+  - baseline.yaml
+
+# Extended XYZ: Lattice and Properties from the comment line; species column matched to the
+# species names. `fields` stores other per-atom properties as generic fields (valid until
+# particles first move).
+setup_system:
+  # the readers keep the deck's domain (cell size, periodicity) and fit it to the file's box
+  - domain:
+      cell_size: 6.6 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_extxyz:
+      file: Ta_bcc.xyz
+      fields: [ energy ]
