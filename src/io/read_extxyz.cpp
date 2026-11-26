@@ -4,11 +4,11 @@
 //   read_extxyz: { file: system.xyz, fields: ["*"] }          # every other per-atom property
 //   read_extxyz: { file: system.xyz, fields: [force, eps] }   # these properties only
 //
-// Lattice gives the cell (required); pos, species (or Z, or type) and velo go
+// Lattice gives the cell (required); pos, type (or species, or Z) and velo go
 // to the grid (velocities: read_velocities). Atom ids: the id column if there
-// is one (remap_atom: false), else the order in the file. Types are fixed by
-// the species slot: species symbols (or the element of Z) are matched to the
-// species names, type t of a type column is species t-1.
+// is one (remap_atom: false), else the order in the file. Types come from the
+// type column when there is one (type t is species t-1); otherwise species
+// symbols (or the element of Z) are matched to the species names.
 //
 // `fields` selects other per-atom properties to store as exanb generic fields
 // (grid flat arrays): 1 column -> scalar, 3 -> Vec3, 9 -> Mat3 (row-major),
@@ -69,7 +69,8 @@ public:
   inline std::string documentation() const override final {
     return R"EOF(
 Reads the first frame of an extended XYZ file (Lattice required) into the grid:
-positions, types (species / Z / type column, matched to the species names) and
+positions, types (type column: type t is species t-1; else species / Z column,
+matched to the species names) and
 velocities (read_velocities). Other per-atom properties listed in `fields`
 ("*" = all) are stored as generic fields: 1 column -> scalar, 3 -> Vec3,
 9 -> Mat3, other counts -> name_0..name_{n-1}. Generic fields are valid until
