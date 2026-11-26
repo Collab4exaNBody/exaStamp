@@ -62,6 +62,28 @@ find_and_enable_compression(libZIP BZip2   AIO_WITH_BZIP2 WITH_BZIP2)
 find_and_enable_compression(libZIP LibLZMA AIO_WITH_LZMA  WITH_LZMA )
 
 
+# HDF5 input (read_hdf5, aio ADR 0016): aio.hpp reads AIO_WITH_HDF5. A parallel
+# HDF5 (H5_HAVE_PARALLEL) enables MPI-IO reading; pick one with -DHDF5_ROOT=<prefix>.
+option(WITH_HDF5 "Enable HDF5 input (read_hdf5)" ON)
+if(WITH_HDF5)
+    find_package(HDF5 COMPONENTS C)
+    if(HDF5_FOUND)
+        target_link_libraries(libZIP INTERFACE HDF5::HDF5)
+        target_compile_definitions(libZIP INTERFACE AIO_WITH_HDF5=1)
+        # h5pcc -show (HDF5 1.14 autotools) gives no -I: without this, another hdf5.h
+        # on the system path (e.g. a serial /usr/include one) would be used
+        if(NOT HDF5_INCLUDE_DIRS AND HDF5_C_LIBRARY_hdf5)
+            get_filename_component(xsp_hdf5_libdir "${HDF5_C_LIBRARY_hdf5}" DIRECTORY)
+            target_include_directories(libZIP INTERFACE "${xsp_hdf5_libdir}/../include")
+        endif()
+        message(STATUS "HDF5 ${HDF5_VERSION} found (parallel: ${HDF5_IS_PARALLEL}) — enabling AIO_WITH_HDF5")
+    else()
+        message(STATUS "HDF5 not found — read_hdf5 disabled")
+    endif()
+else()
+    message(STATUS "HDF5 support disabled by user (WITH_HDF5=OFF)")
+endif()
+
 set(exaStampIO_LINK_LIBRARIES exaStampCompute exaStampThermoState exanbMPI exanbIO exanbDefBox exaStampParticleSpecies exanbGridCellParticles exanbParticleNeighbors libZIP stdc++fs)
 set(exaStampIO_INCLUDE_DIRS ${BASEN_INCLUDE_DIRS})
 
