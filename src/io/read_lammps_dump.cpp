@@ -1,3 +1,20 @@
+/*
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements. See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership. The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License. You may obtain a copy of the License at
+  http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied. See the License for the
+specific language governing permissions and limitations
+under the License.
+*/
+
 // read_lammps_dump: reads the first frame of a LAMMPS text dump with aio (ADR 0012).
 //
 //   read_lammps_dump: { file: dump.lammpstrj }                  # .gz/.bz2/.xz detected from content
@@ -31,42 +48,40 @@
 
 #include <exaStamp/io/atom_file_reader.h>
 
-namespace exaStamp {
+namespace exaStamp
+{
 
-using namespace exanb;
+  using namespace exanb;
 
-template <class GridT, class = AssertGridHasFields<GridT, field::_rx, field::_ry, field::_rz, field::_vx, field::_vy,
-                                                   field::_vz, field::_id, field::_type>>
-class ReadLammpsDumpNode : public OperatorNode {
-  using StringList = std::vector<std::string>;
-  EXASTAMP_ATOM_READER_SLOTS();
-  ADD_SLOT(StringList, fields, INPUT, StringList{},
-           DocString{"Per-atom columns to store as generic scalar fields; \"*\" = all. Default: none"});
+  template <class GridT, class = AssertGridHasFields<GridT, field::_rx, field::_ry, field::_rz, field::_vx, field::_vy, field::_vz, field::_id, field::_type>> class ReadLammpsDumpNode : public OperatorNode
+  {
+    using StringList = std::vector<std::string>;
+    EXASTAMP_ATOM_READER_SLOTS();
+    ADD_SLOT(StringList, fields, INPUT, StringList{}, DocString{"Per-atom columns to store as generic scalar fields; \"*\" = all. Default: none"});
 
-public:
-  inline void execute() override final {
-    if (!species.has_value() || species->empty())
-      fatal_error() << "read_lammps_dump: species must be defined (dumps do not state the type count)" << std::endl;
+  public:
+    inline void execute() override final
+    {
+      if (!species.has_value() || species->empty())
+        fatal_error() << "read_lammps_dump: species must be defined (dumps do not state the type count)" << std::endl;
 
-    std::vector<std::string_view> names;
-    for (std::size_t k = 0; k < species->size(); ++k)
-      names.emplace_back(species->at(k).m_name);
+      std::vector<std::string_view> names;
+      for (std::size_t k = 0; k < species->size(); ++k)
+        names.emplace_back(species->at(k).m_name);
 
-    aio::formats::lammps_dump::Options opt;
-    opt.by_id_if_present = !*remap_atom;
-    opt.species = names;
+      aio::formats::lammps_dump::Options opt;
+      opt.by_id_if_present = !*remap_atom;
+      opt.species = names;
 
-    atom_io::ReaderSettings settings = EXASTAMP_ATOM_READER_SETTINGS();
-    settings.properties = atom_io::PropertySelection(*fields);
-    settings.file_has_pbc = true;
-    atom_io::read_atom_file("read_lammps_dump", *mpi, *domain, *grid, settings, *file,
-                            [&](const char* path, auto& sink) {
-                              return aio::formats::lammps_dump::read_file(path, sink, opt);
-                            });
-  }
+      atom_io::ReaderSettings settings = EXASTAMP_ATOM_READER_SETTINGS();
+      settings.properties = atom_io::PropertySelection(*fields);
+      settings.file_has_pbc = true;
+      atom_io::read_atom_file("read_lammps_dump", *mpi, *domain, *grid, settings, *file, [&](const char *path, auto &sink) { return aio::formats::lammps_dump::read_file(path, sink, opt); });
+    }
 
-  inline std::string documentation() const override final {
-    return R"EOF(
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
 Reads the first frame of a LAMMPS text dump into the grid: positions (first
 complete family of x > xs > xu > xsu), types (type column: type t is species
 t-1; else element column, matched to the species names) and velocities
@@ -79,14 +94,11 @@ Example:
       file: dump.lammpstrj
       fields: [ c_pe ]
 )EOF";
-  }
-};
+    }
+  };
 
-template <class GridT> using ReadLammpsDumpNodeTmpl = ReadLammpsDumpNode<GridT>;
+  template <class GridT> using ReadLammpsDumpNodeTmpl = ReadLammpsDumpNode<GridT>;
 
-ONIKA_AUTORUN_INIT(read_lammps_dump) {
-  OperatorNodeFactory::instance()->register_factory("read_lammps_dump",
-                                                    make_grid_variant_operator<ReadLammpsDumpNodeTmpl>);
-}
+  ONIKA_AUTORUN_INIT(read_lammps_dump) { OperatorNodeFactory::instance()->register_factory("read_lammps_dump", make_grid_variant_operator<ReadLammpsDumpNodeTmpl>); }
 
 } // namespace exaStamp

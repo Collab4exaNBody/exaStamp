@@ -1,18 +1,16 @@
 /*
 Licensed to the Apache Software Foundation (ASF) under one
-or more contributor license agreements.  See the NOTICE file
+or more contributor license agreements. See the NOTICE file
 distributed with this work for additional information
-regarding copyright ownership.  The ASF licenses this file
+regarding copyright ownership. The ASF licenses this file
 to you under the Apache License, Version 2.0 (the
 "License"); you may not use this file except in compliance
-with the License.  You may obtain a copy of the License at
-
+with the License. You may obtain a copy of the License at
   http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing,
 software distributed under the License is distributed on an
 "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-KIND, either express or implied.  See the License for the
+KIND, either express or implied. See the License for the
 specific language governing permissions and limitations
 under the License.
 */
@@ -35,65 +33,63 @@ under the License.
 
 #include <exaStamp/io/hdf5_reader.h>
 
-namespace exaStamp {
+namespace exaStamp
+{
 
-using namespace exanb;
+  using namespace exanb;
 
-template <class GridT, class = AssertGridHasFields<GridT, field::_rx, field::_ry, field::_rz, field::_vx, field::_vy,
-                                                   field::_vz, field::_id, field::_type>>
-class ReadHdf5Node : public OperatorNode {
-  EXASTAMP_ATOM_READER_SLOTS();
-  ADD_SLOT(atom_io::Hdf5Schema, schema, INPUT, REQUIRED,
-           DocString{"Dataset paths: positions, velocities, ids, types, cell, origin, pbc, fields"});
-  ADD_SLOT(bool, mpio, INPUT, true,
-           DocString{"Every rank reads its share with MPI-IO (parallel HDF5 only; otherwise rank 0 reads, with a "
-                     "warning)"});
-  ADD_SLOT(bool, stream_sink, INPUT, false,
-           DocString{"Debug / benchmark: read on rank 0 through the text readers' stream sink (buffered)"});
+  template <class GridT, class = AssertGridHasFields<GridT, field::_rx, field::_ry, field::_rz, field::_vx, field::_vy, field::_vz, field::_id, field::_type>> class ReadHdf5Node : public OperatorNode
+  {
+    EXASTAMP_ATOM_READER_SLOTS();
+    ADD_SLOT(atom_io::Hdf5Schema, schema, INPUT, REQUIRED, DocString{"Dataset paths: positions, velocities, ids, types, cell, origin, pbc, fields"});
+    ADD_SLOT(bool, mpio, INPUT, true,
+             DocString{"Every rank reads its share with MPI-IO (parallel HDF5 only; otherwise rank 0 reads, with a "
+                       "warning)"});
+    ADD_SLOT(bool, stream_sink, INPUT, false, DocString{"Debug / benchmark: read on rank 0 through the text readers' stream sink (buffered)"});
 
-public:
-  inline void execute() override final {
+  public:
+    inline void execute() override final
+    {
 #if !AIO_WITH_HDF5
-    fatal_error() << "read_hdf5: exaStamp was built without HDF5 (configure with WITH_HDF5=ON and a libhdf5 "
-                     "installation, e.g. -DHDF5_ROOT=<prefix>)"
-                  << std::endl;
+      fatal_error() << "read_hdf5: exaStamp was built without HDF5 (configure with WITH_HDF5=ON and a libhdf5 "
+                       "installation, e.g. -DHDF5_ROOT=<prefix>)"
+                    << std::endl;
 #else
-    const aio::formats::hdf5::Schema& s = schema->s;
-    if (s.positions.empty())
-      fatal_error() << "read_hdf5: schema.positions is required" << std::endl;
-    if (s.cell.empty())
-      fatal_error() << "read_hdf5: schema.cell is required" << std::endl;
-    if (!*remap_atom && s.ids.empty())
-      fatal_error() << "read_hdf5: remap_atom: false needs schema.ids (or set remap_atom: true)" << std::endl;
+      const aio::formats::hdf5::Schema &s = schema->s;
+      if (s.positions.empty())
+        fatal_error() << "read_hdf5: schema.positions is required" << std::endl;
+      if (s.cell.empty())
+        fatal_error() << "read_hdf5: schema.cell is required" << std::endl;
+      if (!*remap_atom && s.ids.empty())
+        fatal_error() << "read_hdf5: remap_atom: false needs schema.ids (or set remap_atom: true)" << std::endl;
 
-    atom_io::ReaderSettings settings = EXASTAMP_ATOM_READER_SETTINGS();
-    std::vector<std::string> names;
-    for (const auto& p : s.properties)
-      names.push_back(p.name);
-    settings.properties = atom_io::PropertySelection(names);
-    settings.file_has_pbc = !s.pbc.empty();
+      atom_io::ReaderSettings settings = EXASTAMP_ATOM_READER_SETTINGS();
+      std::vector<std::string> names;
+      for (const auto &p : s.properties)
+        names.push_back(p.name);
+      settings.properties = atom_io::PropertySelection(names);
+      settings.file_has_pbc = !s.pbc.empty();
 
-    if (*stream_sink) {
-      // GridStreamSink takes the type count and labels from the reader: the species names
-      std::vector<std::string_view> labels;
-      if (species.has_value())
-        for (std::size_t k = 0; k < species->size(); ++k)
-          labels.emplace_back(species->at(k).m_name);
-      aio::formats::hdf5::Options opt;
-      opt.by_id_if_present = !*remap_atom;
-      opt.species = labels;
-      atom_io::read_atom_file("read_hdf5", *mpi, *domain, *grid, settings, *file,
-                              [&](const char* path, auto& sink) {
-                                return aio::formats::hdf5::read_file(path, s, sink, opt);
-                              });
-      return;
-    }
-    atom_io::read_hdf5_into_grid(*mpi, *domain, *grid, settings, *file, s, *remap_atom, *mpio);
+      if (*stream_sink)
+      {
+        // GridStreamSink takes the type count and labels from the reader: the species names
+        std::vector<std::string_view> labels;
+        if (species.has_value())
+          for (std::size_t k = 0; k < species->size(); ++k)
+            labels.emplace_back(species->at(k).m_name);
+        aio::formats::hdf5::Options opt;
+        opt.by_id_if_present = !*remap_atom;
+        opt.species = labels;
+        atom_io::read_atom_file("read_hdf5", *mpi, *domain, *grid, settings, *file, [&](const char *path, auto &sink) { return aio::formats::hdf5::read_file(path, s, sink, opt); });
+        return;
+      }
+      atom_io::read_hdf5_into_grid(*mpi, *domain, *grid, settings, *file, s, *remap_atom, *mpio);
 #endif
-  }
+    }
 
-  inline std::string documentation() const override final {
-    return R"EOF(
+    inline std::string documentation() const override final
+    {
+      return R"EOF(
 Reads atoms from an HDF5 file. The schema gives the dataset paths; each
 per-atom dataset has N rows.
 
@@ -126,13 +122,11 @@ Example:
         origin: /box/origin
         fields: { force: /atoms/force }
 )EOF";
-  }
-};
+    }
+  };
 
-template <class GridT> using ReadHdf5NodeTmpl = ReadHdf5Node<GridT>;
+  template <class GridT> using ReadHdf5NodeTmpl = ReadHdf5Node<GridT>;
 
-ONIKA_AUTORUN_INIT(read_hdf5) {
-  OperatorNodeFactory::instance()->register_factory("read_hdf5", make_grid_variant_operator<ReadHdf5NodeTmpl>);
-}
+  ONIKA_AUTORUN_INIT(read_hdf5) { OperatorNodeFactory::instance()->register_factory("read_hdf5", make_grid_variant_operator<ReadHdf5NodeTmpl>); }
 
 } // namespace exaStamp
