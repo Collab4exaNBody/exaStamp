@@ -50,6 +50,10 @@ AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/flexible_molecule/triaminotri
 # Layout: compute_local_strain/<variant>.msp
 AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/io_atoms")
 
+# Usage examples of the aio-based atom readers (read_lammps_data, read_extxyz, read_lammps_dump, read_hdf5)
+# Layout: io_aio/<variant>.msp
+AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/io_aio")
+
 # Regression tests for testing input output operators for rigid molecules
 # Layout: compute_local_strain/<variant>.msp
 AddRegressionTestFlat("${CMAKE_CURRENT_SOURCE_DIR}/io_rigid_molecules")
