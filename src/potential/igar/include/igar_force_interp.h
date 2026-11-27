@@ -20,11 +20,12 @@ under the License.
 
 #include <exanb/compute/compute_cell_particles.h>
 #include <exanb/core/grid_particle_field_accessor.h>
-#include <exanb/core/parallel_grid_algorithm.h>
 #include <exanb/core/domain.h>
 #include <onika/math/basic_types_operators.h>
 #include <onika/cuda/cuda.h>
-#include <onika/math/quaternion_operators.h>
+
+#include <cmath>
+#include <type_traits>
 
 #include "igar_field.h"
 
@@ -46,9 +47,11 @@ namespace exaStamp
     CatmullRom = 2
   };
 
+  // 1D weights w[n] (and derivatives dw[n] = dw/dt) of the stencil nodes first_node(t) + n, n in [0, N[, relative to
+  // the particle's voxel. t in [-1/2, 1/2[ is the offset of the particle from its voxel center, in voxel units.
+  // Lagrange and BSpline: 3 nodes at -1, 0, +1.
   template <IgarInterpolation Scheme> struct IgarInterpolationWeights;
 
-  // t in [-1/2, 1/2]: offset from the particle's voxel center, in voxel units. Nodes at -1, 0, +1.
   template <> struct IgarInterpolationWeights<IgarInterpolation::Lagrange>
   {
     static inline constexpr int N = 3;
@@ -79,8 +82,8 @@ namespace exaStamp
     }
   };
 
-  // The particle lies between nodes 0 and 1 of the 4 nodes -1, 0, 1, 2 (s in [0,1] from node 0): node 0 is the
-  // particle's voxel (t >= 0) or the one below it (t < 0).
+  // CatmullRom: 4 nodes -1, 0, 1, 2 around the particle, which lies between nodes 0 and 1 (s in [0, 1[ from node 0).
+  // Node 0 is the particle's voxel (t >= 0) or the one below it (t < 0).
   template <> struct IgarInterpolationWeights<IgarInterpolation::CatmullRom>
   {
     static inline constexpr int N = 4;
@@ -137,12 +140,15 @@ namespace exaStamp
       Weights::weights(v, wv, dwv);
       Weights::weights(w, ww, dww);
 
+      const ssize_t x0 = ssize_t(cx) + Weights::first_node(u);
+      const ssize_t y0 = ssize_t(cy) + Weights::first_node(v);
+      const ssize_t z0 = ssize_t(cz) + Weights::first_node(w);
       ssize_t ix[N], iy[N], iz[N];
       for (int n = 0; n < N; n++)
       {
-        ix[n] = igar_wrap_index(ssize_t(cx) + Weights::first_node(u) + n, dims.i, periodic_x);
-        iy[n] = igar_wrap_index(ssize_t(cy) + Weights::first_node(v) + n, dims.j, periodic_y);
-        iz[n] = igar_wrap_index(ssize_t(cz) + Weights::first_node(w) + n, dims.k, periodic_z);
+        ix[n] = igar_wrap_index(x0 + n, dims.i, periodic_x);
+        iy[n] = igar_wrap_index(y0 + n, dims.j, periodic_y);
+        iz[n] = igar_wrap_index(z0 + n, dims.k, periodic_z);
       }
 
       // nodes outside a non-periodic domain count as 0

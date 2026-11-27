@@ -47,26 +47,42 @@ namespace exaStamp
     ADD_SLOT(std::string, grid_ordering, INPUT, std::string("F_ORDER"), DocString{"Ordering of the values in the file: F_ORDER (x fastest) or C_ORDER (z fastest)."});
     ADD_SLOT(IgarField, igar_field, INPUT_OUTPUT, DocString{"IGAR field, replicated on every MPI process."});
 
+    // file reads go by chunks of this size: a 1024^3 field never has to be held twice in memory
+    static inline constexpr size_t io_chunk_bytes = size_t(1) << 26;
+    // MPI_Bcast takes an int count: the field is broadcast by chunks well below 2^31 bytes
+    static inline constexpr size_t bcast_chunk_bytes = size_t(1) << 28;
+
+    // what igar_read_field needs from the VTK header (the lines before the data)
+    struct VtkHeader
+    {
+      bool binary = false;
+      bool color_scalars = false; // COLOR_SCALARS: 8-bit data, written as byte/255 in ASCII files
+      IJK dims = {0, 0, 0};
+      size_t count = 0;           // POINT_DATA
+      std::string type;           // data type of the SCALARS
+    };
+
+    static inline bool is_blank(char c) { return c == ' ' || c == '\n' || c == '\r' || c == '\t'; }
+
     // values are passed to store(file_index, value) in file order
     template <class StoreT> static inline void parse_ascii(std::ifstream &file, size_t count, StoreT &store, const std::string &fname)
     {
-      static constexpr size_t chunk = size_t(1) << 26;
-      std::vector<char> buf(chunk + 64);
+      std::vector<char> buf(io_chunk_bytes + 64);
       size_t keep = 0, n = 0;
       bool eof = false;
       while (n < count && !eof)
       {
-        file.read(buf.data() + keep, chunk - keep);
+        file.read(buf.data() + keep, io_chunk_bytes - keep);
         const size_t len = keep + size_t(file.gcount());
         eof = (file.gcount() == 0) || file.eof();
         const char *p = buf.data();
         const char *end = buf.data() + len;
         while (n < count)
         {
-          while (p < end && (*p == ' ' || *p == '\n' || *p == '\r' || *p == '\t')) ++p;
+          while (p < end && is_blank(*p)) ++p;
           // a number may be cut at the chunk end: keep it for the next chunk
           const char *q = p;
-          while (q < end && !(*q == ' ' || *q == '\n' || *q == '\r' || *q == '\t')) ++q;
+          while (q < end && !is_blank(*q)) ++q;
           if (q == end && !eof) break;
           if (p == end) break;
           double v = 0.0;
@@ -83,7 +99,7 @@ namespace exaStamp
 
     template <class T, class StoreT> static inline void parse_binary_typed(std::ifstream &file, size_t count, StoreT &store, const std::string &fname)
     {
-      static constexpr size_t chunk_values = (size_t(1) << 26) / sizeof(T);
+      static constexpr size_t chunk_values = io_chunk_bytes / sizeof(T);
       std::vector<unsigned char> buf(chunk_values * sizeof(T));
       size_t n = 0;
       while (n < count)
@@ -119,45 +135,35 @@ namespace exaStamp
       else fatal_error() << "igar_read_field: " << fname << ": unsupported binary data type '" << type << "'" << std::endl;
     }
 
-    // rank 0 only: fills the field from the file
-    inline void read_file(IgarField &field, bool as_uint8, bool c_order)
+    // reads the header up to LOOKUP_TABLE (or COLOR_SCALARS): the file is left at the first value
+    static inline VtkHeader read_header(std::ifstream &file, const std::string &fname)
     {
-      const std::string &fname = *file_name;
-      std::ifstream file(fname, std::ios::binary);
-      if (!file.is_open()) fatal_error() << "igar_read_field: could not open " << fname << std::endl;
-
-      bool binary = false, lookup_table = false, color_scalars = false;
-      IJK dims = {0, 0, 0};
-      size_t count = 0;
-      std::string type;
+      VtkHeader h;
+      bool data_found = false;
       std::string line;
-      while (std::getline(file, line))
+      while (!data_found && std::getline(file, line))
       {
         if (!line.empty() && line.back() == '\r') line.pop_back();
         std::istringstream ls(line);
         std::string keyword;
         ls >> keyword;
-        if (keyword == "BINARY") binary = true;
+        if (keyword == "BINARY") h.binary = true;
         else if (keyword == "DATASET")
         {
           std::string ds;
           ls >> ds;
           if (ds != "STRUCTURED_POINTS") fatal_error() << "igar_read_field: " << fname << ": DATASET " << ds << " not supported (STRUCTURED_POINTS only)" << std::endl;
         }
-        else if (keyword == "DIMENSIONS") ls >> dims.i >> dims.j >> dims.k;
-        else if (keyword == "POINT_DATA") ls >> count;
+        else if (keyword == "DIMENSIONS") ls >> h.dims.i >> h.dims.j >> h.dims.k;
+        else if (keyword == "POINT_DATA") ls >> h.count;
         else if (keyword == "SCALARS")
         {
           std::string name;
           int ncomp = 1;
-          ls >> name >> type;
+          ls >> name >> h.type;
           if (ls >> ncomp && ncomp != 1) fatal_error() << "igar_read_field: " << fname << ": scalar field expected, " << ncomp << " components found" << std::endl;
         }
-        else if (keyword == "LOOKUP_TABLE")
-        {
-          lookup_table = true;
-          break;
-        }
+        else if (keyword == "LOOKUP_TABLE") data_found = true;
         else if (keyword == "COLOR_SCALARS")
         {
           // 8-bit data written by VTK for unsigned char arrays: bytes in BINARY files, byte/255 in ASCII files, no LOOKUP_TABLE
@@ -165,25 +171,38 @@ namespace exaStamp
           int ncomp = 0;
           ls >> name >> ncomp;
           if (ncomp != 1) fatal_error() << "igar_read_field: " << fname << ": scalar field expected, COLOR_SCALARS with " << ncomp << " values found" << std::endl;
-          type = "unsigned_char";
-          color_scalars = true;
-          lookup_table = true;
-          break;
+          h.type = "unsigned_char";
+          h.color_scalars = true;
+          data_found = true;
         }
       }
-      if (!lookup_table) fatal_error() << "igar_read_field: " << fname << ": LOOKUP_TABLE not found" << std::endl;
-      if (dims.i <= 0 || dims.j <= 0 || dims.k <= 0) fatal_error() << "igar_read_field: " << fname << ": bad DIMENSIONS " << dims << std::endl;
-      field.m_dims = dims;
-      if (count != field.number_of_values()) fatal_error() << "igar_read_field: " << fname << ": POINT_DATA " << count << " != " << dims.i << "x" << dims.j << "x" << dims.k << std::endl;
+      if (!data_found) fatal_error() << "igar_read_field: " << fname << ": LOOKUP_TABLE not found" << std::endl;
+      if (h.dims.i <= 0 || h.dims.j <= 0 || h.dims.k <= 0) fatal_error() << "igar_read_field: " << fname << ": bad DIMENSIONS " << h.dims << std::endl;
+      return h;
+    }
+
+    // rank 0 only: fills the field from the file
+    inline void read_file(IgarField &field, bool as_uint8, bool c_order)
+    {
+      const std::string &fname = *file_name;
+      std::ifstream file(fname, std::ios::binary);
+      if (!file.is_open()) fatal_error() << "igar_read_field: could not open " << fname << std::endl;
+
+      const VtkHeader h = read_header(file, fname);
+      field.m_dims = h.dims;
+      const size_t count = h.count;
+      if (count != field.number_of_values()) fatal_error() << "igar_read_field: " << fname << ": POINT_DATA " << count << " != " << h.dims.i << "x" << h.dims.j << "x" << h.dims.k << std::endl;
 
       if (as_uint8) field.m_u8.resize(count);
       else field.m_f64.resize(count);
       uint8_t *const u8 = field.m_u8.data();
       double *const f64 = field.m_f64.data();
-      const size_t nx = dims.i, ny = dims.j, nz = dims.k;
+      const size_t nx = h.dims.i, ny = h.dims.j, nz = h.dims.k;
 
       auto store = [&](size_t n, double v)
       {
+        // the field is stored in F order (x fastest). In a C_ORDER file, index n is (i,j,k) with k fastest:
+        // i = n / (ny*nz), j = (n / nz) % ny, k = n % nz
         size_t dest = n;
         if (c_order) dest = n / (ny * nz) + nx * ((n / nz) % ny + ny * (n % nz));
         if (as_uint8)
@@ -201,13 +220,41 @@ namespace exaStamp
         }
       };
 
-      if (binary) parse_binary(file, type, count, store, fname);
-      else if (color_scalars)
+      if (h.binary) parse_binary(file, h.type, count, store, fname);
+      else if (h.color_scalars)
       {
         auto store_color = [&](size_t n, double v) { store(n, std::nearbyint(v * 255.0)); };
         parse_ascii(file, count, store_color, fname);
       }
       else parse_ascii(file, count, store, fname);
+    }
+
+    // rank 0 holds the field: every other process gets its dimensions then its values. Returns the field size in bytes.
+    static inline size_t broadcast_field(IgarField &field, bool as_uint8, MPI_Comm comm)
+    {
+      long long dims[3] = {field.m_dims.i, field.m_dims.j, field.m_dims.k};
+      MPI_Bcast(dims, 3, MPI_LONG_LONG, 0, comm);
+      field.m_dims = IJK{dims[0], dims[1], dims[2]};
+      const size_t count = field.number_of_values();
+      unsigned char *data = nullptr;
+      size_t bytes = 0;
+      if (as_uint8)
+      {
+        field.m_u8.resize(count);
+        data = field.m_u8.data();
+        bytes = count;
+      }
+      else
+      {
+        field.m_f64.resize(count);
+        data = reinterpret_cast<unsigned char *>(field.m_f64.data());
+        bytes = count * sizeof(double);
+      }
+      for (size_t off = 0; off < bytes; off += bcast_chunk_bytes)
+      {
+        MPI_Bcast(data + off, int(std::min(bcast_chunk_bytes, bytes - off)), MPI_BYTE, 0, comm);
+      }
+      return bytes;
     }
 
   public:
@@ -266,30 +313,7 @@ Example:
 
       const auto t0 = std::chrono::steady_clock::now();
       if (rank == 0) read_file(field, as_uint8, c_order);
-
-      long long dims[3] = {field.m_dims.i, field.m_dims.j, field.m_dims.k};
-      MPI_Bcast(dims, 3, MPI_LONG_LONG, 0, comm);
-      field.m_dims = IJK{dims[0], dims[1], dims[2]};
-      const size_t count = field.number_of_values();
-      unsigned char *data = nullptr;
-      size_t bytes = 0;
-      if (as_uint8)
-      {
-        field.m_u8.resize(count);
-        data = field.m_u8.data();
-        bytes = count;
-      }
-      else
-      {
-        field.m_f64.resize(count);
-        data = reinterpret_cast<unsigned char *>(field.m_f64.data());
-        bytes = count * sizeof(double);
-      }
-      static constexpr size_t bcast_chunk = size_t(1) << 28;
-      for (size_t off = 0; off < bytes; off += bcast_chunk)
-      {
-        MPI_Bcast(data + off, int(std::min(bcast_chunk, bytes - off)), MPI_BYTE, 0, comm);
-      }
+      const size_t bytes = broadcast_field(field, as_uint8, comm);
       const double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
 
       lout << "IGAR field       = " << *file_name << std::endl

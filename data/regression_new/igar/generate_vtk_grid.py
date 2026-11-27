@@ -1,13 +1,27 @@
 #!/usr/bin/python3
+"""
+Writes test fields for the IGAR potential (igar_read_field / igar_force_interp) as legacy VTK STRUCTURED_POINTS files.
 
+With no argument, writes igar_test.vtk, the field read by LJ_igar.msp and CH_rebo_read_xyz.msp: a 128^3 sinusoid,
+18 periods along z, values in [0, 1], stored as an 8-bit BINARY image (levels 0-255). Read it with
+igar_read_field { storage: uint8, value_scale: 0.00392156862745098 } (1/255).
+
+Usage:
+    generate_vtk_grid.py [--shape sinusoid|spheres] [-n N] [--output FILE] [--ascii]
+
+--shape spheres writes 4 random periodic spheres (seed 165): voxels inside a sphere at level 255, the others at 0.
+"""
+
+import argparse
 import numpy as np
 
 def write_ovito_grid(filename, data_array, origin=(0.0, 0.0, 0.0), spacing=(1.0, 1.0, 1.0), ordering='F'):
     """
-    Writes a 3D NumPy array to a VTK structured points file.
+    Writes a 3D NumPy array to a LAMMPS-style grid dump (ITEM: GRID ..., one value per line), readable by OVITO.
+    origin and spacing are unused: the box bounds are 0..N along each axis.
 
     Parameters:
-        filename (str): The output VTK file name (e.g., 'points.vtk').
+        filename (str): The output file name.
         data_array (np.ndarray): A 3D NumPy array of shape (Nx, Ny, Nz).
         origin (tuple): The origin of the grid (default is (0.0, 0.0, 0.0)).
         spacing (tuple): The spacing between grid points (default is (1.0, 1.0, 1.0)).
@@ -68,7 +82,6 @@ def write_vtk_structured_points(filename, data_array, origin=(0.0, 0.0, 0.0), sp
         else:
             np.savetxt(f, values, fmt="%d" if is_uint8 else "%.17g")
 
-import numpy as np
 
 def populate_3d_array_with_spheres(Nx, Ny, Nz, num_spheres, mean_radius, radius_variance, seed=None):
     """
@@ -105,23 +118,15 @@ def populate_3d_array_with_spheres(Nx, Ny, Nz, num_spheres, mean_radius, radius_
         cy = int(np.floor(cy_red * Ny))
         cz = int(np.floor(cz_red * Nz))
         
-        print(cx,cy,cz)
-        
         # Random radius from Gaussian distribution
         radius = max(1, np.random.normal(mean_radius*min(Nx,Ny,Nz), np.sqrt(radius_variance*Nx)))
 
-        # Fill the sphere into the array
-        for x in range(Nx):
-            for y in range(Ny):
-                for z in range(Nz):
-                    # Compute periodic distance to the sphere's center
-                    dx = min(abs(x - cx), Nx - abs(x - cx))
-                    dy = min(abs(y - cy), Ny - abs(y - cy))
-                    dz = min(abs(z - cz), Nz - abs(z - cz))
-                    distance = np.sqrt(dx**2 + dy**2 + dz**2)
-
-                    if distance <= radius:
-                        array[x, y, z] = 1
+        # Fill the sphere into the array, using the periodic distance to its center
+        dx = np.abs(np.arange(Nx) - cx); dx = np.minimum(dx, Nx - dx)
+        dy = np.abs(np.arange(Ny) - cy); dy = np.minimum(dy, Ny - dy)
+        dz = np.abs(np.arange(Nz) - cz); dz = np.minimum(dz, Nz - dz)
+        distance = np.sqrt(dx[:, None, None]**2 + dy[None, :, None]**2 + dz[None, None, :]**2)
+        array[distance <= radius] = 1
 
     return array
 
@@ -174,24 +179,19 @@ def populate_3d_array_with_sinusoid(Nx, Ny, Nz, val_min, val_max, n_periods, dir
     return array
 
 
-# Example usage
 if __name__ == "__main__":
-    Nx, Ny, Nz = 128,128,128
-    ordering = 'F'
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--shape", default="sinusoid", choices=["sinusoid", "spheres"])
+    parser.add_argument("-n", type=int, default=128, help="voxels per axis (default 128)")
+    parser.add_argument("--output", default="igar_test.vtk")
+    parser.add_argument("--ascii", action="store_true", help="ASCII file instead of BINARY")
+    args = parser.parse_args()
 
-    # Sinusoidal grid: 18 periods along z, values in [0, 1], written as an 8-bit image (levels 0-255) in a BINARY file:
-    # read it with igar_read_field { storage: uint8, value_scale: 0.00392156862745098 } (1/255)
-    data_sin = populate_3d_array_with_sinusoid(Nx, Ny, Nz, val_min=0., val_max=1.0, n_periods=18, direction='z')
-    write_vtk_structured_points(
-#        "sinusoid_%dx%dx%d_%sorder.vtk" % (Nx, Ny, Nz, ordering),
-        "igar_test.vtk",
-        to_uint8(data_sin, 0.0, 1.0), origin=(0.0, 0.0, 0.0), spacing=(1.0, 1.0, 1.0), ordering=ordering, binary=True)
-
-    # # Sphere grid (original)
-    # num_spheres = 4
-    # mean_radius = 0.25
-    # radius_variance = 0.1
-    # data_sph = populate_3d_array_with_spheres(Nx, Ny, Nz, num_spheres, mean_radius, radius_variance, seed=165)
-    # write_vtk_structured_points(
-    #     "points_%dx%dx%d_%sorder.vtk" % (Nx, Ny, Nz, ordering),
-    #     data_sph, origin=(0.0, 0.0, 0.0), spacing=(1.0, 1.0, 1.0), ordering=ordering)
+    Nx, Ny, Nz = args.n, args.n, args.n
+    if args.shape == "sinusoid":
+        data = populate_3d_array_with_sinusoid(Nx, Ny, Nz, val_min=0., val_max=1.0, n_periods=18, direction='z')
+    else:
+        data = populate_3d_array_with_spheres(Nx, Ny, Nz, num_spheres=4, mean_radius=0.25, radius_variance=0.1, seed=165)
+    write_vtk_structured_points(args.output, to_uint8(data, 0.0, 1.0), origin=(0.0, 0.0, 0.0), spacing=(1.0, 1.0, 1.0),
+                                ordering='F', binary=not args.ascii)
+    print("%s: %s, %d^3, 8-bit %s" % (args.output, args.shape, args.n, "ASCII" if args.ascii else "BINARY"))

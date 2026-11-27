@@ -18,5 +18,5 @@
 # ===== exaStamp IGAR potential ======
 # ====================================
 
-set(exaStampIGAR_LINK_LIBRARIES exaStampCompute exanbParticleNeighbors exanbMPI exaStampParticleSpecies exanbGridCellParticles)
+set(exaStampIGAR_LINK_LIBRARIES exaStampCompute exanbMPI)
 onika_add_plugin(exaStampIGAR ${CMAKE_CURRENT_SOURCE_DIR})

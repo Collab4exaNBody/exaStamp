@@ -51,7 +51,10 @@ setup_system:
       sigma: 0.2 ang
   - init_temperature_new:
       T: 2000. K
-  - igar_read_field: { file_name: "igar_test.vtk", storage: uint8, value_scale: 0.00392156862745098 }   # 1/255
+  - igar_read_field:
+      file_name: "igar_test.vtk"   # 128^3 8-bit field (BINARY) written by generate_vtk_grid.py
+      storage: uint8
+      value_scale: 0.00392156862745098   # 1/255: levels 0-255 -> field in [0,1]
   
 write_snapshot: nop
 

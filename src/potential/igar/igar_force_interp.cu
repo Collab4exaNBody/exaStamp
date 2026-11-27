@@ -21,9 +21,6 @@ under the License.
 #include <onika/scg/operator_factory.h>
 #include <onika/scg/operator_slot.h>
 
-#include <exaStamp/compute/field_combiners.h>
-#include <exaStamp/compute/physics_functors.h>
-#include <exanb/compute/field_combiners.h>
 #include <exanb/core/grid_particle_field_accessor.h>
 
 #include "igar_force_interp.h"
