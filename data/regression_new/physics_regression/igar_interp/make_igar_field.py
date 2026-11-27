@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# Writes igar_field.vtk : smooth periodic scalar field 0.5*(1+cos(2pi x/L) cos(2pi y/L) cos(2pi z/L)) on n^3 points
-# (legacy VTK structured points, F order, as read by read_cell_values). usage: make_igar_field.py [n=16]
+# Writes igar_field.vtk : smooth periodic scalar field 0.5*(1+cos(2pi x/L) cos(2pi y/L) cos(2pi z/L)) sampled at the
+# centers of n^3 voxels (ASCII legacy VTK structured points, doubles, F order), read by igar_read_field with
+# storage: double. usage: make_igar_field.py [n=16]
 import math, sys
 n = int(sys.argv[1]) if len(sys.argv) > 1 else 16
 with open("igar_field.vtk", "w") as f:

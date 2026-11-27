@@ -1,5 +1,5 @@
 # IGAR external energy field (igar_force_interp), Ar on a simple cubic lattice, LJ switched off (epsilon 0)
-# igar_field.vtk : smooth periodic field written by make_igar_field.py (16^3 = 4^3 cells x grid_subdiv 4)
+# igar_field.vtk : smooth periodic field (16^3 voxels, doubles) written by make_igar_field.py, read by igar_read_field
 includes:
   - ../common.yaml
 
@@ -42,14 +42,9 @@ setup_system:
       types: [ Ar ]
       size: [ 2.1 ang, 2.1 ang, 2.1 ang ]
   - physics_regression_noise
-  - read_cell_values:
-      field_name: "igar_ep"
-      field_dim: 1
-      grid_subdiv: 4
-      file_name: "igar_field.vtk"
+  - igar_read_field: { file_name: "igar_field.vtk", storage: double }
 
 
 +global:
-  enable_cell_values: true
   rcut_inc: 1.0 ang
   dt: 0.5 fs

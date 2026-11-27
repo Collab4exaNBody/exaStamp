@@ -109,6 +109,7 @@ namespace exaStamp
     {
       double x[GMM_MAX_FEATURES];
       double lp[GMM_MAX_COMPONENTS];
+      if( g.K <= 0 ) { posterior = 0.0; return -1; }
       gmm_features( g, row, x );
       const double lse = gmm_log_prob( g, x, lp );
       int best = 0;
