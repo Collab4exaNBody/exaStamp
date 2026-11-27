@@ -1,0 +1,14 @@
+includes:
+  - baseline.yaml
+
+# First frame of a LAMMPS text dump (columns from the ITEM: ATOMS line). Dumps do not state the
+# type count: species are required. `fields` stores extra columns as generic fields.
+setup_system:
+  # the readers keep the deck's domain (cell size, periodicity) and fit it to the file's box
+  - domain:
+      cell_size: 6.6 ang
+      periodic: [ true, true, true ]
+      expandable: false
+  - read_lammps_dump:
+      file: Ta_bcc.dump
+      fields: [ c_pe ]
